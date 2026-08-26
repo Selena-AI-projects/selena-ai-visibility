@@ -537,4 +537,6 @@ Control Room: `DISPOSABLE_DB_PASS; STAGING NOT AUTHORIZED`. Общих мигр�
 
 Следующий шаг Visibility OS: утверждение этой Delta →
 `SELENA_VISIBILITY_OS_MIGRATION_PLAN_V2.md` →
-`SELENA_VISIBILITY_OS_ACCEPTANCE_GATES_V2.md` → фазы реализации.
+`SELENA_VISIBILITY_OS_ACCEPTANCE_GATES_V2.md` →
+`SELENA_VISIBILITY_OS_TZ_CODEX_V2.md` (задание исполняющему агенту) → фазы
+реализации.
