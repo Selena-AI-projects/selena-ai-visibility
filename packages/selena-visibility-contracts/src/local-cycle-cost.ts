@@ -9,9 +9,10 @@
 // amount and no fractional literal at all: a number that looks like a price and
 // lives in the repository will eventually be believed by someone.
 //
-// The billing unit is a parameter for the same reason. Providers meter in
-// blocks of results rather than per call — DataForSEO in tens — so a model that
-// prices calls silently halves the cost of a cycle that reads twenty deep.
+// The metering rule is a parameter for the same reason. Some providers charge
+// per request and some per block of results, and the difference is the whole
+// depth multiple on every line of a costing — a model that picks one silently
+// halves or doubles the bill.
 
 export type LocalCycleShape = {
 	gridPoints: number;
@@ -28,16 +29,21 @@ export type LocalCycleShape = {
 	captureDepth: number;
 };
 
+/**
+ * How the provider counts what it charges for. Stated rather than assumed,
+ * because the two answers differ by the depth multiple on every row of a
+ * costing: a provider metering in blocks of ten bills a twenty-deep read twice,
+ * one metering per request bills it once.
+ */
+export type LocalCycleMetering =
+	| { kind: "request" }
+	| { kind: "results"; resultsPerBillableUnit: number };
+
 export type LocalCycleTariff = {
 	currency: "USD";
-	/**
-	 * Price of one billable unit — not of one call. A provider that meters in
-	 * blocks of results bills a deep read as several units, so pricing per call
-	 * would understate a deep cycle by exactly the block multiple.
-	 */
+	/** Price of one billable unit, whatever the metering says a unit is. */
 	pricePerBillableUnit: number;
-	/** Results covered by one billable unit. DataForSEO meters in tens. */
-	resultsPerBillableUnit: number;
+	metering: LocalCycleMetering;
 	/** Some providers bill a floor per request; absent means no floor. */
 	minimumBillableUnits?: number;
 };
@@ -71,7 +77,7 @@ export type LocalCycleCost = {
 		maxRetriesPerObservation: number;
 		retriesBillable: boolean;
 		pricePerBillableUnit: number;
-		resultsPerBillableUnit: number;
+		metering: LocalCycleMetering;
 		minimumBillableUnits: number | null;
 	};
 };
@@ -94,7 +100,8 @@ function assertTariff(tariff: LocalCycleTariff): void {
 	if (tariff.currency !== "USD") throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
 	if (!Number.isFinite(tariff.pricePerBillableUnit) || tariff.pricePerBillableUnit < 0)
 		throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
-	if (!isPositiveInteger(tariff.resultsPerBillableUnit)) throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
+	if (tariff.metering.kind === "results" && !isPositiveInteger(tariff.metering.resultsPerBillableUnit))
+		throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
 	if (tariff.minimumBillableUnits !== undefined && !isNonNegativeInteger(tariff.minimumBillableUnits))
 		throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
 }
@@ -127,8 +134,11 @@ export function localCycleCost(
 	assertTariff(tariff);
 	const calls = localCycleCalls(shape, retry);
 	// A partial block still costs a whole one: reading 11 results where the unit
-	// covers 10 is two units, not 1.1.
-	const unitsPerCall = Math.ceil(shape.captureDepth / tariff.resultsPerBillableUnit);
+	// covers 10 is two units, not 1.1. Per-request metering ignores depth.
+	const unitsPerCall =
+		tariff.metering.kind === "request"
+			? 1
+			: Math.ceil(shape.captureDepth / tariff.metering.resultsPerBillableUnit);
 	const plannedUnits = calls.planned * unitsPerCall;
 	const worstCaseUnits = calls.worstCase * unitsPerCall;
 	// A billing floor raises the invoice, never the measurement: planned calls
@@ -157,7 +167,7 @@ export function localCycleCost(
 			maxRetriesPerObservation: retry.maxRetriesPerObservation,
 			retriesBillable: retry.retriesBillable,
 			pricePerBillableUnit: tariff.pricePerBillableUnit,
-			resultsPerBillableUnit: tariff.resultsPerBillableUnit,
+			metering: tariff.metering,
 			minimumBillableUnits: tariff.minimumBillableUnits ?? null,
 		},
 	};

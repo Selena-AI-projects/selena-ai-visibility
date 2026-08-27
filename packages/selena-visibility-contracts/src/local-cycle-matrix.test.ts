@@ -6,8 +6,8 @@ import {
 	MATRIX_BEGIN,
 	MATRIX_CAPTURE_DEPTH,
 	MATRIX_END,
+	PRICE_SOURCE,
 	PUBLISHED_DATAFORSEO_STANDARD_USD,
-	PUBLISHED_PRICE_CAVEAT,
 	renderLocalCycleMatrix,
 } from "./local-cycle-matrix.js";
 
@@ -35,42 +35,33 @@ describe("economics document", () => {
 		expect(block).toBe(renderLocalCycleMatrix());
 	});
 
-	// The published price is a quotable public figure; the account's real tariff
-	// is not known until an invoice says so. The document may show the first
-	// only while it keeps saying which one it is, and may never guess the second.
-	it("quotes the published price under its caveat", () => {
+	it("prices at the rate the account's own card states", () => {
 		expect(renderLocalCycleMatrix()).toContain(`DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}`);
-		expect(document).toContain(PUBLISHED_PRICE_CAVEAT);
-	});
-
-	it("leaves the account tariff empty on every row", () => {
+		expect(document).toContain(PRICE_SOURCE);
 		expect(dataRows()).toHaveLength(18);
-		for (const row of dataRows()) {
-			expect(row.trimEnd().endsWith("| — |")).toBe(true);
-		}
 	});
 
-	// The whole reason capture depth entered the model: at a block of ten, a
-	// twenty-deep read is two units, and the table must show the doubling rather
-	// than quietly price a cycle at half of what it costs.
-	it("bills every row at two units for the twenty-deep read the bands require", () => {
+	// The account card bills serp/task_post per request with no per-result
+	// component, so a deeper read must not multiply the charge. The column is
+	// kept visible because the answer would flip the largest row past the cap.
+	it("bills one unit per call at the depth the bands require", () => {
 		expect(MATRIX_CAPTURE_DEPTH).toBe(20);
 		for (const row of dataRows()) {
-			expect(row.split("|").map((cell) => cell.trim())[7]).toBe("2");
+			expect(row.split("|").map((cell) => cell.trim())[7]).toBe("1");
 		}
 	});
 
-	it("marks the configurations the cost cap refuses", () => {
+	it("clears the cost cap on every configuration at this rate", () => {
 		const rendered = renderLocalCycleMatrix();
 		expect(rendered).toContain(`В капе $${CYCLE_BUDGET_CAP_USD}`);
-		// 7×7 × 20 keywords × 2 repeats is the one row above the cap; if the cap
-		// or the price moves, this is the assertion that notices.
-		expect(rendered.split("\n").filter((line) => line.includes("**нет**"))).toHaveLength(1);
+		expect(rendered.split("\n").filter((line) => line.includes("**нет**"))).toHaveLength(0);
+		// The row that a depth multiplier would push over $3, named so a change
+		// in either direction is noticed here rather than on an invoice.
+		expect(document).toContain("`7×7 × 20 запросов × 2 повтора`");
 	});
 
 	it("leaves the sizing decisions to the owner", () => {
-		expect(document).toContain("`<не сверено со счётом>`");
-		for (const decision of ["49", "400 м", "800 м", "$3 worst-case", "DataForSEO Standard"]) {
+		for (const decision of ["49", "400 м", "800 м", "$3 worst-case", "DataForSEO Standard queue"]) {
 			expect(document, `owner decision missing: ${decision}`).toContain(decision);
 		}
 	});

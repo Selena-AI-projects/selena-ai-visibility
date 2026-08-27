@@ -36,22 +36,23 @@ export const MATRIX_END = "<!-- local-cycle-matrix:end -->";
  * invoice says otherwise.
  */
 export const PUBLISHED_DATAFORSEO_STANDARD_USD = 0.0006;
-/** DataForSEO meters in blocks of ten results, not per call. */
-export const PUBLISHED_DATAFORSEO_RESULTS_PER_UNIT = 10;
-export const PUBLISHED_PRICE_CAVEAT = "опубликованный прайс, не сверено со счётом";
+/**
+ * Verified against the account's own exported rate card, not a published list
+ * price: `serp / task_post` bills $0.0006 per request on the normal queue with
+ * no per-result component, so depth does not multiply the charge.
+ */
+export const ACCOUNT_METERING = { kind: "request" } as const;
+export const PRICE_SOURCE = "прайс-лист аккаунта, экспорт из кабинета";
 
 /** Owner decision recorded in local-cycle-economics.md. */
 export const CYCLE_BUDGET_CAP_USD = 3;
-
-/** The account's real tariff is unknown until the first invoice is read. */
-const ACTUAL_TARIFF_UNKNOWN = "—";
 
 const money = (value: number): string => `$${value.toFixed(4)}`;
 
 export function renderLocalCycleMatrix(): string {
 	const rows: string[] = [
-		`| Grid | Запросы | Повторы | Глубина | Наблюдения | Вызовы план / worst-case | Единиц на вызов | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}/ед., план / worst-case | В капе $${CYCLE_BUDGET_CAP_USD} | Фактический тариф аккаунта |`,
-		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |",
+		`| Grid | Запросы | Повторы | Глубина | Наблюдения | Вызовы план / worst-case | Единиц на вызов | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}/запрос, план / worst-case | В капе $${CYCLE_BUDGET_CAP_USD} |`,
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |",
 	];
 	for (const grid of MATRIX_GRIDS) {
 		for (const keywords of MATRIX_KEYWORDS) {
@@ -69,14 +70,14 @@ export function renderLocalCycleMatrix(): string {
 					{
 						currency: "USD",
 						pricePerBillableUnit: PUBLISHED_DATAFORSEO_STANDARD_USD,
-						resultsPerBillableUnit: PUBLISHED_DATAFORSEO_RESULTS_PER_UNIT,
+						metering: ACCOUNT_METERING,
 					},
 					MATRIX_RETRY,
 				);
 				const observations = shape.gridPoints * shape.keywords * shape.repeats;
 				const withinCap = published.worstCaseCost <= CYCLE_BUDGET_CAP_USD ? "да" : "**нет**";
 				rows.push(
-					`| ${grid.label} | ${keywords} | ${repeats} | ${MATRIX_CAPTURE_DEPTH} | ${observations} | ${calls.planned} / ${calls.worstCase} | ${published.unitsPerCall} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${withinCap} | ${ACTUAL_TARIFF_UNKNOWN} |`,
+					`| ${grid.label} | ${keywords} | ${repeats} | ${MATRIX_CAPTURE_DEPTH} | ${observations} | ${calls.planned} / ${calls.worstCase} | ${published.unitsPerCall} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${withinCap} |`,
 				);
 			}
 		}

@@ -11,7 +11,7 @@ import {
 } from "./local-cycle-cost.js";
 
 const shape: LocalCycleShape = { gridPoints: 9, keywords: 5, repeats: 1, providersPerObservation: 1, captureDepth: 10 };
-const tariff: LocalCycleTariff = { currency: "USD", pricePerBillableUnit: 2, resultsPerBillableUnit: 10 };
+const tariff: LocalCycleTariff = { currency: "USD", pricePerBillableUnit: 2, metering: { kind: "results", resultsPerBillableUnit: 10 } };
 const billedRetry: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: true };
 const freeRetry: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: false };
 
@@ -79,6 +79,17 @@ describe("cost", () => {
 		expect(cost.unitsPerCall).toBe(2);
 	});
 
+	// DataForSEO's own rate card for this account prices serp/task_post per
+	// request with no per-result component, so depth must not multiply there.
+	it("ignores depth when the provider meters per request", () => {
+		const perRequest: LocalCycleTariff = { currency: "USD", pricePerBillableUnit: 2, metering: { kind: "request" } };
+		const shallow = localCycleCost({ ...shape, captureDepth: 10 }, perRequest, freeRetry);
+		const deep = localCycleCost({ ...shape, captureDepth: 100 }, perRequest, freeRetry);
+
+		expect(deep.unitsPerCall).toBe(1);
+		expect(deep.plannedCost).toBe(shallow.plannedCost);
+	});
+
 	it("keeps the inputs visible in the breakdown", () => {
 		expect(localCycleCost(shape, tariff, billedRetry).breakdown).toEqual({
 			gridPoints: 9,
@@ -89,7 +100,7 @@ describe("cost", () => {
 			maxRetriesPerObservation: 1,
 			retriesBillable: true,
 			pricePerBillableUnit: 2,
-			resultsPerBillableUnit: 10,
+			metering: { kind: "results", resultsPerBillableUnit: 10 },
 			minimumBillableUnits: null,
 		});
 	});
@@ -98,7 +109,7 @@ describe("cost", () => {
 		for (const broken of [
 			{ ...tariff, pricePerBillableUnit: -1 },
 			{ ...tariff, pricePerBillableUnit: Number.POSITIVE_INFINITY },
-			{ ...tariff, resultsPerBillableUnit: 0 },
+			{ ...tariff, metering: { kind: "results" as const, resultsPerBillableUnit: 0 } },
 			{ ...tariff, minimumBillableUnits: 1.5 },
 		]) {
 			expect(() => localCycleCost(shape, broken, freeRetry)).toThrow("LOCAL_CYCLE_TARIFF_INVALID");
