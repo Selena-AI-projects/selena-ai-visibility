@@ -1,4 +1,4 @@
-import { type LocalCycleRetry, type LocalCycleShape, localCycleCalls } from "./local-cycle-cost.js";
+import { type LocalCycleRetry, type LocalCycleShape, localCycleCalls, localCycleCost } from "./local-cycle-cost.js";
 
 // The scenario matrix in docs/selena-visibility/local-cycle-economics.md is
 // rendered from here rather than typed by hand: a table of call counts is
@@ -20,13 +20,25 @@ export const MATRIX_RETRY: LocalCycleRetry = { maxRetriesPerObservation: 1, retr
 export const MATRIX_BEGIN = "<!-- local-cycle-matrix:begin -->";
 export const MATRIX_END = "<!-- local-cycle-matrix:end -->";
 
-/** Placeholder left for the owner's tariff; never a number. */
-const TARIFF_PLACEHOLDER = "`<tariff>`";
+/**
+ * The vendor's published list price, not a figure from an invoice. It lives
+ * here rather than in the calculator on purpose: the calculator must stay
+ * price-free (a test enforces that), while a document may quote a public price
+ * as long as it says where the number came from and stays unverified until an
+ * invoice says otherwise.
+ */
+export const PUBLISHED_DATAFORSEO_STANDARD_USD = 0.0006;
+export const PUBLISHED_PRICE_CAVEAT = "опубликованный прайс, не сверено со счётом";
+
+/** The account's real tariff is unknown until the first invoice is read. */
+const ACTUAL_TARIFF_UNKNOWN = "—";
+
+const money = (value: number): string => `$${value.toFixed(4)}`;
 
 export function renderLocalCycleMatrix(): string {
 	const rows: string[] = [
-		"| Grid | Запросы | Повторы | Наблюдения | Вызовы плановые | Вызовы worst-case | Стоимость плановая | Стоимость worst-case |",
-		"| --- | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+		`| Grid | Запросы | Повторы | Наблюдения | Вызовы плановые | Вызовы worst-case | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}, план / worst-case | Фактический тариф аккаунта |`,
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
 	];
 	for (const grid of MATRIX_GRIDS) {
 		for (const keywords of MATRIX_KEYWORDS) {
@@ -38,9 +50,14 @@ export function renderLocalCycleMatrix(): string {
 					providersPerObservation: 1,
 				};
 				const calls = localCycleCalls(shape, MATRIX_RETRY);
+				const published = localCycleCost(
+					shape,
+					{ currency: "USD", pricePerProviderCall: PUBLISHED_DATAFORSEO_STANDARD_USD },
+					MATRIX_RETRY,
+				);
 				const observations = shape.gridPoints * shape.keywords * shape.repeats;
 				rows.push(
-					`| ${grid.label} | ${keywords} | ${repeats} | ${observations} | ${calls.planned} | ${calls.worstCase} | ${TARIFF_PLACEHOLDER} | ${TARIFF_PLACEHOLDER} |`,
+					`| ${grid.label} | ${keywords} | ${repeats} | ${observations} | ${calls.planned} | ${calls.worstCase} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${ACTUAL_TARIFF_UNKNOWN} |`,
 				);
 			}
 		}
