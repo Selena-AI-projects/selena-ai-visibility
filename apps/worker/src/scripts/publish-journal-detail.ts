@@ -48,7 +48,14 @@ if (unknown.length > 0) {
 	process.exit(2);
 }
 
-type Cell = { systemId: string; answered: boolean; mentioned: boolean | null };
+type Cell = {
+	systemId: string;
+	answered: boolean;
+	mentioned: boolean | null;
+	/** Per system, not per question: "who beat us" differs on every surface. */
+	namedInstead: string[];
+	citedDomains: string[];
+};
 type Question = { text: string; cells: Cell[]; namedInstead: string[]; citedDomains: string[] };
 type Detail = {
 	date: string;
@@ -165,30 +172,31 @@ async function detailFor(slug: string): Promise<Detail | null> {
 		const scenarioId = scenarioRows.find((row) => row.text === text)?.id;
 		if (!scenarioId) continue;
 		const mine = runs.filter((run) => run.scenarioId === scenarioId);
-		const competitorCounts = new Map<string, number>();
-		const domainCounts = new Map<string, number>();
 		const cells: Cell[] = systems.map((system) => {
 			const run = mine.find((candidate) => candidate.systemId === system.systemId);
 			// VALID is the only reading we count. Anything else is an answer we
 			// did not get, and an answer we did not get is not an absent brand.
 			const answered = run?.validity === "VALID";
+			const citations = answered ? ((run?.citations ?? []) as { domain?: string }[]) : [];
+			// Only where the brand was absent: "named instead" is a comparison,
+			// and a competitor standing beside the brand is not one.
+			const competitors =
+				answered && !run?.mention ? ((run?.competitors ?? []) as { name?: string }[]) : [];
 			return {
 				systemId: system.systemId,
 				answered,
 				mentioned: answered ? (run?.mention ?? null) : null,
+				namedInstead: [...new Set(competitors.map((c) => c.name).filter((n): n is string => !!n))].slice(0, 6),
+				citedDomains: [...new Set(citations.map((c) => c.domain).filter((d): d is string => !!d))].slice(0, 6),
 			};
 		});
-		for (const run of mine) {
-			if (run.validity !== "VALID") continue;
-			for (const citation of (run.citations ?? []) as { domain?: string }[]) {
-				if (citation.domain) domainCounts.set(citation.domain, (domainCounts.get(citation.domain) ?? 0) + 1);
-			}
-			// Only where the brand was absent: "named instead" is a comparison,
-			// and a competitor standing beside the brand is not one.
-			if (run.mention) continue;
-			for (const competitor of (run.competitors ?? []) as { name?: string }[]) {
-				if (competitor.name) competitorCounts.set(competitor.name, (competitorCounts.get(competitor.name) ?? 0) + 1);
-			}
+		// The question-level roll-up stays for a reader who wants the shape of
+		// the whole row at once; the cells are where the evidence lives.
+		const competitorCounts = new Map<string, number>();
+		const domainCounts = new Map<string, number>();
+		for (const cell of cells) {
+			for (const name of cell.namedInstead) competitorCounts.set(name, (competitorCounts.get(name) ?? 0) + 1);
+			for (const domain of cell.citedDomains) domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + 1);
 		}
 		questions.push({
 			text,
