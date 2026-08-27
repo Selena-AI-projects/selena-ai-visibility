@@ -43,6 +43,10 @@ export const MICRO_SLICE_CYCLE = {
 	keywords: 1,
 	repeats: 1,
 	providersPerObservation: 1,
+	// Twenty because the coverage bands reach Top-20 and a shallower read cannot
+	// answer "outside Top-20" at all. It is also what the cycle is billed for:
+	// a provider metering in tens charges two units for this depth.
+	captureDepth: 20,
 	expectedObservations: 9,
 } as const;
 

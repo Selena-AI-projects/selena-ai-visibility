@@ -10,14 +10,16 @@ import {
 	localCycleCost,
 } from "./local-cycle-cost.js";
 
-const shape: LocalCycleShape = { gridPoints: 9, keywords: 5, repeats: 1, providersPerObservation: 1 };
-const tariff: LocalCycleTariff = { currency: "USD", pricePerProviderCall: 2 };
+const shape: LocalCycleShape = { gridPoints: 9, keywords: 5, repeats: 1, providersPerObservation: 1, captureDepth: 10 };
+const tariff: LocalCycleTariff = { currency: "USD", pricePerBillableUnit: 2, resultsPerBillableUnit: 10 };
 const billedRetry: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: true };
 const freeRetry: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: false };
 
 describe("call counts", () => {
 	it("multiplies every axis", () => {
-		expect(localCycleCalls({ gridPoints: 49, keywords: 10, repeats: 2, providersPerObservation: 1 }, freeRetry)).toEqual(
+		expect(
+			localCycleCalls({ gridPoints: 49, keywords: 10, repeats: 2, providersPerObservation: 1, captureDepth: 20 }, freeRetry),
+		).toEqual(
 			{ planned: 980, worstCase: 980 },
 		);
 	});
@@ -33,6 +35,7 @@ describe("call counts", () => {
 			{ ...shape, keywords: -1 },
 			{ ...shape, repeats: 1.5 },
 			{ ...shape, providersPerObservation: Number.NaN },
+			{ ...shape, captureDepth: 0 },
 		]) {
 			expect(() => localCycleCalls(broken, freeRetry)).toThrow("LOCAL_CYCLE_SHAPE_INVALID");
 		}
@@ -53,10 +56,27 @@ describe("cost", () => {
 	});
 
 	it("lets a billing floor raise the invoice without inflating the measurement", () => {
-		const cost = localCycleCost(shape, { ...tariff, minimumBillableCalls: 100 }, freeRetry);
+		const cost = localCycleCost(shape, { ...tariff, minimumBillableUnits: 100 }, freeRetry);
 		expect(cost.plannedCalls).toBe(45);
-		expect(cost.billedPlannedCalls).toBe(100);
+		expect(cost.plannedUnits).toBe(45);
+		expect(cost.billedPlannedUnits).toBe(100);
 		expect(cost.plannedCost).toBe(200);
+	});
+
+	// The bug this rule exists to prevent: metering in blocks of ten means a
+	// twenty-deep read is two units, and pricing it as one call halves the bill.
+	it("bills a deeper read as more units at the same number of calls", () => {
+		const shallow = localCycleCost({ ...shape, captureDepth: 10 }, tariff, freeRetry);
+		const deep = localCycleCost({ ...shape, captureDepth: 20 }, tariff, freeRetry);
+
+		expect(deep.plannedCalls).toBe(shallow.plannedCalls);
+		expect(deep.unitsPerCall).toBe(2);
+		expect(deep.plannedCost).toBe(shallow.plannedCost * 2);
+	});
+
+	it("charges a whole unit for a partial block", () => {
+		const cost = localCycleCost({ ...shape, captureDepth: 11 }, tariff, freeRetry);
+		expect(cost.unitsPerCall).toBe(2);
 	});
 
 	it("keeps the inputs visible in the breakdown", () => {
@@ -65,18 +85,21 @@ describe("cost", () => {
 			keywords: 5,
 			repeats: 1,
 			providersPerObservation: 1,
+			captureDepth: 10,
 			maxRetriesPerObservation: 1,
 			retriesBillable: true,
-			pricePerProviderCall: 2,
-			minimumBillableCalls: null,
+			pricePerBillableUnit: 2,
+			resultsPerBillableUnit: 10,
+			minimumBillableUnits: null,
 		});
 	});
 
 	it("refuses a tariff that is not a usable price", () => {
 		for (const broken of [
-			{ ...tariff, pricePerProviderCall: -1 },
-			{ ...tariff, pricePerProviderCall: Number.POSITIVE_INFINITY },
-			{ ...tariff, minimumBillableCalls: 1.5 },
+			{ ...tariff, pricePerBillableUnit: -1 },
+			{ ...tariff, pricePerBillableUnit: Number.POSITIVE_INFINITY },
+			{ ...tariff, resultsPerBillableUnit: 0 },
+			{ ...tariff, minimumBillableUnits: 1.5 },
 		]) {
 			expect(() => localCycleCost(shape, broken, freeRetry)).toThrow("LOCAL_CYCLE_TARIFF_INVALID");
 		}

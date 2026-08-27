@@ -8,6 +8,10 @@
 // The price is always a parameter. This module contains no tariff, no currency
 // amount and no fractional literal at all: a number that looks like a price and
 // lives in the repository will eventually be believed by someone.
+//
+// The billing unit is a parameter for the same reason. Providers meter in
+// blocks of results rather than per call — DataForSEO in tens — so a model that
+// prices calls silently halves the cost of a cycle that reads twenty deep.
 
 export type LocalCycleShape = {
 	gridPoints: number;
@@ -15,13 +19,27 @@ export type LocalCycleShape = {
 	repeats: number;
 	/** Usually one. A second provider over the same grid doubles the calls. */
 	providersPerObservation: number;
+	/**
+	 * How many ranked results each observation reads. It belongs in the shape
+	 * rather than in a default because it is a methodology choice with a price:
+	 * "outside Top-20" is unanswerable below depth 20, and providers that meter
+	 * in blocks of results charge twice for reading twice as deep.
+	 */
+	captureDepth: number;
 };
 
 export type LocalCycleTariff = {
 	currency: "USD";
-	pricePerProviderCall: number;
-	/** Some providers bill a floor per request batch; absent means no floor. */
-	minimumBillableCalls?: number;
+	/**
+	 * Price of one billable unit — not of one call. A provider that meters in
+	 * blocks of results bills a deep read as several units, so pricing per call
+	 * would understate a deep cycle by exactly the block multiple.
+	 */
+	pricePerBillableUnit: number;
+	/** Results covered by one billable unit. DataForSEO meters in tens. */
+	resultsPerBillableUnit: number;
+	/** Some providers bill a floor per request; absent means no floor. */
+	minimumBillableUnits?: number;
 };
 
 export type LocalCycleRetry = {
@@ -35,9 +53,13 @@ export type LocalCycleCost = {
 	currency: "USD";
 	plannedCalls: number;
 	worstCaseCalls: number;
+	/** Billable units one call consumes at this capture depth. */
+	unitsPerCall: number;
+	plannedUnits: number;
+	worstCaseUnits: number;
 	/** What the provider bills after any floor is applied. */
-	billedPlannedCalls: number;
-	billedWorstCaseCalls: number;
+	billedPlannedUnits: number;
+	billedWorstCaseUnits: number;
 	plannedCost: number;
 	worstCaseCost: number;
 	breakdown: {
@@ -45,10 +67,12 @@ export type LocalCycleCost = {
 		keywords: number;
 		repeats: number;
 		providersPerObservation: number;
+		captureDepth: number;
 		maxRetriesPerObservation: number;
 		retriesBillable: boolean;
-		pricePerProviderCall: number;
-		minimumBillableCalls: number | null;
+		pricePerBillableUnit: number;
+		resultsPerBillableUnit: number;
+		minimumBillableUnits: number | null;
 	};
 };
 
@@ -62,15 +86,16 @@ const COST_SCALE = 1000000;
 const roundCost = (value: number): number => Math.round(value * COST_SCALE) / COST_SCALE;
 
 function assertShape(shape: LocalCycleShape): void {
-	const axes = [shape.gridPoints, shape.keywords, shape.repeats, shape.providersPerObservation];
+	const axes = [shape.gridPoints, shape.keywords, shape.repeats, shape.providersPerObservation, shape.captureDepth];
 	if (!axes.every(isPositiveInteger)) throw new Error("LOCAL_CYCLE_SHAPE_INVALID");
 }
 
 function assertTariff(tariff: LocalCycleTariff): void {
 	if (tariff.currency !== "USD") throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
-	if (!Number.isFinite(tariff.pricePerProviderCall) || tariff.pricePerProviderCall < 0)
+	if (!Number.isFinite(tariff.pricePerBillableUnit) || tariff.pricePerBillableUnit < 0)
 		throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
-	if (tariff.minimumBillableCalls !== undefined && !isNonNegativeInteger(tariff.minimumBillableCalls))
+	if (!isPositiveInteger(tariff.resultsPerBillableUnit)) throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
+	if (tariff.minimumBillableUnits !== undefined && !isNonNegativeInteger(tariff.minimumBillableUnits))
 		throw new Error("LOCAL_CYCLE_TARIFF_INVALID");
 }
 
@@ -101,29 +126,39 @@ export function localCycleCost(
 ): LocalCycleCost {
 	assertTariff(tariff);
 	const calls = localCycleCalls(shape, retry);
+	// A partial block still costs a whole one: reading 11 results where the unit
+	// covers 10 is two units, not 1.1.
+	const unitsPerCall = Math.ceil(shape.captureDepth / tariff.resultsPerBillableUnit);
+	const plannedUnits = calls.planned * unitsPerCall;
+	const worstCaseUnits = calls.worstCase * unitsPerCall;
 	// A billing floor raises the invoice, never the measurement: planned calls
 	// stay what the cycle actually performs, so a cycle cannot be reported as
 	// larger than the matrix it was authorized for.
-	const floor = tariff.minimumBillableCalls ?? 0;
-	const billedPlannedCalls = Math.max(calls.planned, floor);
-	const billedWorstCaseCalls = Math.max(calls.worstCase, floor);
+	const floor = tariff.minimumBillableUnits ?? 0;
+	const billedPlannedUnits = Math.max(plannedUnits, floor);
+	const billedWorstCaseUnits = Math.max(worstCaseUnits, floor);
 	return {
 		currency: tariff.currency,
 		plannedCalls: calls.planned,
 		worstCaseCalls: calls.worstCase,
-		billedPlannedCalls,
-		billedWorstCaseCalls,
-		plannedCost: roundCost(billedPlannedCalls * tariff.pricePerProviderCall),
-		worstCaseCost: roundCost(billedWorstCaseCalls * tariff.pricePerProviderCall),
+		unitsPerCall,
+		plannedUnits,
+		worstCaseUnits,
+		billedPlannedUnits,
+		billedWorstCaseUnits,
+		plannedCost: roundCost(billedPlannedUnits * tariff.pricePerBillableUnit),
+		worstCaseCost: roundCost(billedWorstCaseUnits * tariff.pricePerBillableUnit),
 		breakdown: {
 			gridPoints: shape.gridPoints,
 			keywords: shape.keywords,
 			repeats: shape.repeats,
 			providersPerObservation: shape.providersPerObservation,
+			captureDepth: shape.captureDepth,
 			maxRetriesPerObservation: retry.maxRetriesPerObservation,
 			retriesBillable: retry.retriesBillable,
-			pricePerProviderCall: tariff.pricePerProviderCall,
-			minimumBillableCalls: tariff.minimumBillableCalls ?? null,
+			pricePerBillableUnit: tariff.pricePerBillableUnit,
+			resultsPerBillableUnit: tariff.resultsPerBillableUnit,
+			minimumBillableUnits: tariff.minimumBillableUnits ?? null,
 		},
 	};
 }

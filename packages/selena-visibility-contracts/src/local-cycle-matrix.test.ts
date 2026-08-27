@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+	CYCLE_BUDGET_CAP_USD,
 	MATRIX_BEGIN,
+	MATRIX_CAPTURE_DEPTH,
 	MATRIX_END,
 	PUBLISHED_DATAFORSEO_STANDARD_USD,
 	PUBLISHED_PRICE_CAVEAT,
@@ -12,6 +14,11 @@ import {
 const documentPath = fileURLToPath(
 	new URL("../../../docs/selena-visibility/local-cycle-economics.md", import.meta.url),
 );
+
+const dataRows = (): string[] =>
+	renderLocalCycleMatrix()
+		.split("\n")
+		.filter((line) => line.startsWith("| ") && !line.includes("Grid") && !line.startsWith("| ---"));
 
 describe("economics document", () => {
 	const document = readFileSync(documentPath, "utf8");
@@ -37,17 +44,34 @@ describe("economics document", () => {
 	});
 
 	it("leaves the account tariff empty on every row", () => {
-		const dataRows = renderLocalCycleMatrix()
-			.split("\n")
-			.filter((line) => line.startsWith("| ") && !line.includes("Grid") && !line.startsWith("| ---"));
-		expect(dataRows).toHaveLength(18);
-		for (const row of dataRows) {
+		expect(dataRows()).toHaveLength(18);
+		for (const row of dataRows()) {
 			expect(row.trimEnd().endsWith("| — |")).toBe(true);
 		}
 	});
 
+	// The whole reason capture depth entered the model: at a block of ten, a
+	// twenty-deep read is two units, and the table must show the doubling rather
+	// than quietly price a cycle at half of what it costs.
+	it("bills every row at two units for the twenty-deep read the bands require", () => {
+		expect(MATRIX_CAPTURE_DEPTH).toBe(20);
+		for (const row of dataRows()) {
+			expect(row.split("|").map((cell) => cell.trim())[7]).toBe("2");
+		}
+	});
+
+	it("marks the configurations the cost cap refuses", () => {
+		const rendered = renderLocalCycleMatrix();
+		expect(rendered).toContain(`В капе $${CYCLE_BUDGET_CAP_USD}`);
+		// 7×7 × 20 keywords × 2 repeats is the one row above the cap; if the cap
+		// or the price moves, this is the assertion that notices.
+		expect(rendered.split("\n").filter((line) => line.includes("**нет**"))).toHaveLength(1);
+	});
+
 	it("leaves the sizing decisions to the owner", () => {
-		expect(document).toContain("Потолок точек grid и допустимая стоимость цикла — решение владельца");
 		expect(document).toContain("`<не сверено со счётом>`");
+		for (const decision of ["49", "400 м", "800 м", "$3 worst-case", "DataForSEO Standard"]) {
+			expect(document, `owner decision missing: ${decision}`).toContain(decision);
+		}
 	});
 });

@@ -14,6 +14,14 @@ export const MATRIX_GRIDS = [
 export const MATRIX_KEYWORDS = [5, 10, 20] as const;
 export const MATRIX_REPEATS = [1, 2] as const;
 
+/**
+ * Twenty is the methodology's floor, not a preference: the coverage bands go to
+ * Top-20, and "outside Top-20" is unanswerable from a shallower read. It costs
+ * real money — two billable units per call at DataForSEO's block of ten — so the
+ * table shows it rather than hiding it in a default.
+ */
+export const MATRIX_CAPTURE_DEPTH = 20;
+
 /** The catalog's `one_technical_invalid` policy, stated as a parameter. */
 export const MATRIX_RETRY: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: true };
 
@@ -28,7 +36,12 @@ export const MATRIX_END = "<!-- local-cycle-matrix:end -->";
  * invoice says otherwise.
  */
 export const PUBLISHED_DATAFORSEO_STANDARD_USD = 0.0006;
+/** DataForSEO meters in blocks of ten results, not per call. */
+export const PUBLISHED_DATAFORSEO_RESULTS_PER_UNIT = 10;
 export const PUBLISHED_PRICE_CAVEAT = "опубликованный прайс, не сверено со счётом";
+
+/** Owner decision recorded in local-cycle-economics.md. */
+export const CYCLE_BUDGET_CAP_USD = 3;
 
 /** The account's real tariff is unknown until the first invoice is read. */
 const ACTUAL_TARIFF_UNKNOWN = "—";
@@ -37,8 +50,8 @@ const money = (value: number): string => `$${value.toFixed(4)}`;
 
 export function renderLocalCycleMatrix(): string {
 	const rows: string[] = [
-		`| Grid | Запросы | Повторы | Наблюдения | Вызовы плановые | Вызовы worst-case | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}, план / worst-case | Фактический тариф аккаунта |`,
-		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+		`| Grid | Запросы | Повторы | Глубина | Наблюдения | Вызовы план / worst-case | Единиц на вызов | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}/ед., план / worst-case | В капе $${CYCLE_BUDGET_CAP_USD} | Фактический тариф аккаунта |`,
+		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: | ---: |",
 	];
 	for (const grid of MATRIX_GRIDS) {
 		for (const keywords of MATRIX_KEYWORDS) {
@@ -48,16 +61,22 @@ export function renderLocalCycleMatrix(): string {
 					keywords,
 					repeats,
 					providersPerObservation: 1,
+					captureDepth: MATRIX_CAPTURE_DEPTH,
 				};
 				const calls = localCycleCalls(shape, MATRIX_RETRY);
 				const published = localCycleCost(
 					shape,
-					{ currency: "USD", pricePerProviderCall: PUBLISHED_DATAFORSEO_STANDARD_USD },
+					{
+						currency: "USD",
+						pricePerBillableUnit: PUBLISHED_DATAFORSEO_STANDARD_USD,
+						resultsPerBillableUnit: PUBLISHED_DATAFORSEO_RESULTS_PER_UNIT,
+					},
 					MATRIX_RETRY,
 				);
 				const observations = shape.gridPoints * shape.keywords * shape.repeats;
+				const withinCap = published.worstCaseCost <= CYCLE_BUDGET_CAP_USD ? "да" : "**нет**";
 				rows.push(
-					`| ${grid.label} | ${keywords} | ${repeats} | ${observations} | ${calls.planned} | ${calls.worstCase} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${ACTUAL_TARIFF_UNKNOWN} |`,
+					`| ${grid.label} | ${keywords} | ${repeats} | ${MATRIX_CAPTURE_DEPTH} | ${observations} | ${calls.planned} / ${calls.worstCase} | ${published.unitsPerCall} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${withinCap} | ${ACTUAL_TARIFF_UNKNOWN} |`,
 				);
 			}
 		}
