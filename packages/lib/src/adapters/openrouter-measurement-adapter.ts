@@ -8,6 +8,10 @@ import {
 	runOutcomeSchema,
 } from "@workspace/selena-visibility-contracts";
 import { type ExtractionContext, extractMeasurement } from "../selena-answer-extraction";
+
+// Re-exported so a caller that builds one adapter per model does not need a
+// direct dependency on the contracts package to know which models there are.
+export { apiModelIds };
 import type { SelenaExecutablePermit, SelenaMeasurementAdapter, SelenaMeasurementPermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
 

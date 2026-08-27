@@ -24,12 +24,13 @@
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { apiModelIds, createOpenRouterAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import * as schema from "@workspace/lib/db/schema";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
+import type { SelenaMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
-	type MeasurementAdapterRegistry,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	runMeasurementForPermit,
@@ -39,6 +40,14 @@ import { and, eq, gte } from "drizzle-orm";
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
+
+/**
+ * An API View answer is bought by the token and costs more than a scraped one,
+ * so the ceiling has to price the two channels apart. This is the contract's
+ * conservative estimate rather than a measured figure: the ceiling exists to
+ * refuse a run before it spends, and an estimate that runs low would not.
+ */
+const API_PRICE_PER_ANSWER_USD = 0.005;
 
 /** The collector is the bottleneck and it is patient, so many can wait at once. */
 const CONCURRENCY = 10;
@@ -101,7 +110,7 @@ const resolvers = createSelenaMeasurementResolvers(db);
 
 /** Only the surfaces the configured name can actually route to are built. */
 const selected = new Set(measurementAdapterNamesFor(config.adapter));
-const adapters: MeasurementAdapterRegistry = Object.fromEntries(
+const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 	BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`)).map((surface) => [
 		`brightdata-${surface}`,
 		createBrightDataAdapter({
@@ -116,6 +125,41 @@ const adapters: MeasurementAdapterRegistry = Object.fromEntries(
 		}),
 	]),
 );
+if (selected.has("openrouter")) {
+	// The family routes all five API models to one adapter name, but an
+	// OpenRouter adapter is built around a single model. So the registered
+	// adapter is a dispatcher: it reads the model off the permit it was given
+	// and hands the call to that model's adapter. Choosing by permit is the
+	// same rule the executor uses to choose the adapter itself — the sold
+	// system decides, never a service-wide setting.
+	const openRouterKey = required("OPENROUTER_API_KEY");
+	const byModel = new Map<string, SelenaMeasurementAdapter>(
+		apiModelIds.map((model: string) => [
+			model,
+			createOpenRouterAdapter({
+				apiKey: openRouterKey,
+				model,
+				fetchImpl: fetch,
+				resolveScenarioText: resolvers.resolveScenarioText,
+				resolveExtractionContext: resolvers.resolveExtractionContext,
+			}),
+		]),
+	);
+	const first = byModel.get(apiModelIds[0]);
+	if (!first) throw new Error("SELENA_API_MODELS_EMPTY");
+	adapters.openrouter = {
+		channel: first.channel,
+		measure: (permit) => first.measure(permit),
+		execute: (permit) => {
+			const adapter = permit.systemId ? byModel.get(permit.systemId) : undefined;
+			// A permit whose system has no model is refused rather than measured
+			// by whichever model happens to be first: the wrong model's answer
+			// stored under the right name is worse than no answer.
+			if (!adapter) throw new Error(`SELENA_API_MODEL_UNKNOWN: ${permit.systemId ?? "null"}`);
+			return adapter.execute(permit);
+		},
+	};
+}
 if (Object.keys(adapters).length === 0) {
 	console.error(`SELENA_MEASUREMENT_ADAPTER=${config.adapter} reaches no Visitor View collector`);
 	process.exit(2);
@@ -234,12 +278,24 @@ async function measure(slug: string): Promise<void> {
 	const rows = await scenarioRowsFor(project.id, slug);
 	// The surfaces the collectors are pointed at, under the names the catalog
 	// sells them as — the adapter's own map, so the two cannot drift apart.
-	const systems = BRIGHTDATA_SURFACES.map((surface) => ({
-		systemId: brightDataVisitorSurface[surface],
-		channel: "VISITOR" as const,
-	}));
+	const systems = [
+		...BRIGHTDATA_SURFACES.map((surface) => ({
+			systemId: brightDataVisitorSurface[surface],
+			channel: "VISITOR" as const,
+		})),
+		...(selected.has("openrouter")
+			? apiModelIds.map((model: string) => ({ systemId: model, channel: "API" as const }))
+			: []),
+	];
 	const expectedRuns = rows.length * systems.length;
-	const cost = expectedRuns * PRICE_PER_ANSWER_USD;
+	// Priced per channel: an API answer is bought by the token and a scraped one
+	// by the request, and one rate over both would under-price whichever is
+	// dearer — which is the direction that matters for a ceiling.
+	const cost = systems.reduce(
+		(total, system) =>
+			total + rows.length * (system.channel === "API" ? API_PRICE_PER_ANSWER_USD : PRICE_PER_ANSWER_USD),
+		0,
+	);
 	if (cost > maxCostUsd) {
 		console.error(
 			`${slug}: ${expectedRuns} answers cost about $${cost.toFixed(4)}, ceiling is $${maxCostUsd.toFixed(4)}`,
@@ -248,7 +304,7 @@ async function measure(slug: string): Promise<void> {
 		return;
 	}
 
-	console.log(`\n${scenario.brand} — ${rows.length} questions × ${systems.length} surfaces (~$${cost.toFixed(4)})`);
+	console.log(`\n${scenario.brand} — ${rows.length} questions × ${systems.length} systems (~$${cost.toFixed(4)})`);
 	if (scenario.ownership === "third-party") {
 		console.log(
 			scenario.consent
