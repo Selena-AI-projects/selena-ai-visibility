@@ -132,5 +132,18 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["npx", "tsx", "src/scripts/measure-journal.ts"]
 
+# Publishing stage — reads a finished measurement and opens a pull request on
+# the marketing site with its per-question detail, then exits.
+#
+# Separate from `measure` on purpose: this one spends nothing and touches no
+# provider, so it can be re-run freely when a publish fails, without the
+# spending guard that protects the measurement.
+FROM base AS publish
+WORKDIR /app
+
+COPY --from=builder /deploy/worker ./
+
+CMD ["npx", "tsx", "src/scripts/publish-journal-detail.ts"]
+
 # The service name selects the final runtime stage: web or worker.
 FROM ${RAILWAY_SERVICE_NAME} AS final
