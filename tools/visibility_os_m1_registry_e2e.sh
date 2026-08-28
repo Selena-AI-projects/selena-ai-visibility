@@ -5,7 +5,7 @@ compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
-"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/_pending-os/M1_measurement_registry.sql"
+"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/0037_visibility_os_measurement_registry.sql"
 
 "${psql[@]}" <<'SQL'
 INSERT INTO organization (id, name, slug, created_at)

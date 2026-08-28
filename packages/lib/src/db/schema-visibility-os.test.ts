@@ -86,9 +86,9 @@ describe("Visibility OS measurement registry", () => {
 		]);
 	});
 
-	it("keeps schema, pending SQL and the owner-run backfill aligned", () => {
+	it("keeps schema, numbered SQL and the owner-run backfill aligned", () => {
 		const migration = readFileSync(
-			new URL("./migrations/_pending-os/M1_measurement_registry.sql", import.meta.url),
+			new URL("./migrations/0037_visibility_os_measurement_registry.sql", import.meta.url),
 			"utf8",
 		);
 		const backfill = readFileSync(
