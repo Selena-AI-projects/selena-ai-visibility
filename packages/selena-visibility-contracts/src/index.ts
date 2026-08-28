@@ -129,3 +129,4 @@ export * from "./measurement-scope.js";
 export * from "./payment.js";
 export * from "./promo.js";
 export * from "./recommendation.js";
+export * from "./visibility-os.js";

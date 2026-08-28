@@ -11,6 +11,16 @@ const registryTables = [
 	schema.svEvidenceIndex,
 ];
 
+const localTables = [
+	schema.svLocalKeywords,
+	schema.svGridDefinitions,
+	schema.svGridPoints,
+	schema.svLocalScanCycles,
+	schema.svLocalRankObservations,
+	schema.svLocalCompetitorObservations,
+	schema.svLocalVisibilityMetrics,
+];
+
 describe("Visibility OS measurement registry", () => {
 	it("exports the five RLS-enabled registry tables without a shared observation table", () => {
 		expect(registryTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -112,5 +122,52 @@ describe("Visibility OS measurement registry", () => {
 		expect(migration).not.toContain('INSERT INTO "sv_measurement_cycles"');
 		expect(backfill).toContain('INSERT INTO "sv_measurement_cycles"');
 		expect(backfill).toContain('FROM "sv_cycles"');
+	});
+});
+
+describe("Visibility OS Local schema", () => {
+	it("exports seven RLS-enabled Local tables and keeps Ask Maps observations separate", () => {
+		expect(localTables.map((table) => getTableConfig(table).name)).toEqual([
+			"sv_local_keywords",
+			"sv_grid_definitions",
+			"sv_grid_points",
+			"sv_local_scan_cycles",
+			"sv_local_rank_observations",
+			"sv_local_competitor_observations",
+			"sv_local_visibility_metrics",
+		]);
+		for (const table of localTables) expect(getTableConfig(table).enableRLS).toBe(true);
+		expect(getTableConfig(schema.svLocalObservations).name).toBe("sv_local_observations");
+	});
+
+	it("adds domain attribution to cost events without changing the AI run tables", () => {
+		expect(getTableConfig(schema.svCostEvents).columns.map((column) => column.name)).toContain("domain_id");
+		expect(getTableConfig(schema.svCostEvents).columns.map((column) => column.name)).toContain("measurement_cycle_id");
+		expect(getTableConfig(schema.svRuns).columns.map((column) => column.name)).not.toContain("domain_id");
+	});
+
+	it("keeps the pending SQL aligned with Local cardinality and isolation gates", () => {
+		const migration = readFileSync(
+			new URL("./migrations/_pending-os/M2_local_visibility.sql", import.meta.url),
+			"utf8",
+		);
+		for (const table of localTables) {
+			const name = getTableConfig(table).name;
+			expect(migration).toContain(`CREATE TABLE "${name}"`);
+			expect(migration).toContain(`ALTER TABLE "${name}" ENABLE ROW LEVEL SECURITY`);
+			expect(migration).toContain(`CREATE POLICY "tenant_isolation" ON "${name}"`);
+		}
+		expect(migration).toContain(
+			'("cycle_id", "location_id", "keyword_id", "grid_point_id", "provider", "repeat_index")',
+		);
+		expect(migration).toContain("ADD COLUMN \"domain_id\" text DEFAULT 'AI' NOT NULL");
+		expect(migration).toContain("\"domain_id\" = 'LOCAL'");
+		expect(migration).toContain('"point_count" <= 49');
+		expect(migration).toContain("LOCAL_CYCLE_COST_NOT_FROZEN");
+		expect(migration).toContain("CARDINALITY_INCIDENT");
+		expect(migration).toContain("sv_prepare_local_observation_retry");
+		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
+		expect(migration).not.toContain('ALTER TABLE "sv_cycles"');
+		expect(migration).not.toContain('ALTER TABLE "sv_run_permits"');
 	});
 });

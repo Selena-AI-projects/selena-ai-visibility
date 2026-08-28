@@ -15,6 +15,7 @@
 		"./jsx": "./src/jsx.d.ts"
 	},
 	"dependencies": {
+		"@fontsource/geist-sans": "^5.3.0",
 		"@resvg/resvg-js": "^2.6.2",
 		"@workspace/config": "workspace:*",
 		"react": "^19.2.8",
