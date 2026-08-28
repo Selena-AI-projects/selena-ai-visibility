@@ -143,13 +143,16 @@ release/selena-visibility-mvp                продуктовая линия, 
   `sv_measurement_datasets`, `sv_source_snapshots`, `sv_evidence_index`
   (ограничения — §3 плана миграций);
 - **общей таблицы наблюдений не создавать**;
-- SQL в `_pending-os/M1_measurement_registry.sql`: таблицы, индексы,
+- SQL в `0037_visibility_os_measurement_registry.sql`: таблицы, индексы,
   `ENABLE ROW LEVEL SECURITY` и политика `tenant_isolation` на каждой;
 - compatibility `VIEW` поверх `sv_cycles`, чтобы AI-домен читался через
   зонтичный интерфейс без переноса строк;
 - backfill зонтичных строк — отдельный файл-скрипт, не часть миграции.
 
-Приёмка: **Gate 1**, **Gate 2**.
+Приёмка: **Gate 1**, **Gate 2 — M1 registry stage**. В M1 Gate 2 проверяет
+реестр, зонтичные циклы, FK evidence и tenant isolation; Local
+cost/cardinality/retry/queue не имитируются и остаются обязательными для
+повтора M2.
 
 ## 7. M2 — Local Visibility
 
@@ -196,8 +199,9 @@ targetRank, localCoverage, shareOfLocalVoice
 Экраны: локальное покрытие внутри маршрута кабинета, закрытый шаг показывается
 закрытым.
 
-Приёмка: **Gate 3**, **Gate 4**, **Gate 9**. Fixture для Gate 4 фиксируется в
-репозитории вместе с ожидаемыми числами.
+Приёмка: **Gate 2** (повтор с Local cost/cardinality/retry/queue), **Gate 3**,
+**Gate 4**, **Gate 9**. Fixture для Gate 4 фиксируется в репозитории вместе с
+ожидаемыми числами.
 
 ## 8. M3 — Search и Reputation
 

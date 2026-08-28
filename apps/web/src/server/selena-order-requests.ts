@@ -13,7 +13,7 @@ import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/helpers";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
-import { prepareSelenaScenarios, startSelenaMeasurement } from "./selena-order-desk";
+import { prepareSelenaScenarios, startSelenaMeasurement } from "./selena-order-desk-core";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
