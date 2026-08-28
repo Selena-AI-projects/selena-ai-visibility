@@ -40,7 +40,12 @@ export function createWhitelabelDeployment(options: CreateWhitelabelDeploymentOp
 			readOnly: false,
 			showOptimizeButton: true,
 			canCreateBrands: false,
-			selfServeSignup: false,
+			// Off by default: a whitelabel deployment normally has its accounts
+			// created for it. Opt in with SELENA_SELF_SERVE_SIGNUP=true when the
+			// door is meant to be open — a promo where strangers sign themselves
+			// up, for instance. The login page already offers "Create one" as soon
+			// as this is true, and /auth/register stops bouncing to /auth/login.
+			selfServeSignup: env.SELENA_SELF_SERVE_SIGNUP === "true",
 			billing: false,
 			reportGeneration: true,
 			teamInvites: false,
