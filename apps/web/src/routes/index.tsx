@@ -10,7 +10,8 @@
  * visitor sees the signup screen instead of an empty-database login form.
  * Shows sign-in for unauthenticated users in other modes.
  */
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouteContext } from "@tanstack/react-router";
+import type { ClientConfig } from "@workspace/config/types";
 import { Button } from "@workspace/ui/components/button";
 import FullPageCard from "@/components/full-page-card";
 import { getSession } from "@/lib/auth/session";
@@ -47,15 +48,26 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
 	const { redirect: redirectParam } = Route.useSearch();
+	const context = useRouteContext({ strict: false }) as { clientConfig?: ClientConfig };
+	const canRegister = context.clientConfig?.canRegister ?? false;
 
-	const loginUrl = "/auth/login";
-	const signInUrl = redirectParam ? `${loginUrl}?returnTo=${encodeURIComponent(redirectParam)}` : loginUrl;
+	const withReturnTo = (path: string) =>
+		redirectParam ? `${path}?returnTo=${encodeURIComponent(redirectParam)}` : path;
 
 	return (
 		<FullPageCard className="">
-			<Button asChild>
-				<a href={signInUrl}>Sign In</a>
-			</Button>
+			<div className="flex flex-col items-center gap-3 w-full">
+				<Button asChild className="w-full">
+					<a href={withReturnTo("/auth/login")}>Sign In</a>
+				</Button>
+				{/* Without this the bare Sign In button is the only thing a first-time
+				    visitor sees, and nothing on the page says an account can be made. */}
+				{canRegister && (
+					<Button asChild variant="outline" className="w-full">
+						<a href={withReturnTo("/auth/register")}>Create an account</a>
+					</Button>
+				)}
+			</div>
 		</FullPageCard>
 	);
 }

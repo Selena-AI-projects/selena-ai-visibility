@@ -35,9 +35,9 @@ export const getClientConfig = createServerFn({ method: "GET" }).handler(async (
 
 	const userCount = await countUsers();
 	const hasUsers = userCount > 0;
-	// Cloud is public self-serve, so registration is always open. Otherwise it's
-	// only reachable in local mode before the first user signs up — once the
-	// instance is bootstrapped, both the UI and API reject signups.
+	// Cloud is public self-serve, so registration is always open. Local mode is
+	// closed once the instance is bootstrapped, unless the deployment opts in to
+	// self-serve signup — then every signup gets its own workspace.
 	const canRegister = deployment.features.selfServeSignup || (deployment.mode === "local" && !hasUsers);
 
 	return {
