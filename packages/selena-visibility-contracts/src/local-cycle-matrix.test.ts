@@ -1,43 +1,46 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
-	CYCLE_BUDGET_CAP_USD,
-	MATRIX_BEGIN,
-	MATRIX_CAPTURE_DEPTH,
-	MATRIX_END,
-	PRICE_SOURCE,
-	PUBLISHED_DATAFORSEO_STANDARD_USD,
-	renderLocalCycleMatrix,
-} from "./local-cycle-matrix.js";
+import { MATRIX_BEGIN, MATRIX_CAPTURE_DEPTH, MATRIX_END, renderLocalCycleMatrix } from "./local-cycle-matrix.js";
 
 const documentPath = fileURLToPath(
 	new URL("../../../docs/selena-visibility/local-cycle-economics.md", import.meta.url),
 );
 
+const document = readFileSync(documentPath, "utf8");
+const start = document.indexOf(MATRIX_BEGIN);
+const end = document.indexOf(MATRIX_END);
+const generatedBlock = document.slice(start + MATRIX_BEGIN.length, end).trim();
+const header = generatedBlock.match(
+	/^Тариф расчёта: DataForSEO Standard \$([0-9.]+) за вызов\. Решение владельца: (\d{4}-\d{2}-\d{2})\./,
+);
+const cap = generatedBlock.match(/\| В капе \$([0-9.]+) \|/);
+if (!header || !cap) throw new Error("MATRIX_GENERATION_METADATA_MISSING");
+
+const input = {
+	tariffUsdPerCall: Number(header[1]),
+	decisionDate: header[2],
+	cycleBudgetCapUsd: Number(cap[1]),
+};
+
 const dataRows = (): string[] =>
-	renderLocalCycleMatrix()
+	renderLocalCycleMatrix(input)
 		.split("\n")
 		.filter((line) => line.startsWith("| ") && !line.includes("Grid") && !line.startsWith("| ---"));
 
 describe("economics document", () => {
-	const document = readFileSync(documentPath, "utf8");
-
 	// The document is the artifact the owner prices from, so a hand-edited
 	// table would be a wrong number nobody notices. This is the check that
 	// makes "generated, not typed" enforceable.
 	it("carries exactly the matrix the calculator produces", () => {
-		const start = document.indexOf(MATRIX_BEGIN);
-		const end = document.indexOf(MATRIX_END);
 		expect(start, "matrix markers missing").toBeGreaterThan(-1);
 		expect(end).toBeGreaterThan(start);
-		const block = document.slice(start + MATRIX_BEGIN.length, end).trim();
-		expect(block).toBe(renderLocalCycleMatrix());
+		expect(generatedBlock).toBe(renderLocalCycleMatrix(input));
 	});
 
-	it("prices at the rate the account's own card states", () => {
-		expect(renderLocalCycleMatrix()).toContain(`DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}`);
-		expect(document).toContain(PRICE_SOURCE);
+	it("records the CLI tariff and decision date in the generated heading", () => {
+		expect(input.tariffUsdPerCall).toBeGreaterThan(0);
+		expect(input.decisionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		expect(dataRows()).toHaveLength(18);
 	});
 
@@ -52,8 +55,8 @@ describe("economics document", () => {
 	});
 
 	it("clears the cost cap on every configuration at this rate", () => {
-		const rendered = renderLocalCycleMatrix();
-		expect(rendered).toContain(`В капе $${CYCLE_BUDGET_CAP_USD}`);
+		const rendered = renderLocalCycleMatrix(input);
+		expect(rendered).toContain(`В капе $${input.cycleBudgetCapUsd.toFixed(4)}`);
 		expect(rendered.split("\n").filter((line) => line.includes("**нет**"))).toHaveLength(0);
 		// The row that a depth multiplier would push over $3, named so a change
 		// in either direction is noticed here rather than on an invoice.
@@ -64,5 +67,30 @@ describe("economics document", () => {
 		for (const decision of ["49", "400 м", "800 м", "$3 worst-case", "DataForSEO Standard queue"]) {
 			expect(document, `owner decision missing: ${decision}`).toContain(decision);
 		}
+	});
+
+	it("keeps the selected tariff out of TypeScript", () => {
+		const selectedTariff = header[1];
+		for (const sourcePath of [
+			new URL("./local-cycle-matrix.ts", import.meta.url),
+			new URL("../scripts/render-local-cycle-matrix.ts", import.meta.url),
+		]) {
+			const source = readFileSync(fileURLToPath(sourcePath), "utf8");
+			expect(source).not.toContain(selectedTariff);
+		}
+	});
+});
+
+describe("matrix input", () => {
+	it("rejects missing economic provenance", () => {
+		expect(() => renderLocalCycleMatrix({ ...input, tariffUsdPerCall: Number.NaN })).toThrow(
+			"LOCAL_CYCLE_MATRIX_TARIFF_INVALID",
+		);
+		expect(() => renderLocalCycleMatrix({ ...input, cycleBudgetCapUsd: -1 })).toThrow(
+			"LOCAL_CYCLE_MATRIX_CAP_INVALID",
+		);
+		expect(() => renderLocalCycleMatrix({ ...input, decisionDate: "28 August" })).toThrow(
+			"LOCAL_CYCLE_MATRIX_DECISION_DATE_INVALID",
+		);
 	});
 });

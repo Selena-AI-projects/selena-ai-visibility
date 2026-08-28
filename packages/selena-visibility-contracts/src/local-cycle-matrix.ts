@@ -16,9 +16,8 @@ export const MATRIX_REPEATS = [1, 2] as const;
 
 /**
  * Twenty is the methodology's floor, not a preference: the coverage bands go to
- * Top-20, and "outside Top-20" is unanswerable from a shallower read. It costs
- * real money — two billable units per call at DataForSEO's block of ten — so the
- * table shows it rather than hiding it in a default.
+ * Top-20, and "outside Top-20" is unanswerable from a shallower read. The table
+ * shows it rather than hiding a methodology choice in a default.
  */
 export const MATRIX_CAPTURE_DEPTH = 20;
 
@@ -28,30 +27,30 @@ export const MATRIX_RETRY: LocalCycleRetry = { maxRetriesPerObservation: 1, retr
 export const MATRIX_BEGIN = "<!-- local-cycle-matrix:begin -->";
 export const MATRIX_END = "<!-- local-cycle-matrix:end -->";
 
-/**
- * The vendor's published list price, not a figure from an invoice. It lives
- * here rather than in the calculator on purpose: the calculator must stay
- * price-free (a test enforces that), while a document may quote a public price
- * as long as it says where the number came from and stays unverified until an
- * invoice says otherwise.
- */
-export const PUBLISHED_DATAFORSEO_STANDARD_USD = 0.0006;
-/**
- * Verified against the account's own exported rate card, not a published list
- * price: `serp / task_post` bills $0.0006 per request on the normal queue with
- * no per-result component, so depth does not multiply the charge.
- */
-export const ACCOUNT_METERING = { kind: "request" } as const;
-export const PRICE_SOURCE = "прайс-лист аккаунта, экспорт из кабинета";
-
-/** Owner decision recorded in local-cycle-economics.md. */
-export const CYCLE_BUDGET_CAP_USD = 3;
+export type LocalCycleMatrixInput = {
+	tariffUsdPerCall: number;
+	decisionDate: string;
+	cycleBudgetCapUsd: number;
+};
 
 const money = (value: number): string => `$${value.toFixed(4)}`;
+const tariff = (value: number): string => `$${value.toFixed(8).replace(/0+$/, "").replace(/\.$/, "")}`;
 
-export function renderLocalCycleMatrix(): string {
+function assertMatrixInput(input: LocalCycleMatrixInput): void {
+	if (!Number.isFinite(input.tariffUsdPerCall) || input.tariffUsdPerCall < 0)
+		throw new Error("LOCAL_CYCLE_MATRIX_TARIFF_INVALID");
+	if (!Number.isFinite(input.cycleBudgetCapUsd) || input.cycleBudgetCapUsd < 0)
+		throw new Error("LOCAL_CYCLE_MATRIX_CAP_INVALID");
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(input.decisionDate))
+		throw new Error("LOCAL_CYCLE_MATRIX_DECISION_DATE_INVALID");
+}
+
+export function renderLocalCycleMatrix(input: LocalCycleMatrixInput): string {
+	assertMatrixInput(input);
 	const rows: string[] = [
-		`| Grid | Запросы | Повторы | Глубина | Наблюдения | Вызовы план / worst-case | Единиц на вызов | DataForSEO Standard $${PUBLISHED_DATAFORSEO_STANDARD_USD}/запрос, план / worst-case | В капе $${CYCLE_BUDGET_CAP_USD} |`,
+		`Тариф расчёта: DataForSEO Standard ${tariff(input.tariffUsdPerCall)} за вызов. Решение владельца: ${input.decisionDate}.`,
+		"",
+		`| Grid | Запросы | Повторы | Глубина | Наблюдения | Вызовы план / worst-case | Единиц на вызов | Стоимость план / worst-case | В капе ${money(input.cycleBudgetCapUsd)} |`,
 		"| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :---: |",
 	];
 	for (const grid of MATRIX_GRIDS) {
@@ -69,13 +68,13 @@ export function renderLocalCycleMatrix(): string {
 					shape,
 					{
 						currency: "USD",
-						pricePerBillableUnit: PUBLISHED_DATAFORSEO_STANDARD_USD,
-						metering: ACCOUNT_METERING,
+						pricePerBillableUnit: input.tariffUsdPerCall,
+						metering: { kind: "request" },
 					},
 					MATRIX_RETRY,
 				);
 				const observations = shape.gridPoints * shape.keywords * shape.repeats;
-				const withinCap = published.worstCaseCost <= CYCLE_BUDGET_CAP_USD ? "да" : "**нет**";
+				const withinCap = published.worstCaseCost <= input.cycleBudgetCapUsd ? "да" : "**нет**";
 				rows.push(
 					`| ${grid.label} | ${keywords} | ${repeats} | ${MATRIX_CAPTURE_DEPTH} | ${observations} | ${calls.planned} / ${calls.worstCase} | ${published.unitsPerCall} | ${money(published.plannedCost)} / ${money(published.worstCaseCost)} | ${withinCap} |`,
 				);
