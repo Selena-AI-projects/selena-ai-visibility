@@ -4,7 +4,9 @@ import {
 	IconCircleDashed,
 	IconExternalLink,
 	IconGlobe,
+	IconLock,
 	IconLogout,
+	IconMapPin,
 	IconPlus,
 	IconRefresh,
 	IconSparkles,
@@ -30,6 +32,10 @@ import { humanizeSelenaError } from "@/lib/selena-workspace-errors";
 import { getSelenaAdminAccessFn } from "../../../server/selena-admin-orders";
 import { createSelenaProjectFn, getSelenaWorkspaceFn } from "../../../server/selena-client";
 import { type CycleCompareResult, getSelenaCycleCompareFn } from "../../../server/selena-cycle-compare";
+import {
+	getSelenaLocalVisibilityStateFn,
+	type LocalVisibilityFeatureState,
+} from "../../../server/selena-local-visibility";
 import { getSelenaMeasurementFn, type MeasurementView } from "../../../server/selena-measurement-view";
 import {
 	cancelSelenaProfileSuggestionFn,
@@ -54,6 +60,7 @@ import { collectSelenaWebsiteFn } from "../../../server/selena-website-collector
 export const Route = createFileRoute("/_authed/app/selena")({
 	loader: async () => ({
 		workspace: await getSelenaWorkspaceFn(),
+		localVisibility: await getSelenaLocalVisibilityStateFn(),
 		// The owner runs measurements from the order desk, not by sending
 		// herself a request. Knowing who is looking is what lets the plan card
 		// point at the right door.
@@ -83,7 +90,7 @@ const emptyProfileForm = {
 };
 
 function SelenaWorkspace() {
-	const { workspace } = Route.useLoaderData();
+	const { workspace, localVisibility } = Route.useLoaderData();
 	const { projects } = workspace;
 	const router = useRouter();
 	const { user } = useAuth();
@@ -613,12 +620,69 @@ function SelenaWorkspace() {
 							/>
 							<QuestionsPanel project={selectedProject} locale={locale} />
 							<MeasurementPanel project={selectedProject} locale={locale} />
+							<LocalVisibilityPanel state={localVisibility} locale={locale} />
 							<ResultsPanel project={selectedProject} locale={locale} />
 						</>
 					)}
 				</div>
 			</main>
 		</div>
+	);
+}
+
+function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeatureState; locale: WorkspaceLocale }) {
+	return (
+		<section className="selena-section" aria-labelledby="local-visibility-title">
+			<div className="flex flex-wrap items-start justify-between gap-4">
+				<div className="flex gap-4">
+					<div className="selena-icon-disc">
+						{state.enabled ? (
+							<IconMapPin className="size-5" aria-hidden="true" />
+						) : (
+							<IconLock className="size-5" aria-hidden="true" />
+						)}
+					</div>
+					<div>
+						<h2 id="local-visibility-title" className="selena-heading text-2xl">
+							{tr(locale, "6 · Local visibility", "6 · Локальная видимость")}
+						</h2>
+						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+							{tr(
+								locale,
+								"How consistently the business appears in Google Maps local results across approved coordinates and searches.",
+								"Насколько стабильно бизнес появляется в локальной выдаче Google Maps по утверждённым координатам и запросам.",
+							)}
+						</p>
+					</div>
+				</div>
+				<span className="inline-flex min-h-8 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-3 text-xs font-semibold text-[#6e6258]">
+					{state.enabled ? tr(locale, "UNKNOWN", "НЕИЗВЕСТНО") : tr(locale, "Locked", "Закрыто")}
+				</span>
+			</div>
+
+			{state.enabled ? (
+				<div className="mt-6 border-y border-[#e6ddd1] py-5">
+					<p className="text-sm font-medium text-[#181614]">
+						{tr(locale, "No local measurement data yet", "Данных локального замера пока нет")}
+					</p>
+					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+						{tr(
+							locale,
+							"Coverage remains UNKNOWN until an approved local cycle records every grid point. Opening this step does not start a scan.",
+							"Покрытие остаётся НЕИЗВЕСТНЫМ, пока утверждённый локальный цикл не запишет каждую точку сетки. Открытие этого шага не запускает сканирование.",
+						)}
+					</p>
+				</div>
+			) : (
+				<p className="mt-6 border-t border-[#e6ddd1] pt-5 text-sm leading-6 text-[#6e6258]">
+					{tr(
+						locale,
+						"This surface is not enabled for this deployment. No local scan can start while it is locked.",
+						"Эта поверхность не включена для текущего развёртывания. Пока шаг закрыт, локальный скан не может запуститься.",
+					)}
+				</p>
+			)}
+		</section>
 	);
 }
 
@@ -1180,7 +1244,6 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 			.then((data) => setScenarios(data.scenarios))
 			.catch(() => setFailed(true));
 	};
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reload only when the project changes
 	useEffect(load, [project.project.id]);
 
 	useEffect(() => {
@@ -1556,7 +1619,7 @@ function CycleComparePanel({
 				)}
 			</p>
 		);
-	if (!result || !result.comparable) return null;
+	if (!result?.comparable) return null;
 
 	const label = (change: CycleDiffChange): string => {
 		switch (change.type) {
@@ -1592,8 +1655,8 @@ function CycleComparePanel({
 				</p>
 			) : (
 				<ul className="mt-2 flex flex-col gap-1 text-sm text-[#3d362e]">
-					{result.report.changes.map((change, index) => (
-						<li key={`${change.type}-${change.scenarioId}-${change.system}-${index}`}>
+					{result.report.changes.map((change) => (
+						<li key={`${change.type}-${change.scenarioId}-${change.system}-${JSON.stringify(change.evidence)}`}>
 							{change.system} · {label(change)}{" "}
 							<span className="text-xs text-[#6e6258]">
 								({tr(locale, "measured in", "измерено в")} {change.evidence.baseRunIds.length}+
@@ -1853,7 +1916,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 			<div className="flex flex-wrap items-start justify-between gap-4">
 				<div>
 					<h2 id="results-title" className="selena-heading text-2xl">
-						{tr(locale, "6 · Results and next actions", "6 · Результаты и следующие действия")}
+						{tr(locale, "7 · Results and next actions", "7 · Результаты и следующие действия")}
 					</h2>
 					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
 						{tr(

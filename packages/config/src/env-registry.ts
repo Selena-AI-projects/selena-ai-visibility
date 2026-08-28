@@ -285,6 +285,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Set to 'true' to let strangers create their own accounts in local mode, each in their own workspace. Off by default, where only the first signup on an empty database is allowed.",
 	},
 	{
+		name: "SELENA_LOCAL_VISIBILITY_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to expose the Local Visibility surface. Unset and every other value keep the surface and provider execution disabled.",
+	},
+	{
 		name: "VITE_APP_NAME",
 		scope: "client",
 		requiredBy: ["whitelabel"],
