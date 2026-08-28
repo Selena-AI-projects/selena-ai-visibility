@@ -278,6 +278,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "Client-visible copy of DEPLOYMENT_MODE.",
 	},
 	{
+		name: "SELENA_SELF_SERVE_SIGNUP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let strangers create their own accounts. Off by default: a whitelabel deployment normally has its accounts created for it.",
+	},
+	{
 		name: "VITE_APP_NAME",
 		scope: "client",
 		requiredBy: ["whitelabel"],
