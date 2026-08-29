@@ -158,11 +158,7 @@ async function detailFor(slug: string): Promise<Detail | null> {
 		}
 	}
 	systems.sort((left, right) =>
-		left.channel === right.channel
-			? left.systemId.localeCompare(right.systemId)
-			: left.channel === "VISITOR"
-				? -1
-				: 1,
+		left.channel === right.channel ? left.systemId.localeCompare(right.systemId) : left.channel === "VISITOR" ? -1 : 1,
 	);
 
 	// The published order is the question set's, not the database's: the set is
@@ -180,8 +176,7 @@ async function detailFor(slug: string): Promise<Detail | null> {
 			const citations = answered ? ((run?.citations ?? []) as { domain?: string }[]) : [];
 			// Only where the brand was absent: "named instead" is a comparison,
 			// and a competitor standing beside the brand is not one.
-			const competitors =
-				answered && !run?.mention ? ((run?.competitors ?? []) as { name?: string }[]) : [];
+			const competitors = answered && !run?.mention ? ((run?.competitors ?? []) as { name?: string }[]) : [];
 			return {
 				systemId: system.systemId,
 				answered,
@@ -287,6 +282,60 @@ async function publish(files: { path: string; content: string }[], branch: strin
 	throw new Error(`GITHUB_PULL_FAILED: ${pull.status} ${await pull.text()}`);
 }
 
+/**
+ * The detail as text, for a result that is held back from the journal.
+ *
+ * Written to be read by a person in a deploy log and pasted onward, so it
+ * stays narrow and puts the two columns that carry the finding — how many
+ * systems named the brand, and who they named instead — on the question's own
+ * line. A dash is not a zero: a system that never answered is counted apart
+ * from one that answered without the brand.
+ */
+function readable(brand: string, detail: Detail): string {
+	const lines: string[] = [
+		"",
+		`── ${brand} · ${detail.date} · ${detail.configVersion} ${"─".repeat(8)}`,
+		`${detail.systems.length} systems: ${detail.systems.map((s) => s.systemId).join(", ")}`,
+		"",
+	];
+
+	let named = 0;
+	let answers = 0;
+	let mentions = 0;
+	for (const [index, question] of detail.questions.entries()) {
+		const answered = question.cells.filter((cell) => cell.answered);
+		const hits = answered.filter((cell) => cell.mentioned === true).length;
+		const silent = question.cells.length - answered.length;
+		answers += answered.length;
+		mentions += hits;
+		if (hits > 0) named += 1;
+		const instead = question.namedInstead.slice(0, 3).join(", ");
+		lines.push(
+			`${String(index + 1).padStart(2)}. ${hits}/${answered.length}${silent ? ` (${silent} без ответа)` : ""}  ${question.text}`,
+		);
+		if (instead) lines.push(`      вместо: ${instead}`);
+	}
+
+	const domains = new Map<string, number>();
+	for (const question of detail.questions) {
+		for (const cell of question.cells) {
+			for (const domain of cell.citedDomains) domains.set(domain, (domains.get(domain) ?? 0) + 1);
+		}
+	}
+	const top = [...domains.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+	lines.push("");
+	lines.push(
+		`ИТОГО: назван в ${named} из ${detail.questions.length} вопросов, ${mentions} упоминаний в ${answers} ответах`,
+	);
+	if (top.length > 0) {
+		lines.push("Источники, на которые ссылались:");
+		for (const [domain, count] of top) lines.push(`  ${String(count).padStart(3)} × ${domain}`);
+	}
+	lines.push("─".repeat(60));
+	return lines.join("\n");
+}
+
 async function main(): Promise<void> {
 	const files: { path: string; content: string }[] = [];
 	for (const slug of slugs) {
@@ -295,6 +344,11 @@ async function main(): Promise<void> {
 		// about them, and the recorded yes is what separates the two.
 		if (scenario.ownership === "third-party" && !scenario.consent) {
 			console.log(`${scenario.brand}: third-party without a recorded consent — measured, not published`);
+			// The result still has to reach the person who ordered the run, or the
+			// money bought nothing. Printing it keeps the consent rule intact —
+			// the rule is about publishing to the journal, not about looking.
+			const held = await detailFor(slug);
+			if (held) console.log(readable(scenario.brand, held));
 			continue;
 		}
 		const detail = await detailFor(slug);
@@ -303,9 +357,7 @@ async function main(): Promise<void> {
 			path: `data/journal/${slug}/${detail.date}.json`,
 			content: `${JSON.stringify(detail, null, 2)}\n`,
 		});
-		const named = detail.questions.filter((question) =>
-			question.cells.some((cell) => cell.mentioned === true),
-		).length;
+		const named = detail.questions.filter((question) => question.cells.some((cell) => cell.mentioned === true)).length;
 		console.log(`${scenario.brand}: ${detail.questions.length} questions, named in ${named}`);
 	}
 
