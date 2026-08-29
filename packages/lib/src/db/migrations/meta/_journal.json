@@ -260,6 +260,13 @@
       "when": 1787767200000,
       "tag": "0036_selena_order_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787853600000,
+      "tag": "0037_visibility_os_measurement_registry",
+      "breakpoints": true
     }
   ]
 }

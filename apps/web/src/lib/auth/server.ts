@@ -10,50 +10,46 @@
 import { getCloudAuthOptions } from "@workspace/cloud/auth-hooks";
 import { type CreateAuthOptions, createAuth } from "@workspace/lib/auth/server";
 import { countUsers, provisionLocalOrg, provisionUmbrellaOrg } from "@workspace/lib/db/provisioning";
-import { selfServeSignupOpen } from "@workspace/selena-visibility-contracts";
 import { getWhitelabelAuthOptions } from "@workspace/whitelabel/auth-hooks";
+import { getDeployment } from "@/lib/config/server";
 
 /**
- * Local mode hooks: enforce "exactly one user, with an admin org created
- * atomically on signup". The `before` hook rejects any signup once a user
- * exists; the `after` hook creates the organization and membership.
+ * Local mode hooks, in one of two shapes.
  *
- * Also applies to direct POST /api/auth/sign-up/email calls — the hooks
- * fire regardless of whether signup is triggered from our UI or a curl.
+ * Closed (the default): "exactly one user, with an admin org created
+ * atomically on signup". The `before` hook rejects any signup once a user
+ * exists; the `after` hook creates the single shared organization.
+ *
+ * Open (SELENA_SELF_SERVE_SIGNUP_ENABLED=true): anyone may sign up, and each new
+ * user gets their own workspace. The shared organization must not be reused
+ * here — it would seat every stranger as an admin next to the operator's own
+ * brands, and its id is a constant, so the second signup would collide on
+ * the primary key anyway.
+ *
+ * Both shapes also apply to direct POST /api/auth/sign-up/email calls — the
+ * hooks fire regardless of whether signup is triggered from our UI or a curl.
  */
 function getLocalAuthOptions(): CreateAuthOptions {
-	// With self-serve signup open, "exactly one user" no longer holds, and the
-	// single shared org must not be handed out with it: `provisionLocalOrg`
-	// inserts a fixed organization id, so a second signup would either collide
-	// on the primary key or seat a stranger as admin of the owner's workspace.
-	// Each account gets its own org instead, the way cloud provisions one.
-	if (selfServeSignupOpen(process.env)) {
-		return {
-			databaseHooks: {
-				user: {
-					create: {
-						after: async (user) => {
-							await provisionUmbrellaOrg({
-								userId: user.id,
-								name: user.name?.trim() ? `${user.name.trim()}'s workspace` : "My workspace",
-							});
-						},
-					},
-				},
-			},
-		};
-	}
+	const selfServeSignup = getDeployment().features.selfServeSignup;
 
 	return {
 		databaseHooks: {
 			user: {
 				create: {
 					before: async () => {
+						if (selfServeSignup) return;
 						if ((await countUsers()) > 0) {
 							throw new Error("This instance is already bootstrapped. Sign in with the existing account instead.");
 						}
 					},
 					after: async (user) => {
+						if (selfServeSignup) {
+							await provisionUmbrellaOrg({
+								userId: user.id,
+								name: user.name?.trim() ? `${user.name.trim()}'s workspace` : "My workspace",
+							});
+							return;
+						}
 						await provisionLocalOrg({ userId: user.id });
 					},
 				},

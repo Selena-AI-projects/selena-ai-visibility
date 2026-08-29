@@ -6,7 +6,6 @@ import { getEnvValidationState } from "@workspace/config/env";
 import type { ClientConfig } from "@workspace/config/types";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { countUsers } from "@workspace/lib/db/provisioning";
-import { selfServeSignupOpen } from "@workspace/selena-visibility-contracts";
 import { getDeployment } from "@/lib/config/server";
 
 export type PublicClientConfig = Omit<ClientConfig, "branding"> & {
@@ -36,14 +35,10 @@ export const getClientConfig = createServerFn({ method: "GET" }).handler(async (
 
 	const userCount = await countUsers();
 	const hasUsers = userCount > 0;
-	// Three ways the door can be open: cloud is public self-serve; the Selena
-	// flag opens signup without the rest of the cloud stack; and local mode
-	// admits the one bootstrap account before anybody has signed up. Closed on
-	// all three, both the UI and the API reject signups.
-	const canRegister =
-		deployment.features.selfServeSignup ||
-		selfServeSignupOpen(process.env) ||
-		(deployment.mode === "local" && !hasUsers);
+	// Cloud is public self-serve, so registration is always open. Local mode is
+	// closed once the instance is bootstrapped, unless the deployment opts in to
+	// self-serve signup — then every signup gets its own workspace.
+	const canRegister = deployment.features.selfServeSignup || (deployment.mode === "local" && !hasUsers);
 
 	return {
 		mode: deployment.mode,

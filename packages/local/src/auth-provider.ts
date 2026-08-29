@@ -19,7 +19,12 @@ export function createLocalDeployment(env: Record<string, string | undefined> = 
 			readOnly,
 			showOptimizeButton: false,
 			canCreateBrands: !readOnly,
-			selfServeSignup: false,
+			// Off by default: a Selena deployment normally has its accounts
+			// created for it. Opt in with SELENA_SELF_SERVE_SIGNUP_ENABLED=true
+			// when the door is meant to be open — a promo where strangers sign
+			// themselves up, for instance. Never in demo mode, where the shared
+			// demo login is the whole point.
+			selfServeSignup: !readOnly && env.SELENA_SELF_SERVE_SIGNUP_ENABLED === "true",
 			billing: false,
 			reportGeneration: true,
 			teamInvites: false,

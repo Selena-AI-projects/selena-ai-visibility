@@ -278,6 +278,20 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "Client-visible copy of DEPLOYMENT_MODE.",
 	},
 	{
+		name: "SELENA_SELF_SERVE_SIGNUP_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let strangers create their own accounts in local mode, each in their own workspace. Off by default, where only the first signup on an empty database is allowed.",
+	},
+	{
+		name: "SELENA_LOCAL_VISIBILITY_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to expose the Local Visibility surface. Unset and every other value keep the surface and provider execution disabled.",
+	},
+	{
 		name: "VITE_APP_NAME",
 		scope: "client",
 		requiredBy: ["whitelabel"],
@@ -451,7 +465,8 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: "optional",
 		credential: true,
-		description: "Secret key for signing raw evidence links. Never sent to a client; only signatures derived from it are.",
+		description:
+			"Secret key for signing raw evidence links. Never sent to a client; only signatures derived from it are.",
 	},
 	// Cloud-only service credentials. Consumed by the Stripe billing and
 	// Resend transactional-email integrations (implemented in follow-up work);

@@ -120,11 +120,15 @@ export function calculateQuote(input: QuoteCreate, pricing: QuotePricing) {
 }
 export * from "./anonymous-suggest.js";
 export * from "./catalog.js";
+export * from "./evidence-loop.js";
 export * from "./free-auto-dispatch.js";
+// The matrix renderer and the micro-slice fixture stay out of the product
+// surface: one generates a document, the other is test data.
+export * from "./local-cycle-cost.js";
 export * from "./local-discovery.js";
 export * from "./measurement-execution.js";
 export * from "./measurement-scope.js";
 export * from "./payment.js";
 export * from "./promo.js";
 export * from "./recommendation.js";
-export * from "./self-serve-signup.js";
+export * from "./visibility-os.js";

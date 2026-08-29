@@ -1,6 +1,8 @@
+import { sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	boolean,
+	check,
 	index,
 	integer,
 	json,
@@ -22,6 +24,7 @@ import { organization } from "./schema-auth";
 // Better-auth tables & relations — re-exported so `import * as schema` sees everything.
 // Source file is auto-generated; run `pnpm run generate:auth-schema` to refresh.
 export * from "./schema-auth";
+export * from "./schema-visibility-os";
 
 // ============================================================================
 // Application tables
@@ -406,10 +409,10 @@ export const svPayments = pgTable("sv_payments", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), orderId: uuid("order_id").notNull().references(() => svOrders.id), provider: text("provider").notNull().default("test"), providerEventId: text("provider_event_id").notNull(), status: svPaymentStatusEnum().notNull().default("PENDING"), amount: numeric("amount", { precision: 12, scale: 2 }).notNull(), currency: text("currency").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ eventUnique: uniqueIndex("sv_payments_provider_event_unique").on(table.provider, table.providerEventId), orgIdx: index("sv_payments_org_idx").on(table.organizationId) })).enableRLS();
 export const svFindings = pgTable("sv_findings", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), severity: text("severity").notNull(), category: text("category").notNull(), title: text("title").notNull(), detail: text("detail").notNull(), status: svFindingStatusEnum().notNull().default("OPEN"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), domainId: text("domain_id"), locationId: uuid("location_id"), severity: text("severity").notNull(), category: text("category").notNull(), title: text("title").notNull(), detail: text("detail").notNull(), status: svFindingStatusEnum().notNull().default("OPEN"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ cycleIdx: index("sv_findings_cycle_idx").on(table.cycleId), orgIdx: index("sv_findings_org_idx").on(table.organizationId) })).enableRLS();
 export const svRecommendations = pgTable("sv_recommendations", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), findingId: uuid("finding_id").references(() => svFindings.id), priority: text("priority").notNull(), title: text("title").notNull(), action: text("action").notNull(), rationale: text("rationale").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), findingId: uuid("finding_id").references(() => svFindings.id), domainId: text("domain_id"), locationId: uuid("location_id"), priority: text("priority").notNull(), title: text("title").notNull(), action: text("action").notNull(), rationale: text("rationale").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ cycleIdx: index("sv_recommendations_cycle_idx").on(table.cycleId), orgIdx: index("sv_recommendations_org_idx").on(table.organizationId) })).enableRLS();
 export const svProjectProfiles = pgTable("sv_project_profiles", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), brandName: text("brand_name").notNull(), primaryDomain: text("primary_domain").notNull(), publicProfiles: jsonb("public_profiles").notNull().default([]), competitorSnapshot: jsonb("competitor_snapshot").notNull().default([]), scenarioSnapshot: jsonb("scenario_snapshot").notNull().default([]), mapsLocation: jsonb("maps_location"), confirmedAt: timestamp("confirmed_at", { withTimezone: true }), confirmedBy: text("confirmed_by"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -461,8 +464,8 @@ export const svIncidents = pgTable("sv_incidents", {
 // whether the amount is the provider's actual figure or our estimate; cap
 // alerts read sums from here rather than trusting run rows to be complete.
 export const svCostEvents = pgTable("sv_cost_events", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").references(() => svCycles.id), runId: uuid("run_id").references(() => svRuns.id), provider: text("provider").notNull(), amountUsd: numeric("amount_usd", { precision: 12, scale: 6 }).notNull(), basis: text("basis").notNull(), kind: text("kind").notNull().default("measurement"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId), runIdx: index("sv_cost_events_run_idx").on(table.runId) })).enableRLS();
+	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").references(() => svCycles.id), measurementCycleId: uuid("measurement_cycle_id"), domainId: text("domain_id").notNull().default("AI"), runId: uuid("run_id").references(() => svRuns.id), provider: text("provider").notNull(), amountUsd: numeric("amount_usd", { precision: 12, scale: 6 }).notNull(), basis: text("basis").notNull(), kind: text("kind").notNull().default("measurement"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId), orgDomainIdx: index("sv_cost_events_org_domain_idx").on(table.organizationId, table.domainId), measurementCycleIdx: index("sv_cost_events_measurement_cycle_idx").on(table.measurementCycleId), runIdx: index("sv_cost_events_run_idx").on(table.runId), domainShapeCheck: check("sv_cost_events_domain_shape_check", sql`${table.domainId} = 'AI' OR (${table.measurementCycleId} IS NOT NULL AND ${table.cycleId} IS NULL AND ${table.runId} IS NULL)`) })).enableRLS();
 
 export const svRecommendationRunStatusEnum = pgEnum("sv_recommendation_run_status", ["RUNNING", "READY", "FAILED"]);
 export const svRecommendationRuns = pgTable("sv_recommendation_runs", {
@@ -502,7 +505,7 @@ export const svBusinessLocations = pgTable("sv_business_locations", {
 	// Opaque user-supplied strings kept for human cross-checking only: the RC7
 	// MANUAL_ONLY policy forbids the backend from ever resolving them through
 	// Google Maps / Places, so they must never feed an external lookup.
-	googleMapsUrlReference: text("google_maps_url_reference"), googlePlaceIdReference: text("google_place_id_reference"),
+	googleMapsUrlReference: text("google_maps_url_reference"), googlePlaceIdReference: text("google_place_id_reference"), localProfile: jsonb("local_profile"), localProfileConfirmedAt: timestamp("local_profile_confirmed_at", { withTimezone: true }),
 	referenceOrigin: svReferenceOriginEnum("reference_origin").notNull().default("USER_PROVIDED"), locationRole: svLocationRoleEnum("location_role").notNull().default("PRIMARY"), confirmationStatus: svLocationConfirmationEnum("confirmation_status").notNull().default("PROPOSED"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ entityIdx: index("sv_business_locations_entity_idx").on(table.entityId), orgIdx: index("sv_business_locations_org_idx").on(table.organizationId) })).enableRLS();
 
