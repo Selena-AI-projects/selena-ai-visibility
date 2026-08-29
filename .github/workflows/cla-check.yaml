@@ -36,6 +36,7 @@ jobs:
         env:
           AUTHOR: ${{ github.event.pull_request.user.login }}
           AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          AUTHOR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
           set -euo pipefail
           author_lower="$(echo "$AUTHOR" | tr '[:upper:]' '[:lower:]')"
@@ -50,6 +51,18 @@ jobs:
           case "$author_lower" in
             'dependabot[bot]'|'github-actions[bot]'|'renovate[bot]'|dependabot|renovate)
               echo "Bot account $AUTHOR is exempt from CLA check."
+              exit 0
+              ;;
+          esac
+
+          # The people this repository already belongs to, which the header of
+          # this file has always named as exempt. A fork cannot satisfy the
+          # check any other way: signing means adding a username to the
+          # upstream project's registry, and that registry is their agreement
+          # to enter, not ours to edit.
+          case "$AUTHOR_ASSOCIATION" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "$AUTHOR is $AUTHOR_ASSOCIATION here and is exempt from the CLA check."
               exit 0
               ;;
           esac
