@@ -9,7 +9,8 @@
  */
 import { getCloudAuthOptions } from "@workspace/cloud/auth-hooks";
 import { type CreateAuthOptions, createAuth } from "@workspace/lib/auth/server";
-import { countUsers, provisionLocalOrg } from "@workspace/lib/db/provisioning";
+import { countUsers, provisionLocalOrg, provisionUmbrellaOrg } from "@workspace/lib/db/provisioning";
+import { selfServeSignupOpen } from "@workspace/selena-visibility-contracts";
 import { getWhitelabelAuthOptions } from "@workspace/whitelabel/auth-hooks";
 
 /**
@@ -21,6 +22,28 @@ import { getWhitelabelAuthOptions } from "@workspace/whitelabel/auth-hooks";
  * fire regardless of whether signup is triggered from our UI or a curl.
  */
 function getLocalAuthOptions(): CreateAuthOptions {
+	// With self-serve signup open, "exactly one user" no longer holds, and the
+	// single shared org must not be handed out with it: `provisionLocalOrg`
+	// inserts a fixed organization id, so a second signup would either collide
+	// on the primary key or seat a stranger as admin of the owner's workspace.
+	// Each account gets its own org instead, the way cloud provisions one.
+	if (selfServeSignupOpen(process.env)) {
+		return {
+			databaseHooks: {
+				user: {
+					create: {
+						after: async (user) => {
+							await provisionUmbrellaOrg({
+								userId: user.id,
+								name: user.name?.trim() ? `${user.name.trim()}'s workspace` : "My workspace",
+							});
+						},
+					},
+				},
+			},
+		};
+	}
+
 	return {
 		databaseHooks: {
 			user: {
