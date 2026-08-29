@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AttributionInput } from "./evidence-loop";
+import type { AttributionInput } from "./evidence-loop.js";
 
 export const outcomeSourceAccessClasses = ["CONNECTED", "UPLOADED"] as const;
 export type OutcomeSourceAccessClass = (typeof outcomeSourceAccessClasses)[number];

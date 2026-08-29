@@ -6,7 +6,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
 bash "$repo_root/tools/visibility_os_m5_map_e2e.sh" "$compose_file"
-"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/_pending-os/M6_outcome_layer.sql"
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_outcome_sources')")" != "sv_outcome_sources" ]]; then
+	"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/0042_visibility_os_outcome_layer.sql"
+fi
 
 "${psql[@]}" <<'SQL'
 INSERT INTO sv_outcome_metric_definitions (metric_key, version, unit, aggregation)

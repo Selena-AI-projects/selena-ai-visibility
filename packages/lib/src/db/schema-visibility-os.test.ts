@@ -173,7 +173,7 @@ describe("Visibility OS Local schema", () => {
 
 	it("keeps the pending SQL aligned with Local cardinality and isolation gates", () => {
 		const migration = readFileSync(
-			new URL("./migrations/_pending-os/M2_local_visibility.sql", import.meta.url),
+			new URL("./migrations/0038_visibility_os_local_visibility.sql", import.meta.url),
 			"utf8",
 		);
 		for (const table of localTables) {
@@ -222,7 +222,7 @@ describe("Visibility OS Search and Reputation schema", () => {
 
 	it("keeps pending SQL aligned with Search/Reputation isolation and provenance", () => {
 		const migration = readFileSync(
-			new URL("./migrations/_pending-os/M3_search_reputation.sql", import.meta.url),
+			new URL("./migrations/0039_visibility_os_search_reputation.sql", import.meta.url),
 			"utf8",
 		);
 		for (const table of searchAndReputationTables) {
@@ -290,7 +290,7 @@ describe("Visibility OS Action and Evidence Loop schema", () => {
 
 	it("keeps pending SQL aligned with evidence, transition and verification gates", () => {
 		const migration = readFileSync(
-			new URL("./migrations/_pending-os/M4_action_evidence_loop.sql", import.meta.url),
+			new URL("./migrations/0040_visibility_os_action_evidence_loop.sql", import.meta.url),
 			"utf8",
 		);
 		const rollback = readFileSync(
@@ -333,7 +333,10 @@ describe("Visibility OS Map read models", () => {
 	});
 
 	it("keeps pending SQL bound to immutable dataset evidence and observation provenance", () => {
-		const migration = readFileSync(new URL("./migrations/_pending-os/M5_visibility_map.sql", import.meta.url), "utf8");
+		const migration = readFileSync(
+			new URL("./migrations/0041_visibility_os_visibility_map.sql", import.meta.url),
+			"utf8",
+		);
 		const rollback = readFileSync(
 			new URL("./migrations/_pending-os/M5_visibility_map_down.sql", import.meta.url),
 			"utf8",
@@ -357,6 +360,19 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
+	it("registers M2 through M6 as one ordered numbered migration chain", () => {
+		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
+			entries: Array<{ idx: number; tag: string }>;
+		};
+		expect(journal.entries.slice(-5)).toEqual([
+			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
+			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
+			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
+			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
+			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
+		]);
+	});
+
 	it("exports four RLS-enabled M6 tables and keeps observations nullable", () => {
 		expect(outcomeTables.map((table) => getTableConfig(table).name)).toEqual([
 			"sv_outcome_sources",
@@ -377,8 +393,11 @@ describe("Visibility OS Outcome Layer schema", () => {
 		expect(schema.svAttributionVerdictEnum.enumValues).not.toContain("CAUSAL");
 	});
 
-	it("keeps pending SQL aligned with Outcome provenance and tenant gates", () => {
-		const migration = readFileSync(new URL("./migrations/_pending-os/M6_outcome_layer.sql", import.meta.url), "utf8");
+	it("keeps numbered SQL aligned with Outcome provenance and tenant gates", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0042_visibility_os_outcome_layer.sql", import.meta.url),
+			"utf8",
+		);
 		const rollback = readFileSync(
 			new URL("./migrations/_pending-os/M6_outcome_layer_down.sql", import.meta.url),
 			"utf8",
