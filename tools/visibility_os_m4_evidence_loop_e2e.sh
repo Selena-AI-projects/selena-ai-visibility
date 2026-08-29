@@ -6,7 +6,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
 bash "$repo_root/tools/visibility_os_m3_search_reputation_e2e.sh" "$compose_file"
-"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/_pending-os/M4_action_evidence_loop.sql"
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_approved_actions')")" != "sv_approved_actions" ]]; then
+	"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/0040_visibility_os_action_evidence_loop.sql"
+fi
 
 "${psql[@]}" <<'SQL'
 INSERT INTO organization (id, name, slug, created_at)

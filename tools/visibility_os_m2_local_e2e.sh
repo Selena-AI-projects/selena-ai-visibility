@@ -5,7 +5,9 @@ compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
-"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/_pending-os/M2_local_visibility.sql"
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_local_keywords')")" != "sv_local_keywords" ]]; then
+	"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/0038_visibility_os_local_visibility.sql"
+fi
 
 "${psql[@]}" <<'SQL'
 INSERT INTO organization (id, name, slug, created_at)
