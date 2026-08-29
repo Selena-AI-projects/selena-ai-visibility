@@ -5,19 +5,20 @@
  * on prompt_runs and citations tables.
  */
 
+import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
+import { getAllProviders } from "@workspace/lib/providers";
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { getAllProviders } from "@workspace/lib/providers";
 import {
-	UNAVAILABLE_SENTINEL,
 	type FanoutBreakdownRow,
 	type FanoutModelTotalRow,
 	type FanoutPromptTotalRow,
+	UNAVAILABLE_SENTINEL,
 } from "@/lib/fanout-analysis";
 import { parseModelFilter } from "@/lib/model-filter";
 import { usesWholeHourOffsets } from "@/lib/timezone-offsets";
 
-const db = drizzle(process.env.DATABASE_URL!);
+const db = drizzle({ connection: runtimeDatabaseConnection() });
 
 // ============================================================================
 // Types

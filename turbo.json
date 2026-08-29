@@ -2,6 +2,7 @@
   "$schema": "https://turborepo.dev/schema.json",
   "globalEnv": [
     "DATABASE_URL",
+    "SELENA_RUNTIME_DATABASE_CA_PEM",
     "APP_URL",
     "BETTER_AUTH_SECRET",
     "AUTH0_DOMAIN",

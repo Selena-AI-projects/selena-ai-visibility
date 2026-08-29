@@ -8,6 +8,7 @@ import { getModelMeta } from "@workspace/config/models";
 import type { DeploymentMode } from "@workspace/config/types";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
+import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
 import { type Brand, brands, type Prompt, promptRuns, prompts } from "@workspace/lib/db/schema";
 import { assertCadenceAllowed, getBrandOrganizationId, getOrgEntitlementsMap } from "@workspace/lib/entitlements";
 import { analyzeBrand } from "@workspace/lib/onboarding";
@@ -32,11 +33,7 @@ import { getAdminActiveBrandsOverTime, getAdminBrandRunStats, getAdminRunsOverTi
 // ============================================================================
 
 async function withPgClient<T>(fn: (client: Client) => Promise<T>): Promise<T> {
-	const connectionString = process.env.DATABASE_URL;
-	if (!connectionString) {
-		throw new Error("DATABASE_URL is required");
-	}
-	const client = new Client({ connectionString });
+	const client = new Client(runtimeDatabaseConnection());
 	await client.connect();
 	try {
 		return await fn(client);

@@ -81,17 +81,21 @@ provider registration, paid call or background job. Auto-deploy is outside this
 branch: release happens only through an owner merge into
 `release/selena-visibility-mvp`; `railway up` was not run.
 
-## Hosted runtime TLS blocker
+## Hosted runtime TLS status
 
-`SELENA_RUNTIME_DATABASE_CA_PEM` is not registered in the environment registry,
-declared in the web environment types or referenced by a GitHub workflow. More
-importantly, none of the PostgreSQL clients reads it: Drizzle, direct `pg`
-clients and pg-boss receive only `DATABASE_URL`. Therefore injecting that PEM
-variable in GitHub or Railway does not attach the CA certificate to a database
-connection. A `DATABASE_URL` may carry its own SSL parameters, but that is not
-evidence that this custom CA PEM is trusted.
+Read-only Railway metadata confirms that release commit `9f3cc2b0` auto-deployed
+successfully to staging `web`, `worker`, `publish` and `measure`. The `migrate`
+service has no deployment, and no migration or measurement job was started by
+this verification.
 
-Hosted CA-verified connectivity is `UNKNOWN / BLOCKED_EXTERNAL` until a separate
-runtime TLS implementation and hosted connection test are authorized. No CA
-handling, deployment variable or hosted service was changed in this branch;
-this blocker is outside the repository-only Gate 12 PASS.
+The repository-only `codex/database-tls-adapter` branch registers
+`SELENA_RUNTIME_DATABASE_CA_PEM` and routes shared Drizzle, direct `pg` and both
+pg-boss clients through one fail-closed runtime adapter. Escaped PEM newlines
+are normalized, non-certificate material is rejected, and connection-string
+TLS options cannot override `rejectUnauthorized: true` when the CA is present.
+
+Hosted CA-verified connectivity remains `UNKNOWN / BLOCKED_EXTERNAL` until this
+branch is reviewed and merged, the staging variable is confirmed by
+an owner without exposing its value, and a separately authorized read-only
+connection smoke test succeeds. No hosted variable, deployment, database or
+runtime job was changed while preparing this branch.

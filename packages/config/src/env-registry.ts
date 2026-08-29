@@ -51,6 +51,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "PostgreSQL connection string.",
 	},
 	{
+		name: "SELENA_RUNTIME_DATABASE_CA_PEM",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"PEM-encoded CA certificate bundle for runtime PostgreSQL clients. When set, certificate verification is mandatory.",
+	},
+	{
 		name: "APP_URL",
 		scope: "server",
 		requiredBy: ["cloud"],
