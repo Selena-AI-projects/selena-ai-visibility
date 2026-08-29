@@ -20,7 +20,7 @@ import { getDeployment } from "@/lib/config/server";
  * atomically on signup". The `before` hook rejects any signup once a user
  * exists; the `after` hook creates the single shared organization.
  *
- * Open (SELENA_SELF_SERVE_SIGNUP=true): anyone may sign up, and each new
+ * Open (SELENA_SELF_SERVE_SIGNUP_ENABLED=true): anyone may sign up, and each new
  * user gets their own workspace. The shared organization must not be reused
  * here — it would seat every stranger as an admin next to the operator's own
  * brands, and its id is a constant, so the second signup would collide on
