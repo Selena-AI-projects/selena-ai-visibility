@@ -1,20 +1,24 @@
 import { describe, expect, it } from "vitest";
-import {
-	DEFAULT_GRID_POINT_CEILING,
-	VISIBILITY_SURFACES,
-	assertGridWithinCeiling,
-	assertLocalObservationCardinality,
-	assertSurfaceCaptureAllowed,
-	expectedLocalObservations,
-	localCoverage,
-	localVoiceComparison,
-	shareOfLocalVoice,
-	squareGridPoints,
-	visibilityPortfolio,
-} from "./visibility-os";
-import { LOCAL_AI_DISCOVERY_POLICY } from "./local-discovery";
 import { LOCAL_COVERAGE_EXPECTED_V1, LOCAL_COVERAGE_FIXTURE_V1 } from "./fixtures/local-coverage-v1";
 import { MICRO_SLICE_GRID, MICRO_SLICE_GRID_POINTS } from "./fixtures/micro-slice";
+import { LOCAL_AI_DISCOVERY_POLICY } from "./local-discovery";
+import {
+	assertGridWithinCeiling,
+	assertLocalObservationCardinality,
+	assertReputationAnalysis,
+	assertSurfaceCaptureAllowed,
+	DEFAULT_GRID_POINT_CEILING,
+	expectedLocalObservations,
+	expectedReputationSnapshots,
+	expectedSearchObservations,
+	localCoverage,
+	localVoiceComparison,
+	reviewVelocityPer30Days,
+	shareOfLocalVoice,
+	squareGridPoints,
+	VISIBILITY_SURFACES,
+	visibilityPortfolio,
+} from "./visibility-os";
 
 describe("Visibility OS surfaces", () => {
 	it("keeps Ask Maps manual-only and treats missing flags as disabled", () => {
@@ -32,10 +36,29 @@ describe("Visibility OS surfaces", () => {
 		).not.toThrow();
 	});
 
+	it("keeps unfinished Search, Reputation and Local provider surfaces fail-closed", () => {
+		expect(() =>
+			assertSurfaceCaptureAllowed("GOOGLE_ORGANIC", "PROVIDER_API", {
+				SELENA_SEARCH_VISIBILITY_ENABLED: "true",
+			}),
+		).toThrow("VISIBILITY_SURFACE_NOT_IMPLEMENTED");
+		expect(() =>
+			assertSurfaceCaptureAllowed("REVIEW_PLATFORM", "MANUAL_OBSERVATION", {
+				SELENA_REPUTATION_ENABLED: "true",
+			}),
+		).toThrow("VISIBILITY_SURFACE_NOT_IMPLEMENTED");
+		expect(() =>
+			assertSurfaceCaptureAllowed("GOOGLE_MAPS_LOCAL_PACK", "PROVIDER_API", {
+				SELENA_LOCAL_VISIBILITY_ENABLED: "true",
+			}),
+		).toThrow("VISIBILITY_SURFACE_NOT_IMPLEMENTED");
+	});
+
 	it("keeps readiness and visibility beside each other without an overall score", () => {
 		const valid = {
 			readiness: [
 				{
+					evidenceType: "READINESS_SNAPSHOT" as const,
 					dimension: "ACCESS",
 					score: 80,
 					evidenceIds: ["readiness-1"],
@@ -44,6 +67,7 @@ describe("Visibility OS surfaces", () => {
 			],
 			surfaces: [
 				{
+					evidenceType: "MEASUREMENT_OBSERVATION" as const,
 					surfaceId: "GOOGLE_MAPS_LOCAL_PACK",
 					status: "UNKNOWN",
 					metrics: null,
@@ -54,6 +78,44 @@ describe("Visibility OS surfaces", () => {
 		};
 		expect(visibilityPortfolio.parse(valid)).toEqual(valid);
 		expect(() => visibilityPortfolio.parse({ ...valid, overallScore: 80 })).toThrow();
+	});
+
+	it("keeps visibility unchanged when readiness changes", () => {
+		const surfaces = [
+			{
+				evidenceType: "MEASUREMENT_OBSERVATION" as const,
+				surfaceId: "REVIEW_PLATFORM" as const,
+				status: "MEASURED" as const,
+				metrics: { reviewVelocityPer30Days: 4 },
+				evidenceIds: ["review-snapshot-1"],
+				measuredAt: "2026-08-29T00:00:00.000Z",
+			},
+		];
+		const first = visibilityPortfolio.parse({
+			readiness: [
+				{
+					evidenceType: "READINESS_SNAPSHOT",
+					dimension: "ACCESS",
+					score: 20,
+					evidenceIds: ["readiness-1"],
+					measuredAt: "2026-08-29T00:00:00.000Z",
+				},
+			],
+			surfaces,
+		});
+		const second = visibilityPortfolio.parse({
+			readiness: [
+				{
+					evidenceType: "READINESS_SNAPSHOT",
+					dimension: "ACCESS",
+					score: 90,
+					evidenceIds: ["readiness-2"],
+					measuredAt: "2026-08-29T01:00:00.000Z",
+				},
+			],
+			surfaces,
+		});
+		expect(second.surfaces).toEqual(first.surfaces);
 	});
 });
 
@@ -137,5 +199,35 @@ describe("Visibility OS local metrics fixture v1", () => {
 		);
 		expect(comparison[LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey]).toBeCloseTo(1 / 3);
 		expect(comparison["competitor-a"]).toBeCloseTo(2 / 9);
+	});
+});
+
+describe("Visibility OS Search and Reputation contracts", () => {
+	it("keeps Search and Reputation cardinality formulas domain-specific", () => {
+		expect(expectedSearchObservations({ queries: 2, engines: 2, regions: 1, devices: 2, repeats: 3 })).toBe(24);
+		expect(expectedReputationSnapshots({ locations: 2, sources: 3, periods: 4 })).toBe(24);
+		expect(() => expectedSearchObservations({ queries: 0, engines: 1, regions: 1, devices: 1, repeats: 1 })).toThrow(
+			"SEARCH_OBSERVATION_SHAPE_INVALID",
+		);
+		expect(() => expectedReputationSnapshots({ locations: 1, sources: -1, periods: 1 })).toThrow(
+			"REPUTATION_SNAPSHOT_SHAPE_INVALID",
+		);
+	});
+
+	it("requires an analysis method version for every topic or sentiment", () => {
+		expect(() =>
+			assertReputationAnalysis({ topic: "service", sentiment: "POSITIVE", analysisMethodVersion: null }),
+		).toThrow("REPUTATION_ANALYSIS_METHOD_REQUIRED");
+		expect(() =>
+			assertReputationAnalysis({ topic: null, sentiment: "NEGATIVE", analysisMethodVersion: "sentiment/1" }),
+		).not.toThrow();
+		expect(() => assertReputationAnalysis({ topic: null, sentiment: null, analysisMethodVersion: null })).not.toThrow();
+	});
+
+	it("normalizes review velocity to 30 days and preserves UNKNOWN", () => {
+		expect(reviewVelocityPer30Days(5, 15)).toBe(10);
+		expect(reviewVelocityPer30Days(null, 15)).toBeNull();
+		expect(() => reviewVelocityPer30Days(5, 0)).toThrow("REPUTATION_PERIOD_INVALID");
+		expect(() => reviewVelocityPer30Days(-1, 15)).toThrow("REPUTATION_REVIEW_COUNT_INVALID");
 	});
 });
