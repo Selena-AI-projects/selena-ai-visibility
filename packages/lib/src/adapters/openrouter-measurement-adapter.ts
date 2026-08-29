@@ -12,6 +12,7 @@ import { type ExtractionContext, extractMeasurement } from "../selena-answer-ext
 // Re-exported so a caller that builds one adapter per model does not need a
 // direct dependency on the contracts package to know which models there are.
 export { apiModelIds };
+
 import type { SelenaExecutablePermit, SelenaMeasurementAdapter, SelenaMeasurementPermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
 
@@ -59,6 +60,8 @@ export type OpenRouterAdapterDeps = {
 	timeoutMs?: number;
 	maxResponseBytes?: number;
 };
+
+export type OpenRouterFamilyAdapterDeps = Omit<OpenRouterAdapterDeps, "model" | "system">;
 
 type OpenRouterUsage = {
 	prompt_tokens?: number | null;
@@ -344,6 +347,38 @@ export function createOpenRouterAdapter(deps: OpenRouterAdapterDeps): SelenaMeas
 			// contract, so a mapping bug surfaces as a refusal rather than as a
 			// malformed row reaching storage.
 			return runOutcomeSchema.parse(await execute(permit));
+		},
+	};
+}
+
+/**
+ * Routes the catalog's API View permits to the exact OpenRouter model the
+ * permit authorizes. The registry has one `openrouter` family entry, while the
+ * sold system remains per permit; using a service-wide model here would store
+ * five differently labelled observations from one model.
+ */
+export function createOpenRouterFamilyAdapter(deps: OpenRouterFamilyAdapterDeps): SelenaMeasurementAdapter {
+	const byModel = new Map<string, SelenaMeasurementAdapter>(
+		apiModelIds.map((model) => [
+			model,
+			createOpenRouterAdapter({
+				...deps,
+				model,
+				system: model,
+			}),
+		]),
+	);
+
+	return {
+		channel: "api_view",
+		async measure(permit: SelenaMeasurementPermit) {
+			if (permit.channel !== "api_view") throw new Error("MEASUREMENT_CHANNEL_MISMATCH");
+			return { dispatchKey: permit.dispatchKey, status: "queued" as const };
+		},
+		async execute(permit: SelenaExecutablePermit) {
+			const adapter = permit.systemId === null ? undefined : byModel.get(permit.systemId);
+			if (!adapter) throw new Error("SELENA_API_MODEL_UNKNOWN");
+			return adapter.execute(permit);
 		},
 	};
 }

@@ -8,7 +8,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SelenaExecutablePermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
-import { createOpenRouterAdapter, resolveOpenRouterCost } from "./openrouter-measurement-adapter";
+import {
+	apiModelIds,
+	createOpenRouterAdapter,
+	createOpenRouterFamilyAdapter,
+	resolveOpenRouterCost,
+} from "./openrouter-measurement-adapter";
 
 const API_KEY = "sk-or-v1-secret-owner-key";
 const SCENARIO_TEXT = "Which spa in Canggu is best for a deep tissue massage?";
@@ -121,6 +126,67 @@ describe("OpenRouter measurement adapter", () => {
 			provider: "openrouter",
 		});
 		expect(() => runOutcomeSchema.parse(outcome)).not.toThrow();
+	});
+
+	it("routes every API View permit to the exact catalog model it authorizes", async () => {
+		const fetchImpl = vi.fn(
+			async (): Promise<Response> =>
+				jsonResponse(
+					successPayload({
+						choices: [{ message: { content: "KORA Food Hall is the purpose-built option." } }],
+					}),
+				),
+		) as unknown as typeof fetch;
+		const adapter = createOpenRouterFamilyAdapter({
+			apiKey: API_KEY,
+			fetchImpl,
+			resolveScenarioText: () => SCENARIO_TEXT,
+			resolveExtractionContext: () => ({
+				brandTerms: ["KORA Food Hall"],
+				ownedDomains: ["korafoodhall.com"],
+				competitors: [],
+				language: "en",
+			}),
+			now,
+		});
+
+		const outcomes: RunOutcome[] = [];
+		for (const [index, model] of apiModelIds.entries()) {
+			outcomes.push(
+				await adapter.execute(
+					permitFor({
+						id: `permit-${index}`,
+						systemId: model,
+						dispatchKey: `order-1:scenario-1:${model}:0:1`,
+					}),
+				),
+			);
+		}
+
+		expect(fetchImpl).toHaveBeenCalledTimes(apiModelIds.length);
+		expect(globalFetch).not.toHaveBeenCalled();
+		expect(
+			(fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map(
+				([, init]) => JSON.parse(String((init as RequestInit | undefined)?.body)).model,
+			),
+		).toEqual([...apiModelIds]);
+		expect(outcomes.map((outcome) => outcome.measurement?.system)).toEqual([...apiModelIds]);
+		expect(outcomes.map((outcome) => outcome.measurement?.model)).toEqual([...apiModelIds]);
+	});
+
+	it("refuses a non-catalog API model before transport", async () => {
+		const fetchImpl = respondWith(jsonResponse(successPayload()));
+		const adapter = createOpenRouterFamilyAdapter({
+			apiKey: API_KEY,
+			fetchImpl,
+			resolveScenarioText: () => SCENARIO_TEXT,
+			now,
+		});
+
+		await expect(adapter.execute(permitFor({ systemId: "unsupported/model" }))).rejects.toThrow(
+			"SELENA_API_MODEL_UNKNOWN",
+		);
+		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
 	it("falls back to the local estimate when the provider reports no cost", async () => {
