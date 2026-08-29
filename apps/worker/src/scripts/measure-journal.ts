@@ -50,7 +50,12 @@ const PRICE_PER_ANSWER_USD = 0.0015;
 const API_PRICE_PER_ANSWER_USD = 0.005;
 
 /** The collector is the bottleneck and it is patient, so many can wait at once. */
-const CONCURRENCY = 10;
+// Bright Data's own scrape call can take well past a minute per question, and
+// under concurrent load a snapshot has been observed not to become ready
+// within the adapter's 5-minute default poll window — every permit sent that
+// way was recorded as MALFORMED_RESPONSE (2026-08-29 run: 0 valid of 200).
+// A gentler pace keeps each call inside that window.
+const CONCURRENCY = 3;
 
 const BRIGHTDATA_ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const BRIGHTDATA_SURFACES = ["chatgpt", "gemini", "perplexity"] as const;
@@ -122,6 +127,11 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 			fetchImpl: fetch,
 			resolveScenarioText: resolvers.resolveScenarioText,
 			resolveExtractionContext: resolvers.resolveExtractionContext,
+			// Default is 5 minutes; the 2026-08-29 run showed snapshots still
+			// running past that under concurrent load, so every call in it was
+			// lost as MALFORMED_RESPONSE despite Bright Data having produced
+			// (and billed) an answer. Doubled here rather than left unbounded.
+			snapshotTimeoutMs: 10 * 60 * 1000,
 		}),
 	]),
 );
