@@ -118,6 +118,7 @@ export function calculateQuote(input: QuoteCreate, pricing: QuotePricing) {
 		currency: pricing.currency,
 	};
 }
+export * from "./anonymous-suggest.js";
 export * from "./catalog.js";
 export * from "./evidence-loop.js";
 export * from "./free-auto-dispatch.js";

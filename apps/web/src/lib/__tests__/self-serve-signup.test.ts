@@ -29,19 +29,19 @@ describe("self-serve signup", () => {
 	});
 
 	it("opens on a bootstrapped instance once the deployment opts in", () => {
-		expect(canRegister({ SELENA_SELF_SERVE_SIGNUP: "true" }, true)).toBe(true);
+		expect(canRegister({ SELENA_SELF_SERVE_SIGNUP_ENABLED: "true" }, true)).toBe(true);
 	});
 
 	it("treats anything but the exact string 'true' as closed", () => {
 		for (const value of ["1", "TRUE", "yes", ""]) {
 			resetDeploymentCache();
-			expect(canRegister({ SELENA_SELF_SERVE_SIGNUP: value }, true)).toBe(false);
+			expect(canRegister({ SELENA_SELF_SERVE_SIGNUP_ENABLED: value }, true)).toBe(false);
 		}
 	});
 
 	it("never opens in demo mode, where the shared demo login is the point", () => {
 		const deployment = getDeployment({
-			env: { DEPLOYMENT_MODE: "demo", SELENA_SELF_SERVE_SIGNUP: "true" },
+			env: { DEPLOYMENT_MODE: "demo", SELENA_SELF_SERVE_SIGNUP_ENABLED: "true" },
 		});
 		expect(deployment.mode).toBe("demo");
 		expect(deployment.features.selfServeSignup).toBe(false);

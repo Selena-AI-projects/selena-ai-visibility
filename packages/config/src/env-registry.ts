@@ -278,7 +278,7 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "Client-visible copy of DEPLOYMENT_MODE.",
 	},
 	{
-		name: "SELENA_SELF_SERVE_SIGNUP",
+		name: "SELENA_SELF_SERVE_SIGNUP_ENABLED",
 		scope: "server",
 		requiredBy: "optional",
 		description:
