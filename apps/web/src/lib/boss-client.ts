@@ -1,3 +1,4 @@
+import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
 import type { PgBoss } from "pg-boss";
 
 let bossInstance: PgBoss | null = null;
@@ -16,18 +17,13 @@ export async function getBoss(): Promise<PgBoss> {
 		return bossPromise;
 	}
 
-	const connectionString = process.env.DATABASE_URL;
-	if (!connectionString) {
-		throw new Error("DATABASE_URL is required for pg-boss");
-	}
-
 	bossPromise = (async () => {
 		// Loaded here rather than at module scope: server-function modules that
 		// enqueue jobs stay in the client graph, and a static edge to pg-boss
 		// shipped the Postgres driver to the browser.
 		const { PgBoss } = await import("pg-boss");
 		const boss = new PgBoss({
-			connectionString,
+			...runtimeDatabaseConnection(),
 			schema: "pgboss",
 			// Web app only needs to send/schedule jobs, not process them
 			supervise: false, // Let worker handle supervision
