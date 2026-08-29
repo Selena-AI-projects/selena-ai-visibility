@@ -4,8 +4,8 @@ set -euo pipefail
 compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 compose=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 "${compose[@]}" <<'SQL'
-CREATE TABLE IF NOT EXISTS organization (id text PRIMARY KEY, name text NOT NULL, slug text NOT NULL UNIQUE);
-INSERT INTO organization (id, name, slug) VALUES ('e2e-a', 'E2E A', 'e2e-a'), ('e2e-b', 'E2E B', 'e2e-b') ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS organization (id text PRIMARY KEY, name text NOT NULL, slug text NOT NULL UNIQUE, created_at timestamptz NOT NULL DEFAULT now());
+INSERT INTO organization (id, name, slug, created_at) VALUES ('e2e-a', 'E2E A', 'e2e-a', now()), ('e2e-b', 'E2E B', 'e2e-b', now()) ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS sv_website_snapshots (id text PRIMARY KEY, organization_id text NOT NULL REFERENCES organization(id), project_id uuid NOT NULL REFERENCES sv_projects(id), website text NOT NULL, content_hash text NOT NULL, captured_at timestamptz NOT NULL, snapshot jsonb NOT NULL, immutable boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now());
 CREATE UNIQUE INDEX IF NOT EXISTS sv_website_snapshots_project_hash_unique ON sv_website_snapshots(project_id, content_hash);
 CREATE INDEX IF NOT EXISTS sv_website_snapshots_org_idx ON sv_website_snapshots(organization_id);
@@ -23,6 +23,17 @@ BEGIN
   SELECT count(*) INTO rls_count FROM pg_class WHERE relname LIKE 'sv_%' AND relkind = 'r' AND relrowsecurity;
   IF a_count <> 1 OR b_count <> 1 THEN RAISE EXCEPTION 'cross-tenant fixture mismatch'; END IF;
   IF rls_count < 15 THEN RAISE EXCEPTION 'RLS coverage too low: %', rls_count; END IF;
+  IF to_regclass('sv_outcome_sources') IS NOT NULL AND (
+    SELECT count(*) FROM pg_class
+    WHERE relname IN (
+      'sv_outcome_sources',
+      'sv_outcome_metric_definitions',
+      'sv_outcome_observations',
+      'sv_outcome_attribution_windows'
+    ) AND relkind = 'r' AND relrowsecurity
+  ) <> 4 THEN
+    RAISE EXCEPTION 'Outcome RLS coverage incomplete';
+  END IF;
 END $$;
 DO $$
 DECLARE

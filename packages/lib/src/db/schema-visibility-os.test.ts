@@ -39,6 +39,13 @@ const actionAndEvidenceTables = [
 	schema.svAttributionAssessments,
 ];
 
+const outcomeTables = [
+	schema.svOutcomeSources,
+	schema.svOutcomeMetricDefinitions,
+	schema.svOutcomeObservations,
+	schema.svOutcomeAttributionWindows,
+];
+
 describe("Visibility OS measurement registry", () => {
 	it("exports the five RLS-enabled registry tables without a shared observation table", () => {
 		expect(registryTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -346,5 +353,52 @@ describe("Visibility OS Map read models", () => {
 		expect(rollback).toContain('DROP VIEW IF EXISTS "sv_visibility_map_datasets"');
 		expect(rollback).toContain('DROP VIEW IF EXISTS "sv_visibility_map_points"');
 		expect(rollback).not.toContain("DROP TABLE");
+	});
+});
+
+describe("Visibility OS Outcome Layer schema", () => {
+	it("exports four RLS-enabled M6 tables and keeps observations nullable", () => {
+		expect(outcomeTables.map((table) => getTableConfig(table).name)).toEqual([
+			"sv_outcome_sources",
+			"sv_outcome_metric_definitions",
+			"sv_outcome_observations",
+			"sv_outcome_attribution_windows",
+		]);
+		for (const table of outcomeTables) expect(getTableConfig(table).enableRLS).toBe(true);
+		const columns = getTableConfig(schema.svOutcomeObservations).columns;
+		expect(columns.find((column) => column.name === "value")?.notNull).toBe(false);
+		expect(columns.find((column) => column.name === "source_id")?.notNull).toBe(true);
+		expect(columns.find((column) => column.name === "dataset_id")?.notNull).toBe(true);
+	});
+
+	it("extends attribution with an optional persisted Outcome window", () => {
+		const columns = getTableConfig(schema.svAttributionAssessments).columns;
+		expect(columns.find((column) => column.name === "outcome_window_id")?.notNull).toBe(false);
+		expect(schema.svAttributionVerdictEnum.enumValues).not.toContain("CAUSAL");
+	});
+
+	it("keeps pending SQL aligned with Outcome provenance and tenant gates", () => {
+		const migration = readFileSync(new URL("./migrations/_pending-os/M6_outcome_layer.sql", import.meta.url), "utf8");
+		const rollback = readFileSync(
+			new URL("./migrations/_pending-os/M6_outcome_layer_down.sql", import.meta.url),
+			"utf8",
+		);
+		for (const table of outcomeTables) {
+			const name = getTableConfig(table).name;
+			expect(migration).toContain(`CREATE TABLE "${name}"`);
+			expect(migration).toContain(`ALTER TABLE "${name}" ENABLE ROW LEVEL SECURITY`);
+			expect(migration).toContain(`CREATE POLICY "tenant_isolation" ON "${name}"`);
+			expect(rollback).toContain(`DROP TABLE IF EXISTS "${name}"`);
+		}
+		expect(migration).toContain("\"access_class\" IN ('CONNECTED', 'UPLOADED')");
+		expect(migration).toContain('UNIQUE ("source_id", "metric_key", "period_start", "period_end")');
+		expect(migration).toContain('"value" numeric(18, 6)');
+		expect(migration).toContain('ADD COLUMN "outcome_window_id" uuid');
+		expect(migration).toContain("\"domain_id\" = 'OUTCOME'");
+		expect(migration).toContain("OUTCOME_SOURCE_MISMATCH");
+		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
+		expect(migration).not.toContain("ownerApprovedMeasurementAdapters");
+		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_incidents"');
+		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_audit_events"');
 	});
 });
