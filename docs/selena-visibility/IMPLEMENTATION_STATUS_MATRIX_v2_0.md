@@ -1,7 +1,7 @@
 # Visibility OS Implementation Status Matrix v2.0
 
 Working state of local branch `codex/visibility-os-m5-map`, based on
-`release/selena-visibility-mvp` merge commit `1bfa926e`, on 2026-08-29. This
+`release/selena-visibility-mvp` merge commit `fc1ccc19`, on 2026-08-29. This
 matrix covers Visibility OS only;
 `IMPLEMENTATION_STATUS_MATRIX_v1_4.md` remains the record for the existing AI
 core.
@@ -34,7 +34,7 @@ has a matching artifact.
 
 | Gate | Status | Evidence or blocker |
 | --- | --- | --- |
-| 1 `AI_CORE_NO_REGRESSION_PASS` | `PASS (M5 local)` | Node 24.18: contracts 137/137, lib 824/824, config 87/87, web 294 passed / 4 skipped; all four typechecks and the production build passed. The existing PostgreSQL AI stub cycle passed over numbered migrations plus pending M2/M3/M4/M5 SQL. M5 adds only read-model views and makes no frontend or AI cycle change |
+| 1 `AI_CORE_NO_REGRESSION_PASS` | `PASS (M5 local)` | Node 24.18: contracts 145/145, lib 824/824, config 87/87, web 294 passed / 4 skipped; all four typechecks and the production build passed. The existing PostgreSQL AI stub cycle passed over numbered migrations plus pending M2/M3/M4/M5 SQL. M5 adds only read-model views and makes no frontend or AI cycle change |
 | 2 `MEASUREMENT_DOMAIN_ISOLATION_PASS` | `PASS (M3 local)` | M1 and M2 scratch criteria were repeated before M3. Search/Reputation writes created no AI or Local observations; uniqueness, domain FK, retry-in-place, Configuration Lock cardinality, cost sums, failure/emergency-stop status and two-tenant RLS stayed domain-specific. Search/Reputation have no registered runtime queues or adapters |
 | 3 `LOCAL_MEASUREMENT_SCHEMA_PASS` | `PASS (M2 local)` | disposable PG16 proved the exact observation uniqueness key, complete `grid points x keywords x repeats` cardinality, explicit invalid/unmeasured rows with reasons, required nonnegative depth, reconstructable region/coordinate/keyword/provider and immutable grid versions |
 | 4 `GEO_GRID_METRICS_PASS` | `PASS (M2 local)` | frozen `local-coverage-v1` fixture covers Top-3/10/20, outside Top-20, found-only average rank plus found share, Share of Local Voice, competitors, shallow captures and `UNKNOWN` empty denominators with deterministic six-decimal results |
