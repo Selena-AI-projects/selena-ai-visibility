@@ -67,6 +67,11 @@ export const svMeasurementDatasets = pgTable(
 			table.datasetKey,
 			table.version,
 		),
+		idCycleOrganizationUnique: uniqueIndex("sv_measurement_datasets_id_cycle_organization_unique").on(
+			table.id,
+			table.cycleId,
+			table.organizationId,
+		),
 		orgCycleIdx: index("sv_measurement_datasets_org_cycle_idx").on(table.organizationId, table.cycleId),
 	}),
 ).enableRLS();
@@ -684,6 +689,284 @@ export const svReviewTopicObservations = pgTable(
 		analysisMethodCheck: check(
 			"sv_review_topic_observations_analysis_method_check",
 			sql`length(trim(${table.topic})) > 0 AND length(trim(${table.sentiment})) > 0 AND length(trim(${table.analysisMethodVersion})) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svActionStatusEnum = pgEnum("sv_action_status", [
+	"PROPOSED",
+	"APPROVED",
+	"IN_PROGRESS",
+	"IMPLEMENTED",
+	"VERIFIED",
+	"REJECTED",
+	"ABANDONED",
+]);
+export const svChangeVerificationEnum = pgEnum("sv_change_verification", ["DECLARED", "EVIDENCED", "DISPUTED"]);
+export const svVerificationStatusEnum = pgEnum("sv_verification_status", ["PLANNED", "RUNNING", "COMPLETED", "FAILED"]);
+export const svAttributionVerdictEnum = pgEnum("sv_attribution_verdict", [
+	"POSITIVE_CORRELATION",
+	"NEGATIVE_CORRELATION",
+	"NO_OBSERVED_CHANGE",
+	"MIXED_RESULT",
+	"INSUFFICIENT_EVIDENCE",
+	"CONFOUNDED",
+	"NOT_MEASURED",
+]);
+export const svAttributionConfidenceEnum = pgEnum("sv_attribution_confidence", ["HIGH", "MEDIUM", "LOW", "UNKNOWN"]);
+
+export const svApprovedActions = pgTable(
+	"sv_approved_actions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		sourceKind: text("source_kind").notNull(),
+		sourceRef: text("source_ref").notNull(),
+		findingRef: text("finding_ref"),
+		recommendationRef: text("recommendation_ref"),
+		status: svActionStatusEnum("status").notNull().default("PROPOSED"),
+		title: text("title").notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		idOrganizationUnique: uniqueIndex("sv_approved_actions_id_organization_unique").on(table.id, table.organizationId),
+		orgProjectIdx: index("sv_approved_actions_org_project_idx").on(table.organizationId, table.projectId),
+		sourceCheck: check(
+			"sv_approved_actions_source_check",
+			sql`${table.sourceKind} IN ('CYCLE_RECOMMENDATION', 'ENGINE_ACTION', 'MANUAL') AND length(trim(${table.sourceRef})) > 0`,
+		),
+		evidenceCheck: check(
+			"sv_approved_actions_evidence_check",
+			sql`cardinality(${table.evidenceIds}) > 0 AND length(trim(${table.title})) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svActionApprovals = pgTable(
+	"sv_action_approvals",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		actionId: uuid("action_id").notNull(),
+		approvalVersion: integer("approval_version").notNull(),
+		approvedBy: text("approved_by").notNull(),
+		approvedAt: timestamp("approved_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		actionVersionUnique: uniqueIndex("sv_action_approvals_action_version_unique").on(
+			table.actionId,
+			table.approvalVersion,
+		),
+		actionOrganizationReference: foreignKey({
+			columns: [table.actionId, table.organizationId],
+			foreignColumns: [svApprovedActions.id, svApprovedActions.organizationId],
+			name: "sv_action_approvals_action_organization_fk",
+		}),
+		orgActionIdx: index("sv_action_approvals_org_action_idx").on(table.organizationId, table.actionId),
+		approvalCheck: check(
+			"sv_action_approvals_approval_check",
+			sql`${table.approvalVersion} > 0 AND length(trim(${table.approvedBy})) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svChangeEvents = pgTable(
+	"sv_change_events",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		actionId: uuid("action_id"),
+		changeType: text("change_type").notNull(),
+		detail: text("detail").notNull(),
+		verification: svChangeVerificationEnum("verification").notNull().default("DECLARED"),
+		evidenceIds: text("evidence_ids").array().notNull().default([]),
+		occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		idOrganizationUnique: uniqueIndex("sv_change_events_id_organization_unique").on(table.id, table.organizationId),
+		actionOrganizationReference: foreignKey({
+			columns: [table.actionId, table.organizationId],
+			foreignColumns: [svApprovedActions.id, svApprovedActions.organizationId],
+			name: "sv_change_events_action_organization_fk",
+		}),
+		orgProjectIdx: index("sv_change_events_org_project_idx").on(table.organizationId, table.projectId),
+		contentCheck: check(
+			"sv_change_events_content_check",
+			sql`length(trim(${table.changeType})) > 0 AND length(trim(${table.detail})) > 0`,
+		),
+		evidenceCheck: check(
+			"sv_change_events_evidence_check",
+			sql`${table.verification} <> 'EVIDENCED' OR cardinality(${table.evidenceIds}) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svChangeEventAssets = pgTable(
+	"sv_change_event_assets",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		changeEventId: uuid("change_event_id").notNull(),
+		objectReference: text("object_reference").notNull(),
+		contentSha256: text("content_sha256"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		eventOrganizationReference: foreignKey({
+			columns: [table.changeEventId, table.organizationId],
+			foreignColumns: [svChangeEvents.id, svChangeEvents.organizationId],
+			name: "sv_change_event_assets_event_organization_fk",
+		}),
+		orgEventIdx: index("sv_change_event_assets_org_event_idx").on(table.organizationId, table.changeEventId),
+		referenceCheck: check("sv_change_event_assets_reference_check", sql`length(trim(${table.objectReference})) > 0`),
+	}),
+).enableRLS();
+
+export const svVerificationCycles = pgTable(
+	"sv_verification_cycles",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		actionId: uuid("action_id").notNull(),
+		baselineCycleId: uuid("baseline_cycle_id")
+			.notNull()
+			.references(() => svMeasurementCycles.id),
+		verificationMeasurementCycleId: uuid("verification_measurement_cycle_id")
+			.notNull()
+			.references(() => svMeasurementCycles.id),
+		baselineDatasetId: uuid("baseline_dataset_id")
+			.notNull()
+			.references(() => svMeasurementDatasets.id),
+		verificationDatasetId: uuid("verification_dataset_id")
+			.notNull()
+			.references(() => svMeasurementDatasets.id),
+		attempt: integer("attempt").notNull(),
+		settleDays: integer("settle_days").notNull().default(14),
+		status: svVerificationStatusEnum("status").notNull().default("PLANNED"),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		actionAttemptUnique: uniqueIndex("sv_verification_cycles_action_attempt_unique").on(table.actionId, table.attempt),
+		chainUnique: uniqueIndex("sv_verification_cycles_chain_unique").on(
+			table.id,
+			table.organizationId,
+			table.actionId,
+			table.baselineCycleId,
+			table.verificationMeasurementCycleId,
+			table.baselineDatasetId,
+			table.verificationDatasetId,
+		),
+		actionOrganizationReference: foreignKey({
+			columns: [table.actionId, table.organizationId],
+			foreignColumns: [svApprovedActions.id, svApprovedActions.organizationId],
+			name: "sv_verification_cycles_action_organization_fk",
+		}),
+		baselineDatasetCycleReference: foreignKey({
+			columns: [table.baselineDatasetId, table.baselineCycleId, table.organizationId],
+			foreignColumns: [svMeasurementDatasets.id, svMeasurementDatasets.cycleId, svMeasurementDatasets.organizationId],
+			name: "sv_verification_cycles_baseline_dataset_cycle_fk",
+		}),
+		verificationDatasetCycleReference: foreignKey({
+			columns: [table.verificationDatasetId, table.verificationMeasurementCycleId, table.organizationId],
+			foreignColumns: [svMeasurementDatasets.id, svMeasurementDatasets.cycleId, svMeasurementDatasets.organizationId],
+			name: "sv_verification_cycles_verification_dataset_cycle_fk",
+		}),
+		orgActionIdx: index("sv_verification_cycles_org_action_idx").on(table.organizationId, table.actionId),
+		shapeCheck: check(
+			"sv_verification_cycles_shape_check",
+			sql`${table.attempt} > 0 AND ${table.settleDays} > 0 AND ${table.baselineCycleId} <> ${table.verificationMeasurementCycleId} AND ${table.baselineDatasetId} <> ${table.verificationDatasetId}`,
+		),
+		completionCheck: check(
+			"sv_verification_cycles_completion_check",
+			sql`(${table.status} = 'COMPLETED' AND ${table.completedAt} IS NOT NULL) OR ${table.status} <> 'COMPLETED'`,
+		),
+	}),
+).enableRLS();
+
+export const svAttributionAssessments = pgTable(
+	"sv_attribution_assessments",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		verificationCycleId: uuid("verification_cycle_id").notNull(),
+		actionId: uuid("action_id").notNull(),
+		findingRef: text("finding_ref").notNull(),
+		recommendationRef: text("recommendation_ref").notNull(),
+		changeEventIds: uuid("change_event_ids").array().notNull(),
+		baselineCycleId: uuid("baseline_cycle_id").notNull(),
+		verificationMeasurementCycleId: uuid("verification_measurement_cycle_id").notNull(),
+		baselineDatasetId: uuid("baseline_dataset_id").notNull(),
+		verificationDatasetId: uuid("verification_dataset_id").notNull(),
+		metricKey: text("metric_key").notNull(),
+		formulaVersion: text("formula_version").notNull(),
+		verdict: svAttributionVerdictEnum("verdict").notNull(),
+		confidence: svAttributionConfidenceEnum("confidence").notNull(),
+		reasonCodes: text("reason_codes").array().notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		delta: numeric("delta", { precision: 18, scale: 6 }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		verificationMetricFormulaUnique: uniqueIndex("sv_attribution_assessments_verification_metric_unique").on(
+			table.verificationCycleId,
+			table.metricKey,
+			table.formulaVersion,
+		),
+		verificationChainReference: foreignKey({
+			columns: [
+				table.verificationCycleId,
+				table.organizationId,
+				table.actionId,
+				table.baselineCycleId,
+				table.verificationMeasurementCycleId,
+				table.baselineDatasetId,
+				table.verificationDatasetId,
+			],
+			foreignColumns: [
+				svVerificationCycles.id,
+				svVerificationCycles.organizationId,
+				svVerificationCycles.actionId,
+				svVerificationCycles.baselineCycleId,
+				svVerificationCycles.verificationMeasurementCycleId,
+				svVerificationCycles.baselineDatasetId,
+				svVerificationCycles.verificationDatasetId,
+			],
+			name: "sv_attribution_assessments_verification_chain_fk",
+		}),
+		orgVerificationIdx: index("sv_attribution_assessments_org_verification_idx").on(
+			table.organizationId,
+			table.verificationCycleId,
+		),
+		provenanceCheck: check(
+			"sv_attribution_assessments_provenance_check",
+			sql`cardinality(${table.evidenceIds}) > 0 AND cardinality(${table.changeEventIds}) > 0 AND cardinality(${table.reasonCodes}) > 0 AND length(trim(${table.findingRef})) > 0 AND length(trim(${table.recommendationRef})) > 0 AND length(trim(${table.metricKey})) > 0 AND length(trim(${table.formulaVersion})) > 0`,
+		),
+		confidenceCheck: check(
+			"sv_attribution_assessments_confidence_check",
+			sql`((${table.verdict} IN ('POSITIVE_CORRELATION', 'NEGATIVE_CORRELATION', 'NO_OBSERVED_CHANGE', 'MIXED_RESULT')) AND ${table.confidence} IN ('HIGH', 'MEDIUM', 'LOW')) OR ((${table.verdict} IN ('INSUFFICIENT_EVIDENCE', 'CONFOUNDED', 'NOT_MEASURED')) AND ${table.confidence} = 'UNKNOWN')`,
 		),
 	}),
 ).enableRLS();

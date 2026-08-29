@@ -119,6 +119,7 @@ export function calculateQuote(input: QuoteCreate, pricing: QuotePricing) {
 	};
 }
 export * from "./catalog.js";
+export * from "./evidence-loop.js";
 export * from "./free-auto-dispatch.js";
 // The matrix renderer and the micro-slice fixture stay out of the product
 // surface: one generates a document, the other is test data.
