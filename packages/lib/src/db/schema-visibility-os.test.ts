@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, getViewConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "./schema";
 
@@ -312,5 +312,39 @@ describe("Visibility OS Action and Evidence Loop schema", () => {
 		}
 		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_incidents"');
 		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_audit_events"');
+	});
+});
+
+describe("Visibility OS Map read models", () => {
+	it("exports two existing views instead of a table per map mode", () => {
+		expect(
+			[schema.svVisibilityMapPoints, schema.svVisibilityMapDatasets].map((view) => getViewConfig(view)),
+		).toMatchObject([
+			{ name: "sv_visibility_map_points", isExisting: true },
+			{ name: "sv_visibility_map_datasets", isExisting: true },
+		]);
+	});
+
+	it("keeps pending SQL bound to immutable dataset evidence and observation provenance", () => {
+		const migration = readFileSync(new URL("./migrations/_pending-os/M5_visibility_map.sql", import.meta.url), "utf8");
+		const rollback = readFileSync(
+			new URL("./migrations/_pending-os/M5_visibility_map_down.sql", import.meta.url),
+			"utf8",
+		);
+		expect(migration).toContain('CREATE VIEW "sv_visibility_map_points" WITH (security_invoker = true)');
+		expect(migration).toContain('CREATE VIEW "sv_visibility_map_datasets" WITH (security_invoker = true)');
+		expect(migration).toContain('evidence."observation_ref" = observation."id"::text');
+		expect(migration).toContain('dataset."immutable" = true');
+		expect(migration).toContain('observation."id" AS "observation_id"');
+		expect(migration).toContain('false AS "interpolated"');
+		expect(migration).toContain("'LIVE_VIEW'::text AS \"materialization_kind\"");
+		expect(migration).toContain('NULL::timestamptz AS "refreshed_at"');
+		expect(migration).toContain('array_agg(DISTINCT point."keyword_id"');
+		expect(migration).not.toContain("CREATE TABLE");
+		expect(migration).not.toContain("MATERIALIZED VIEW");
+		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
+		expect(rollback).toContain('DROP VIEW IF EXISTS "sv_visibility_map_datasets"');
+		expect(rollback).toContain('DROP VIEW IF EXISTS "sv_visibility_map_points"');
+		expect(rollback).not.toContain("DROP TABLE");
 	});
 });
