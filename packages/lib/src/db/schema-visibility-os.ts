@@ -14,7 +14,7 @@ import {
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
-import { svBusinessLocations, svConfigurationLocks, svEntities } from "./schema";
+import { svBusinessLocations, svConfigurationLocks, svEntities, svProjects } from "./schema";
 import { organization } from "./schema-auth";
 
 export const svMeasurementDomains = pgTable("sv_measurement_domains", {
@@ -420,5 +420,270 @@ export const svLocalVisibilityMetrics = pgTable(
 			table.formulaVersion,
 		),
 		orgCycleIdx: index("sv_local_visibility_metrics_org_cycle_idx").on(table.organizationId, table.cycleId),
+	}),
+).enableRLS();
+
+export const svSearchQueries = pgTable(
+	"sv_search_queries",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		queryText: text("query_text").notNull(),
+		normalizedText: text("normalized_text").notNull(),
+		engine: text("engine").notNull(),
+		region: text("region").notNull(),
+		device: text("device").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectQueryScopeUnique: uniqueIndex("sv_search_queries_project_scope_unique").on(
+			table.projectId,
+			table.normalizedText,
+			table.engine,
+			table.region,
+			table.device,
+		),
+		idScopeUnique: uniqueIndex("sv_search_queries_id_scope_unique").on(
+			table.id,
+			table.engine,
+			table.region,
+			table.device,
+		),
+		orgProjectIdx: index("sv_search_queries_org_project_idx").on(table.organizationId, table.projectId),
+		textCheck: check(
+			"sv_search_queries_text_check",
+			sql`length(trim(${table.queryText})) > 0 AND length(trim(${table.normalizedText})) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svSearchRankObservations = pgTable(
+	"sv_search_rank_observations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id").notNull(),
+		domainId: text("domain_id").notNull().default("SEARCH"),
+		queryId: uuid("query_id")
+			.notNull()
+			.references(() => svSearchQueries.id),
+		engine: text("engine").notNull(),
+		region: text("region").notNull(),
+		device: text("device").notNull(),
+		repeatIndex: integer("repeat_index").notNull(),
+		validity: text("validity").notNull(),
+		invalidReason: text("invalid_reason"),
+		captureDepth: integer("capture_depth").notNull(),
+		targetRank: integer("target_rank"),
+		attemptCount: integer("attempt_count").notNull().default(1),
+		rawReference: text("raw_reference"),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		observationScopeUnique: uniqueIndex("sv_search_rank_observations_scope_unique").on(
+			table.cycleId,
+			table.queryId,
+			table.engine,
+			table.region,
+			table.device,
+			table.repeatIndex,
+		),
+		cycleDomainReference: foreignKey({
+			columns: [table.cycleId, table.domainId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			name: "sv_search_rank_observations_cycle_domain_fk",
+		}),
+		queryScopeReference: foreignKey({
+			columns: [table.queryId, table.engine, table.region, table.device],
+			foreignColumns: [svSearchQueries.id, svSearchQueries.engine, svSearchQueries.region, svSearchQueries.device],
+			name: "sv_search_rank_observations_query_scope_fk",
+		}),
+		orgCycleIdx: index("sv_search_rank_observations_org_cycle_idx").on(table.organizationId, table.cycleId),
+		domainCheck: check("sv_search_rank_observations_domain_check", sql`${table.domainId} = 'SEARCH'`),
+		validityCheck: check(
+			"sv_search_rank_observations_validity_check",
+			sql`${table.validity} IN ('VALID', 'INVALID', 'UNMEASURED')`,
+		),
+		invalidReasonCheck: check(
+			"sv_search_rank_observations_invalid_reason_check",
+			sql`(${table.validity} = 'VALID' AND ${table.invalidReason} IS NULL) OR (${table.validity} <> 'VALID' AND ${table.invalidReason} IS NOT NULL)`,
+		),
+		rankCheck: check(
+			"sv_search_rank_observations_rank_check",
+			sql`${table.captureDepth} >= 0 AND (${table.targetRank} IS NULL OR (${table.targetRank} > 0 AND ${table.targetRank} <= ${table.captureDepth}))`,
+		),
+		retryCheck: check(
+			"sv_search_rank_observations_retry_check",
+			sql`${table.repeatIndex} >= 0 AND ${table.attemptCount} > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svReputationSources = pgTable(
+	"sv_reputation_sources",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => svBusinessLocations.id),
+		source: text("source").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		locationSourceUnique: uniqueIndex("sv_reputation_sources_location_source_unique").on(
+			table.locationId,
+			table.source,
+		),
+		orgLocationIdx: index("sv_reputation_sources_org_location_idx").on(table.organizationId, table.locationId),
+		sourceCheck: check("sv_reputation_sources_source_check", sql`length(trim(${table.source})) > 0`),
+	}),
+).enableRLS();
+
+export const svReviewSnapshots = pgTable(
+	"sv_review_snapshots",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id").notNull(),
+		domainId: text("domain_id").notNull().default("REPUTATION"),
+		sourceId: uuid("source_id")
+			.notNull()
+			.references(() => svReputationSources.id),
+		periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+		periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+		validity: text("validity").notNull().default("VALID"),
+		invalidReason: text("invalid_reason"),
+		ratingAverage: numeric("rating_average", { precision: 4, scale: 3 }),
+		reviewCount: integer("review_count"),
+		newReviews: integer("new_reviews"),
+		attemptCount: integer("attempt_count").notNull().default(1),
+		rawReference: text("raw_reference"),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		sourcePeriodUnique: uniqueIndex("sv_review_snapshots_source_period_unique").on(
+			table.sourceId,
+			table.periodStart,
+			table.periodEnd,
+		),
+		idSourcePeriodUnique: uniqueIndex("sv_review_snapshots_id_source_period_unique").on(
+			table.id,
+			table.sourceId,
+			table.periodStart,
+			table.periodEnd,
+		),
+		cycleDomainReference: foreignKey({
+			columns: [table.cycleId, table.domainId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			name: "sv_review_snapshots_cycle_domain_fk",
+		}),
+		orgCycleIdx: index("sv_review_snapshots_org_cycle_idx").on(table.organizationId, table.cycleId),
+		domainCheck: check("sv_review_snapshots_domain_check", sql`${table.domainId} = 'REPUTATION'`),
+		periodCheck: check("sv_review_snapshots_period_check", sql`${table.periodEnd} > ${table.periodStart}`),
+		validityCheck: check(
+			"sv_review_snapshots_validity_check",
+			sql`${table.validity} IN ('VALID', 'INVALID', 'UNMEASURED')`,
+		),
+		invalidReasonCheck: check(
+			"sv_review_snapshots_invalid_reason_check",
+			sql`(${table.validity} = 'VALID' AND ${table.invalidReason} IS NULL) OR (${table.validity} <> 'VALID' AND ${table.invalidReason} IS NOT NULL)`,
+		),
+		metricCheck: check(
+			"sv_review_snapshots_metric_check",
+			sql`(${table.ratingAverage} IS NULL OR (${table.ratingAverage} >= 0 AND ${table.ratingAverage} <= 5)) AND (${table.reviewCount} IS NULL OR ${table.reviewCount} >= 0) AND (${table.newReviews} IS NULL OR ${table.newReviews} >= 0)`,
+		),
+		retryCheck: check("sv_review_snapshots_retry_check", sql`${table.attemptCount} > 0`),
+	}),
+).enableRLS();
+
+export const svReviewVelocityMetrics = pgTable(
+	"sv_review_velocity_metrics",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		snapshotId: uuid("snapshot_id")
+			.notNull()
+			.references(() => svReviewSnapshots.id),
+		sourceId: uuid("source_id")
+			.notNull()
+			.references(() => svReputationSources.id),
+		periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+		periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+		formulaVersion: text("formula_version").notNull(),
+		velocityPer30Days: numeric("velocity_per_30_days", { precision: 12, scale: 6 }),
+		computedAt: timestamp("computed_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		sourcePeriodFormulaUnique: uniqueIndex("sv_review_velocity_metrics_source_period_formula_unique").on(
+			table.sourceId,
+			table.periodStart,
+			table.periodEnd,
+			table.formulaVersion,
+		),
+		snapshotScopeReference: foreignKey({
+			columns: [table.snapshotId, table.sourceId, table.periodStart, table.periodEnd],
+			foreignColumns: [
+				svReviewSnapshots.id,
+				svReviewSnapshots.sourceId,
+				svReviewSnapshots.periodStart,
+				svReviewSnapshots.periodEnd,
+			],
+			name: "sv_review_velocity_metrics_snapshot_scope_fk",
+		}),
+		orgSourceIdx: index("sv_review_velocity_metrics_org_source_idx").on(table.organizationId, table.sourceId),
+		periodCheck: check("sv_review_velocity_metrics_period_check", sql`${table.periodEnd} > ${table.periodStart}`),
+		velocityCheck: check(
+			"sv_review_velocity_metrics_value_check",
+			sql`${table.velocityPer30Days} IS NULL OR ${table.velocityPer30Days} >= 0`,
+		),
+	}),
+).enableRLS();
+
+export const svReviewTopicObservations = pgTable(
+	"sv_review_topic_observations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		snapshotId: uuid("snapshot_id")
+			.notNull()
+			.references(() => svReviewSnapshots.id),
+		topic: text("topic").notNull(),
+		sentiment: text("sentiment").notNull(),
+		analysisMethodVersion: text("analysis_method_version").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		snapshotTopicMethodUnique: uniqueIndex("sv_review_topic_observations_topic_method_unique").on(
+			table.snapshotId,
+			table.topic,
+			table.analysisMethodVersion,
+		),
+		orgSnapshotIdx: index("sv_review_topic_observations_org_snapshot_idx").on(table.organizationId, table.snapshotId),
+		analysisMethodCheck: check(
+			"sv_review_topic_observations_analysis_method_check",
+			sql`length(trim(${table.topic})) > 0 AND length(trim(${table.sentiment})) > 0 AND length(trim(${table.analysisMethodVersion})) > 0`,
+		),
 	}),
 ).enableRLS();

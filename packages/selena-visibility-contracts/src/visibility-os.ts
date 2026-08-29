@@ -75,11 +75,13 @@ export function assertSurfaceCaptureAllowed(
 ): void {
 	const surface = VISIBILITY_SURFACES[surfaceId];
 	if (env[surface.featureFlag] !== "true") throw new Error("VISIBILITY_SURFACE_DISABLED");
+	if (surface.status !== "MEASURED") throw new Error("VISIBILITY_SURFACE_NOT_IMPLEMENTED");
 	if (!surface.captureMethods.includes(method)) throw new Error("VISIBILITY_CAPTURE_METHOD_BLOCKED");
 }
 
 export const readinessDimensions = ["ACCESS", "ENTITY", "PROPOSITION", "ACTION"] as const;
 export const readinessScoreSchema = z.strictObject({
+	evidenceType: z.literal("READINESS_SNAPSHOT"),
 	dimension: z.enum(readinessDimensions),
 	score: z.number().min(0).max(100),
 	evidenceIds: z.array(z.string().min(1)).min(1),
@@ -88,6 +90,7 @@ export const readinessScoreSchema = z.strictObject({
 
 export const surfaceVisibilitySchema = z
 	.strictObject({
+		evidenceType: z.literal("MEASUREMENT_OBSERVATION"),
 		surfaceId: z.enum(visibilitySurfaceIds),
 		status: z.enum(["MEASURED", "NOT_MEASURED", "UNKNOWN"]),
 		metrics: z.record(z.string(), z.number().nullable()).nullable(),
@@ -262,4 +265,51 @@ export function localVoiceComparison(
 	return Object.fromEntries(
 		entityKeys.map((entityKey) => [entityKey, shareOfLocalVoice(observations, entityKey, captureDepth).value]),
 	);
+}
+
+export type SearchObservationShape = {
+	queries: number;
+	engines: number;
+	regions: number;
+	devices: number;
+	repeats: number;
+};
+
+export function expectedSearchObservations(shape: SearchObservationShape): number {
+	const axes = [shape.queries, shape.engines, shape.regions, shape.devices, shape.repeats];
+	if (!axes.every(isPositiveInteger)) throw new Error("SEARCH_OBSERVATION_SHAPE_INVALID");
+	return axes.reduce((product, value) => product * value, 1);
+}
+
+export type ReputationSnapshotShape = {
+	locations: number;
+	sources: number;
+	periods: number;
+};
+
+export function expectedReputationSnapshots(shape: ReputationSnapshotShape): number {
+	const axes = [shape.locations, shape.sources, shape.periods];
+	if (!axes.every(isPositiveInteger)) throw new Error("REPUTATION_SNAPSHOT_SHAPE_INVALID");
+	return axes.reduce((product, value) => product * value, 1);
+}
+
+export type ReputationAnalysisInput = {
+	topic: string | null;
+	sentiment: string | null;
+	analysisMethodVersion: string | null;
+};
+
+const hasText = (value: string | null): boolean => Boolean(value?.trim());
+
+export function assertReputationAnalysis(input: ReputationAnalysisInput): void {
+	if ((hasText(input.topic) || hasText(input.sentiment)) && !hasText(input.analysisMethodVersion)) {
+		throw new Error("REPUTATION_ANALYSIS_METHOD_REQUIRED");
+	}
+}
+
+export function reviewVelocityPer30Days(newReviews: number | null, periodDays: number): number | null {
+	if (!Number.isFinite(periodDays) || periodDays <= 0) throw new Error("REPUTATION_PERIOD_INVALID");
+	if (newReviews === null) return null;
+	if (!Number.isInteger(newReviews) || newReviews < 0) throw new Error("REPUTATION_REVIEW_COUNT_INVALID");
+	return (newReviews * 30) / periodDays;
 }

@@ -21,6 +21,15 @@ const localTables = [
 	schema.svLocalVisibilityMetrics,
 ];
 
+const searchAndReputationTables = [
+	schema.svSearchQueries,
+	schema.svSearchRankObservations,
+	schema.svReputationSources,
+	schema.svReviewSnapshots,
+	schema.svReviewVelocityMetrics,
+	schema.svReviewTopicObservations,
+];
+
 describe("Visibility OS measurement registry", () => {
 	it("exports the five RLS-enabled registry tables without a shared observation table", () => {
 		expect(registryTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -166,6 +175,52 @@ describe("Visibility OS Local schema", () => {
 		expect(migration).toContain("LOCAL_CYCLE_COST_NOT_FROZEN");
 		expect(migration).toContain("CARDINALITY_INCIDENT");
 		expect(migration).toContain("sv_prepare_local_observation_retry");
+		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
+		expect(migration).not.toContain('ALTER TABLE "sv_cycles"');
+		expect(migration).not.toContain('ALTER TABLE "sv_run_permits"');
+	});
+});
+
+describe("Visibility OS Search and Reputation schema", () => {
+	it("exports six RLS-enabled domain tables without changing AI run tables", () => {
+		expect(searchAndReputationTables.map((table) => getTableConfig(table).name)).toEqual([
+			"sv_search_queries",
+			"sv_search_rank_observations",
+			"sv_reputation_sources",
+			"sv_review_snapshots",
+			"sv_review_velocity_metrics",
+			"sv_review_topic_observations",
+		]);
+		for (const table of searchAndReputationTables) expect(getTableConfig(table).enableRLS).toBe(true);
+		expect(getTableConfig(schema.svRuns).columns.map((column) => column.name)).not.toContain("domain_id");
+	});
+
+	it("keeps absent Reputation values nullable and analysis provenance required", () => {
+		const snapshotColumns = getTableConfig(schema.svReviewSnapshots).columns;
+		for (const name of ["rating_average", "review_count", "new_reviews"]) {
+			expect(snapshotColumns.find((column) => column.name === name)?.notNull).toBe(false);
+		}
+		const topicColumns = getTableConfig(schema.svReviewTopicObservations).columns;
+		expect(topicColumns.find((column) => column.name === "analysis_method_version")?.notNull).toBe(true);
+	});
+
+	it("keeps pending SQL aligned with Search/Reputation isolation and provenance", () => {
+		const migration = readFileSync(
+			new URL("./migrations/_pending-os/M3_search_reputation.sql", import.meta.url),
+			"utf8",
+		);
+		for (const table of searchAndReputationTables) {
+			const name = getTableConfig(table).name;
+			expect(migration).toContain(`CREATE TABLE "${name}"`);
+			expect(migration).toContain(`ALTER TABLE "${name}" ENABLE ROW LEVEL SECURITY`);
+			expect(migration).toContain(`CREATE POLICY "tenant_isolation" ON "${name}"`);
+		}
+		expect(migration).toContain('("cycle_id", "query_id", "engine", "region", "device", "repeat_index")');
+		expect(migration).toContain('UNIQUE ("location_id", "source")');
+		expect(migration).toContain('UNIQUE ("source_id", "period_start", "period_end")');
+		expect(migration).toContain('"analysis_method_version" text NOT NULL');
+		expect(migration).toContain("\"domain_id\" = 'SEARCH'");
+		expect(migration).toContain("\"domain_id\" = 'REPUTATION'");
 		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
 		expect(migration).not.toContain('ALTER TABLE "sv_cycles"');
 		expect(migration).not.toContain('ALTER TABLE "sv_run_permits"');
