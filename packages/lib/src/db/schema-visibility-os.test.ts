@@ -30,6 +30,15 @@ const searchAndReputationTables = [
 	schema.svReviewTopicObservations,
 ];
 
+const actionAndEvidenceTables = [
+	schema.svApprovedActions,
+	schema.svActionApprovals,
+	schema.svChangeEvents,
+	schema.svChangeEventAssets,
+	schema.svVerificationCycles,
+	schema.svAttributionAssessments,
+];
+
 describe("Visibility OS measurement registry", () => {
 	it("exports the five RLS-enabled registry tables without a shared observation table", () => {
 		expect(registryTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -224,5 +233,84 @@ describe("Visibility OS Search and Reputation schema", () => {
 		expect(migration).not.toContain('ALTER TABLE "sv_runs"');
 		expect(migration).not.toContain('ALTER TABLE "sv_cycles"');
 		expect(migration).not.toContain('ALTER TABLE "sv_run_permits"');
+	});
+});
+
+describe("Visibility OS Action and Evidence Loop schema", () => {
+	it("exports six RLS-enabled M4 tables beside the recommendation engine ledger", () => {
+		expect(actionAndEvidenceTables.map((table) => getTableConfig(table).name)).toEqual([
+			"sv_approved_actions",
+			"sv_action_approvals",
+			"sv_change_events",
+			"sv_change_event_assets",
+			"sv_verification_cycles",
+			"sv_attribution_assessments",
+		]);
+		for (const table of actionAndEvidenceTables) expect(getTableConfig(table).enableRLS).toBe(true);
+		expect(getTableConfig(schema.svRecommendationActions).name).toBe("sv_recommendation_actions");
+	});
+
+	it("keeps CAUSAL out of the attribution type and preserves the seven terminal verdicts", () => {
+		expect(schema.svAttributionVerdictEnum.enumValues).toEqual([
+			"POSITIVE_CORRELATION",
+			"NEGATIVE_CORRELATION",
+			"NO_OBSERVED_CHANGE",
+			"MIXED_RESULT",
+			"INSUFFICIENT_EVIDENCE",
+			"CONFOUNDED",
+			"NOT_MEASURED",
+		]);
+		expect(schema.svAttributionVerdictEnum.enumValues).not.toContain("CAUSAL");
+	});
+
+	it("allows unattributed changes but requires action and attribution evidence", () => {
+		const actionColumns = getTableConfig(schema.svApprovedActions).columns;
+		expect(actionColumns.find((column) => column.name === "evidence_ids")?.notNull).toBe(true);
+		const changeColumns = getTableConfig(schema.svChangeEvents).columns;
+		expect(changeColumns.find((column) => column.name === "action_id")?.notNull).toBe(false);
+		const assessmentColumns = getTableConfig(schema.svAttributionAssessments).columns;
+		expect(assessmentColumns.find((column) => column.name === "evidence_ids")?.notNull).toBe(true);
+		expect(assessmentColumns.find((column) => column.name === "change_event_ids")?.notNull).toBe(true);
+	});
+
+	it("adds nullable domain and location scope to the legacy finding ledger", () => {
+		for (const table of [schema.svFindings, schema.svRecommendations]) {
+			const columns = getTableConfig(table).columns;
+			expect(columns.find((column) => column.name === "domain_id")?.notNull).toBe(false);
+			expect(columns.find((column) => column.name === "location_id")?.notNull).toBe(false);
+		}
+	});
+
+	it("keeps pending SQL aligned with evidence, transition and verification gates", () => {
+		const migration = readFileSync(
+			new URL("./migrations/_pending-os/M4_action_evidence_loop.sql", import.meta.url),
+			"utf8",
+		);
+		const rollback = readFileSync(
+			new URL("./migrations/_pending-os/M4_action_evidence_loop_down.sql", import.meta.url),
+			"utf8",
+		);
+		for (const table of actionAndEvidenceTables) {
+			const name = getTableConfig(table).name;
+			expect(migration).toContain(`CREATE TABLE "${name}"`);
+			expect(migration).toContain(`ALTER TABLE "${name}" ENABLE ROW LEVEL SECURITY`);
+			expect(migration).toContain(`CREATE POLICY "tenant_isolation" ON "${name}"`);
+		}
+		expect(migration).toContain('cardinality("evidence_ids") > 0');
+		expect(migration).toContain('UNIQUE ("action_id", "approval_version")');
+		expect(migration).toContain('UNIQUE ("action_id", "attempt")');
+		expect(migration).toContain('UNIQUE ("verification_cycle_id", "metric_key", "formula_version")');
+		expect(migration).toContain("sv_guard_action_status_transition");
+		expect(migration).toContain("ACTION_VERIFICATION_INCOMPLETE");
+		expect(migration).toContain("ATTRIBUTION_VERIFICATION_INCOMPLETE");
+		expect(migration).toContain('ALTER TABLE "sv_findings"');
+		expect(migration).toContain('ALTER TABLE "sv_recommendations"');
+		expect(migration).not.toContain("'CAUSAL'");
+		expect(migration).not.toContain('CREATE TABLE "sv_outcome_');
+		for (const table of actionAndEvidenceTables.toReversed()) {
+			expect(rollback).toContain(`DROP TABLE IF EXISTS "${getTableConfig(table).name}"`);
+		}
+		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_incidents"');
+		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_audit_events"');
 	});
 });
