@@ -752,6 +752,147 @@ export const svReviewTopicObservations = pgTable(
 	}),
 ).enableRLS();
 
+export const svOutcomeMetricDefinitions = pgTable(
+	"sv_outcome_metric_definitions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		metricKey: text("metric_key").notNull(),
+		version: integer("version").notNull(),
+		unit: text("unit").notNull(),
+		aggregation: text("aggregation").notNull().default("SUM"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		metricVersionUnique: uniqueIndex("sv_outcome_metric_definitions_key_version_unique").on(
+			table.metricKey,
+			table.version,
+		),
+		shapeCheck: check(
+			"sv_outcome_metric_definitions_shape_check",
+			sql`${table.version} > 0 AND length(trim(${table.metricKey})) > 0 AND length(trim(${table.unit})) > 0 AND ${table.aggregation} = 'SUM'`,
+		),
+	}),
+).enableRLS();
+
+export const svOutcomeSources = pgTable(
+	"sv_outcome_sources",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => svBusinessLocations.id),
+		accessClass: text("access_class").notNull(),
+		sourceReference: text("source_reference").notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		idScopeUnique: uniqueIndex("sv_outcome_sources_id_scope_unique").on(
+			table.id,
+			table.organizationId,
+			table.projectId,
+			table.locationId,
+		),
+		orgLocationIdx: index("sv_outcome_sources_org_location_idx").on(table.organizationId, table.locationId),
+		accessClassCheck: check(
+			"sv_outcome_sources_access_class_check",
+			sql`${table.accessClass} IN ('CONNECTED', 'UPLOADED')`,
+		),
+		provenanceCheck: check(
+			"sv_outcome_sources_provenance_check",
+			sql`length(trim(${table.sourceReference})) > 0 AND cardinality(${table.evidenceIds}) > 0`,
+		),
+	}),
+).enableRLS();
+
+export const svOutcomeObservations = pgTable(
+	"sv_outcome_observations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => svBusinessLocations.id),
+		sourceId: uuid("source_id")
+			.notNull()
+			.references(() => svOutcomeSources.id),
+		measurementCycleId: uuid("measurement_cycle_id").notNull(),
+		domainId: text("domain_id").notNull().default("OUTCOME"),
+		datasetId: uuid("dataset_id").notNull(),
+		metricKey: text("metric_key").notNull(),
+		metricVersion: integer("metric_version").notNull(),
+		value: numeric("value", { precision: 18, scale: 6 }),
+		periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+		periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		sourceMetricPeriodUnique: uniqueIndex("sv_outcome_observations_source_metric_period_unique").on(
+			table.sourceId,
+			table.metricKey,
+			table.periodStart,
+			table.periodEnd,
+		),
+		idScopeMetricUnique: uniqueIndex("sv_outcome_observations_id_scope_metric_unique").on(
+			table.id,
+			table.organizationId,
+			table.projectId,
+			table.locationId,
+			table.metricKey,
+			table.metricVersion,
+		),
+		sourceScopeReference: foreignKey({
+			columns: [table.sourceId, table.organizationId, table.projectId, table.locationId],
+			foreignColumns: [
+				svOutcomeSources.id,
+				svOutcomeSources.organizationId,
+				svOutcomeSources.projectId,
+				svOutcomeSources.locationId,
+			],
+			name: "sv_outcome_observations_source_scope_fk",
+		}),
+		measurementDomainReference: foreignKey({
+			columns: [table.measurementCycleId, table.domainId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			name: "sv_outcome_observations_measurement_domain_fk",
+		}),
+		datasetCycleReference: foreignKey({
+			columns: [table.datasetId, table.measurementCycleId, table.organizationId],
+			foreignColumns: [svMeasurementDatasets.id, svMeasurementDatasets.cycleId, svMeasurementDatasets.organizationId],
+			name: "sv_outcome_observations_dataset_cycle_fk",
+		}),
+		metricDefinitionReference: foreignKey({
+			columns: [table.metricKey, table.metricVersion],
+			foreignColumns: [svOutcomeMetricDefinitions.metricKey, svOutcomeMetricDefinitions.version],
+			name: "sv_outcome_observations_metric_definition_fk",
+		}),
+		orgLocationIdx: index("sv_outcome_observations_org_location_idx").on(table.organizationId, table.locationId),
+		domainCheck: check("sv_outcome_observations_domain_check", sql`${table.domainId} = 'OUTCOME'`),
+		periodCheck: check("sv_outcome_observations_period_check", sql`${table.periodEnd} > ${table.periodStart}`),
+		provenanceCheck: check(
+			"sv_outcome_observations_provenance_check",
+			sql`cardinality(${table.evidenceIds}) > 0 AND ${table.metricVersion} > 0 AND length(trim(${table.metricKey})) > 0`,
+		),
+		valueCheck: check(
+			"sv_outcome_observations_value_check",
+			sql`${table.value} IS NULL OR ${table.value} <> 'NaN'::numeric`,
+		),
+	}),
+).enableRLS();
+
 export const svActionStatusEnum = pgEnum("sv_action_status", [
 	"PROPOSED",
 	"APPROVED",
@@ -963,6 +1104,118 @@ export const svVerificationCycles = pgTable(
 	}),
 ).enableRLS();
 
+export const svOutcomeAttributionWindows = pgTable(
+	"sv_outcome_attribution_windows",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		locationId: uuid("location_id")
+			.notNull()
+			.references(() => svBusinessLocations.id),
+		verificationCycleId: uuid("verification_cycle_id").notNull(),
+		actionId: uuid("action_id").notNull(),
+		baselineCycleId: uuid("baseline_cycle_id").notNull(),
+		verificationMeasurementCycleId: uuid("verification_measurement_cycle_id").notNull(),
+		baselineDatasetId: uuid("baseline_dataset_id").notNull(),
+		verificationDatasetId: uuid("verification_dataset_id").notNull(),
+		baselineObservationId: uuid("baseline_observation_id").notNull(),
+		verificationObservationId: uuid("verification_observation_id").notNull(),
+		metricKey: text("metric_key").notNull(),
+		metricVersion: integer("metric_version").notNull(),
+		windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+		windowEnd: timestamp("window_end", { withTimezone: true }).notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		verificationMetricUnique: uniqueIndex("sv_outcome_attribution_windows_verification_metric_unique").on(
+			table.verificationCycleId,
+			table.metricKey,
+			table.metricVersion,
+		),
+		assessmentChainUnique: uniqueIndex("sv_outcome_attribution_windows_assessment_chain_unique").on(
+			table.id,
+			table.organizationId,
+			table.verificationCycleId,
+			table.actionId,
+			table.baselineCycleId,
+			table.verificationMeasurementCycleId,
+			table.baselineDatasetId,
+			table.verificationDatasetId,
+			table.metricKey,
+		),
+		verificationChainReference: foreignKey({
+			columns: [
+				table.verificationCycleId,
+				table.organizationId,
+				table.actionId,
+				table.baselineCycleId,
+				table.verificationMeasurementCycleId,
+				table.baselineDatasetId,
+				table.verificationDatasetId,
+			],
+			foreignColumns: [
+				svVerificationCycles.id,
+				svVerificationCycles.organizationId,
+				svVerificationCycles.actionId,
+				svVerificationCycles.baselineCycleId,
+				svVerificationCycles.verificationMeasurementCycleId,
+				svVerificationCycles.baselineDatasetId,
+				svVerificationCycles.verificationDatasetId,
+			],
+			name: "sv_outcome_attribution_windows_verification_chain_fk",
+		}),
+		baselineObservationReference: foreignKey({
+			columns: [
+				table.baselineObservationId,
+				table.organizationId,
+				table.projectId,
+				table.locationId,
+				table.metricKey,
+				table.metricVersion,
+			],
+			foreignColumns: [
+				svOutcomeObservations.id,
+				svOutcomeObservations.organizationId,
+				svOutcomeObservations.projectId,
+				svOutcomeObservations.locationId,
+				svOutcomeObservations.metricKey,
+				svOutcomeObservations.metricVersion,
+			],
+			name: "sv_outcome_attribution_windows_baseline_observation_fk",
+		}),
+		verificationObservationReference: foreignKey({
+			columns: [
+				table.verificationObservationId,
+				table.organizationId,
+				table.projectId,
+				table.locationId,
+				table.metricKey,
+				table.metricVersion,
+			],
+			foreignColumns: [
+				svOutcomeObservations.id,
+				svOutcomeObservations.organizationId,
+				svOutcomeObservations.projectId,
+				svOutcomeObservations.locationId,
+				svOutcomeObservations.metricKey,
+				svOutcomeObservations.metricVersion,
+			],
+			name: "sv_outcome_attribution_windows_verification_observation_fk",
+		}),
+		orgLocationIdx: index("sv_outcome_attribution_windows_org_location_idx").on(table.organizationId, table.locationId),
+		windowCheck: check(
+			"sv_outcome_attribution_windows_window_check",
+			sql`${table.windowEnd} > ${table.windowStart} AND ${table.baselineObservationId} <> ${table.verificationObservationId} AND cardinality(${table.evidenceIds}) > 0`,
+		),
+	}),
+).enableRLS();
+
 export const svAttributionAssessments = pgTable(
 	"sv_attribution_assessments",
 	{
@@ -979,6 +1232,7 @@ export const svAttributionAssessments = pgTable(
 		verificationMeasurementCycleId: uuid("verification_measurement_cycle_id").notNull(),
 		baselineDatasetId: uuid("baseline_dataset_id").notNull(),
 		verificationDatasetId: uuid("verification_dataset_id").notNull(),
+		outcomeWindowId: uuid("outcome_window_id"),
 		metricKey: text("metric_key").notNull(),
 		formulaVersion: text("formula_version").notNull(),
 		verdict: svAttributionVerdictEnum("verdict").notNull(),
@@ -1014,6 +1268,31 @@ export const svAttributionAssessments = pgTable(
 				svVerificationCycles.verificationDatasetId,
 			],
 			name: "sv_attribution_assessments_verification_chain_fk",
+		}),
+		outcomeWindowReference: foreignKey({
+			columns: [
+				table.outcomeWindowId,
+				table.organizationId,
+				table.verificationCycleId,
+				table.actionId,
+				table.baselineCycleId,
+				table.verificationMeasurementCycleId,
+				table.baselineDatasetId,
+				table.verificationDatasetId,
+				table.metricKey,
+			],
+			foreignColumns: [
+				svOutcomeAttributionWindows.id,
+				svOutcomeAttributionWindows.organizationId,
+				svOutcomeAttributionWindows.verificationCycleId,
+				svOutcomeAttributionWindows.actionId,
+				svOutcomeAttributionWindows.baselineCycleId,
+				svOutcomeAttributionWindows.verificationMeasurementCycleId,
+				svOutcomeAttributionWindows.baselineDatasetId,
+				svOutcomeAttributionWindows.verificationDatasetId,
+				svOutcomeAttributionWindows.metricKey,
+			],
+			name: "sv_attribution_assessments_outcome_window_fk",
 		}),
 		orgVerificationIdx: index("sv_attribution_assessments_org_verification_idx").on(
 			table.organizationId,

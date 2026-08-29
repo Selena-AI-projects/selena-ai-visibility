@@ -128,6 +128,7 @@ export * from "./local-cycle-cost.js";
 export * from "./local-discovery.js";
 export * from "./measurement-execution.js";
 export * from "./measurement-scope.js";
+export * from "./outcome-layer.js";
 export * from "./payment.js";
 export * from "./promo.js";
 export * from "./recommendation.js";
