@@ -1563,42 +1563,100 @@ export function createSelenaRepositories(db: Db) {
 				writable(ctx);
 				if (!observationReviewDecisions.includes(input.decision))
 					throw new Error("OBSERVATION_REVIEW_DECISION_INVALID");
-				const observation = await getObservationOwned(ctx, observationId);
-				// SURFACE_UNAVAILABLE is a valid capture of an unavailable surface,
-				// not invalid evidence — metrics exclude it from denominators.
-				const validity =
-					input.decision === "ACCEPTED" || input.decision === "SURFACE_UNAVAILABLE" ? "VALID" : "INVALID";
-				const [reviewed] = await db
-					.update(schema.svLocalObservations)
-					.set({
-						reviewStatus: input.decision,
-						reviewedBy: ctx.actorId,
-						reviewedAt: new Date(),
-						validity,
-						invalidReason: validity === "INVALID" ? (input.reason ?? input.decision) : null,
-					})
-					.where(
-						and(
-							eq(schema.svLocalObservations.id, observationId),
-							eq(schema.svLocalObservations.organizationId, ctx.tenantId),
-						),
-					)
-					.returning();
-				await db
-					.update(schema.svCaptureTasks)
-					.set({ status: input.decision, updatedAt: new Date() })
-					.where(
-						and(
-							eq(schema.svCaptureTasks.id, observation.captureTaskId),
-							eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
-						),
-					);
-				await recordAudit(db, ctx, "OBSERVATION_REVIEWED", "sv_local_observations", observationId, {
-					decision: input.decision,
-					reason: input.reason ?? null,
-					idempotencyKey: input.idempotencyKey ?? null,
+				return db.transaction(async (tx) => {
+					const [observation] = await tx
+						.select()
+						.from(schema.svLocalObservations)
+						.where(
+							and(
+								eq(schema.svLocalObservations.id, observationId),
+								eq(schema.svLocalObservations.organizationId, ctx.tenantId),
+							),
+						)
+						.for("update")
+						.limit(1);
+					if (!observation) throw new Error("Not found: observation is outside AuthContext tenant");
+
+					const [task] = await tx
+						.select()
+						.from(schema.svCaptureTasks)
+						.where(
+							and(
+								eq(schema.svCaptureTasks.id, observation.captureTaskId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+							),
+						)
+						.for("update")
+						.limit(1);
+					if (!task) throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+
+					if (input.idempotencyKey) {
+						const [priorReview] = await tx
+							.select({ details: schema.svAuditEvents.details })
+							.from(schema.svAuditEvents)
+							.where(
+								and(
+									eq(schema.svAuditEvents.organizationId, ctx.tenantId),
+									eq(schema.svAuditEvents.event, "OBSERVATION_REVIEWED"),
+									eq(schema.svAuditEvents.subjectId, observationId),
+									sql`${schema.svAuditEvents.details} ->> 'idempotencyKey' = ${input.idempotencyKey}`,
+								),
+							)
+							.limit(1);
+						if (priorReview) {
+							const details = priorReview.details as Record<string, unknown>;
+							if (details.decision !== input.decision || (details.reason ?? null) !== (input.reason ?? null))
+								throw new Error("OBSERVATION_REVIEW_IDEMPOTENCY_CONFLICT");
+							if (observation.reviewStatus !== input.decision || task.status !== input.decision)
+								throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+							return observation;
+						}
+					}
+
+					if (observation.reviewStatus !== "SUBMITTED_FOR_REVIEW") throw new Error("OBSERVATION_ALREADY_REVIEWED");
+					if (task.status !== "SUBMITTED_FOR_REVIEW") throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+
+					// SURFACE_UNAVAILABLE is a valid capture of an unavailable surface,
+					// not invalid evidence — metrics exclude it from denominators.
+					const validity =
+						input.decision === "ACCEPTED" || input.decision === "SURFACE_UNAVAILABLE" ? "VALID" : "INVALID";
+					const [reviewed] = await tx
+						.update(schema.svLocalObservations)
+						.set({
+							reviewStatus: input.decision,
+							reviewedBy: ctx.actorId,
+							reviewedAt: new Date(),
+							validity,
+							invalidReason: validity === "INVALID" ? (input.reason ?? input.decision) : null,
+						})
+						.where(
+							and(
+								eq(schema.svLocalObservations.id, observationId),
+								eq(schema.svLocalObservations.organizationId, ctx.tenantId),
+								eq(schema.svLocalObservations.reviewStatus, "SUBMITTED_FOR_REVIEW"),
+							),
+						)
+						.returning();
+					if (!reviewed) throw new Error("OBSERVATION_REVIEW_CONFLICT");
+					const [reviewedTask] = await tx
+						.update(schema.svCaptureTasks)
+						.set({ status: input.decision, updatedAt: new Date() })
+						.where(
+							and(
+								eq(schema.svCaptureTasks.id, observation.captureTaskId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+								eq(schema.svCaptureTasks.status, "SUBMITTED_FOR_REVIEW"),
+							),
+						)
+						.returning({ id: schema.svCaptureTasks.id });
+					if (!reviewedTask) throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+					await recordAudit(tx, ctx, "OBSERVATION_REVIEWED", "sv_local_observations", observationId, {
+						decision: input.decision,
+						reason: input.reason ?? null,
+						idempotencyKey: input.idempotencyKey ?? null,
+					});
+					return reviewed;
 				});
-				return reviewed;
 			},
 		},
 		mentions: {
