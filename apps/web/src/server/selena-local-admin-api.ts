@@ -10,6 +10,7 @@ import {
 	selenaApiHttpErrorResponse,
 } from "../lib/selena-api-http";
 import { type AuthContext, resolveApiKeyAuthContext } from "../lib/selena-auth-context";
+import { runSelenaApiMutation, type SelenaApiIdempotencyRunner } from "./selena-api-idempotency";
 
 export const localAdminOperations = [
 	"preflight",
@@ -70,6 +71,8 @@ export type LocalAdminRouteDependencies = {
 	authenticate: (request: Request) => Promise<AuthContext>;
 	store: SelenaLocalAdminStore;
 	requestId: () => string;
+	/** Optional transaction-owned durable idempotency adapter; absent stays fail-closed via the store. */
+	idempotency?: SelenaApiIdempotencyRunner;
 };
 
 const defaultRouteDependencies: LocalAdminRouteDependencies = {
@@ -152,24 +155,37 @@ export function createSelenaLocalAdminRouteHandlers(
 			const idempotencyKey = parseIdempotencyKey(request.headers);
 			const body = await readOptionalJson(request);
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
-			const result = await dependencies.store.execute({
-				auth,
-				tenantId: auth.tenantId,
-				operation,
-				resourceId: validatedResourceId,
-				idempotencyKey,
-				bodyHash,
-				body,
+			const response = await runSelenaApiMutation({
+				runner: dependencies.idempotency,
+				identity: {
+					tenantId: auth.tenantId,
+					operation,
+					resourceId: validatedResourceId,
+					idempotencyKey,
+					bodyHash,
+				},
+				execute: async () => {
+					const result = await dependencies.store.execute({
+						auth,
+						tenantId: auth.tenantId,
+						operation,
+						resourceId: validatedResourceId,
+						idempotencyKey,
+						bodyHash,
+						body,
+					});
+					if (result === null)
+						throw new SelenaApiHttpError(
+							503,
+							LOCAL_ADMIN_OWNER_GATE_CODE,
+							"Admin action did not produce a durable response.",
+							true,
+							{ providerCalls: 0, operation },
+						);
+					return { status: 202, body: result };
+				},
 			});
-			if (result === null)
-				throw new SelenaApiHttpError(
-					503,
-					LOCAL_ADMIN_OWNER_GATE_CODE,
-					"Admin action did not produce a durable response.",
-					true,
-					{ providerCalls: 0, operation },
-				);
-			const parsed = localAdminSuccessResponseSchema.safeParse(result);
+			const parsed = localAdminSuccessResponseSchema.safeParse(response.body);
 			if (!parsed.success)
 				throw new SelenaApiHttpError(
 					503,
@@ -178,7 +194,7 @@ export function createSelenaLocalAdminRouteHandlers(
 					true,
 					{ providerCalls: 0, operation },
 				);
-			return Response.json(parsed.data, { status: 202 });
+			return Response.json(parsed.data, { status: response.status });
 		} catch (error) {
 			return routeError(error, requestId);
 		}

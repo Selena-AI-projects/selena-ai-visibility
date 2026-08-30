@@ -19,6 +19,7 @@ import {
 	selenaApiHttpErrorResponse,
 } from "../lib/selena-api-http";
 import { type AuthContext, resolveApiKeyAuthContext } from "../lib/selena-auth-context";
+import { runSelenaApiMutation, type SelenaApiIdempotencyRunner } from "./selena-api-idempotency";
 
 type StoredQuote = ReturnType<typeof localScanQuoteResponseSchema.parse>;
 type StoredCycle = ReturnType<typeof localScanCycleCreateResponseSchema.parse>;
@@ -207,6 +208,8 @@ type LocalWriteRouteDependencies = {
 	authenticate: (request: Request) => Promise<AuthContext>;
 	store: SelenaLocalWriteStore;
 	requestId: () => string;
+	/** Optional transaction-owned durable idempotency adapter; absent stays fail-closed via the store. */
+	idempotency?: SelenaApiIdempotencyRunner;
 };
 
 const defaultRouteDependencies: LocalWriteRouteDependencies = {
@@ -275,17 +278,28 @@ export function createSelenaLocalWriteRouteHandlers(
 				const idempotencyKey = parseIdempotencyKey(request.headers);
 				const body = localScanQuoteRequestSchema.parse(await readJson(request));
 				const bodyHash = hashIdempotencyBody({ locationId: validatedLocationId, body });
-				const result = localScanQuoteResponseSchema.parse(
-					await dependencies.store.quote({
-						auth,
+				const response = await runSelenaApiMutation({
+					runner: dependencies.idempotency,
+					identity: {
 						tenantId: auth.tenantId,
-						locationId: validatedLocationId,
+						operation: "quote-create",
+						resourceId: validatedLocationId,
 						idempotencyKey,
 						bodyHash,
-						input: body,
+					},
+					execute: async () => ({
+						status: 201,
+						body: await dependencies.store.quote({
+							auth,
+							tenantId: auth.tenantId,
+							locationId: validatedLocationId,
+							idempotencyKey,
+							bodyHash,
+							input: body,
+						}),
 					}),
-				);
-				return Response.json(result, { status: 201 });
+				});
+				return Response.json(localScanQuoteResponseSchema.parse(response.body), { status: response.status });
 			} catch (error) {
 				return routeError(error, requestId);
 			}
@@ -299,17 +313,28 @@ export function createSelenaLocalWriteRouteHandlers(
 				const idempotencyKey = parseIdempotencyKey(request.headers);
 				const parsed = localScanCycleCreateRequestSchema.parse(await readJson(request));
 				const bodyHash = hashIdempotencyBody({ locationId: validatedLocationId, body: parsed });
-				const result = localScanCycleCreateResponseSchema.parse(
-					await dependencies.store.createCycle({
-						auth,
+				const response = await runSelenaApiMutation({
+					runner: dependencies.idempotency,
+					identity: {
 						tenantId: auth.tenantId,
-						locationId: validatedLocationId,
+						operation: "cycle-create",
+						resourceId: validatedLocationId,
 						idempotencyKey,
 						bodyHash,
-						input: parsed,
+					},
+					execute: async () => ({
+						status: 201,
+						body: await dependencies.store.createCycle({
+							auth,
+							tenantId: auth.tenantId,
+							locationId: validatedLocationId,
+							idempotencyKey,
+							bodyHash,
+							input: parsed,
+						}),
 					}),
-				);
-				return Response.json(result, { status: 201 });
+				});
+				return Response.json(localScanCycleCreateResponseSchema.parse(response.body), { status: response.status });
 			} catch (error) {
 				return routeError(error, requestId);
 			}

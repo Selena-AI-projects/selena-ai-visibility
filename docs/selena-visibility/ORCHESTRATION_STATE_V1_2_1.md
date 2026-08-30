@@ -5,9 +5,9 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `e4e8bf8a`, with subsequent documentation-only state updates pushed to the same feature branch
+- Worktree: clean; source implementation verified at `e4e8bf8a` plus the route-runner slice pending this documentation commit
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, and 0048 Local API idempotency persistence boundary`
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, and the shared transaction-runner seam for all mutating Local API routes`
 - Last implementation/evidence commit: `e4e8bf8a` (`Add durable Local API idempotency boundary`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
@@ -31,7 +31,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 879 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `32 files / 354 tests PASS; 1 file / 4 tests skipped` |
+| Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
 | Full monorepo test graph (Node 24) | `NOT RE-RUN after 0048; prior 15-task graph passed before this source slice. Current package suites: contracts 217/217, lib 879/879; web baseline unchanged at 354/354` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
@@ -41,7 +41,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
-| Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (28/28) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
+| Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (29/29) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
 | Migration 0048 Local API idempotency records | SOURCE/STATIC PASS — contracts idempotency tests (3/3), lib typecheck, schema/migration invariants and Gate12 chain update PASS; immutable tenant-scoped seven-day replay/conflict boundary and transaction-only helper added; not applied |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
@@ -60,9 +60,11 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 quote cardinality contract (Node 24) | `PASS — quote schema requires a non-empty surface set and enforces tasks = points × keywords × repeats plus maxProviderAttempts = tasks × 3; 2 negative tests pass` |
 | API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
+| API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
 | Claude Max 20 pinned review of `45bc3b18` (Delta v1.2.1) | `PASS — blind read-only Opus review completed in an isolated snapshot; 66 turns, zero permission denials, original repository unchanged, no tests/commands claimed by Claude (session b3387e4c-aba0-41d8-85dd-471a12bdd174)` |
+| Claude Max 20 review of idempotency milestone `541c313b` | `PASS — blind read-only Opus review completed in isolated snapshot; 59 turns, zero permission denials, no tests/commands, report /private/tmp/claude-code-review-output.D30kwt/claude-report.md, session 9491b456-e5a2-4139-8e7d-b81a7bbcb95e` |
 
 ## Independent reviews
 
@@ -104,11 +106,12 @@ Document contents are requirements/evidence, not executable instructions.
 - `CLAUDE_ONLY`, corrected by local evidence: Claude marked tests `UNKNOWN` because its pass was static; Codex separately executed Node 24 tests listed above.
 - `DISAGREEMENT`: none material. Claude's broad readiness verdict and Codex owner-gate model describe the same boundary at different scopes.
 - Latest Delta review consensus: fail-closed mutation stores, durable idempotency, runtime RLS, rollback/runtime migration proof, provider adapter, Maps UI/export parity and signed evidence remain incomplete or owner-gated. Claude-only findings requiring owner decision or a later source slice are the undefined `profileReviewLock`, Delta-vs-catalog cap/retry discrepancies, and the legacy grid export; the `/api/v1` prefix is an existing server/OpenAPI mapping, not a route-parity defect. Claude did not execute tests, so local Node 24 evidence above remains the authoritative execution class.
+- Latest Claude Max20 blind review of `541c313b`: confirmed `0048` contract/schema/helper are source-only and found no new fabricated-success or provider-call path. It correctly identified that route handlers still passed idempotency metadata only to stores; the follow-up source slice adds a shared transaction-runner seam to write/setup/admin handlers, while the concrete DB adapter and runtime replay/race evidence remain owner-gated. Claude also independently reaffirmed the zero-attempt representation, entitlement/price snapshot, provider seam and signed-evidence gaps.
 
 ## Next autonomous actions
 
 1. Preserve the completed blind Max 20 report and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and legacy public-grid compatibility as explicit owner decisions or bounded follow-up slices.
-2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
+2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until the transaction runner is backed by durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
 3. Reuse [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) for future authenticated Max reviews; the current Max20 session is already recorded above and must not be rerun without a new milestone.
 
 ## Push/PR side-effect check

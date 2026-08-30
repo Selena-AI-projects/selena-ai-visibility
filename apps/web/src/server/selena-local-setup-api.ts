@@ -22,6 +22,7 @@ import {
 	selenaApiHttpErrorResponse,
 } from "../lib/selena-api-http";
 import { type AuthContext, resolveApiKeyAuthContext } from "../lib/selena-auth-context";
+import { runSelenaApiMutation, type SelenaApiIdempotencyRunner } from "./selena-api-idempotency";
 
 export type LocalSetupOperation = "location-create" | "place-entity-confirm" | "keyword-set-create";
 
@@ -71,6 +72,8 @@ export type LocalSetupRouteDependencies = {
 	authenticate: (request: Request) => Promise<AuthContext>;
 	store: SelenaLocalSetupStore;
 	requestId: () => string;
+	/** Optional transaction-owned durable idempotency adapter; absent stays fail-closed via the store. */
+	idempotency?: SelenaApiIdempotencyRunner;
 };
 
 const defaultRouteDependencies: LocalSetupRouteDependencies = {
@@ -143,23 +146,37 @@ export function createSelenaLocalSetupRouteHandlers(
 			const idempotencyKey = parseIdempotencyKey(request.headers);
 			const body = await read(request);
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
-			const result = await dependencies.store.execute({
-				auth,
-				tenantId: auth.tenantId,
-				operation,
-				resourceId: validatedResourceId,
-				idempotencyKey,
-				bodyHash,
-				body,
+			const response = await runSelenaApiMutation({
+				runner: dependencies.idempotency,
+				identity: {
+					tenantId: auth.tenantId,
+					operation,
+					resourceId: validatedResourceId,
+					idempotencyKey,
+					bodyHash,
+				},
+				execute: async () => {
+					const result = await dependencies.store.execute({
+						auth,
+						tenantId: auth.tenantId,
+						operation,
+						resourceId: validatedResourceId,
+						idempotencyKey,
+						bodyHash,
+						body,
+					});
+					if (result === null)
+						throw new SelenaApiHttpError(
+							503,
+							LOCAL_SETUP_OWNER_GATE_CODE,
+							"Local setup action did not produce a durable response.",
+							true,
+							{ providerCalls: 0, operation },
+						);
+					return { status: operation === "place-entity-confirm" ? 200 : 201, body: result };
+				},
 			});
-			if (result === null)
-				throw new SelenaApiHttpError(
-					503,
-					LOCAL_SETUP_OWNER_GATE_CODE,
-					"Local setup action did not produce a durable response.",
-					true,
-					{ providerCalls: 0, operation },
-				);
+			const result = response.body;
 			const parsed =
 				operation === "location-create"
 					? localBusinessLocationCreateResponseSchema.safeParse(result)
@@ -174,7 +191,7 @@ export function createSelenaLocalSetupRouteHandlers(
 					true,
 					{ providerCalls: 0, operation },
 				);
-			return Response.json(parsed.data, { status: operation === "place-entity-confirm" ? 200 : 201 });
+			return Response.json(parsed.data, { status: response.status });
 		} catch (error) {
 			return routeError(error, requestId);
 		}
