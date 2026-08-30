@@ -73,6 +73,13 @@ async function main() {
 		retryLimit: 0,
 		expireInSeconds: 60 * 30,
 	});
+	// createQueue is idempotent but does not reconcile options on an existing
+	// pg-boss queue. Keep deployed upgrades from retaining the old 15-minute
+	// expiry after the Perplexity snapshot allowance changes.
+	await boss.updateQueue("selena-measure", {
+		retryLimit: 0,
+		expireInSeconds: 60 * 30,
+	});
 	await boss.createQueue("selena-answer-retention", {
 		retryLimit: 1,
 		retryDelay: 600,
