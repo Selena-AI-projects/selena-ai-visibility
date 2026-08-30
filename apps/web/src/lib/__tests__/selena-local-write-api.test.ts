@@ -205,6 +205,7 @@ describe("Selena local write API", () => {
 		expect(store.quote).toHaveBeenCalledWith(
 			expect.objectContaining({
 				locationId,
+				tenantId: auth.tenantId,
 				idempotencyKey: "local-write-1",
 				bodyHash: expect.stringMatching(/^sha256:/),
 				auth,

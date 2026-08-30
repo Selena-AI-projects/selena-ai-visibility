@@ -23,6 +23,7 @@ export type LocalAdminOperation = (typeof localAdminOperations)[number];
 
 type LocalAdminStoreInput = {
 	auth: AuthContext;
+	tenantId: string;
 	operation: LocalAdminOperation;
 	resourceId: string;
 	idempotencyKey: string;
@@ -153,6 +154,7 @@ export function createSelenaLocalAdminRouteHandlers(
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
 			const result = await dependencies.store.execute({
 				auth,
+				tenantId: auth.tenantId,
 				operation,
 				resourceId: validatedResourceId,
 				idempotencyKey,

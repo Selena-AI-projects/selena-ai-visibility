@@ -89,6 +89,7 @@ describe("Selena local setup API", () => {
 		expect(store.execute).toHaveBeenCalledWith(
 			expect.objectContaining({
 				auth,
+				tenantId: auth.tenantId,
 				operation: "place-entity-confirm",
 				resourceId: locationId,
 				idempotencyKey: "setup-write-1",

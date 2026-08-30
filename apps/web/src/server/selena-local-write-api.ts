@@ -26,6 +26,7 @@ type StoredCycle = ReturnType<typeof localScanCycleCreateResponseSchema.parse>;
 export type SelenaLocalWriteStore = {
 	quote(input: {
 		auth: AuthContext;
+		tenantId: string;
 		locationId: string;
 		idempotencyKey: string;
 		bodyHash: string;
@@ -33,6 +34,7 @@ export type SelenaLocalWriteStore = {
 	}): Promise<StoredQuote>;
 	createCycle(input: {
 		auth: AuthContext;
+		tenantId: string;
 		locationId: string;
 		idempotencyKey: string;
 		bodyHash: string;
@@ -276,6 +278,7 @@ export function createSelenaLocalWriteRouteHandlers(
 				const result = localScanQuoteResponseSchema.parse(
 					await dependencies.store.quote({
 						auth,
+						tenantId: auth.tenantId,
 						locationId: validatedLocationId,
 						idempotencyKey,
 						bodyHash,
@@ -299,6 +302,7 @@ export function createSelenaLocalWriteRouteHandlers(
 				const result = localScanCycleCreateResponseSchema.parse(
 					await dependencies.store.createCycle({
 						auth,
+						tenantId: auth.tenantId,
 						locationId: validatedLocationId,
 						idempotencyKey,
 						bodyHash,

@@ -37,6 +37,7 @@ type LocalSetupResult =
 
 type LocalSetupStoreInput = {
 	auth: AuthContext;
+	tenantId: string;
 	operation: LocalSetupOperation;
 	resourceId: string;
 	idempotencyKey: string;
@@ -144,6 +145,7 @@ export function createSelenaLocalSetupRouteHandlers(
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
 			const result = await dependencies.store.execute({
 				auth,
+				tenantId: auth.tenantId,
 				operation,
 				resourceId: validatedResourceId,
 				idempotencyKey,

@@ -86,6 +86,7 @@ describe("Selena local admin API", () => {
 		expect(store.execute).toHaveBeenCalledWith(
 			expect.objectContaining({
 				auth,
+				tenantId: auth.tenantId,
 				operation: "stop",
 				resourceId: cycleId,
 				idempotencyKey: "admin-write-1",
