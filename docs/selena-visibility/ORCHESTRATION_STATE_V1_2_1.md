@@ -8,7 +8,7 @@
 - Worktree: clean feature checkout after source-only API-01B quote/create/export slice
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `e8a22b7b` (`record API-01B acceptance evidence`), pushed to `origin/feature/selena-visibility-v1-2-1`
+- Current feature commit: `e6195ba7` (`record monorepo build baseline`), pushed to `origin/feature/selena-visibility-v1-2-1`
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
