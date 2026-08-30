@@ -7,10 +7,11 @@ import {
 	contextHash,
 	expectedObservations,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextSnapshotSchema,
 	type ObservationReviewDecision,
 	type OrderingState,
 	observationReviewDecisions,
-	observerContextSchema,
+	observerContextFromTaskSnapshot,
 	parseMeasurementScope,
 	type RunOutcome,
 	resolveExplicitPosition,
@@ -1451,7 +1452,11 @@ export function createSelenaRepositories(db: Db) {
 					},
 					block.evidencePolicy,
 				);
-				const context = observerContextSchema.parse(input.context);
+				const submittedContextSnapshot = localAiTaskContextSnapshotSchema.parse(input.context);
+				const taskContextSnapshot = localAiTaskContextSnapshotSchema.parse(task.contextSnapshot);
+				if (submittedContextSnapshot.pointId !== taskContextSnapshot.pointId)
+					throw new Error("OBSERVATION_POINT_MISMATCH");
+				const context = observerContextFromTaskSnapshot(submittedContextSnapshot);
 				const scenario = block.scenarios.find((candidate) => candidate.scenarioId === task.scenarioId) ?? null;
 				assertObservationMatchesLockedTask({
 					queryText: input.queryText,

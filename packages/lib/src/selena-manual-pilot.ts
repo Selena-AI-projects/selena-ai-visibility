@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import {
 	assertObservationCardinality,
-	contextHash,
 	type LocalAiDiscoveryLockBlock,
+	type LocalAiTaskContextSnapshot,
 	localAiDiscoveryLockBlockSchema,
-	type ObserverContext,
+	localAiTaskContextHash,
 } from "@workspace/selena-visibility-contracts";
 
 // RC7 Phase E planning is pure: a lock block goes in, a finite task matrix
@@ -13,7 +13,7 @@ import {
 export type PlannedCaptureTask = {
 	scenarioId: string;
 	contextHash: string;
-	contextSnapshot: ObserverContext;
+	contextSnapshot: LocalAiTaskContextSnapshot;
 	repeatIndex: number;
 	queryTextSnapshot: string;
 	targetEntityIdsSnapshot: string[];
@@ -30,7 +30,7 @@ export function planCaptureTasks(block: LocalAiDiscoveryLockBlock): PlannedCaptu
 	const seenDedupeKeys = new Set<string>();
 	for (const scenario of parsed.scenarios) {
 		for (const context of parsed.observerContexts) {
-			const hash = contextHash(context);
+			const hash = localAiTaskContextHash(context);
 			for (let repeatIndex = 0; repeatIndex < parsed.repeats; repeatIndex++) {
 				// Belt-and-suspenders: the schema already pins expectedObservations to
 				// the matrix product, so planning task expected+1 must be impossible

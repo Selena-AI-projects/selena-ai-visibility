@@ -14,14 +14,15 @@ import {
 	svVisibilityMapPoints,
 } from "@workspace/lib/db/schema";
 import {
-	contextHash,
 	LOCAL_API_EVIDENCE_TTL_SECONDS,
 	type LocalApiCursorResource,
+	localAiTaskContextHash,
+	localAiTaskContextSnapshotSchema,
 	localApiAiResultsResponseSchema,
 	localApiEvidenceResponseSchema,
 	localApiMapResultsResponseSchema,
 	localApiProgressResponseSchema,
-	observerContextSchema,
+	observerContextFromTaskSnapshot,
 	readManualLocalAiLock,
 } from "@workspace/selena-visibility-contracts";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
@@ -370,7 +371,7 @@ function aiTaskEvidenceUsable(rows: LocalReadAiTaskAssetRow[]): boolean {
 }
 
 function coordinateProofEvidenceId(rows: LocalReadAiTaskAssetRow[]): string | null {
-	const proof = rows.find(
+	const proofs = rows.filter(
 		(row) =>
 			row.evidenceAssetType === "COORDINATE_PROOF" &&
 			row.evidenceId !== null &&
@@ -379,7 +380,7 @@ function coordinateProofEvidenceId(rows: LocalReadAiTaskAssetRow[]): string | nu
 			row.evidenceCapturedAt !== null &&
 			!Number.isNaN(row.evidenceCapturedAt.getTime()),
 	);
-	return proof?.evidenceId ?? null;
+	return proofs.length === 1 ? (proofs[0]?.evidenceId ?? null) : null;
 }
 
 function hasCoordinateProof(snapshot: unknown, proofEvidenceId: string | null): boolean {
@@ -406,9 +407,9 @@ function hasCoordinateProof(snapshot: unknown, proofEvidenceId: string | null): 
 }
 
 function parseLocalAiTaskObserverContext(snapshot: unknown) {
-	const parsed = observerContextSchema.safeParse(snapshot);
+	const parsed = localAiTaskContextSnapshotSchema.safeParse(snapshot);
 	if (!parsed.success) return null;
-	return parsed.data;
+	return observerContextFromTaskSnapshot(parsed.data);
 }
 
 function nullableContextString(snapshot: unknown, key: string): string | null {
@@ -582,14 +583,16 @@ async function evaluateLocalAi(store: SelenaLocalReadStore, cycle: LocalReadCycl
 	for (const row of rows) grouped.set(row.captureTaskId, [...(grouped.get(row.captureTaskId) ?? []), row]);
 	if (grouped.size > expected) throw new Error("LOCAL_AI_PROGRESS_EXCEEDS_EXPECTED");
 	const allowedScenarioIds = new Set(lock.lock.discovery.scenarios.map((scenario) => scenario.scenarioId));
-	const allowedContextHashes = new Set(lock.lock.discovery.observerContexts.map((context) => contextHash(context)));
+	const allowedContextHashes = new Set(
+		lock.lock.discovery.observerContexts.map((context) => localAiTaskContextHash(context)),
+	);
 	for (const row of rows) {
 		const context = parseLocalAiTaskObserverContext(row.contextSnapshot);
 		const scenario = lock.lock.discovery.scenarios.find((candidate) => candidate.scenarioId === row.scenarioId);
 		if (
 			!context ||
 			!scenario ||
-			contextHash(context) !== row.contextHash ||
+			localAiTaskContextHash(row.contextSnapshot) !== row.contextHash ||
 			row.queryTextSnapshot !== scenario.queryText ||
 			context.queryLanguage !== scenario.language ||
 			!allowedScenarioIds.has(row.scenarioId) ||

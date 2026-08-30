@@ -3,9 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	assertObservationCardinality,
-	contextHash,
 	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextHash,
 } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it } from "vitest";
 import { observationContentSha256, planCaptureTasks } from "./selena-manual-pilot";
@@ -87,7 +87,7 @@ describe("Selena manual pilot capture-task planning", () => {
 	it("snapshots the scenario query and the context behind its hash", () => {
 		const tasks = planCaptureTasks(lockBlock);
 		for (const task of tasks) {
-			expect(task.contextHash).toBe(contextHash(task.contextSnapshot));
+			expect(task.contextHash).toBe(localAiTaskContextHash(task.contextSnapshot));
 			const scenario = lockBlock.scenarios.find((candidate) => candidate.scenarioId === task.scenarioId);
 			expect(task.queryTextSnapshot).toBe(scenario?.queryText);
 			expect(task.targetEntityIdsSnapshot).toEqual(scenario?.targetEntityIds);

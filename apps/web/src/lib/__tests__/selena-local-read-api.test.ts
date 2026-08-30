@@ -1,4 +1,4 @@
-import { contextHash } from "@workspace/selena-visibility-contracts";
+import { localAiTaskContextHash } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
 	createSelenaLocalReadApi,
@@ -26,6 +26,7 @@ const ids = {
 	aiObservation: "10000000-0000-4000-8000-000000000021",
 	aiEvidence: "10000000-0000-4000-8000-000000000022",
 	aiCoordinateProof: "10000000-0000-4000-8000-000000000023",
+	aiCoordinateProofDuplicate: "10000000-0000-4000-8000-000000000024",
 	dataset: "10000000-0000-4000-8000-000000000003",
 	location: "10000000-0000-4000-8000-000000000004",
 	grid: "10000000-0000-4000-8000-000000000005",
@@ -124,7 +125,7 @@ function acceptedAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 	return {
 		captureTaskId: ids.task,
 		scenarioId: ids.scenario,
-		contextHash: contextHash(localAiObserverContext),
+		contextHash: localAiTaskContextHash(localAiObserverContext),
 		repeatIndex: 0,
 		taskStatus: "ACCEPTED",
 		taskCreatedAt: new Date("2026-08-30T02:00:00.000Z"),
@@ -401,7 +402,7 @@ describe("Selena local read API core", () => {
 					captureTaskId: ids.task,
 					observationId: ids.aiObservation,
 					scenarioId: ids.scenario,
-					contextHash: contextHash(localAiObserverContext),
+					contextHash: localAiTaskContextHash(localAiObserverContext),
 					repeatIndex: 0,
 					taskStatus: "ACCEPTED",
 					resultStatus: "VALID",
@@ -451,6 +452,26 @@ describe("Selena local read API core", () => {
 		});
 	});
 
+	it("fails closed when a task has more than one usable coordinate proof", async () => {
+		const task = acceptedAiTaskAssetRow();
+		const proof = coordinateProofAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [
+				task,
+				proof,
+				{ ...proof, evidenceId: ids.aiCoordinateProofDuplicate, evidenceSequenceIndex: 2 },
+			]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).resolves.toMatchObject({
+			status: "PARTIAL",
+			items: [{ resultStatus: "UNKNOWN", reasonCode: "ACCEPTANCE_EVIDENCE_INCOMPLETE" }],
+		});
+	});
+
 	it("does not treat area-mode coordinates as pin-level coordinate proof", async () => {
 		const areaContext = {
 			...localAiObserverContext,
@@ -463,10 +484,14 @@ describe("Selena local read API core", () => {
 			listAiTaskAssets: vi.fn(async () => [
 				{
 					...task,
-					contextHash: contextHash(areaContext),
+					contextHash: localAiTaskContextHash(areaContext),
 					contextSnapshot: areaContext,
 				},
-				{ ...coordinateProofAiTaskAssetRow(), contextHash: contextHash(areaContext), contextSnapshot: areaContext },
+				{
+					...coordinateProofAiTaskAssetRow(),
+					contextHash: localAiTaskContextHash(areaContext),
+					contextSnapshot: areaContext,
+				},
 			]),
 			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
 		});
@@ -509,10 +534,10 @@ describe("Selena local read API core", () => {
 			listAiTaskAssets: vi.fn(async () => [
 				{
 					...task,
-					contextHash: contextHash(observedContext),
+					contextHash: localAiTaskContextHash(observedContext),
 					contextSnapshot: observedContext,
 				},
-				{ ...proof, contextHash: contextHash(observedContext), contextSnapshot: observedContext },
+				{ ...proof, contextHash: localAiTaskContextHash(observedContext), contextSnapshot: observedContext },
 			]),
 			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
 		});
@@ -520,7 +545,7 @@ describe("Selena local read API core", () => {
 
 		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).resolves.toMatchObject({
 			status: "READY",
-			items: [{ resultStatus: "VALID", contextHash: contextHash(observedContext) }],
+			items: [{ resultStatus: "VALID", contextHash: localAiTaskContextHash(observedContext) }],
 		});
 	});
 

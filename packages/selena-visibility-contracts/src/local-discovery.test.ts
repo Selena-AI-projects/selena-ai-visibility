@@ -19,6 +19,8 @@ import {
 	LOCAL_AI_DISCOVERY_POLICY,
 	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextHash,
+	localAiTaskContextSnapshotSchema,
 	localDiscoveryConfigFromEnv,
 	type ObserverContext,
 	observationSubmissionViolations,
@@ -174,6 +176,7 @@ describe("RC7 observer context and context hash", () => {
 
 	it("hashes conditions, not the capture moment", () => {
 		expect(contextHash({ ...moscowContext, capturedAt: "2026-08-18T22:15:00.000Z" })).toBe(hash);
+		expect(localAiTaskContextHash({ ...moscowContext, pointId })).toBe(hash);
 		expect(contextHash(moscowContext)).toMatch(/^[0-9a-f]{64}$/);
 		expect(contextHash({ ...moscowContext, observerLocality: "Kazan" })).not.toBe(hash);
 	});
@@ -184,23 +187,16 @@ describe("RC7 observer context and context hash", () => {
 		expect(observerContextSchema.safeParse({ ...moscowContext, observerGeoMode: "DECLARED_COORDINATE" }).success).toBe(
 			false,
 		);
-		expect(
-			observerContextSchema.safeParse({
-				...moscowContext,
-				observerGeoMode: "DECLARED_COORDINATE",
-				observerLatitude: 55.75,
-				observerLongitude: 37.62,
-				pointId,
-			}).success,
-		).toBe(true);
-		expect(
-			observerContextSchema.safeParse({
-				...moscowContext,
-				observerGeoMode: "DECLARED_COORDINATE",
-				observerLatitude: 55.75,
-				observerLongitude: 37.62,
-			}).success,
-		).toBe(false);
+		const coordinateContext = {
+			...moscowContext,
+			observerGeoMode: "DECLARED_COORDINATE",
+			observerLatitude: 55.75,
+			observerLongitude: 37.62,
+		} as const;
+		expect(observerContextSchema.safeParse(coordinateContext).success).toBe(true);
+		expect(localAiTaskContextSnapshotSchema.safeParse(coordinateContext).success).toBe(false);
+		expect(localAiTaskContextSnapshotSchema.safeParse({ ...coordinateContext, pointId }).success).toBe(true);
+		expect(localAiTaskContextHash({ ...coordinateContext, pointId })).toBe(contextHash(coordinateContext));
 	});
 });
 

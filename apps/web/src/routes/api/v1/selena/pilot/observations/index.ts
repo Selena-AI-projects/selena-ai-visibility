@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
-import { observerContextSchema, orderingStates } from "@workspace/selena-visibility-contracts";
+import { localAiTaskContextSnapshotSchema, orderingStates } from "@workspace/selena-visibility-contracts";
 import { z } from "zod";
 import { createSelenaApiHandler } from "../../../../../../lib/selena-api-handler";
 import { pilotDisabledResponse, pilotErrorResponse } from "../../../../../../lib/selena-pilot-gate";
@@ -21,7 +21,7 @@ const submissionSchema = z
 		idempotencyKey: z.string().min(1).max(200),
 		capturedAt: z.iso.datetime(),
 		queryText: z.string().min(1),
-		context: observerContextSchema,
+		context: localAiTaskContextSnapshotSchema,
 		orderingState: z.enum(orderingStates).optional(),
 		transcript: z.string().min(1),
 		// The screenshot reference stays an opaque string end to end: the server

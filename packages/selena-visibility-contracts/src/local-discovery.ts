@@ -68,7 +68,6 @@ export const observerContextSchema = z
 		observerGeoMode: z.enum(observerGeoModes),
 		observerLatitude: z.number().min(-90).max(90).optional(),
 		observerLongitude: z.number().min(-180).max(180).optional(),
-		pointId: z.string().uuid().optional(),
 		appLocale: z.string().trim().min(2).max(35),
 		queryLanguage: z.string().trim().min(2).max(35),
 		deviceClass: z.enum(observerDeviceClasses),
@@ -84,10 +83,21 @@ export const observerContextSchema = z
 			issues.addIssue({ code: "custom", message: "OBSERVER_COORDINATES_MUST_BE_PAIRED" });
 		if (context.observerGeoMode === "DECLARED_COORDINATE" && (!hasLatitude || !hasLongitude))
 			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_COORDINATES" });
+	});
+export type ObserverContext = z.infer<typeof observerContextSchema>;
+
+export const localAiTaskContextSnapshotSchema = observerContextSchema
+	.safeExtend({ pointId: z.string().uuid().optional() })
+	.superRefine((context, issues) => {
 		if (context.observerGeoMode === "DECLARED_COORDINATE" && context.pointId === undefined)
 			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_POINT_ID" });
 	});
-export type ObserverContext = z.infer<typeof observerContextSchema>;
+export type LocalAiTaskContextSnapshot = z.infer<typeof localAiTaskContextSnapshotSchema>;
+
+export function observerContextFromTaskSnapshot(snapshot: unknown): ObserverContext {
+	const { pointId: _pointId, ...context } = localAiTaskContextSnapshotSchema.parse(snapshot);
+	return observerContextSchema.parse(context);
+}
 
 // The hash identifies the observation *conditions*, not the moment — two
 // captures under identical conditions at different times must collide, so
@@ -100,6 +110,10 @@ export function contextHash(context: ObserverContext): string {
 		if (value !== undefined) canonical[key] = value;
 	}
 	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+export function localAiTaskContextHash(snapshot: unknown): string {
+	return contextHash(observerContextFromTaskSnapshot(snapshot));
 }
 
 // ---------------------------------------------------------------------------
@@ -154,7 +168,7 @@ export const localAiDiscoveryLockBlockSchema = z
 		entityRelationships: z.array(lockEntityRelationshipSchema),
 		businessLocations: z.array(lockBusinessLocationSchema),
 		scenarios: z.array(lockScenarioSchema),
-		observerContexts: z.array(observerContextSchema),
+		observerContexts: z.array(localAiTaskContextSnapshotSchema),
 		repeats: z.number().int().min(0),
 		expectedObservations: z.number().int().min(0),
 		evidencePolicy: evidencePolicySchema,
@@ -245,7 +259,7 @@ export function observationSubmissionViolations(
 ): string[] {
 	const violations: string[] = [];
 	if (policy.queryRequired && !submission.queryText?.trim()) violations.push("OBSERVATION_MISSING_QUERY_TEXT");
-	const parsedContext = observerContextSchema.safeParse(submission.context);
+	const parsedContext = localAiTaskContextSnapshotSchema.safeParse(submission.context);
 	if (policy.contextRequired && !parsedContext.success) violations.push("OBSERVATION_MISSING_CONTEXT");
 	if (policy.timestampRequired && !hasValidTimestamp(submission.capturedAt))
 		violations.push("OBSERVATION_MISSING_CAPTURED_AT");
