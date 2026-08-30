@@ -56,7 +56,14 @@ export async function getBoss(): Promise<PgBoss> {
 		// work that was authorized once.
 		await boss.createQueue("selena-measure", {
 			retryLimit: 0,
-			expireInSeconds: 60 * 15,
+			expireInSeconds: 60 * 30,
+		});
+		// createQueue preserves options on an existing queue. Reconcile the
+		// measurement deadline so a web-first startup cannot leave the legacy
+		// 15-minute expiry in place.
+		await boss.updateQueue("selena-measure", {
+			retryLimit: 0,
+			expireInSeconds: 60 * 30,
 		});
 
 		bossInstance = boss;
