@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: source-only API-01C admin-control slice under validation
+- Worktree: clean after source-only API-01C admin-control slice
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `49ccb2a3` (`record latest orchestration head`), pushed to `origin/feature/selena-visibility-v1-2-1`; API-01C changes are uncommitted pending final gates
+- Current feature commit: `9dad5469` (`implement fail-closed local admin controls`), pushed to `origin/feature/selena-visibility-v1-2-1`
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -83,9 +83,9 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. Finish the final API-01C quality-gate run, commit and push the source-only admin-control slice, then record the exact commit evidence.
-2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
-3. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`.
+1. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
+2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`.
+3. Preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
 
 ## Push/PR side-effect check
 
