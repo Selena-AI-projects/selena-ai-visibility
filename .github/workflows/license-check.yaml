@@ -1,14 +1,12 @@
 # License Compliance Check
 #
 # Validates that all dependencies use licenses compatible with MIT.
-# Runs on every push/PR to main and can be triggered manually.
+# Runs on pull requests to main and can be triggered manually.
 # Lightweight – only needs Node + pnpm, no Docker or databases.
 
 name: License Check
 
 on:
-  push:
-    branches: [main, release/selena-visibility-mvp]
   pull_request:
     branches: [main, release/selena-visibility-mvp]
   workflow_dispatch:
