@@ -335,7 +335,7 @@ describe("local API public contracts", () => {
 				items: [{ ...base, evidenceIds: [] }],
 			}).success,
 		).toBe(false);
-		for (const resultStatus of ["INVALID", "UNKNOWN", "BLOCKED"] as const) {
+		for (const resultStatus of ["UNKNOWN", "BLOCKED"] as const) {
 			expect(
 				localApiAiResultSchema.parse({
 					...base,
@@ -347,6 +347,38 @@ describe("local API public contracts", () => {
 				}).resultStatus,
 			).toBe(resultStatus);
 		}
+		expect(
+			localApiAiResultSchema.parse({
+				...base,
+				observationId: null,
+				resultStatus: "INVALID",
+				taskStatus: "REJECTED",
+				validity: "INVALID",
+				reasonCode: "REJECTED",
+				capturedAt: null,
+				evidenceIds: [],
+			}).resultStatus,
+		).toBe("INVALID");
+		expect(
+			localApiAiResultSchema.safeParse({
+				...base,
+				resultStatus: "VALID",
+				taskStatus: "REJECTED",
+				validity: "INVALID",
+			}).success,
+		).toBe(false);
+		expect(
+			localApiAiResultSchema.safeParse({
+				...base,
+				observationId: null,
+				resultStatus: "INVALID",
+				taskStatus: "ACCEPTED",
+				validity: "VALID",
+				capturedAt: null,
+				evidenceIds: [],
+				reasonCode: "INVALID_REVIEW",
+			}).success,
+		).toBe(false);
 	});
 
 	it("models both 600-second signed access and explicit signing-unavailable access", () => {

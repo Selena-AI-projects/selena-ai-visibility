@@ -221,3 +221,9 @@
 - Decision: a Local AI row may be promoted to `VALID` only when its proof-bearing snapshot declares `observerGeoMode: DECLARED_COORDINATE` in addition to valid latitude/longitude, `pointId` and a non-empty proof reference. Coordinates attached to `DECLARED_AREA` or `UNKNOWN` remain insufficient.
 - Evidence: `hasCoordinateProof` and regression coverage in the feature branch at `603fad81` plus the follow-up source-only patch; targeted web read-API tests `26/26` and web typecheck pass. The existing manual submit route still carries only the immutable observer context, so this decision does not claim an end-to-end proof write path.
 - Effect: area-level context cannot be misclassified as pin-level evidence; proof metadata transport and persistence remain a separate source/runtime slice and no provider or automated Local AI path is enabled.
+
+## D-039 — Keep Local AI result states internally consistent
+
+- Decision: the public Local AI result contract accepts `VALID` only with `taskStatus=ACCEPTED` and `validity=VALID`; `INVALID` requires one of the explicit invalid-review task statuses and `validity=INVALID`. `UNKNOWN` remains the honest state for incomplete evidence, including an accepted task whose proof or evidence is missing.
+- Evidence: source-only `localApiAiResultSchema` refinement and regression cases in the feature branch; contracts `11/11`, typecheck and Biome checks pass on 2026-08-30. No runtime or provider path is involved.
+- Effect: contradictory DTO combinations cannot be serialized as authoritative results, while the existing incomplete-evidence semantics are preserved.

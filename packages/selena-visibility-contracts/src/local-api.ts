@@ -218,6 +218,8 @@ export const localApiManualTaskStatuses = [
 	"SURFACE_UNAVAILABLE",
 ] as const;
 
+const localApiInvalidTaskStatuses = ["REJECTED", "NEEDS_CORRECTION", "INSUFFICIENT_EVIDENCE"] as const;
+
 export const localApiAiResultSchema = z
 	.strictObject({
 		captureTaskId: z.string().uuid(),
@@ -255,11 +257,24 @@ export const localApiAiResultSchema = z
 	})
 	.superRefine((result, context) => {
 		if (result.resultStatus === "VALID") {
+			if (result.taskStatus !== "ACCEPTED" || result.validity !== "VALID") {
+				context.addIssue({ code: "custom", message: "LOCAL_API_AI_VALID_STATE_MISMATCH" });
+			}
 			if (result.observationId === null || result.capturedAt === null || result.evidenceIds.length === 0) {
 				context.addIssue({ code: "custom", message: "LOCAL_API_AI_VALID_EVIDENCE_REQUIRED" });
 			}
 			if (result.reasonCode !== null) {
 				context.addIssue({ code: "custom", message: "LOCAL_API_AI_VALID_REASON_FORBIDDEN", path: ["reasonCode"] });
+			}
+		} else if (result.resultStatus === "INVALID") {
+			if (
+				!localApiInvalidTaskStatuses.includes(result.taskStatus as (typeof localApiInvalidTaskStatuses)[number]) ||
+				result.validity !== "INVALID"
+			) {
+				context.addIssue({ code: "custom", message: "LOCAL_API_AI_INVALID_STATE_MISMATCH" });
+			}
+			if (result.reasonCode === null) {
+				context.addIssue({ code: "custom", message: "LOCAL_API_AI_NONVALID_REASON_REQUIRED", path: ["reasonCode"] });
 			}
 		} else if (result.reasonCode === null) {
 			context.addIssue({ code: "custom", message: "LOCAL_API_AI_NONVALID_REASON_REQUIRED", path: ["reasonCode"] });
