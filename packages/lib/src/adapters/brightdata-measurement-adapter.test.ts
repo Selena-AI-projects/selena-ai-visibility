@@ -239,10 +239,10 @@ describe("Bright Data measurement adapter", () => {
 		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
 	});
 
-	it("keeps polling a Perplexity snapshot beyond five minutes", async () => {
+	it("keeps polling a Perplexity snapshot beyond the observed sixteen-minute collection", async () => {
 		vi.useFakeTimers();
 		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
-		const readyAt = Date.now() + 6 * 60_000;
+		const readyAt = Date.now() + 16 * 60_000;
 		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
 			const url = String(input);
 			if (url.includes("/trigger")) return jsonResponse({ snapshot_id: "s_slow_perplexity" });
@@ -258,7 +258,7 @@ describe("Bright Data measurement adapter", () => {
 				system: "perplexity",
 				collectionMode: "trigger",
 			}).execute(permitFor({ systemId: "Perplexity" }));
-			await vi.advanceTimersByTimeAsync(6 * 60_000);
+			await vi.advanceTimersByTimeAsync(16 * 60_000);
 			const outcome = await outcomePromise;
 
 			expect(outcome).toMatchObject({
