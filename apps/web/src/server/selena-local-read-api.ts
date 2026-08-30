@@ -183,6 +183,11 @@ export type SelenaLocalReadStore = {
 		limit: number;
 		after: LocalReadCursorPosition | null;
 	}): Promise<LocalReadEvidenceRow[]>;
+	findEvidenceHighWater(input: {
+		tenantId: string;
+		measurementCycleId: string;
+		pilotCycleId: string | null;
+	}): Promise<Date | null>;
 };
 
 export class SelenaLocalCycleNotFoundError extends Error {
@@ -776,6 +781,11 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 						after: input.after,
 					})
 				: [];
+			const evidenceHighWater = await store.findEvidenceHighWater({
+				tenantId: input.tenantId,
+				measurementCycleId: cycle.measurementCycleId,
+				pilotCycleId: evaluation.pilotCycleId,
+			});
 			const merged = [
 				...mapRows.map((row) => ({
 					kind: "MAPS" as const,
@@ -798,7 +808,7 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 			const snapshotVersion = assertCursorSnapshot(
 				cycle,
 				input.snapshotVersion,
-				maxIso([evaluation.updatedAt, ...page.items.map((entry) => safeIso(entry.row.capturedAt))]),
+				maxIso([evaluation.updatedAt, ...(evidenceHighWater ? [safeIso(evidenceHighWater)] : [])]),
 			);
 			return {
 				cycleId: input.cycleId,
@@ -1191,6 +1201,51 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 			)
 			.orderBy(asc(svEvidenceIndex.capturedAt), asc(svEvidenceIndex.id))
 			.limit(limit);
+	},
+
+	async findEvidenceHighWater({ tenantId, measurementCycleId, pilotCycleId }) {
+		const [maps] = await db
+			.select({ capturedAt: sql<Date | null>`max(${svEvidenceIndex.capturedAt})` })
+			.from(svEvidenceIndex)
+			.innerJoin(
+				svMeasurementDatasets,
+				and(
+					eq(svMeasurementDatasets.id, svEvidenceIndex.datasetId),
+					eq(svMeasurementDatasets.organizationId, svEvidenceIndex.organizationId),
+					eq(svMeasurementDatasets.cycleId, svEvidenceIndex.cycleId),
+				),
+			)
+			.where(
+				and(
+					eq(svEvidenceIndex.organizationId, tenantId),
+					eq(svEvidenceIndex.cycleId, measurementCycleId),
+					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
+					eq(svMeasurementDatasets.immutable, true),
+				),
+			);
+		if (!pilotCycleId) return maps?.capturedAt ?? null;
+		const [ai] = await db
+			.select({ capturedAt: sql<Date | null>`max(${svObservationEvidenceAssets.capturedAt})` })
+			.from(svObservationEvidenceAssets)
+			.innerJoin(
+				svLocalObservations,
+				and(
+					eq(svLocalObservations.id, svObservationEvidenceAssets.observationId),
+					eq(svLocalObservations.organizationId, svObservationEvidenceAssets.organizationId),
+				),
+			)
+			.innerJoin(
+				svCaptureTasks,
+				and(
+					eq(svCaptureTasks.id, svLocalObservations.captureTaskId),
+					eq(svCaptureTasks.organizationId, svObservationEvidenceAssets.organizationId),
+				),
+			)
+			.where(
+				and(eq(svObservationEvidenceAssets.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)),
+			);
+		const candidates = [maps?.capturedAt, ai?.capturedAt].filter((value): value is Date => value instanceof Date);
+		return candidates.reduce<Date | null>((latest, value) => (!latest || value > latest ? value : latest), null);
 	},
 };
 

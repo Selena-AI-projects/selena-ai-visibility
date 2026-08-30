@@ -256,6 +256,7 @@ function store(overrides: Partial<SelenaLocalReadStore> = {}): SelenaLocalReadSt
 		findMapDatasetId: vi.fn(async () => ({ id: ids.dataset, createdAt: new Date("2026-08-30T01:30:00.000Z") })),
 		listMapResults: vi.fn(async () => []),
 		listEvidence: vi.fn(async () => []),
+		findEvidenceHighWater: vi.fn(async () => null),
 		...overrides,
 	};
 }
@@ -591,6 +592,27 @@ describe("Selena local read API core", () => {
 			},
 		});
 		expect(JSON.stringify(result)).not.toContain("raw");
+	});
+
+	it("anchors evidence cursors to the full evidence high-water mark before page slicing", async () => {
+		const source = store({
+			listEvidence: vi.fn(async () => [evidenceRow({ capturedAt: new Date("2026-08-30T02:00:00.000Z") })]),
+			findEvidenceHighWater: vi.fn(async () => new Date("2026-08-30T03:00:00.000Z")),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(
+			api.evidence({ tenantId: "tenant-a", cycleId: ids.cycle, limit: 1, after: null }),
+		).resolves.toMatchObject({ snapshotVersion: "2026-08-30T03:00:00.000Z" });
+		await expect(
+			api.evidence({
+				tenantId: "tenant-a",
+				cycleId: ids.cycle,
+				limit: 1,
+				after: null,
+				snapshotVersion: "2026-08-30T02:00:00.000Z",
+			}),
+		).rejects.toMatchObject({ code: "CURSOR_STALE", status: 409 });
 	});
 
 	it("enforces endpoint-specific read scopes with the standard error envelope", async () => {
