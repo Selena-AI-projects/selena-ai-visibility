@@ -6,6 +6,7 @@ import {
 	assertLocalMapsRankCapabilitySupportsTask,
 	assertLocalMapsRankCoordinateProofMatchesTask,
 	assertLocalMapsRankQuoteMatchesLock,
+	formatLocalMapsLocationCoordinate,
 	localMapsRankCapabilitySchema,
 	localMapsRankPermitSchema,
 	localMapsRankQuoteSchema,
@@ -137,6 +138,20 @@ describe("LocalMapsRankAdapter contract", () => {
 			"LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH",
 		);
 		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, undefined as never)).toThrow();
+	});
+
+	it("formats the locked location_coordinate wire value", () => {
+		const slot = planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lock)[0];
+		if (!slot) throw new Error("TEST_SLOT_MISSING");
+		const task = materializeLocalMapsProviderRequest(lock, slot, {
+			id: "22222222-2222-4222-8222-222222222222",
+			text: "cafes ubud",
+			keywordSetId: lock.keywordSet.id,
+			keywordSetVersion: lock.keywordSet.version,
+		});
+		expect(formatLocalMapsLocationCoordinate(task)).toBe(
+			`${task.point.latitude},${task.point.longitude},${lock.request.zoom}`,
+		);
 	});
 
 	it("rejects a provider capability whose depth is below the locked request", () => {

@@ -1,7 +1,11 @@
 import { z } from "zod";
 import { executionKeyPartSchema, maximumProviderAttempts } from "./local-execution.js";
 import { type MapsLockV1, mapsLockV1Schema, mapsRequestLockSchema } from "./local-locks.js";
-import type { LocalMapsLiveProviderResult, LocalMapsMaterializedProviderRequest } from "./local-maps-live.js";
+import {
+	type LocalMapsLiveProviderResult,
+	type LocalMapsMaterializedProviderRequest,
+	localMapsMaterializedProviderRequestSchema,
+} from "./local-maps-live.js";
 
 const usdAmountSchema = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
 const attemptIndexSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
@@ -85,6 +89,17 @@ export type LocalMapsRankAdapter<TRawResult = unknown> = {
 	normalize(result: TRawResult): LocalMapsRankNormalizedObservation;
 	capability(): LocalMapsRankCapability;
 };
+
+/**
+ * Formats the provider wire value required by the Maps contract. Coordinates
+ * are already frozen decimal strings in the materialized request; only the
+ * locked zoom is appended, so a provider adapter cannot silently choose a
+ * different point or depth context.
+ */
+export function formatLocalMapsLocationCoordinate(inputTask: LocalMapsMaterializedProviderRequest): string {
+	const task = localMapsMaterializedProviderRequestSchema.parse(inputTask);
+	return `${task.point.latitude},${task.point.longitude},${task.params.zoom}`;
+}
 
 /** A provider must be able to honour the depth frozen in the Maps Lock. */
 export function assertLocalMapsRankCapabilitySupportsTask(
