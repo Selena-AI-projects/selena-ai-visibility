@@ -61,6 +61,28 @@ describe("local setup contracts", () => {
 		).toMatchObject({ cid: "123", matchStatus: "REVIEWED_MATCH" });
 	});
 
+	it("allows only explicitly reviewed name/address fallback identity", () => {
+		const fallback = {
+			matchedName: "KORA Food Hall",
+			matchedAddress: "Ubud, Bali",
+			mapsUrl: "https://maps.google.com/?q=KORA",
+			identitySource: "USER_CONFIRMED" as const,
+			matchPolicy: "REVIEWED_NAME_ADDRESS_FALLBACK" as const,
+			matchStatus: "REVIEWED_MATCH" as const,
+			reviewed: true,
+		};
+		expect(localPlaceEntityConfirmRequestSchema.parse(fallback)).toMatchObject({
+			matchedName: fallback.matchedName,
+			reviewed: true,
+		});
+		expect(() => localPlaceEntityConfirmRequestSchema.parse({ ...fallback, reviewed: false })).toThrow(
+			"MAPS_NAME_ADDRESS_REVIEW_REQUIRED",
+		);
+		expect(() => localPlaceEntityConfirmRequestSchema.parse({ ...fallback, matchedAddress: undefined })).toThrow(
+			"MAPS_NAME_ADDRESS_FALLBACK_REQUIRED",
+		);
+	});
+
 	it("bounds and versions keyword input as immutable set content", () => {
 		expect(
 			localKeywordSetCreateRequestSchema.parse({

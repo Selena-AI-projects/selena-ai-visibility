@@ -172,6 +172,31 @@ describe("Maps Lock v1", () => {
 		).toBe(false);
 	});
 
+	it("permits a reviewed name/address fallback but rejects unreviewed identity", () => {
+		const fallback = {
+			matchedName: "KORA Food Hall",
+			matchedAddress: "Ubud, Bali",
+			mapsUrl: "https://maps.google.com/?q=KORA",
+			identitySource: "USER_CONFIRMED" as const,
+			matchPolicy: "REVIEWED_NAME_ADDRESS_FALLBACK" as const,
+			matchStatus: "REVIEWED_MATCH" as const,
+			reviewed: true,
+		};
+		expect(mapsLockV1Schema.safeParse({ ...mapsLock, targetIdentity: fallback }).success).toBe(true);
+		expect(
+			mapsLockV1Schema.safeParse({
+				...mapsLock,
+				targetIdentity: { ...fallback, reviewed: false },
+			}).success,
+		).toBe(false);
+		expect(
+			mapsLockV1Schema.safeParse({
+				...mapsLock,
+				targetIdentity: { ...fallback, matchStatus: "UNRESOLVED" },
+			}).success,
+		).toBe(false);
+	});
+
 	it("rejects a reordered or duplicated ordered grid", () => {
 		const reordered = [...mapsLock.grid.points];
 		[reordered[0], reordered[1]] = [reordered[1], reordered[0]];

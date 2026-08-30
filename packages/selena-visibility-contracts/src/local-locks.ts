@@ -15,11 +15,34 @@ export const mapsTargetIdentitySchema = z
 	.strictObject({
 		placeId: z.string().trim().min(1).optional(),
 		cid: z.string().trim().min(1).optional(),
+		matchedName: z.string().trim().min(1).max(300).optional(),
+		matchedAddress: z.string().trim().min(1).max(500).optional(),
 		mapsUrl: z.url(),
 		identitySource: z.enum(["USER_CONFIRMED", "PROVIDER_EVIDENCE"]),
 		matchPolicy: z.enum(["PLACE_ID_OR_CID", "REVIEWED_NAME_ADDRESS_FALLBACK"]),
+		matchStatus: z.enum(["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"]).optional(),
+		reviewed: z.boolean().optional(),
 	})
-	.refine((identity) => identity.placeId !== undefined || identity.cid !== undefined, "MAPS_TARGET_IDENTITY_REQUIRED");
+	.superRefine((identity, context) => {
+		const hasPrimaryIdentity = identity.placeId !== undefined || identity.cid !== undefined;
+		if (hasPrimaryIdentity) {
+			if (identity.matchPolicy !== "PLACE_ID_OR_CID")
+				context.addIssue({
+					code: "custom",
+					message: "MAPS_PRIMARY_ID_FALLBACK_POLICY_CONFLICT",
+					path: ["matchPolicy"],
+				});
+			return;
+		}
+		if (identity.matchPolicy !== "REVIEWED_NAME_ADDRESS_FALLBACK")
+			context.addIssue({ code: "custom", message: "MAPS_TARGET_IDENTITY_REQUIRED", path: ["matchPolicy"] });
+		if (identity.matchedName === undefined || identity.matchedAddress === undefined)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_FALLBACK_REQUIRED", path: ["matchedName"] });
+		if (identity.matchStatus !== "REVIEWED_MATCH")
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_MATCH_STATUS_REQUIRED", path: ["matchStatus"] });
+		if (identity.reviewed !== true)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_REVIEW_REQUIRED", path: ["reviewed"] });
+	});
 
 export const mapsProviderLockSchema = z.strictObject({
 	id: executionKeyPartSchema,

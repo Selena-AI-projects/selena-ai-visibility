@@ -39,13 +39,33 @@ export const localPlaceEntityConfirmRequestSchema = z
 	.strictObject({
 		placeId: z.string().trim().min(1).max(300).optional(),
 		cid: z.string().trim().min(1).max(300).optional(),
+		matchedName: z.string().trim().min(1).max(300).optional(),
+		matchedAddress: z.string().trim().min(1).max(500).optional(),
 		mapsUrl: z.url(),
 		identitySource: z.enum(["USER_CONFIRMED", "PROVIDER_EVIDENCE"]),
 		matchPolicy: z.enum(["PLACE_ID_OR_CID", "REVIEWED_NAME_ADDRESS_FALLBACK"]),
 		matchStatus: z.enum(["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"]).default("REVIEWED_MATCH"),
+		reviewed: z.boolean().optional(),
 	})
-	.refine((input) => input.placeId !== undefined || input.cid !== undefined, {
-		message: "MAPS_TARGET_IDENTITY_REQUIRED",
+	.superRefine((input, context) => {
+		const hasPrimaryIdentity = input.placeId !== undefined || input.cid !== undefined;
+		if (hasPrimaryIdentity) {
+			if (input.matchPolicy !== "PLACE_ID_OR_CID")
+				context.addIssue({
+					code: "custom",
+					message: "MAPS_PRIMARY_ID_FALLBACK_POLICY_CONFLICT",
+					path: ["matchPolicy"],
+				});
+			return;
+		}
+		if (input.matchPolicy !== "REVIEWED_NAME_ADDRESS_FALLBACK")
+			context.addIssue({ code: "custom", message: "MAPS_TARGET_IDENTITY_REQUIRED", path: ["matchPolicy"] });
+		if (input.matchedName === undefined || input.matchedAddress === undefined)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_FALLBACK_REQUIRED", path: ["matchedName"] });
+		if (input.matchStatus !== "REVIEWED_MATCH")
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_MATCH_STATUS_REQUIRED", path: ["matchStatus"] });
+		if (input.reviewed !== true)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_REVIEW_REQUIRED", path: ["reviewed"] });
 	});
 export type LocalPlaceEntityConfirmRequest = z.infer<typeof localPlaceEntityConfirmRequestSchema>;
 
@@ -82,11 +102,21 @@ export const localPlaceEntityConfirmResponseSchema = z
 		locationId: uuid,
 		placeId: z.string().trim().min(1).max(300).optional(),
 		cid: z.string().trim().min(1).max(300).optional(),
+		matchedName: z.string().trim().min(1).max(300).optional(),
+		matchedAddress: z.string().trim().min(1).max(500).optional(),
 		mapsUrl: z.url(),
 		matchStatus: z.enum(["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"]),
+		reviewed: z.boolean().optional(),
 	})
-	.refine((input) => input.placeId !== undefined || input.cid !== undefined, {
-		message: "MAPS_TARGET_IDENTITY_REQUIRED",
+	.superRefine((input, context) => {
+		const hasPrimaryIdentity = input.placeId !== undefined || input.cid !== undefined;
+		if (hasPrimaryIdentity) return;
+		if (input.matchedName === undefined || input.matchedAddress === undefined)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_FALLBACK_REQUIRED", path: ["matchedName"] });
+		if (input.matchStatus !== "REVIEWED_MATCH")
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_MATCH_STATUS_REQUIRED", path: ["matchStatus"] });
+		if (input.reviewed !== true)
+			context.addIssue({ code: "custom", message: "MAPS_NAME_ADDRESS_REVIEW_REQUIRED", path: ["reviewed"] });
 	});
 export type LocalPlaceEntityConfirmResponse = z.infer<typeof localPlaceEntityConfirmResponseSchema>;
 
