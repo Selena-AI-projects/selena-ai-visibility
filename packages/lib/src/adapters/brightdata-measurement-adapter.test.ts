@@ -51,8 +51,22 @@ function jsonResponse(payload: unknown, status = 200): Response {
 function respondWith(response: Response | (() => Response)) {
 	return vi.fn(
 		async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-			typeof response === "function" ? response() : response,
+			// A static Response body is a single-use stream; the adapter's retry
+			// on an empty/malformed answer means a fixture may now be read more
+			// than once in one test, so a fresh clone goes out on every call.
+			typeof response === "function" ? response() : response.clone(),
 	);
+}
+
+/** A fixed sequence of responses, one per call — for tests that exercise the retry loop's attempt-by-attempt behavior, where each attempt must see a different answer. */
+function sequenceOf(...responses: Response[]) {
+	let i = 0;
+	return vi.fn(async (): Promise<Response> => {
+		if (i >= responses.length) throw new Error("TEST_SEQUENCE_EXHAUSTED: more attempts than fixtures");
+		const response = responses[i];
+		i += 1;
+		return response;
+	});
 }
 
 function adapterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown> = {}) {
@@ -547,18 +561,74 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("records a charge for an empty or malformed answer instead of a $0 ledger row", async () => {
+		// A single attempt that keeps coming back empty/malformed is retried up
+		// to MAX_ATTEMPTS times (see the retry loop above `execute`), and every
+		// attempt that reaches the provider is billed — so the charge here is
+		// four attempts' worth, not one.
 		const empty = await adapterWith(respondWith(jsonResponse(successPayload({ answer_text_markdown: "  " })))).execute(
 			permitFor(),
 		);
 		expect(empty.invalidReason).toBe("EMPTY_RESPONSE");
-		expect(empty.costUsd).toBe(estimateRunCostUsd("brightdata", true));
+		expect(empty.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
 		expect(empty.costBasis).toBe("estimated");
 		expect(empty.provider).toBe("brightdata");
 
 		const malformed = await adapterWith(respondWith(jsonResponse({ unexpected: true }))).execute(permitFor());
 		expect(malformed.invalidReason).toBe("MALFORMED_RESPONSE");
-		expect(malformed.costUsd).toBe(estimateRunCostUsd("brightdata", true));
+		expect(malformed.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
 		expect(malformed.provider).toBe("brightdata");
+	});
+
+	it("retries an empty or malformed answer and keeps a real one that follows", async () => {
+		// EMPTY_RESPONSE, then a real answer on the second attempt: the run
+		// succeeds, and the ledger carries the cost of both calls, not just
+		// the one that finally worked.
+		const fetchImpl = sequenceOf(
+			jsonResponse(successPayload({ answer_text_markdown: "   " })),
+			jsonResponse(successPayload()),
+		);
+		const outcome = await adapterWith(fetchImpl).execute(permitFor());
+
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+		expect(outcome.status).toBe("SUCCEEDED");
+		expect(outcome.validity).toBe("VALID");
+		expect(outcome.costUsd).toBeCloseTo(2 * estimateRunCostUsd("brightdata", true));
+
+		// MALFORMED_RESPONSE first, a real answer second — the other retriable
+		// reason, same recovery.
+		const fetchImpl2 = sequenceOf(jsonResponse({ unexpected: true }), jsonResponse(successPayload()));
+		const outcome2 = await adapterWith(fetchImpl2).execute(permitFor());
+		expect(fetchImpl2).toHaveBeenCalledTimes(2);
+		expect(outcome2.status).toBe("SUCCEEDED");
+	});
+
+	it("gives up after three retries and reports the last attempt's empty outcome", async () => {
+		const fetchImpl = respondWith(jsonResponse(successPayload({ answer_text_markdown: "   " })));
+		const outcome = await adapterWith(fetchImpl).execute(permitFor());
+
+		// One original attempt plus three retries — never a fifth call.
+		expect(fetchImpl).toHaveBeenCalledTimes(4);
+		expect(outcome.invalidReason).toBe("EMPTY_RESPONSE");
+		expect(outcome.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
+	});
+
+	it("does not retry a failure that is not an empty or malformed answer", async () => {
+		// A transport error is a different problem than an unusable answer;
+		// retrying it here would be the adapter guessing at a fix instead of
+		// reporting what actually happened.
+		const throwingFetch = vi.fn(async () => {
+			throw new Error("ECONNRESET");
+		});
+		const outcome = await adapterWith(throwingFetch).execute(permitFor());
+		expect(throwingFetch).toHaveBeenCalledTimes(1);
+		expect(outcome.status).toBe("FAILED");
+		expect(outcome.invalidReason).toBe("TRANSPORT_ERROR");
+
+		// Nor a provider-side HTTP error.
+		const httpErrorFetch = respondWith(new Response("server error", { status: 500 }));
+		const outcome2 = await adapterWith(httpErrorFetch).execute(permitFor());
+		expect(httpErrorFetch).toHaveBeenCalledTimes(1);
+		expect(outcome2.invalidReason).toBe("PROVIDER_HTTP_500");
 	});
 
 	it("drops a contract-invalid extraction instead of failing the paid run", async () => {
