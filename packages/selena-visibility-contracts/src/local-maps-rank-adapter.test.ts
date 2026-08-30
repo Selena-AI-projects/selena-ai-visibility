@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { maximumProviderAttempts } from "./local-execution";
-import { mapsLockV1Schema } from "./local-locks";
+import { mapsLockV1Schema, planMapsLockSlots } from "./local-locks";
+import { materializeLocalMapsProviderRequest } from "./local-maps-live";
 import {
+	assertLocalMapsRankCoordinateProofMatchesTask,
 	assertLocalMapsRankQuoteMatchesLock,
 	localMapsRankCapabilitySchema,
 	localMapsRankPermitSchema,
@@ -109,5 +111,30 @@ describe("LocalMapsRankAdapter contract", () => {
 				maxDepth: 20,
 			}),
 		).toThrow();
+	});
+
+	it("rejects a normalized response with missing or altered coordinate/request echo", () => {
+		const slot = planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lock)[0];
+		if (!slot) throw new Error("TEST_SLOT_MISSING");
+		const task = materializeLocalMapsProviderRequest(lock, slot, {
+			id: "22222222-2222-4222-8222-222222222222",
+			text: "cafes ubud",
+			keywordSetId: lock.keywordSet.id,
+			keywordSetVersion: lock.keywordSet.version,
+		});
+		const proof = {
+			pointId: task.point.id,
+			pointIndex: task.point.pointIndex,
+			latitude: task.point.latitude,
+			longitude: task.point.longitude,
+			keywordId: task.keyword.id,
+			keywordText: task.keyword.text,
+			request: task.params,
+		};
+		expect(assertLocalMapsRankCoordinateProofMatchesTask(task, proof)).toEqual(proof);
+		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, { ...proof, longitude: "0" })).toThrow(
+			"LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH",
+		);
+		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, undefined as never)).toThrow();
 	});
 });

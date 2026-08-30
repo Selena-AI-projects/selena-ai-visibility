@@ -29,6 +29,11 @@ const dataRows = (): string[] =>
 		.filter((line) => line.startsWith("| ") && !line.includes("Grid") && !line.startsWith("| ---"));
 
 describe("economics document", () => {
+	it("labels the historical matrix as non-normative for Delta v1.2.1", () => {
+		expect(document).toContain("LEGACY M0 / NON-NORMATIVE");
+		expect(document).toContain("максимум три попытки");
+	});
+
 	// The document is the artifact the owner prices from, so a hand-edited
 	// table would be a wrong number nobody notices. This is the check that
 	// makes "generated, not typed" enforceable.
@@ -86,9 +91,7 @@ describe("matrix input", () => {
 		expect(() => renderLocalCycleMatrix({ ...input, tariffUsdPerCall: Number.NaN })).toThrow(
 			"LOCAL_CYCLE_MATRIX_TARIFF_INVALID",
 		);
-		expect(() => renderLocalCycleMatrix({ ...input, cycleBudgetCapUsd: -1 })).toThrow(
-			"LOCAL_CYCLE_MATRIX_CAP_INVALID",
-		);
+		expect(() => renderLocalCycleMatrix({ ...input, cycleBudgetCapUsd: -1 })).toThrow("LOCAL_CYCLE_MATRIX_CAP_INVALID");
 		expect(() => renderLocalCycleMatrix({ ...input, decisionDate: "28 August" })).toThrow(
 			"LOCAL_CYCLE_MATRIX_DECISION_DATE_INVALID",
 		);

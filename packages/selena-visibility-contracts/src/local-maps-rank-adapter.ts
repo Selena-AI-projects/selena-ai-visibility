@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { executionKeyPartSchema, maximumProviderAttempts } from "./local-execution.js";
-import { type MapsLockV1, mapsLockV1Schema } from "./local-locks.js";
+import { type MapsLockV1, mapsLockV1Schema, mapsRequestLockSchema } from "./local-locks.js";
 import type { LocalMapsLiveProviderResult, LocalMapsMaterializedProviderRequest } from "./local-maps-live.js";
 
 const usdAmountSchema = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
@@ -43,12 +43,25 @@ export const localMapsRankCapabilitySchema = z.strictObject({
 });
 export type LocalMapsRankCapability = z.infer<typeof localMapsRankCapabilitySchema>;
 
+/** Fields a provider must echo before its response can be normalized. */
+export const localMapsRankCoordinateProofSchema = z.strictObject({
+	pointId: z.string().uuid(),
+	pointIndex: z.number().int().nonnegative(),
+	latitude: z.string().trim().min(1),
+	longitude: z.string().trim().min(1),
+	keywordId: z.string().uuid(),
+	keywordText: z.string().trim().min(1),
+	request: mapsRequestLockSchema,
+});
+export type LocalMapsRankCoordinateProof = z.infer<typeof localMapsRankCoordinateProofSchema>;
+
 /**
  * The adapter's normalized observation is deliberately narrower than a live
  * result. The runner adds lock/permit identity and then validates the full
  * `LocalMapsLiveProviderResult` before persistence.
  */
 export type LocalMapsRankNormalizedObservation = {
+	coordinateProof: LocalMapsRankCoordinateProof;
 	providerTaskId: string | null;
 	event: LocalMapsLiveProviderResult["event"];
 	targetRank: number | null;
@@ -56,6 +69,7 @@ export type LocalMapsRankNormalizedObservation = {
 	provenance: LocalMapsLiveProviderResult["provenance"];
 	cost: LocalMapsLiveProviderResult["cost"];
 };
+export type LocalMapsRankRunnerObservation = Omit<LocalMapsRankNormalizedObservation, "coordinateProof">;
 
 /**
  * Provider boundary required by Delta §4.1. Implementations are injected and
@@ -71,6 +85,26 @@ export type LocalMapsRankAdapter<TRawResult = unknown> = {
 	normalize(result: TRawResult): LocalMapsRankNormalizedObservation;
 	capability(): LocalMapsRankCapability;
 };
+
+/** Rejects a normalized response that does not echo the frozen task inputs. */
+export function assertLocalMapsRankCoordinateProofMatchesTask(
+	inputTask: LocalMapsMaterializedProviderRequest,
+	inputProof: LocalMapsRankCoordinateProof,
+): LocalMapsRankCoordinateProof {
+	const task = inputTask;
+	const proof = localMapsRankCoordinateProofSchema.parse(inputProof);
+	if (
+		proof.pointId !== task.point.id ||
+		proof.pointIndex !== task.point.pointIndex ||
+		proof.latitude !== task.point.latitude ||
+		proof.longitude !== task.point.longitude ||
+		proof.keywordId !== task.keyword.id ||
+		proof.keywordText !== task.keyword.text ||
+		JSON.stringify(proof.request) !== JSON.stringify(task.params)
+	)
+		throw new Error("LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH");
+	return proof;
+}
 
 /**
  * Verifies that a quote cannot silently change the frozen task/attempt/cost

@@ -1,9 +1,11 @@
 import { type LocalCycleRetry, type LocalCycleShape, localCycleCalls, localCycleCost } from "./local-cycle-cost.js";
 
-// The scenario matrix in docs/selena-visibility/local-cycle-economics.md is
-// rendered from here rather than typed by hand: a table of call counts is
-// exactly the kind of thing that is wrong by one factor and believed for
-// months. A test holds the document to this output.
+// LEGACY M0 / NON-NORMATIVE for Selena AI Visibility v1.2.1. The scenario
+// matrix in docs/selena-visibility/local-cycle-economics.md is rendered from
+// here rather than typed by hand: a table of call counts is exactly the kind
+// of thing that is wrong by one factor and believed for months. A test holds
+// the historical document to this output. Delta quote/entitlement paths must
+// use the versioned sv_* Lock and attempt contracts instead.
 
 export const MATRIX_GRIDS = [
 	{ label: "3×3", gridPoints: 9 },
@@ -21,7 +23,7 @@ export const MATRIX_REPEATS = [1, 2] as const;
  */
 export const MATRIX_CAPTURE_DEPTH = 20;
 
-/** The catalog's `one_technical_invalid` policy, stated as a parameter. */
+/** Historical M0 policy; Delta v1.2.1 uses three total attempts instead. */
 export const MATRIX_RETRY: LocalCycleRetry = { maxRetriesPerObservation: 1, retriesBillable: true };
 
 export const MATRIX_BEGIN = "<!-- local-cycle-matrix:begin -->";
@@ -41,8 +43,7 @@ function assertMatrixInput(input: LocalCycleMatrixInput): void {
 		throw new Error("LOCAL_CYCLE_MATRIX_TARIFF_INVALID");
 	if (!Number.isFinite(input.cycleBudgetCapUsd) || input.cycleBudgetCapUsd < 0)
 		throw new Error("LOCAL_CYCLE_MATRIX_CAP_INVALID");
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(input.decisionDate))
-		throw new Error("LOCAL_CYCLE_MATRIX_DECISION_DATE_INVALID");
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(input.decisionDate)) throw new Error("LOCAL_CYCLE_MATRIX_DECISION_DATE_INVALID");
 }
 
 export function renderLocalCycleMatrix(input: LocalCycleMatrixInput): string {

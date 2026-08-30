@@ -1,6 +1,7 @@
 import {
+	assertLocalMapsRankCoordinateProofMatchesTask,
 	type LocalMapsRankAdapter,
-	type LocalMapsRankPermit,
+	type LocalMapsRankRunnerObservation,
 	localMapsRankCapabilitySchema,
 	localMapsRankPermitSchema,
 } from "@workspace/selena-visibility-contracts";
@@ -25,14 +26,17 @@ export function toLocalMapsLiveProviderPort<TRawResult>(
 		version: adapter.version,
 		endpoint: adapter.endpoint,
 		async execute(request, context) {
-			const permit: LocalMapsRankPermit = localMapsRankPermitSchema.parse({
+			const permit = localMapsRankPermitSchema.parse({
 				organizationId: context.organizationId,
 				attemptId: context.attemptId,
 				reservationId: context.reservationId,
 				executionKey: context.executionKey,
 				attemptIndex: context.attemptIndex,
 			});
-			return adapter.normalize(await adapter.execute(request, permit));
+			const normalized = adapter.normalize(await adapter.execute(request, permit));
+			assertLocalMapsRankCoordinateProofMatchesTask(request, normalized.coordinateProof);
+			const { coordinateProof: _coordinateProof, ...runnerObservation } = normalized;
+			return runnerObservation satisfies LocalMapsRankRunnerObservation;
 		},
 	};
 }

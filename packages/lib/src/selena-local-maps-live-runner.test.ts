@@ -211,7 +211,21 @@ describe("Local Maps live runner protocol", () => {
 			});
 			return providerObservation();
 		});
-		const normalize = vi.fn((result: unknown) => result as LocalMapsRankNormalizedObservation);
+		const normalize = vi.fn(
+			(result: unknown) =>
+				({
+					...(result as Record<string, unknown>),
+					coordinateProof: {
+						pointId: deps.snapshot.providerRequest.point.id,
+						pointIndex: deps.snapshot.providerRequest.point.pointIndex,
+						latitude: deps.snapshot.providerRequest.point.latitude,
+						longitude: deps.snapshot.providerRequest.point.longitude,
+						keywordId: deps.snapshot.providerRequest.keyword.id,
+						keywordText: deps.snapshot.providerRequest.keyword.text,
+						request: deps.snapshot.providerRequest.params,
+					},
+				}) as LocalMapsRankNormalizedObservation,
+		);
 		const adapter = {
 			id: lock.provider.id,
 			version: lock.provider.version,
@@ -247,6 +261,22 @@ describe("Local Maps live runner protocol", () => {
 		).resolves.toEqual(providerObservation());
 		expect(execute).toHaveBeenCalledTimes(1);
 		expect(normalize).toHaveBeenCalledTimes(1);
+
+		const missingProofPort = toLocalMapsLiveProviderPort({
+			...adapter,
+			normalize: () => providerObservation() as unknown as LocalMapsRankNormalizedObservation,
+		});
+		await expect(
+			missingProofPort.execute(deps.snapshot.providerRequest, {
+				organizationId: ids.organizationId,
+				attemptId: ids.attemptId,
+				reservationId: ids.reservationId,
+				executionKey: deps.snapshot.attempt.executionKey,
+				attemptIndex: 1,
+				lockSnapshotCanonical: deps.snapshot.lockSnapshotCanonical,
+				requestSnapshotCanonical: deps.snapshot.requestSnapshotCanonical,
+			}),
+		).rejects.toThrow();
 	});
 
 	it("rejects an invalid intent before touching the store", async () => {
