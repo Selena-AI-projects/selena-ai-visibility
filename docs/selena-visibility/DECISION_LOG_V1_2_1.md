@@ -135,3 +135,9 @@
 - Decision: setup adapters return operation-specific validated result objects, and admin adapters return a validated action result; handlers emit `200/201/202` only for a non-null, schema-valid durable response.
 - Authority: source-only response contracts, route tests and OpenAPI schemas on 2026-08-30.
 - Effect: future runtime adapters have an explicit success path without weakening the default fail-closed owner gate or enabling provider calls.
+
+## D-025 — Explicit tenant adapter boundary
+
+- Decision: every Local write, setup and admin adapter input must carry the `tenantId` copied from the authenticated context, alongside the existing auth context and canonical body hash.
+- Authority: source-only defense-in-depth hardening on 2026-08-30.
+- Effect: future durable adapters receive an explicit tenant boundary and tests detect accidental omission; this does not replace database-enforced RLS or transaction-local tenant context, which remain owner-gated.

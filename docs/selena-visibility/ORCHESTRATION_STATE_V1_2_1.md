@@ -8,7 +8,7 @@
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Last implementation/evidence commit: `c6af2883` (`add typed local action success paths`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
+- Last implementation/evidence commit: `fc3e1d8c` (`enforce explicit tenant boundary on local writes`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -57,6 +57,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 evidence high-water regression (Node 24) | `PASS — evidence snapshot uses an injected full-set high-water query before page slicing; regression test prevents false CURSOR_STALE on later pages` |
 | API-01 quote cardinality contract (Node 24) | `PASS — quote schema requires a non-empty surface set and enforces tasks = points × keywords × repeats plus maxProviderAttempts = tasks × 3; 2 negative tests pass` |
 | API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
+| API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -91,6 +92,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Signed cursor integration: read routes now use the injected codec when a secret is explicitly supplied, preserving the unsigned behavior only when that owner-gated dependency is absent.
 - Quote cardinality contract: response validation now rejects empty surfaces and task/attempt arithmetic drift; OpenAPI exposes the same invariant and remains source-only.
 - Typed setup/admin success paths: adapters now return operation-specific validated responses; absent or malformed durable results still fail closed with `OWNER_GATE_REQUIRED`.
+- Explicit tenant adapter boundary: write, setup and admin handlers now pass the authenticated `tenantId` as a required adapter field; runtime RLS and transaction-local tenant context remain owner-gated.
 
 ### Claude Max 20 synthesis
 
