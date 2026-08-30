@@ -4,6 +4,14 @@ export const localApiScopes = ["local:read", "local:write", "local:execute", "ev
 export const localApiScopeSchema = z.enum(localApiScopes);
 export type LocalApiScope = z.infer<typeof localApiScopeSchema>;
 
+// Provider permissions intentionally live outside the client/local scope
+// union.  A canary is an owner-gated capability, never an ordinary local read
+// or write permission.
+export const providerApiScopes = ["provider:canary"] as const;
+export const providerApiScopeSchema = z.enum(providerApiScopes);
+export type ProviderApiScope = z.infer<typeof providerApiScopeSchema>;
+export const PROVIDER_CANARY_SCOPE: ProviderApiScope = "provider:canary";
+
 export const LOCAL_API_DEFAULT_LIMIT = 50 as const;
 export const LOCAL_API_MAX_LIMIT = 200 as const;
 export const LOCAL_API_EVIDENCE_TTL_SECONDS = 600 as const;

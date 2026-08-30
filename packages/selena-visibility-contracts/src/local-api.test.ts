@@ -13,6 +13,9 @@ import {
 	localApiProgressResponseSchema,
 	localApiScopeSchema,
 	localApiScopes,
+	PROVIDER_CANARY_SCOPE,
+	providerApiScopeSchema,
+	providerApiScopes,
 } from "./local-api";
 
 const ids = {
@@ -33,6 +36,8 @@ describe("local API public contracts", () => {
 		expect(localApiScopes).toEqual(["local:read", "local:write", "local:execute", "evidence:read"]);
 		for (const scope of localApiScopes) expect(localApiScopeSchema.parse(scope)).toBe(scope);
 		expect(localApiScopeSchema.safeParse("provider:canary").success).toBe(false);
+		expect(providerApiScopes).toEqual(["provider:canary"]);
+		expect(providerApiScopeSchema.parse(PROVIDER_CANARY_SCOPE)).toBe(PROVIDER_CANARY_SCOPE);
 	});
 
 	it("locks pagination and evidence TTL constants", () => {

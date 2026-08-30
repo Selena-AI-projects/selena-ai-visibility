@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PROVIDER_CANARY_SCOPE } from "@workspace/selena-visibility-contracts";
 import { z } from "zod";
 import { SelenaApiHttpError, selenaApiErrorResponse, selenaApiHttpErrorResponse } from "../lib/selena-api-http";
 import { type AuthContext, resolveApiKeyAuthContext } from "../lib/selena-auth-context";
@@ -72,9 +73,9 @@ export function createProviderCapabilitiesRouteHandlers(
 			const requestId = dependencies.requestId();
 			try {
 				const auth = await dependencies.authenticate(request);
-				if (!auth.permissions.includes("provider:canary"))
-					throw new SelenaApiHttpError(403, "SCOPE_FORBIDDEN", "API key lacks provider:canary scope.", false, {
-						requiredScope: "provider:canary",
+				if (!auth.permissions.includes(PROVIDER_CANARY_SCOPE))
+					throw new SelenaApiHttpError(403, "SCOPE_FORBIDDEN", `API key lacks ${PROVIDER_CANARY_SCOPE} scope.`, false, {
+						requiredScope: PROVIDER_CANARY_SCOPE,
 					});
 				const validatedProviderId = parseProviderId(providerId);
 				const capabilities = await dependencies.store.read({ auth, providerId: validatedProviderId });

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PROVIDER_CANARY_SCOPE } from "@workspace/selena-visibility-contracts";
 import { z } from "zod";
 import {
 	hashIdempotencyBody,
@@ -69,7 +70,7 @@ const defaultRouteDependencies: LocalAdminRouteDependencies = {
 };
 
 function requiredScope(operation: LocalAdminOperation): "local:execute" | "provider:canary" {
-	return operation === "provider-canary" ? "provider:canary" : "local:execute";
+	return operation === "provider-canary" ? PROVIDER_CANARY_SCOPE : "local:execute";
 }
 
 function requireAdminScope(permissions: readonly string[], operation: LocalAdminOperation): void {
