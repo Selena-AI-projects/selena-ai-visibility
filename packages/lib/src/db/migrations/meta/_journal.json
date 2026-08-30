@@ -351,6 +351,13 @@
       "when": 1787940011000,
       "tag": "0049_visibility_os_claimed_submit_lease",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1787940012000,
+      "tag": "0050_visibility_os_jsonb_text_operator_casts",
+      "breakpoints": true
     }
   ]
 }

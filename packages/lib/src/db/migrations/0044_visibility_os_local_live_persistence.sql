@@ -45,10 +45,10 @@ ALTER TABLE "sv_measurement_attempts"
 					'keyword', 'providerRequest', 'attempt', 'budgetReservation'
 				]
 				AND "submitted_candidate"
-					- 'schemaVersion' - 'kind' - 'mode' - 'canonicalizationVersion'
-					- 'scope' - 'lockSnapshotCanonical' - 'requestSnapshotCanonical'
-					- 'lock' - 'slot' - 'keyword' - 'providerRequest' - 'attempt'
-					- 'budgetReservation' = '{}'::jsonb
+					- 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text
+					- 'scope'::text - 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text
+					- 'lock'::text - 'slot'::text - 'keyword'::text - 'providerRequest'::text - 'attempt'::text
+					- 'budgetReservation'::text = '{}'::jsonb
 				AND "submitted_candidate"->>'schemaVersion' = '1'
 				AND "submitted_candidate"->>'kind' = 'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE'
 				AND "submitted_candidate"->>'mode' = 'LIVE_PROVIDER'
@@ -191,13 +191,13 @@ CREATE TABLE "sv_measurement_attempt_results" (
 	CONSTRAINT "sv_measurement_attempt_results_live_shape_check"
 		CHECK (
 			("validated_result"
-				- 'schemaVersion' - 'kind' - 'mode' - 'canonicalizationVersion'
-				- 'storageClass' - 'organizationId' - 'measurementCycleId'
-				- 'localCycleId' - 'configurationLockId' - 'attemptId'
-				- 'reservationId' - 'executionKey' - 'attemptIndex'
-				- 'lockSnapshotCanonical' - 'requestSnapshotCanonical' - 'provider'
-				- 'externalProviderCalls' - 'completedAt' - 'event' - 'targetRank'
-				- 'evidenceEligible' - 'provenance' - 'cost' = '{}'::jsonb
+				- 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text
+				- 'storageClass'::text - 'organizationId'::text - 'measurementCycleId'::text
+				- 'localCycleId'::text - 'configurationLockId'::text - 'attemptId'::text
+				- 'reservationId'::text - 'executionKey'::text - 'attemptIndex'::text
+				- 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text - 'provider'::text
+				- 'externalProviderCalls'::text - 'completedAt'::text - 'event'::text - 'targetRank'::text
+				- 'evidenceEligible'::text - 'provenance'::text - 'cost'::text = '{}'::jsonb
 			AND jsonb_typeof("validated_result"->'schemaVersion') = 'number'
 			AND jsonb_typeof("validated_result"->'kind') = 'string'
 			AND jsonb_typeof("validated_result"->'mode') = 'string'
@@ -220,7 +220,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND jsonb_typeof("validated_result"->'evidenceEligible') = 'boolean'
 			AND jsonb_typeof("validated_result"->'provider') = 'object'
 			AND "validated_result"->'provider' ?& array['id', 'version', 'providerTaskId']
-			AND "validated_result"->'provider' - 'id' - 'version' - 'providerTaskId' = '{}'::jsonb
+			AND "validated_result"->'provider' - 'id'::text - 'version'::text - 'providerTaskId'::text = '{}'::jsonb
 			AND jsonb_typeof("validated_result"#>'{provider,id}') = 'string'
 			AND length("validated_result"#>>'{provider,id}') > 0
 			AND "validated_result"#>>'{provider,id}' !~ '[[:space:]]'
@@ -235,7 +235,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 				'evidenceKind', 'checkReference', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'
 			]
 			AND "validated_result"->'provenance'
-				- 'evidenceKind' - 'checkReference' - 'rawResponseReference' - 'rawResponseSha256' - 'providerObservedAt'
+				- 'evidenceKind'::text - 'checkReference'::text - 'rawResponseReference'::text - 'rawResponseSha256'::text - 'providerObservedAt'::text
 				= '{}'::jsonb
 			AND "validated_result"#>>'{provenance,evidenceKind}' = 'MAPS_SERP_PROVIDER'
 			AND (
@@ -255,7 +255,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') IN ('string', 'null')
 			AND jsonb_typeof("validated_result"->'cost') = 'object'
 			AND "validated_result"->'cost' ?& array['status', 'currency', 'amountUsd', 'basis']
-			AND "validated_result"->'cost' - 'status' - 'currency' - 'amountUsd' - 'basis' = '{}'::jsonb
+			AND "validated_result"->'cost' - 'status'::text - 'currency'::text - 'amountUsd'::text - 'basis'::text = '{}'::jsonb
 			AND jsonb_typeof("validated_result"#>'{cost,status}') = 'string'
 			AND "validated_result"#>>'{cost,currency}' = 'USD'
 			AND (
@@ -282,7 +282,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'string')
 				OR (("validated_result"#>>'{event,kind}' = 'RETRYABLE_FAILURE'
-						AND "validated_result"->'event' - 'kind' - 'reason' = '{}'::jsonb
+						AND "validated_result"->'event' - 'kind'::text - 'reason'::text = '{}'::jsonb
 						AND "validated_result"#>>'{event,reason}' IN (
 							'EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT',
 							'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE'
@@ -323,8 +323,8 @@ CREATE TABLE "sv_measurement_attempt_results" (
 				'cycleStatus', 'retryAllowed', 'finalInvalidReason'
 			]
 			AND "disposition"
-				- 'attemptStatus' - 'observationValidity' - 'observationOutcome'
-				- 'cycleStatus' - 'retryAllowed' - 'finalInvalidReason' = '{}'::jsonb
+				- 'attemptStatus'::text - 'observationValidity'::text - 'observationOutcome'::text
+				- 'cycleStatus'::text - 'retryAllowed'::text - 'finalInvalidReason'::text = '{}'::jsonb
 			AND "disposition"->>'attemptStatus' IN (
 				'SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION'
 			)

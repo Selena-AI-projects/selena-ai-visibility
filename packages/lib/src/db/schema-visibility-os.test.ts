@@ -398,6 +398,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 			migration.indexOf('IF EXISTS (SELECT 1 FROM "sv_measurement_attempts")'),
 		);
 		expect(migration).toContain("MEASUREMENT_ATTEMPT_0044_PREFLIGHT_REQUIRES_EMPTY_TABLE");
+		expect(migration).toContain("'schemaVersion'::text");
+		expect(migration).toContain("'providerTaskId'::text");
+		expect(migration).toContain("'amountUsd'::text");
 		expect(migration).toContain('ADD COLUMN "submission_token_hash" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_fingerprint" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_canonical" text');
@@ -510,6 +513,23 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).not.toContain('INSERT INTO "sv_measurement_attempts"');
 		expect(migration).not.toContain('UPDATE "sv_measurement_attempts"');
 		expect(journal).toContain('"tag": "0049_visibility_os_claimed_submit_lease"');
+	});
+
+	it("keeps 0050 as a forward-only PostgreSQL JSONB operator compatibility repair", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0050_visibility_os_jsonb_text_operator_casts.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+
+		expect(migration).toContain("pg_get_constraintdef(oid, true)");
+		expect(migration).toContain("format(' - %L::text', key_name)");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_0050_CONSTRAINT_MISSING");
+		expect(migration).toContain("ALTER TABLE %I DROP CONSTRAINT %I");
+		expect(migration).toContain("ALTER TABLE %I ADD CONSTRAINT %I %s");
+		expect(migration).not.toContain('INSERT INTO "sv_measurement_attempt');
+		expect(migration).not.toContain('UPDATE "sv_measurement_attempt');
+		expect(journal).toContain('"tag": "0050_visibility_os_jsonb_text_operator_casts"');
 	});
 
 	it("retires the legacy Local domain and makes configuration locks append-only", () => {
@@ -791,6 +811,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(gate12Apply0046).toBeLessThan(gate12Apply0047);
 		expect(gate12Apply0047).toBeLessThan(gate12Apply0048);
 		expect(gate12Apply0048).toBeLessThan(gate12Apply0049);
+		const gate12Apply0050 = gate12.indexOf("0050_visibility_os_jsonb_text_operator_casts.sql");
+		expect(gate12Apply0049).toBeLessThan(gate12Apply0050);
 		expect(gate12).toContain("Gate 12 requires the 0049 CLAIMED to SUBMITTED lease guard");
 		expect(gate12).toMatch(/"\$\{psql\[@\]\}" -Atc/);
 		expect(gate12Apply0048).toBeLessThan(gate12Marker);
@@ -1163,7 +1185,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-12)).toEqual([
+		expect(journal.entries.slice(-13)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1216,6 +1238,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940011000,
 				tag: "0049_visibility_os_claimed_submit_lease",
+				breakpoints: true,
+			},
+			{
+				idx: 50,
+				version: "7",
+				when: 1787940012000,
+				tag: "0050_visibility_os_jsonb_text_operator_casts",
 				breakpoints: true,
 			},
 		]);

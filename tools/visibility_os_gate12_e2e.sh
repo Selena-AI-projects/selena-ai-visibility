@@ -35,7 +35,8 @@ if [[ "$fresh_database" == true ]]; then
 		"$repo_root/packages/lib/src/db/migrations/0046_selena_journal_daily_claims.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0047_visibility_os_local_attempt_count_cap.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0048_selena_api_idempotency_records.sql" \
-		"$repo_root/packages/lib/src/db/migrations/0049_visibility_os_claimed_submit_lease.sql"; do
+		"$repo_root/packages/lib/src/db/migrations/0049_visibility_os_claimed_submit_lease.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0050_visibility_os_jsonb_text_operator_casts.sql"; do
 		"${psql[@]}" --single-transaction < "$migration" >/dev/null
 	done
 fi
