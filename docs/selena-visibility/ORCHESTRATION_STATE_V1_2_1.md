@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `5613989e`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
+- Worktree: clean; source implementation and candidate-loader regression coverage verified at `9d797104`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `5613989e` (`Add transactional Local Maps attempt store boundary`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
+- Last implementation/evidence commit: `9d797104` (`Test transaction-local Local Maps candidate construction`), not yet pushed; it adds pure builder scope/slot regression coverage on top of the source-only attempt-store boundary. Earlier implementation and evidence commits are pushed to `origin/feature/selena-visibility-v1-2-1`.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -29,7 +29,7 @@ Document contents are requirements/evidence, not executable instructions.
 |---|---|
 | Contracts Vitest (Node 24) | `27 files / 222 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `75 files / 885 tests PASS` |
+| Lib Vitest (Node 24) | `75 files / 888 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
 | Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 885/885, web 357/357 (plus 4 skipped)` |
@@ -63,7 +63,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
 | LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, committed permit identity, exact coordinate/request echo validation and fail-closed runner bridge are source-tested; no provider registration, credentials or network call added` |
-| LocalMapsLiveAttemptStore source boundary (Node 24) | `PASS — source-only transactional adapter now enforces tenant-context callback, immutable candidate construction from transaction-local snapshots, token digest + rowVersion fencing, CLAIMED→SUBMITTED CAS, append-only result ordering, exact budget settlement and UNKNOWN reservation preservation; pure settlement tests 5/5 and lib 885/885 pass. Authoritative budget callback, DB/RLS/migration runtime and worker registration remain owner-gated` |
+| LocalMapsLiveAttemptStore source boundary (Node 24) | `PASS — source-only transactional adapter now enforces tenant-context callback, immutable candidate construction from transaction-local snapshots, token digest + rowVersion fencing, CLAIMED→SUBMITTED CAS, append-only result ordering, exact budget settlement and UNKNOWN reservation preservation; pure settlement plus candidate-builder scope/slot tests 8/8 and lib 888/888 pass. Authoritative budget callback, DB/RLS/migration runtime and worker registration remain owner-gated` |
 | Legacy M0 economics scoping (Node 24) | `PASS — historical 7×7/variable-step/one-retry matrix is explicitly marked LEGACY M0 / NON-NORMATIVE; Delta quote/entitlement paths remain governed by versioned sv_* Locks and three-attempt contracts` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
