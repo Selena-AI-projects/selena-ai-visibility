@@ -5,7 +5,7 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean at feature HEAD `5611f226`; source-only signed-cursor route integration, Local Maps attempt cap and full local quality evidence recorded
+- Worktree: clean; source implementation verified at `5611f226`, with subsequent documentation-only state updates pushed to the same feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims and 0047 Local Maps attempt-count cap`
 - Last implementation/evidence commit: `5611f226` (`cap Local Maps observation attempts`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
