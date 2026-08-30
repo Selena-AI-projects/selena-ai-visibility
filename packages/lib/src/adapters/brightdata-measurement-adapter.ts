@@ -240,23 +240,40 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function extractBrightDataSources(record: Record<string, unknown>): BrightDataSource[] {
 	const sources: BrightDataSource[] = [];
 	const seen = new Set<string>();
+	const addSource = (url: string, title?: string, excludeProvider = false) => {
+		if (seen.has(url)) return;
+		let parsed: URL;
+		try {
+			parsed = new URL(url);
+		} catch {
+			return;
+		}
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+		const domain = parsed.hostname.replace(/^www\./, "");
+		if (excludeProvider && (domain === "perplexity.ai" || domain.endsWith(".perplexity.ai"))) return;
+		seen.add(url);
+		sources.push({ url, domain, ...(title ? { title } : {}) });
+	};
 	for (const field of SOURCE_FIELDS) {
 		const values = record[field];
 		if (!Array.isArray(values)) continue;
 		for (const item of values) {
 			const entry = asRecord(item);
 			const url = typeof item === "string" ? item : typeof entry?.url === "string" ? entry.url : null;
-			if (url === null || seen.has(url)) continue;
-			let parsed: URL;
-			try {
-				parsed = new URL(url);
-			} catch {
-				continue;
-			}
-			if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
-			seen.add(url);
+			if (url === null) continue;
 			const title = typeof entry?.title === "string" && entry.title.trim() !== "" ? entry.title.trim() : undefined;
-			sources.push({ url, domain: parsed.hostname.replace(/^www\./, ""), ...(title ? { title } : {}) });
+			addSource(url, title);
+		}
+	}
+	// Perplexity's collector can leave every structured source array empty while
+	// still returning the displayed citation anchors in its answer-only HTML.
+	// This field excludes the page shell, so external anchors here are evidence
+	// the answer displayed rather than links inferred from prose or source_html.
+	if (sources.length === 0 && typeof record.answer_section_html === "string") {
+		const { document } = parseHTML(`<html><body>${record.answer_section_html}</body></html>`);
+		for (const anchor of document.querySelectorAll("a[href]")) {
+			const href = anchor.getAttribute("href");
+			if (href) addSource(href, undefined, true);
 		}
 	}
 	return sources;
