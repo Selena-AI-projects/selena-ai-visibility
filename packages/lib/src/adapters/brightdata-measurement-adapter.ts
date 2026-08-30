@@ -206,11 +206,11 @@ const REQUEST_ID_FIELDS = ["snapshot_id", "request_id", "response_id", "id"] as 
  */
 const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
-// The worker gives one commercial measurement 15 minutes. Leave enough room
-// for the trigger request, final download and persistence while allowing the
-// long-running Perplexity collector to finish beyond its observed five-minute
-// boundary.
 const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
+// A successful Perplexity collection on the account took almost sixteen
+// minutes. Keep its larger budget scoped to that surface so the faster
+// collectors retain their existing ceiling.
+const PERPLEXITY_SNAPSHOT_TIMEOUT_MS = 25 * 60_000;
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
 const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
 
@@ -426,7 +426,9 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	const maxResponseBytes = deps.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
 	const buildRequestBody = deps.buildRequestBody ?? buildBrightDataRequestBody;
 	const parseAnswer = deps.parseAnswer ?? parseBrightDataAnswer;
-	const snapshotTimeoutMs = deps.snapshotTimeoutMs ?? DEFAULT_SNAPSHOT_TIMEOUT_MS;
+	const snapshotTimeoutMs =
+		deps.snapshotTimeoutMs ??
+		(deps.system === "perplexity" ? PERPLEXITY_SNAPSHOT_TIMEOUT_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
 
 	async function cancelSnapshot(snapshotId: string): Promise<void> {
