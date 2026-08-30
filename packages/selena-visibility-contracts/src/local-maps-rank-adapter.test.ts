@@ -3,6 +3,7 @@ import { maximumProviderAttempts } from "./local-execution";
 import { mapsLockV1Schema, planMapsLockSlots } from "./local-locks";
 import { materializeLocalMapsProviderRequest } from "./local-maps-live";
 import {
+	assertLocalMapsRankCapabilitySupportsTask,
 	assertLocalMapsRankCoordinateProofMatchesTask,
 	assertLocalMapsRankQuoteMatchesLock,
 	localMapsRankCapabilitySchema,
@@ -136,5 +137,26 @@ describe("LocalMapsRankAdapter contract", () => {
 			"LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH",
 		);
 		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, undefined as never)).toThrow();
+	});
+
+	it("rejects a provider capability whose depth is below the locked request", () => {
+		const slot = planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lock)[0];
+		if (!slot) throw new Error("TEST_SLOT_MISSING");
+		const task = materializeLocalMapsProviderRequest(lock, slot, {
+			id: "22222222-2222-4222-8222-222222222222",
+			text: "cafes ubud",
+			keywordSetId: lock.keywordSet.id,
+			keywordSetVersion: lock.keywordSet.version,
+		});
+		const capability = {
+			coordinateProof: "EXACT_REQUEST_ECHO_REQUIRED" as const,
+			rawEvidenceReference: "REQUIRED" as const,
+			supportsAbsentWithinDepth: true as const,
+			maxDepth: 20,
+		};
+		expect(assertLocalMapsRankCapabilitySupportsTask(task, capability)).toEqual(capability);
+		expect(() => assertLocalMapsRankCapabilitySupportsTask(task, { ...capability, maxDepth: 1 })).toThrow(
+			"LOCAL_MAPS_RANK_DEPTH_UNSUPPORTED",
+		);
 	});
 });

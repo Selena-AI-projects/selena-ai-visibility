@@ -21,6 +21,7 @@ import {
 	localApiEvidenceResponseSchema,
 	localApiMapResultsResponseSchema,
 	localApiProgressResponseSchema,
+	observerContextSchema,
 	readManualLocalAiLock,
 } from "@workspace/selena-visibility-contracts";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
@@ -246,7 +247,8 @@ function cycleProgressStatus(status: string) {
 
 function mapProgress(cycle: LocalReadCycle, counts: LocalReadMapCounts) {
 	const counted = counts.valid + counts.invalid + counts.unknown;
-	const created = Math.max(cycle.createdObservations, counted);
+	if (counted > cycle.createdObservations) throw new Error("LOCAL_MAPS_PROGRESS_COUNTER_MISMATCH");
+	const created = cycle.createdObservations;
 	if (created > cycle.expectedObservations) throw new Error("LOCAL_MAPS_PROGRESS_EXCEEDS_EXPECTED");
 	const reconciledCounts = { ...counts, unknown: counts.unknown + Math.max(cycle.createdObservations - counted, 0) };
 	const observed = reconciledCounts.valid + reconciledCounts.invalid + reconciledCounts.unknown;
@@ -385,6 +387,26 @@ function hasCoordinateProof(snapshot: unknown): boolean {
 		typeof pointId === "string" &&
 		z.string().uuid().safeParse(pointId).success
 	);
+}
+
+const localAiTaskContextSnapshotSchema = observerContextSchema.extend({
+	coordinateProofReference: z.string().trim().min(1).optional(),
+	pointId: z.string().uuid().optional(),
+	observerLatitude: z.number().finite().min(-90).max(90).optional(),
+	observerLongitude: z.number().finite().min(-180).max(180).optional(),
+});
+
+function parseLocalAiTaskObserverContext(snapshot: unknown) {
+	const parsed = localAiTaskContextSnapshotSchema.safeParse(snapshot);
+	if (!parsed.success) return null;
+	const {
+		coordinateProofReference: _coordinateProofReference,
+		pointId: _pointId,
+		observerLatitude: _observerLatitude,
+		observerLongitude: _observerLongitude,
+		...observerContext
+	} = parsed.data;
+	return observerContextSchema.parse(observerContext);
 }
 
 function nullableContextString(snapshot: unknown, key: string): string | null {
@@ -556,7 +578,14 @@ async function evaluateLocalAi(store: SelenaLocalReadStore, cycle: LocalReadCycl
 	const allowedScenarioIds = new Set(lock.lock.discovery.scenarios.map((scenario) => scenario.scenarioId));
 	const allowedContextHashes = new Set(lock.lock.discovery.observerContexts.map((context) => contextHash(context)));
 	for (const row of rows) {
+		const context = parseLocalAiTaskObserverContext(row.contextSnapshot);
+		const scenario = lock.lock.discovery.scenarios.find((candidate) => candidate.scenarioId === row.scenarioId);
 		if (
+			!context ||
+			!scenario ||
+			contextHash(context) !== row.contextHash ||
+			row.queryTextSnapshot !== scenario.queryText ||
+			context.queryLanguage !== scenario.language ||
 			!allowedScenarioIds.has(row.scenarioId) ||
 			!allowedContextHashes.has(row.contextHash) ||
 			row.repeatIndex < 0 ||

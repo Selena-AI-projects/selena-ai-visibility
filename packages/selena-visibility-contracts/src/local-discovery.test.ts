@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-	LOCAL_AI_DISCOVERY_POLICY,
-	type LocalAiDiscoveryLockBlock,
-	type ObserverContext,
-	type PilotObservation,
 	assertCaptureMethodAllowed,
 	assertClientResultsAllowed,
 	assertLocalDiscoveryEnabled,
 	assertManualPilotAllowed,
 	assertMentionMatch,
 	assertObservationCardinality,
+	assertObservationMatchesLockedTask,
 	assertObservationSubmission,
 	contextHash,
 	entityInclusionRate,
@@ -19,10 +16,14 @@ import {
 	familyEntityIds,
 	familyPresenceRate,
 	isCountableMention,
+	LOCAL_AI_DISCOVERY_POLICY,
+	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
 	localDiscoveryConfigFromEnv,
+	type ObserverContext,
 	observationSubmissionViolations,
 	observerContextSchema,
+	type PilotObservation,
 	repeatStability,
 	resolveExplicitPosition,
 	visibleSourceRate,
@@ -245,6 +246,56 @@ describe("RC7 observation submission evidence policy", () => {
 		expect(() =>
 			assertObservationSubmission({ ...submission, screenshotReference: undefined }, lockBlock.evidencePolicy),
 		).toThrow("OBSERVATION_MISSING_SCREENSHOT");
+	});
+});
+
+describe("RC7 locked observation identity", () => {
+	const scenario = lockBlock.scenarios[0];
+
+	it("requires the submitted query to match the immutable task and scenario", () => {
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: moscowContext,
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: "другой запрос",
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_QUERY_MISMATCH");
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: "подменённый запрос",
+				scenario,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_TASK_QUERY_MISMATCH");
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario: null,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_SCENARIO_MISSING");
+	});
+
+	it("requires the observer query language to match the locked scenario", () => {
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: { ...moscowContext, queryLanguage: "en" },
+			}),
+		).toThrow("OBSERVATION_LANGUAGE_MISMATCH");
 	});
 });
 

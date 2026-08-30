@@ -2,6 +2,7 @@ import {
 	assertCardinality,
 	assertMentionMatch,
 	assertObservationCardinality,
+	assertObservationMatchesLockedTask,
 	assertObservationSubmission,
 	contextHash,
 	expectedObservations,
@@ -1444,6 +1445,13 @@ export function createSelenaRepositories(db: Db) {
 					block.evidencePolicy,
 				);
 				const context = observerContextSchema.parse(input.context);
+				const scenario = block.scenarios.find((candidate) => candidate.scenarioId === task.scenarioId) ?? null;
+				assertObservationMatchesLockedTask({
+					queryText: input.queryText,
+					taskQueryText: task.queryTextSnapshot,
+					scenario,
+					context,
+				});
 				if (contextHash(context) !== task.contextHash) throw new Error("OBSERVATION_CONTEXT_MISMATCH");
 				const [existing] = await db
 					.select()

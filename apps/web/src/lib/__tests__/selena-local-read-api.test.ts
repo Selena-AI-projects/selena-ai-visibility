@@ -309,6 +309,16 @@ describe("Selena local read API core", () => {
 		});
 	});
 
+	it("fails closed when immutable Maps rows exceed the persisted cycle counter", async () => {
+		const api = createSelenaLocalReadApi(
+			store({ countMapObservations: vi.fn(async () => ({ valid: 4, invalid: 0, unknown: 0 })) }),
+		);
+
+		await expect(api.progress({ tenantId: "tenant-a", cycleId: ids.cycle })).rejects.toThrow(
+			"LOCAL_MAPS_PROGRESS_COUNTER_MISMATCH",
+		);
+	});
+
 	it("exposes a locked Local AI footprint as pending until a manual pilot exists", async () => {
 		const source = store({
 			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
@@ -423,6 +433,20 @@ describe("Selena local read API core", () => {
 				},
 			],
 		});
+	});
+
+	it("fails closed when a manual Local AI task hash or query drifts from the lock", async () => {
+		const task = acceptedAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [{ ...task, contextHash: "f".repeat(64) }]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).rejects.toThrow(
+			"LOCAL_AI_TASK_OUTSIDE_LOCK",
+		);
 	});
 
 	it("keeps a pending manual Local AI task pending instead of counting it as unknown", async () => {

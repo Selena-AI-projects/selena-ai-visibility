@@ -86,6 +86,16 @@ export type LocalMapsRankAdapter<TRawResult = unknown> = {
 	capability(): LocalMapsRankCapability;
 };
 
+/** A provider must be able to honour the depth frozen in the Maps Lock. */
+export function assertLocalMapsRankCapabilitySupportsTask(
+	inputTask: LocalMapsMaterializedProviderRequest,
+	inputCapability: LocalMapsRankCapability,
+): LocalMapsRankCapability {
+	const capability = localMapsRankCapabilitySchema.parse(inputCapability);
+	if (capability.maxDepth < inputTask.params.depth) throw new Error("LOCAL_MAPS_RANK_DEPTH_UNSUPPORTED");
+	return capability;
+}
+
 /** Rejects a normalized response that does not echo the frozen task inputs. */
 export function assertLocalMapsRankCoordinateProofMatchesTask(
 	inputTask: LocalMapsMaterializedProviderRequest,

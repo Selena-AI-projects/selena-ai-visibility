@@ -1,4 +1,5 @@
 import {
+	assertLocalMapsRankCapabilitySupportsTask,
 	assertLocalMapsRankCoordinateProofMatchesTask,
 	type LocalMapsRankAdapter,
 	type LocalMapsRankRunnerObservation,
@@ -20,12 +21,13 @@ export function toLocalMapsLiveProviderPort<TRawResult>(
 ): LocalMapsLiveProviderPort {
 	if (!/^\S+$/.test(adapter.id) || !/^\S+$/.test(adapter.version) || !/^\S+$/.test(adapter.endpoint))
 		throw new Error("LOCAL_MAPS_RANK_ADAPTER_METADATA_INVALID");
-	localMapsRankCapabilitySchema.parse(adapter.capability());
+	const capability = localMapsRankCapabilitySchema.parse(adapter.capability());
 	return {
 		id: adapter.id,
 		version: adapter.version,
 		endpoint: adapter.endpoint,
 		async execute(request, context) {
+			assertLocalMapsRankCapabilitySupportsTask(request, capability);
 			const permit = localMapsRankPermitSchema.parse({
 				organizationId: context.organizationId,
 				attemptId: context.attemptId,

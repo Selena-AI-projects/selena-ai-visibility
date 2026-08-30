@@ -247,6 +247,23 @@ export function assertObservationSubmission(submission: ObservationSubmissionInp
 	if (violations.length > 0) throw new Error(violations.join(", "));
 }
 
+/**
+ * A manual capture is valid only for the immutable task/scenario query that
+ * was sold in the lock. The UI-provided query is evidence metadata, not an
+ * authority that may replace the task snapshot.
+ */
+export function assertObservationMatchesLockedTask(input: {
+	queryText: string;
+	taskQueryText: string;
+	scenario: Pick<LocalAiDiscoveryLockBlock["scenarios"][number], "queryText" | "language"> | null;
+	context: ObserverContext;
+}): void {
+	if (input.scenario === null) throw new Error("OBSERVATION_SCENARIO_MISSING");
+	if (input.taskQueryText !== input.scenario.queryText) throw new Error("OBSERVATION_TASK_QUERY_MISMATCH");
+	if (input.queryText !== input.taskQueryText) throw new Error("OBSERVATION_QUERY_MISMATCH");
+	if (input.context.queryLanguage !== input.scenario.language) throw new Error("OBSERVATION_LANGUAGE_MISMATCH");
+}
+
 // ---------------------------------------------------------------------------
 // Mention rules. An explicit position only exists when the answer itself was
 // explicitly ordered; an UNRESOLVED (ambiguous-name) match is never a mention.
