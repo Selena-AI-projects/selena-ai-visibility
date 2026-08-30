@@ -51,3 +51,9 @@
 
 - Decision: the free Local Maps stub is a separate `REHEARSAL_ONLY` surface. It emits only deterministic synthetic results with zero provider calls and cost; those results are never persistence- or evidence-eligible. Live attempt/result contracts, worker registration and persistent Configuration Lock identity remain separate later slices.
 - Authority: implementation of the owner-approved safe defaults, independently reviewed 2026-08-30.
+
+## D-011 — Live runner boundary
+
+- Decision: a live adapter receives only the frozen provider request and returns raw observation fields. The runner constructs tenant/cycle/attempt identity itself and may call the adapter only after a transactional store returns one fresh committed `SUBMITTED` continuation. Ambiguous calls never retry; UNKNOWN and estimated zero retain their reservation, positive known cost must be SPENT, and actual known zero cost must be RELEASED.
+- Authority: implementation of the owner-approved duplicate-call and budget-safe defaults, independently reviewed 2026-08-30.
+- Boundary: this source-only protocol is not package-exported or worker-registered. DB atomicity, RLS, migration apply and any real provider call remain `UNKNOWN` / owner-gated.

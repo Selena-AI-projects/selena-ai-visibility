@@ -6,9 +6,9 @@
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: clean recovered checkout of the feature branch after an unexpected local workspace loss
-- Current phase: `Phase 0B — deterministic rehearsal and runtime boundary design`
-- Current slice: `free Local Maps rehearsal complete; live attempt/store design next`
-- Parent commit for the current slice: `d4ce8780` (`draft local domain and attempt ledger migration`)
+- Current phase: `Phase 0C — source-only live runner and transactional store design`
+- Current slice: `live DTO and at-most-once runner protocol complete; transactional store remains absent`
+- Parent commit for the current slice: `fcbf02bc` (`define honest local maps live contracts`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,10 +27,11 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `19 files / 172 tests PASS` |
+| Contracts Vitest (Node 24) | `21 files / 189 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `70 files / 843 tests PASS` |
+| Lib Vitest (Node 24) | `71 files / 864 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
+| Live runner targeted Vitest (Node 24) | `1 file / 21 tests PASS` |
 | Migration 0043 static schema/review | `PASS — not applied` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
@@ -46,13 +47,15 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex attempt-migration execution review: adversarial rounds completed read-only; final static verdict `PASS`.
 - Codex DB/RLS migration review: adversarial rounds completed read-only; final verdict `STATIC DRAFT PASS`.
 - Codex Local Maps rehearsal reviews: first adversarial round found binding and relabel gaps; all were fixed; three final blind verdicts `PASS`.
+- Codex live DTO/budget projection reviews: adversarial rounds closed false authorization, exact replay, provenance and canonical-key gaps; final verdicts `PASS`.
+- Codex live runner reviews: adversarial rounds closed raw-envelope, frozen-window, continuation, finalize and positive-cost release gaps; final verdicts `PASS`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
 
 ## Next autonomous actions
 
-1. Commit and push the independently reviewed deterministic Maps rehearsal slice.
-2. Design the live attempt runner/store ports and aggregate atomic claim/cap transaction without registering a provider or queue.
+1. Commit and push the independently reviewed source-only live runner protocol.
+2. Draft the tenant-scoped transactional store and aggregate cap transaction without applying a migration or registering a provider/queue.
 3. Keep all providers, worker registration, persistence of synthetic results and feature flags disabled.
 
 ## Push/PR side-effect check
