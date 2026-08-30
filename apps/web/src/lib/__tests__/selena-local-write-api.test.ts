@@ -133,7 +133,7 @@ describe("Selena local write API", () => {
 				code: "OWNER_GATE_REQUIRED",
 				message: expect.stringContaining("target schema"),
 				requestId: "request-1",
-				retryable: true,
+				retryable: false,
 				details: { blocker: "LOCAL_SCHEMA_NOT_APPLIED_OR_RLS_UNVERIFIED", providerCalls: 0, operation: "quote" },
 			},
 		});

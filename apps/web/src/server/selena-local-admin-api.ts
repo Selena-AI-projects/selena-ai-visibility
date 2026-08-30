@@ -57,7 +57,7 @@ export const failClosedLocalAdminStore: SelenaLocalAdminStore = {
 			503,
 			LOCAL_ADMIN_OWNER_GATE_CODE,
 			`LOCAL_ADMIN_${operation.toUpperCase()} is unavailable until the target schema, RLS and approval gates are verified.`,
-			true,
+			false,
 			{
 				blocker: "LOCAL_ADMIN_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
 				providerCalls: 0,
@@ -179,7 +179,7 @@ export function createSelenaLocalAdminRouteHandlers(
 							503,
 							LOCAL_ADMIN_OWNER_GATE_CODE,
 							"Admin action did not produce a durable response.",
-							true,
+							false,
 							{ providerCalls: 0, operation },
 						);
 					return { status: 202, body: result };
@@ -191,7 +191,7 @@ export function createSelenaLocalAdminRouteHandlers(
 					503,
 					LOCAL_ADMIN_OWNER_GATE_CODE,
 					"Admin action did not produce a valid durable response.",
-					true,
+					false,
 					{ providerCalls: 0, operation },
 				);
 			return Response.json(parsed.data, { status: response.status });

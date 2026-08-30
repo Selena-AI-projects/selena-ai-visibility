@@ -16,7 +16,7 @@ export const failClosedProviderCapabilitiesStore: SelenaProviderCapabilitiesStor
 			503,
 			"OWNER_GATE_REQUIRED",
 			"Provider capabilities are unavailable until the provider registry, credentials and runtime gates are verified.",
-			true,
+			false,
 			{ blocker: "PROVIDER_REGISTRY_OR_CREDENTIALS_UNVERIFIED", providerCalls: 0 },
 		);
 	},
@@ -84,7 +84,7 @@ export function createProviderCapabilitiesRouteHandlers(
 						503,
 						"OWNER_GATE_REQUIRED",
 						"Provider capabilities did not produce a durable registry response.",
-						true,
+						false,
 						{ blocker: "PROVIDER_REGISTRY_OR_CREDENTIALS_UNVERIFIED", providerCalls: 0 },
 					);
 				return Response.json(capabilities);

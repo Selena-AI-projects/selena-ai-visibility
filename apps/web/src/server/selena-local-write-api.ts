@@ -56,7 +56,7 @@ export function localWriteOwnerGateError(operation: "quote" | "cycle"): SelenaAp
 		503,
 		LOCAL_WRITE_OWNER_GATE_CODE,
 		`LOCAL_${operation.toUpperCase()} is unavailable until the target schema and tenant RLS are verified.`,
-		true,
+		false,
 		{
 			blocker: "LOCAL_SCHEMA_NOT_APPLIED_OR_RLS_UNVERIFIED",
 			providerCalls: 0,

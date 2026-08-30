@@ -58,7 +58,7 @@ export const failClosedLocalSetupStore: SelenaLocalSetupStore = {
 			503,
 			LOCAL_SETUP_OWNER_GATE_CODE,
 			`LOCAL_${operation.toUpperCase()} is unavailable until the target schema, RLS and approval gates are verified.`,
-			true,
+			false,
 			{
 				blocker: "LOCAL_SETUP_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
 				providerCalls: 0,
@@ -170,7 +170,7 @@ export function createSelenaLocalSetupRouteHandlers(
 							503,
 							LOCAL_SETUP_OWNER_GATE_CODE,
 							"Local setup action did not produce a durable response.",
-							true,
+							false,
 							{ providerCalls: 0, operation },
 						);
 					return { status: operation === "place-entity-confirm" ? 200 : 201, body: result };
@@ -188,7 +188,7 @@ export function createSelenaLocalSetupRouteHandlers(
 					503,
 					LOCAL_SETUP_OWNER_GATE_CODE,
 					"Local setup action did not produce a valid durable response.",
-					true,
+					false,
 					{ providerCalls: 0, operation },
 				);
 			return Response.json(parsed.data, { status: response.status });
