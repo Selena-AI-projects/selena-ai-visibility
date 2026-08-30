@@ -8,9 +8,9 @@ name: License Check
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/selena-visibility-mvp]
   pull_request:
-    branches: [main]
+    branches: [main, release/selena-visibility-mvp]
   workflow_dispatch:
 
 permissions:
