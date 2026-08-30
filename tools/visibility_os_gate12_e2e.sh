@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$repo_root/tools/visibility_os_compose_command.sh"
+compose_file="${1:-$repo_root/tools/visibility_os_disposable_postgres.compose.yml}"
+compose_project="${SELENA_VISIBILITY_COMPOSE_PROJECT:-}"
+if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ ]]; then
+	printf 'BLOCKED_SCOPE: SELENA_VISIBILITY_COMPOSE_PROJECT must name an isolated rehearsal project.\n' >&2
+	exit 2
+fi
 database_url="${DATABASE_URL:-postgres://selena_test:selena_test@127.0.0.1:55432/selena_visibility_test}"
-psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 fresh_database=false
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.organization')")" != "organization" ]]; then
@@ -28,13 +34,19 @@ if [[ "$fresh_database" == true ]]; then
 		"$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0046_selena_journal_daily_claims.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0047_visibility_os_local_attempt_count_cap.sql" \
-		"$repo_root/packages/lib/src/db/migrations/0048_selena_api_idempotency_records.sql"; do
+		"$repo_root/packages/lib/src/db/migrations/0048_selena_api_idempotency_records.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0049_visibility_os_claimed_submit_lease.sql"; do
 		"${psql[@]}" --single-transaction < "$migration" >/dev/null
 	done
 fi
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_journal_daily_claims') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_journal_daily_claims'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_journal_daily_claims'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('sv_journal_daily_claims_project_organization_fk', 'sv_journal_daily_claims_lock_project_org_fk', 'sv_journal_daily_claims_utc_day_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_journal_daily_claims' AND indexname = 'sv_journal_daily_claims_unresolved_unique' AND indexdef LIKE '%WHERE%') AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_journal_daily_claims'::regclass AND tgname IN ('sv_guard_journal_daily_claim_mutation', 'sv_prevent_journal_daily_claim_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2) AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sv_local_rank_observations'::regclass AND conname = 'sv_local_rank_observations_attempt_count_cap_check' AND convalidated) AND to_regclass('public.sv_api_idempotency_records') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_api_idempotency_records'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_api_idempotency_records'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_api_idempotency_records' AND indexname = 'sv_api_idempotency_identity_unique') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sv_api_idempotency_records'::regclass AND conname IN ('sv_api_idempotency_body_hash_check', 'sv_api_idempotency_response_status_check', 'sv_api_idempotency_expiry_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_api_idempotency_records'::regclass AND tgname IN ('sv_guard_api_idempotency_mutation', 'sv_prevent_api_idempotency_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2)")" != "t" ]]; then
-	echo "Gate 12 requires the complete numbered migration chain through 0048" >&2
+	echo "Gate 12 requires the complete numbered migration chain through 0049" >&2
+	exit 1
+fi
+
+if [[ "$("${psql[@]}" -Atc "SELECT pg_get_functiondef('sv_guard_measurement_attempt_mutation()'::regprocedure) LIKE '%NEW.\"status\" = ''SUBMITTED''%' AND pg_get_functiondef('sv_guard_measurement_attempt_mutation()'::regprocedure) LIKE '%MEASUREMENT_ATTEMPT_CLAIM_EXPIRED%' AND pg_get_functiondef('sv_guard_measurement_attempt_mutation()'::regprocedure) LIKE '%OLD.\"lease_expires_at\" > now()%' AND pg_get_functiondef('sv_guard_measurement_attempt_mutation()'::regprocedure) LIKE '%NEW.\"lease_expires_at\" > OLD.\"lease_expires_at\"%'")" != "t" ]]; then
+	echo "Gate 12 requires the 0049 CLAIMED to SUBMITTED lease guard" >&2
 	exit 1
 fi
 

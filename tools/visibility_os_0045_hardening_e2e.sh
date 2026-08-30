@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$repo_root/tools/visibility_os_compose_command.sh"
+compose_file="${1:-$repo_root/tools/visibility_os_disposable_postgres.compose.yml}"
+compose_project="${SELENA_VISIBILITY_COMPOSE_PROJECT:-}"
+if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ ]]; then
+	printf 'BLOCKED_SCOPE: SELENA_VISIBILITY_COMPOSE_PROJECT must name an isolated rehearsal project.\n' >&2
+	exit 2
+fi
 migration_0045="$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql"
 database_prefix="selena_visibility_0045_$$"
 databases=(
@@ -14,7 +20,7 @@ databases=(
 	"${database_prefix}_cycle_collision"
 	"${database_prefix}_evidence_collision"
 )
-compose=(docker-compose -p selena-visibility-test -f "$compose_file")
+compose=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file")
 
 for database in "${databases[@]}"; do
 	if [[ ! "$database" =~ ^[a-z0-9_]+$ ]]; then

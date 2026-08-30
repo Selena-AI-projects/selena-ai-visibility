@@ -1,4 +1,8 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { getTableConfig, getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "./schema";
@@ -488,6 +492,26 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(journal).toContain('"tag": "0044_visibility_os_local_live_persistence"');
 	});
 
+	it("keeps 0049 as a forward-only CLAIMED to SUBMITTED lease-contract repair", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0049_visibility_os_claimed_submit_lease.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+
+		expect(migration).toContain("pg_get_functiondef('sv_guard_measurement_attempt_mutation()'::regprocedure)");
+		expect(migration).toContain("END IF;$guard$;");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_0049_GUARD_SHAPE_UNEXPECTED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_CLAIM_EXPIRED");
+		expect(migration).toContain("OLD.\"status\" = 'CLAIMED' AND NEW.\"status\" = 'SUBMITTED'");
+		expect(migration).toContain('NEW."lease_expires_at" > OLD."lease_expires_at"');
+		expect(migration).toContain('OLD."lease_expires_at" > now()');
+		expect(migration).toContain('NEW."lease_expires_at" > now()');
+		expect(migration).not.toContain('INSERT INTO "sv_measurement_attempts"');
+		expect(migration).not.toContain('UPDATE "sv_measurement_attempts"');
+		expect(journal).toContain('"tag": "0049_visibility_os_claimed_submit_lease"');
+	});
+
 	it("retires the legacy Local domain and makes configuration locks append-only", () => {
 		const migration0044 = readFileSync(
 			new URL("./migrations/0044_visibility_os_local_live_persistence.sql", import.meta.url),
@@ -743,7 +767,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("tgenabled <> 'O'");
 		expect(gate12).toContain('--single-transaction < "$migration"');
 		expect(gate12).toContain("sv_journal_daily_claims_project_organization_fk");
-		expect(gate12).toContain("complete numbered migration chain through 0048");
+		expect(gate12).toContain("complete numbered migration chain through 0049");
 		const gate12Through0036 = gate12.indexOf("10#$migration_number > 36");
 		const gate12RegistryFixture = gate12.indexOf('bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh"');
 		const gate12HistoricalChain = gate12.indexOf('bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh"');
@@ -753,6 +777,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const gate12Apply0046 = gate12.indexOf("0046_selena_journal_daily_claims.sql");
 		const gate12Apply0047 = gate12.indexOf("0047_visibility_os_local_attempt_count_cap.sql");
 		const gate12Apply0048 = gate12.indexOf("0048_selena_api_idempotency_records.sql");
+		const gate12Apply0049 = gate12.indexOf("0049_visibility_os_claimed_submit_lease.sql");
 		const gate12Marker = gate12.indexOf("sv_journal_daily_claims_project_organization_fk");
 		const gate12Seed = gate12.indexOf("INSERT INTO organization");
 		expect(gate12).toContain('if [[ "$fresh_database" == true ]]');
@@ -765,8 +790,156 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(gate12Apply0045).toBeLessThan(gate12Apply0046);
 		expect(gate12Apply0046).toBeLessThan(gate12Apply0047);
 		expect(gate12Apply0047).toBeLessThan(gate12Apply0048);
+		expect(gate12Apply0048).toBeLessThan(gate12Apply0049);
+		expect(gate12).toContain("Gate 12 requires the 0049 CLAIMED to SUBMITTED lease guard");
+		expect(gate12).toMatch(/"\$\{psql\[@\]\}" -Atc/);
 		expect(gate12Apply0048).toBeLessThan(gate12Marker);
 		expect(gate12Marker).toBeLessThan(gate12Seed);
+	});
+
+	it("keeps the disposable PostgreSQL rehearsal unique, ephemeral and opt-in", () => {
+		const wrapper = readFileSync(
+			new URL("../../../../tools/visibility_os_disposable_rehearsal.sh", import.meta.url),
+			"utf8",
+		);
+		const compose = readFileSync(
+			new URL("../../../../tools/visibility_os_disposable_postgres.compose.yml", import.meta.url),
+			"utf8",
+		);
+		const rehearsalScripts = [
+			"selena_isolated_e2e.sh",
+			"visibility_os_m1_registry_e2e.sh",
+			"visibility_os_m2_local_e2e.sh",
+			"visibility_os_m3_search_reputation_e2e.sh",
+			"visibility_os_m4_evidence_loop_e2e.sh",
+			"visibility_os_m5_map_e2e.sh",
+			"visibility_os_m6_outcome_e2e.sh",
+			"visibility_os_gate12_e2e.sh",
+			"visibility_os_0045_hardening_e2e.sh",
+		].map((name) => readFileSync(new URL(`../../../../tools/${name}`, import.meta.url), "utf8"));
+
+		expect(wrapper).toContain("mode='dry-run'");
+		expect(wrapper).toContain("--run) mode='run'");
+		expect(wrapper.indexOf("if [[ \"$mode\" == 'dry-run' ]]")).toBeLessThan(wrapper.indexOf("command -v docker"));
+		expect(wrapper).toMatch(/compose_project="selena-visibility-rehearsal-\$\{PPID\}-\$\$-\$\{random_suffix\}"/);
+		expect(wrapper).toContain("label=com.docker.compose.project=$compose_project");
+		expect(wrapper).toMatch(/compose=\("\$\{compose_cli\[@\]\}" -p "\$compose_project"/);
+		expect(wrapper).toContain("compose_cli=(docker compose)");
+		expect(wrapper).toContain("compose_cli=(docker-compose)");
+		expect(wrapper).toContain("up -d --pull never postgres");
+		expect(wrapper).toContain("down --volumes --remove-orphans");
+		expect(wrapper).toContain("trap cleanup EXIT");
+		expect(wrapper).toContain("BLOCKED_CLEANUP");
+		expect(wrapper).toContain("resources remain after teardown");
+		expect(wrapper).toContain("cleanup=verified");
+		expect(wrapper).not.toContain("cleanup=scheduled");
+		expect(wrapper).not.toContain("down --volumes --remove-orphans >/dev/null 2>&1 || true");
+		expect(wrapper).toMatch(/published_address="\$\("\$\{compose\[@\]\}" port postgres 5432\)"/);
+		expect(wrapper).not.toContain("docker system prune");
+		expect(wrapper).not.toContain("provider_call");
+
+		expect(compose).toContain("image: postgres:16-alpine");
+		expect(compose).toContain('"127.0.0.1::5432"');
+		expect(compose).toContain("tmpfs:");
+		expect(compose).toContain("/var/lib/postgresql/data");
+		expect(compose).not.toContain("volumes:");
+
+		for (const script of rehearsalScripts) {
+			expect(script).toContain('visibility_os_compose_command.sh"');
+			expect(script).toMatch(/compose_project="\$\{SELENA_VISIBILITY_COMPOSE_PROJECT:-\}"/);
+			expect(script).toContain("^selena-visibility-rehearsal-");
+			expect(script).not.toContain("SELENA_VISIBILITY_COMPOSE_PROJECT:-selena-visibility-test");
+			expect(script).toContain("tools/visibility_os_disposable_postgres.compose.yml}");
+			expect(script).toMatch(/"\$\{compose_cli\[@\]\}" -p "\$compose_project"/);
+		}
+	});
+
+	it("proves dry-run and teardown behavior with a hermetic fake Docker CLI", () => {
+		const wrapperPath = fileURLToPath(
+			new URL("../../../../tools/visibility_os_disposable_rehearsal.sh", import.meta.url),
+		);
+		const fakeBin = mkdtempSync(join(tmpdir(), "selena-rehearsal-"));
+		const dockerLog = join(fakeBin, "docker.log");
+		const suiteLog = join(fakeBin, "suite.log");
+		const fakeDocker = join(fakeBin, "docker");
+		const fakeBash = join(fakeBin, "bash");
+
+		writeFileSync(dockerLog, "");
+		writeFileSync(suiteLog, "");
+		writeFileSync(
+			fakeDocker,
+			`#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_DOCKER_LOG"
+case "$*" in
+  "compose version") exit 0 ;;
+  *"container ls -q"*) exit 0 ;;
+  *"network ls -q"*) exit 0 ;;
+  *"volume ls -q"*) exit 0 ;;
+  "image inspect postgres:16-alpine") exit 0 ;;
+  *"up -d --pull never postgres"*) exit 0 ;;
+  *"exec -T postgres pg_isready"*) exit 0 ;;
+  *"port postgres 5432"*) printf '%s\\n' '127.0.0.1:49152'; exit 0 ;;
+  *"down --volumes --remove-orphans"*) exit "\${FAKE_DOWN_EXIT:-0}" ;;
+esac
+exit 64
+`,
+		);
+		writeFileSync(
+			fakeBash,
+			`#!/bin/sh
+printf '%s\\n' "$*" >> "$FAKE_SUITE_LOG"
+if [ "\${FAKE_SUITE_SIGNAL:-}" = TERM ]; then
+  kill -TERM "$PPID"
+fi
+exit "\${FAKE_SUITE_EXIT:-0}"
+`,
+		);
+		chmodSync(fakeDocker, 0o755);
+		chmodSync(fakeBash, 0o755);
+
+		const run = (extraEnv: Record<string, string> = {}, args = ["--run", "gate12"]) =>
+			spawnSync("/bin/bash", [wrapperPath, ...args], {
+				encoding: "utf8",
+				env: {
+					...process.env,
+					PATH: `${fakeBin}:/usr/bin:/bin`,
+					FAKE_DOCKER_LOG: dockerLog,
+					FAKE_SUITE_LOG: suiteLog,
+					...extraEnv,
+				},
+			});
+
+		try {
+			const dryRun = run({}, ["--dry-run", "gate12"]);
+			expect(dryRun.status).toBe(0);
+			expect(readFileSync(dockerLog, "utf8")).toBe("");
+
+			const success = run();
+			expect(success.status).toBe(0);
+			expect(success.stdout).toContain("REHEARSAL_COMPLETE");
+			expect(success.stdout).toContain("cleanup=verified");
+			expect(readFileSync(dockerLog, "utf8")).toContain("up -d --pull never postgres");
+			expect(readFileSync(dockerLog, "utf8")).toContain("down --volumes --remove-orphans");
+
+			writeFileSync(dockerLog, "");
+			const suiteFailure = run({ FAKE_SUITE_EXIT: "7" });
+			expect(suiteFailure.status).toBe(7);
+			expect(suiteFailure.stdout).not.toContain("REHEARSAL_COMPLETE");
+			expect(readFileSync(dockerLog, "utf8")).toContain("down --volumes --remove-orphans");
+
+			writeFileSync(dockerLog, "");
+			const signal = run({ FAKE_SUITE_SIGNAL: "TERM", FAKE_SUITE_EXIT: "143" });
+			expect(signal.status).toBe(143);
+			expect(signal.stdout).not.toContain("REHEARSAL_COMPLETE");
+			expect(readFileSync(dockerLog, "utf8")).toContain("down --volumes --remove-orphans");
+
+			const cleanupFailure = run({ FAKE_DOWN_EXIT: "9" });
+			expect(cleanupFailure.status).toBe(4);
+			expect(cleanupFailure.stderr).toContain("BLOCKED_CLEANUP");
+			expect(cleanupFailure.stdout).not.toContain("REHEARSAL_COMPLETE");
+		} finally {
+			rmSync(fakeBin, { force: true, recursive: true });
+		}
 	});
 
 	it("persists fail-closed daily journal claims before any provider-capable restart", () => {
@@ -990,7 +1163,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-11)).toEqual([
+		expect(journal.entries.slice(-12)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1038,6 +1211,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0048_selena_api_idempotency_records",
 				breakpoints: true,
 			},
+			{
+				idx: 49,
+				version: "7",
+				when: 1787940011000,
+				tag: "0049_visibility_os_claimed_submit_lease",
+				breakpoints: true,
+			},
 		]);
 	});
 
@@ -1055,13 +1235,9 @@ describe("Visibility OS Outcome Layer schema", () => {
 		expect(attemptCheck && dialect.sqlToQuery(attemptCheck.value).sql).toContain('"attempt_count" BETWEEN 1 AND 3');
 		expect(migration).toContain('LOCK TABLE "sv_local_rank_observations" IN ACCESS EXCLUSIVE MODE');
 		expect(migration).toContain("LOCAL_MAPS_0047_ATTEMPT_COUNT_INVALID");
-		expect(migration).toContain(
-			'CONSTRAINT "sv_local_rank_observations_attempt_count_cap_check"',
-		);
+		expect(migration).toContain('CONSTRAINT "sv_local_rank_observations_attempt_count_cap_check"');
 		expect(migration).toContain('CHECK ("attempt_count" BETWEEN 1 AND 3) NOT VALID');
-		expect(migration).toContain(
-			'VALIDATE CONSTRAINT "sv_local_rank_observations_attempt_count_cap_check"',
-		);
+		expect(migration).toContain('VALIDATE CONSTRAINT "sv_local_rank_observations_attempt_count_cap_check"');
 		expect(migration).not.toContain("provider_call");
 		expect(migration).not.toContain("GRANT ");
 		expect(journal).toContain('"tag": "0047_visibility_os_local_attempt_count_cap"');

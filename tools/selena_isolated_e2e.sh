@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
-compose=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$repo_root/tools/visibility_os_compose_command.sh"
+compose_file="${1:-$repo_root/tools/visibility_os_disposable_postgres.compose.yml}"
+compose_project="${SELENA_VISIBILITY_COMPOSE_PROJECT:-}"
+if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ ]]; then
+	printf 'BLOCKED_SCOPE: SELENA_VISIBILITY_COMPOSE_PROJECT must name an isolated rehearsal project.\n' >&2
+	exit 2
+fi
+compose=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 "${compose[@]}" <<'SQL'
 CREATE TABLE IF NOT EXISTS organization (id text PRIMARY KEY, name text NOT NULL, slug text NOT NULL UNIQUE, created_at timestamptz NOT NULL DEFAULT now());
 INSERT INTO organization (id, name, slug, created_at) VALUES ('e2e-a', 'E2E A', 'e2e-a', now()), ('e2e-b', 'E2E B', 'e2e-b', now()) ON CONFLICT DO NOTHING;

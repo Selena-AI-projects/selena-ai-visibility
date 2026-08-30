@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+. "$repo_root/tools/visibility_os_compose_command.sh"
+compose_file="${1:-$repo_root/tools/visibility_os_disposable_postgres.compose.yml}"
+compose_project="${SELENA_VISIBILITY_COMPOSE_PROJECT:-}"
+if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ ]]; then
+	printf 'BLOCKED_SCOPE: SELENA_VISIBILITY_COMPOSE_PROJECT must name an isolated rehearsal project.\n' >&2
+	exit 2
+fi
+psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_local_keywords')")" != "sv_local_keywords" ]]; then
 	"${psql[@]}" < "$repo_root/packages/lib/src/db/migrations/0038_visibility_os_local_visibility.sql"
