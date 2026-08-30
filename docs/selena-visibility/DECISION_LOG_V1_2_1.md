@@ -209,3 +209,9 @@
 - Decision: move the pre-v1.2.1 planar `squareGridPoints` implementation into an explicit compatibility-only module and mark it deprecated. Preserve its exports for the historical micro-slice, while normative Local Maps code continues to use `sphericalGridPointsV1` exclusively.
 - Evidence: source-only refactor in the feature branch; contracts `230/230`, contracts typecheck and targeted Biome checks pass on 2026-08-30. Repository search found no non-test production caller of the planar generator.
 - Effect: the legacy algorithm remains available only for backward-compatible historical tests and cannot be mistaken for the v1.2.1 spherical grid implementation; no migration, provider or runtime path changed.
+
+## D-037 — Keep process-level worker isolation unclaimed
+
+- Decision: the Local queue boundary is fail-closed, but it is not represented as a separate process. The existing worker bootstrap still performs legacy credential refresh, scrape-target validation and pg-boss startup before registering the Local handler; do not describe this as full Local-worker isolation until an owner-approved runtime architecture supplies it.
+- Evidence: read-only inspection of `apps/worker/src/index.ts` and `apps/worker/src/handlers.ts` at `dc91f8d3`; the Local handler itself imports no database, provider or credential implementation and throws its owner gate before acknowledging a job.
+- Effect: the source-only acceptance claim stays limited to queue/handler topology and false-success rejection; process-level startup isolation remains an explicit runtime owner gate.
