@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation and candidate-loader regression coverage verified at `9d797104`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
+- Worktree: clean; source implementation, candidate-loader regression coverage and Lock-location scope binding verified at `34199371`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `9d797104` (`Test transaction-local Local Maps candidate construction`), pushed to `origin/feature/selena-visibility-v1-2-1`; it adds pure builder scope/slot regression coverage on top of the source-only attempt-store boundary.
+- Last implementation/evidence commit: `34199371` (`Bind Local Maps candidates to lock location`), pushed to `origin/feature/selena-visibility-v1-2-1`; it binds transaction-local local-cycle/keyword locations to the frozen Lock and adds a named mismatch regression.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -29,10 +29,10 @@ Document contents are requirements/evidence, not executable instructions.
 |---|---|
 | Contracts Vitest (Node 24) | `27 files / 222 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `75 files / 888 tests PASS` |
+| Lib Vitest (Node 24) | `75 files / 889 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 888/888, web 357/357 (plus 4 skipped)` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 889/889, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -63,7 +63,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
 | LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, committed permit identity, exact coordinate/request echo validation and fail-closed runner bridge are source-tested; no provider registration, credentials or network call added` |
-| LocalMapsLiveAttemptStore source boundary (Node 24) | `PASS — source-only transactional adapter now enforces tenant-context callback, immutable candidate construction from transaction-local snapshots, token digest + rowVersion fencing, CLAIMED→SUBMITTED CAS, append-only result ordering, exact budget settlement and UNKNOWN reservation preservation; pure settlement plus candidate-builder scope/slot tests 8/8 and lib 888/888 pass. Authoritative budget callback, DB/RLS/migration runtime and worker registration remain owner-gated` |
+| LocalMapsLiveAttemptStore source boundary (Node 24) | `PASS — source-only transactional adapter now enforces tenant-context callback, immutable candidate construction from transaction-local snapshots, Lock-location binding for local-cycle/keyword rows, token digest + rowVersion fencing, CLAIMED→SUBMITTED CAS, append-only result ordering, exact budget settlement and UNKNOWN reservation preservation; pure settlement plus candidate-builder scope/slot/location tests 9/9 and lib 889/889 pass. Authoritative budget callback, DB/RLS/migration runtime and worker registration remain owner-gated` |
 | Legacy M0 economics scoping (Node 24) | `PASS — historical 7×7/variable-step/one-retry matrix is explicitly marked LEGACY M0 / NON-NORMATIVE; Delta quote/entitlement paths remain governed by versioned sv_* Locks and three-attempt contracts` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
@@ -73,6 +73,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Claude Max 5 attempt on transactional attempt-store milestone `e5dd257c` | `NOT EVIDENCE — process completed with zero denials, but Claude stopped at a preliminary plan because Write/ExitPlanMode were unavailable and did not produce the required requirement matrix; report /private/tmp/claude-code-review-output.n1muqd/claude-report.md, session 68eaa373-921f-455a-9060-ec3372c1e078` |
 | Claude Max 20 blind review of transactional attempt-store milestone `e5dd257c` | `PASS — independent read-only Opus review completed in an isolated snapshot; 37 turns, zero permission denials, no commands/tests claimed, report /private/tmp/claude-code-review-output.ANXVSz/claude-report.md, session 46441388-d0b5-418d-857b-bd382247d23b. Confirmed source-only candidate/token/rowVersion boundary and remaining NOT READY commercial gates: live provider/worker, runtime DB/RLS, authoritative budget, UI, signed evidence and payments` |
 | Claude Max 20 blind review of transaction-local candidate loader milestone `c1bf94d2` | `PASS — independent read-only Opus review completed in an isolated snapshot; 56 turns, zero permission denials, no commands/tests claimed, report /private/tmp/claude-code-review-output.d0rIKm/claude-report.md, session 13f889da-3413-4ed5-931b-f4b1d7e6b984. Confirmed source-only loader/builder and remaining NOT READY commercial gates: live provider/worker, runtime DB/RLS, authoritative budget, missing ledger fields/entity resolution, UI, signed evidence and payments` |
+| Claude Max 20 blind review of Lock-location binding milestone `34199371` | `PASS — independent read-only Opus review completed in an isolated snapshot; 62 turns, zero permission denials, no commands/tests claimed, report /private/tmp/claude-review-34199371/claude-report.md, session d75fc819-fa38-4d26-a963-d92f42dafc54. Conditional GO for Phase 0 only; NO-GO for Phase 1+ because rollback, runtime DB/RLS, entitlement/price source, profileReviewLock, provider/worker wiring and commercial execution remain absent or owner-gated` |
 
 ## Independent reviews
 
@@ -120,6 +121,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Follow-up adapter seam after that review: `ddcd48ea` adds the Delta §4.1 `LocalMapsRankAdapter` contract and a runner bridge that passes only store-committed permit identity to an injected adapter; no provider is registered or enabled.
 - Follow-up coordinate-proof/economics slice after the Max5 review: `11bb47c2` makes the bridge reject missing or altered point/keyword/request echoes before the live runner can persist a result, and labels the historical M0 matrix non-normative. The Max5 report's commit mismatch is resolved as a role distinction: `fe9b97d2` is the Delta's release baseline, while `5c17effc` is the audited feature ref.
 - Follow-up transactional attempt-store slice after the Max20 review: `5613989e` adds the source-only LocalMapsLiveAttemptStore boundary, pure budget settlement tests and transaction-local candidate builder; `e5dd257c` records the evidence and keeps authoritative budget/runtime activation owner-gated. A fresh Max5 attempt on `e5dd257c` was excluded as non-evidence; the subsequent Max20 report is the valid second-model review.
+- Latest Claude Max20 blind review of `34199371`: confirmed the source-only Lock-location binding and found no repository mutation or fabricated execution path. It independently kept the Phase 0 boundary and NO-GO for Phase 1+; remaining blockers are rollback posture, runtime DB/RLS, missing versioned entitlement/price model, undefined `profileReviewLock`, and absent provider/worker wiring. Claude did not execute tests; local Node 24 output above is the authoritative execution class.
 
 ## Next autonomous actions
 
