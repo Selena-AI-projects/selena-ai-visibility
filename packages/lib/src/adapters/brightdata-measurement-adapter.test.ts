@@ -272,6 +272,47 @@ describe("Bright Data measurement adapter", () => {
 		}
 	});
 
+	it("accepts a downloadable snapshot while progress still says running", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		let progressCalls = 0;
+		let snapshotCalls = 0;
+		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			const url = String(input);
+			if (url.includes("/trigger")) return jsonResponse({ snapshot_id: "s_eventually_downloadable" });
+			if (url.includes("/progress/")) {
+				progressCalls += 1;
+				return jsonResponse({ status: "running" });
+			}
+			if (url.includes("/snapshot/")) {
+				snapshotCalls += 1;
+				return jsonResponse([{ answer_text: "AVLI is visible.", citations: [{ url: "https://avlibali.com/" }] }]);
+			}
+			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
+		});
+
+		try {
+			const outcomePromise = adapterWith(fetchSpy, {
+				system: "perplexity",
+				collectionMode: "trigger",
+				snapshotPollMs: 1_000,
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(6_000);
+			const outcome = await outcomePromise;
+
+			expect(progressCalls).toBe(6);
+			expect(snapshotCalls).toBe(1);
+			expect(outcome).toMatchObject({
+				status: "SUCCEEDED",
+				validity: "VALID",
+				answer: { text: "AVLI is visible." },
+				sources: [{ url: "https://avlibali.com/", domain: "avlibali.com" }],
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("sends one Visitor View request to the collector, carrying the question", async () => {
 		const fetchImpl = respondWith(jsonResponse(successPayload()));
 		const permit = permitFor();
