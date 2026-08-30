@@ -401,8 +401,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain("'schemaVersion'::text");
 		expect(migration).toContain("'providerTaskId'::text");
 		expect(migration).toContain("'amountUsd'::text");
-		expect(migration).toContain('("validated_result"->\'provider\') -');
-		expect(migration).toContain('("validated_result"->\'event\') -');
+		expect(migration).toContain("(\"validated_result\"->'provider') -");
+		expect(migration).toContain("(\"validated_result\"->'event') -");
 		expect(migration).toContain('ADD COLUMN "submission_token_hash" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_fingerprint" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_canonical" text');
@@ -754,6 +754,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).not.toMatch(/(?:DISABLE|ENABLE) TRIGGER (?:ALL|USER)/);
 		expect(migration.match(/DISABLE TRIGGER/g)).toHaveLength(1);
 		expect(migration.match(/ENABLE TRIGGER/g)).toHaveLength(1);
+		expect(migration.indexOf('ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk"')).toBeLessThan(
+			migration.indexOf('ADD CONSTRAINT "sv_configuration_locks_project_organization_fk"'),
+		);
 		expect(migration).toContain('ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk" NOT DEFERRABLE');
 		expect(migration).toContain('ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk" NOT DEFERRABLE');
 		expect(migration).toContain('ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk" NOT DEFERRABLE');

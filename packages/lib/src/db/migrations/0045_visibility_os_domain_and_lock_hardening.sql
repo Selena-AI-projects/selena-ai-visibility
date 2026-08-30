@@ -195,6 +195,17 @@ BEGIN
 		RAISE EXCEPTION 'LOCAL_MAPS_0045_EVIDENCE_PROVENANCE_SCOPE_MISMATCH';
 	END IF;
 
+	-- Change existing FK timing before adding new FK triggers in this transaction.
+	ALTER TABLE "sv_local_scan_cycles"
+		ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk"
+		DEFERRABLE INITIALLY IMMEDIATE;
+	ALTER TABLE "sv_evidence_index"
+		ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk"
+		DEFERRABLE INITIALLY IMMEDIATE;
+	ALTER TABLE "sv_cost_events"
+		ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk"
+		DEFERRABLE INITIALLY IMMEDIATE;
+
 	ALTER TABLE "sv_configuration_locks"
 		ADD CONSTRAINT "sv_configuration_locks_version_check"
 		CHECK ("version" > 0) NOT VALID;
@@ -227,16 +238,6 @@ BEGIN
 		VALIDATE CONSTRAINT "sv_measurement_cycles_configuration_lock_scope_fk";
 	CREATE UNIQUE INDEX "sv_source_snapshots_id_organization_unique"
 		ON "sv_source_snapshots" ("id", "organization_id");
-
-	ALTER TABLE "sv_local_scan_cycles"
-		ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk"
-		DEFERRABLE INITIALLY IMMEDIATE;
-	ALTER TABLE "sv_evidence_index"
-		ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk"
-		DEFERRABLE INITIALLY IMMEDIATE;
-	ALTER TABLE "sv_cost_events"
-		ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk"
-		DEFERRABLE INITIALLY IMMEDIATE;
 
 	SET CONSTRAINTS
 		"sv_local_scan_cycles_measurement_domain_fk",
