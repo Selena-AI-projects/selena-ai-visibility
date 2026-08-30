@@ -185,7 +185,7 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("uses the direct scrape path for a Perplexity answer", async () => {
-		const fetchImpl = sequenceOf(
+		const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
 			jsonResponse([
 				{
 					answer_text: "AVLI is recommended for Greek dining.",
@@ -193,12 +193,13 @@ describe("Bright Data measurement adapter", () => {
 				},
 			]),
 		);
+		const fetchImpl = fetchMock as unknown as typeof fetch;
 		const outcome = await adapterWith(fetchImpl, {
 			system: "perplexity",
 		}).execute(permitFor({ systemId: "Perplexity" }));
 
-		expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("/datasets/v3/scrape");
-		expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+		expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/datasets/v3/scrape");
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
 			input: [{ url: "https://www.perplexity.ai", prompt: SCENARIO_TEXT, country: "", index: 1 }],
 		});
 		expect(outcome).toMatchObject({
