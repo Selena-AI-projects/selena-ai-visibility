@@ -59,6 +59,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
+| Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
 | Claude Max 20 pinned review of `45bc3b18` (Delta v1.2.1) | `PASS — blind read-only Opus review completed in an isolated snapshot; 66 turns, zero permission denials, original repository unchanged, no tests/commands claimed by Claude (session b3387e4c-aba0-41d8-85dd-471a12bdd174)` |
 
 ## Independent reviews
