@@ -55,7 +55,9 @@ const cycle: LocalReadCycle = {
 
 const localAiObserverContext = {
 	observerCountryCode: "ID",
-	observerGeoMode: "UNKNOWN",
+	observerGeoMode: "DECLARED_COORDINATE",
+	observerLatitude: -8.506854,
+	observerLongitude: 115.262482,
 	appLocale: "en-ID",
 	queryLanguage: "en",
 	deviceClass: "DESKTOP",
@@ -65,7 +67,7 @@ const localAiObserverContext = {
 	capturedAt: "2026-08-30T02:00:00.000Z",
 } as const;
 
-function localAiSnapshot(): unknown {
+function localAiSnapshot(observerContext: unknown = localAiObserverContext): unknown {
 	return {
 		localAiLock: {
 			schemaVersion: 1,
@@ -100,7 +102,7 @@ function localAiSnapshot(): unknown {
 						targetEntityIds: [ids.project],
 					},
 				],
-				observerContexts: [localAiObserverContext],
+				observerContexts: [observerContext],
 				repeats: 1,
 				expectedObservations: 1,
 				evidencePolicy: {
@@ -447,6 +449,40 @@ describe("Selena local read API core", () => {
 		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).rejects.toThrow(
 			"LOCAL_AI_TASK_OUTSIDE_LOCK",
 		);
+	});
+
+	it("keeps declared observer coordinates in the locked context hash", async () => {
+		const observedContext = {
+			...localAiObserverContext,
+			observerLatitude: -8.506854,
+			observerLongitude: 115.262482,
+		};
+		const task = acceptedAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({
+				...cycle,
+				configurationSnapshot: localAiSnapshot(observedContext),
+			})),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [
+				{
+					...task,
+					contextHash: contextHash(observedContext),
+					contextSnapshot: {
+						...observedContext,
+						coordinateProofReference: "manual-coordinate-proof-1",
+						pointId: ids.point,
+					},
+				},
+			]),
+			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).resolves.toMatchObject({
+			status: "READY",
+			items: [{ resultStatus: "VALID", contextHash: contextHash(observedContext) }],
+		});
 	});
 
 	it("keeps a pending manual Local AI task pending instead of counting it as unknown", async () => {

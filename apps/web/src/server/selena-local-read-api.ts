@@ -399,13 +399,7 @@ const localAiTaskContextSnapshotSchema = observerContextSchema.extend({
 function parseLocalAiTaskObserverContext(snapshot: unknown) {
 	const parsed = localAiTaskContextSnapshotSchema.safeParse(snapshot);
 	if (!parsed.success) return null;
-	const {
-		coordinateProofReference: _coordinateProofReference,
-		pointId: _pointId,
-		observerLatitude: _observerLatitude,
-		observerLongitude: _observerLongitude,
-		...observerContext
-	} = parsed.data;
+	const { coordinateProofReference: _coordinateProofReference, pointId: _pointId, ...observerContext } = parsed.data;
 	return observerContextSchema.parse(observerContext);
 }
 
