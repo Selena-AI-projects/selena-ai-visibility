@@ -34,6 +34,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Web Vitest (Node 24) | `29 files / 338 tests PASS; 1 file / 4 tests skipped` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
+| Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
 | Root `pnpm lint` | `BASELINE FAIL — existing web diagnostics (33 errors, 132 warnings, 14 infos); no changed API files reported` |
 | Migration 0043 static schema/review | `PASS — not applied` |
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
