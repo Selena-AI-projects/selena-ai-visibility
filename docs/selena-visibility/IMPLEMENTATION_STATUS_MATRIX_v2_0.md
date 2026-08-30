@@ -53,6 +53,13 @@ existing AI stub cycle without a live provider, paid call or hosted mutation.
 Its PASS does not imply that any numbered migration was applied to staging or
 production, or that hosted database connectivity is accepted.
 
+> Historical-matrix boundary: this v2.0 snapshot predates the Selena v1.2.1
+> feature-branch additions `0043`–`0048` and the source-only API/Maps hardening.
+> Use [ORCHESTRATION_STATE_V1_2_1.md](ORCHESTRATION_STATE_V1_2_1.md) and
+> [ACCEPTANCE_MATRIX_V1_2_1.md](ACCEPTANCE_MATRIX_V1_2_1.md) for the current
+> branch status; no stale PASS in this historical matrix is promoted to current
+> runtime or release evidence.
+
 ## Pending database files
 
 | File | Purpose | Applied state |
