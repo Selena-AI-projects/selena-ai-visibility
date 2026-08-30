@@ -1,19 +1,36 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
-import { svConfigurationLocks, svCycles, svOrders, svRecommendationRuns, svScenarios, svWebsiteSnapshots } from "@workspace/lib/db/schema";
 import {
+	svConfigurationLocks,
+	svCycles,
+	svOrders,
+	svRecommendationRuns,
+	svScenarios,
+	svWebsiteSnapshots,
+} from "@workspace/lib/db/schema";
+import { analyzeAnswer } from "@workspace/lib/selena-answer-analysis";
+import {
+	buildGraderReport,
 	type GraderChannel,
 	type GraderReport,
 	type GraderRunInput,
-	buildGraderReport,
 } from "@workspace/lib/selena-grader-report";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
-import { analyzeAnswer } from "@workspace/lib/selena-answer-analysis";
-import { type SelenaPlanId, monthlyAnswerAllowance, planIds } from "@workspace/selena-visibility-contracts";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
-import { actionPlanSchema, measurementScopeSchema, parseAnalysisSubjects } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import {
+	actionPlanSchema,
+	measurementScopeSchema,
+	monthlyAnswerAllowance,
+	parseAnalysisSubjects,
+	planIds,
+	type SelenaPlanId,
+} from "@workspace/selena-visibility-contracts";
+import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
+	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
+} from "@/lib/selena-monthly-allowance";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 import { readRetainedAnswer, readStoredAnalysis } from "./selena-order-analysis";
 
@@ -75,7 +92,10 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 				.select({ website: svWebsiteSnapshots.website, capturedAt: svWebsiteSnapshots.capturedAt })
 				.from(svWebsiteSnapshots)
 				.where(
-					and(eq(svWebsiteSnapshots.projectId, data.projectId), eq(svWebsiteSnapshots.organizationId, context.tenantId)),
+					and(
+						eq(svWebsiteSnapshots.projectId, data.projectId),
+						eq(svWebsiteSnapshots.organizationId, context.tenantId),
+					),
 				)
 				.orderBy(desc(svWebsiteSnapshots.capturedAt))
 				.limit(1)
@@ -183,6 +203,8 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 						eq(svOrders.projectId, data.projectId),
 						eq(svOrders.organizationId, context.tenantId),
 						gte(svCycles.createdAt, monthStart),
+						notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
+						notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
 					),
 				);
 			view.monthUsage = { used: Number(usage?.used ?? 0), allowance: planForAllowance };
