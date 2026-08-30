@@ -251,3 +251,9 @@
 - Decision: `countMapObservations` and `listMapResults` must constrain their evidence-index joins to `domain_id = LOCAL_MAPS` in addition to tenant, cycle, dataset and observation identity. This is defense-in-depth against cross-domain registry collisions; the evidence-index uniqueness migration remains owner-gated.
 - Evidence: source-only predicates added to `apps/web/src/server/selena-local-read-api.ts` on 2026-08-30; web read/API tests, typecheck and Biome checks pass. No database query was executed against shared or disposable runtime.
 - Effect: Local Maps read projections cannot accidentally consume a same-tenant non-Maps evidence row that happens to share the other join keys; runtime RLS and tenant-scoped uniqueness still require migration proof.
+
+## D-044 — Reject the Claude review after repository mutation
+
+- Decision: treat the Claude Max5 run pinned to `1abec056` as non-evidence because the verifier detected a repository-status change during the run. Preserve the newly appearing untracked handoff file and do not delete, overwrite or commit it as part of this task.
+- Evidence: verifier result `BLOCKED_REPO_MUTATION`; exact status delta was `?? HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`. No Claude readiness verdict is accepted from that run.
+- Effect: the prior valid Claude review at `421da0ca` remains the latest accepted second-model evidence; a later review may be rerun only from a stable, owner-confirmed baseline.
