@@ -52,6 +52,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Provider scope contract hardening (Node 24) | `PASS — provider:canary is formally modeled outside client localApiScopes and reused by admin/capability handlers; contract tests preserve scope separation` |
 | Signed cursor codec (Node 24) | `PASS — injectable HMAC-SHA256 encode/decode verifies signature and tenant/cycle/resource binding; default routes remain unsigned until owner-managed secret provisioning and rotation proof` |
 | Signed cursor route integration (Node 24) | `PASS — read-route dependencies optionally inject the HMAC secret; pagination emits and accepts signed cursors when configured, while the default source-only dependency remains unsigned` |
+| OpenAPI ↔ route-tree parity (Node 24) | `PASS — all 25 OpenAPI paths have matching /api/v1 route-tree entries, including dynamic parameter bindings and declared HTTP methods` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
