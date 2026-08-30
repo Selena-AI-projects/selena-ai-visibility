@@ -43,6 +43,32 @@ export type SelenaRepositoryContext = {
 type Db = NodePgDatabase<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type DbLike = Db | Tx;
+type CycleStatus = (typeof schema.svCycleStatusEnum.enumValues)[number];
+
+const cycleStatusesPreservedOnRunCompletion = new Set<CycleStatus>([
+	"ANALYZING",
+	"QC_REQUIRED",
+	"READY",
+	"STOPPED",
+	"FAILED",
+	"CARDINALITY_INCIDENT",
+]);
+
+export function cycleProgressAfterRunCompletion(input: {
+	status: CycleStatus;
+	completedRuns: number;
+	expectedRuns: number;
+}): { status: CycleStatus; completedRuns: number; cycleDone: boolean } {
+	const completedRuns = input.completedRuns + 1;
+	const cycleDone = completedRuns >= input.expectedRuns;
+	const status = cycleStatusesPreservedOnRunCompletion.has(input.status)
+		? input.status
+		: cycleDone
+			? "QC_REQUIRED"
+			: "RUNNING";
+	return { status, completedRuns, cycleDone };
+}
+
 function writable(ctx: SelenaRepositoryContext) {
 	if (ctx.role === "viewer") throw new Error("Forbidden: viewer is read-only");
 	if (ctx.authType === "api_key" && !ctx.permissions.includes("client:write"))
@@ -928,19 +954,19 @@ export function createSelenaRepositories(db: Db) {
 						.where(and(eq(schema.svCycles.id, run.cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
 						.for("update");
 					if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
-					// Failed and invalid runs count as finished: they are terminal, and
-					// a cycle that never reaches its expected count never reaches QC.
-					const completedRuns = cycle.completedRuns + 1;
-					const cycleDone = completedRuns >= cycle.expectedRuns;
+					// Failed and invalid runs count as finished. A late completion may
+					// arrive after an operator stopped the cycle, so progress is
+					// forward-only and must never revive a terminal or post-run state.
+					const progress = cycleProgressAfterRunCompletion(cycle);
 					await tx
 						.update(schema.svCycles)
 						.set({
-							completedRuns,
-							status: cycleDone ? "QC_REQUIRED" : "RUNNING",
+							completedRuns: progress.completedRuns,
+							status: progress.status,
 							updatedAt: new Date(),
 						})
 						.where(eq(schema.svCycles.id, cycle.id));
-					if (cycleDone)
+					if (progress.status === "QC_REQUIRED")
 						// Human QC is the only exit from a finished cycle; the order is
 						// moved only from states that are still mid-flight, so a
 						// cancelled or already delivered order is never revived.
@@ -1015,8 +1041,9 @@ export function createSelenaRepositories(db: Db) {
 						dispatchKey: parsed.dispatchKey,
 						status: parsed.status,
 						validity: parsed.validity,
-						completedRuns,
+						completedRuns: progress.completedRuns,
 						expectedRuns: cycle.expectedRuns,
+						cycleStatus: progress.status,
 					});
 					return completed;
 				});

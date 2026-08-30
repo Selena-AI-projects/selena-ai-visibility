@@ -112,6 +112,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					endpoint: process.env.SELENA_BRIGHTDATA_ENDPOINT?.trim() || BRIGHTDATA_DEFAULT_ENDPOINT,
 					datasetId: brightDataDatasetId(surface),
 					system: surface,
+					collectionMode: surface === "perplexity" ? "trigger" : "scrape",
 					fetchImpl: fetch,
 					resolveScenarioText: resolvers.resolveScenarioText,
 					resolveExtractionContext: resolvers.resolveExtractionContext,

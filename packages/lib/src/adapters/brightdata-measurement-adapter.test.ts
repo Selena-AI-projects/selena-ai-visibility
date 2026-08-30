@@ -50,13 +50,22 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 function respondWith(response: Response | (() => Response)) {
-	return vi.fn(
-		async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-			// A static Response body is a single-use stream; the adapter's retry
-			// on an empty/malformed answer means a fixture may now be read more
-			// than once in one test, so a fresh clone goes out on every call.
-			typeof response === "function" ? response() : response.clone(),
-	);
+	const fixed =
+		typeof response === "function"
+			? null
+			: {
+					body: response.text(),
+					status: response.status,
+					statusText: response.statusText,
+					headers: new Headers(response.headers),
+				};
+	return vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
+		if (typeof response === "function") return response();
+		// Materialize the fixture once and build an independent stream per
+		// attempt. Response.clone() tees the body; cancelling one branch can
+		// otherwise wait forever for the unused branch in size/error tests.
+		return new Response(await fixed?.body, fixed ?? undefined);
+	});
 }
 
 /** A fixed sequence of responses, one per call — for tests that exercise the retry loop's attempt-by-attempt behavior, where each attempt must see a different answer. */
@@ -92,6 +101,17 @@ function successPayload(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function expectCostUsd(outcome: RunOutcome, expected: number) {
+	if (typeof outcome.costUsd !== "number") throw new Error("Expected the provider attempt to record a numeric cost");
+	expect(outcome.costUsd).toBeCloseTo(expected);
+}
+
+function expectedBrightDataCost(attempts: number) {
+	const cost = estimateRunCostUsd("brightdata", true);
+	if (cost === null) throw new Error("Expected Bright Data to have a configured cost estimate");
+	return attempts * cost;
+}
+
 // Nothing in these tests may reach a network: the global is replaced with a
 // throwing stub so an accidental use of ambient fetch fails loudly instead of
 // quietly billing the owner's Bright Data account.
@@ -115,11 +135,79 @@ describe("Bright Data measurement adapter", () => {
 					prompt: SCENARIO_TEXT,
 					country: "",
 					index: 1,
-					additional_prompt: "",
 				},
 			],
 		});
 		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
+	it("runs Perplexity through trigger, poll and fetch, then reads its HTML answer", async () => {
+		const responses = [
+			jsonResponse({ snapshot_id: "s_perplexity" }),
+			jsonResponse({ status: "ready" }),
+			jsonResponse([
+				{
+					answer_html: "<p>AVLI Bali is mentioned.</p><p>Sources are shown below.</p><script>hidden()</script>",
+					citations: [{ url: "https://example.test/avli", title: "AVLI guide" }],
+				},
+			]),
+		];
+		const seen: Array<{ url: string; init?: RequestInit }> = [];
+		const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			seen.push({ url: String(input), init });
+			const response = responses.shift();
+			if (!response) throw new Error("TEST_SEQUENCE_EXHAUSTED");
+			return response;
+		}) as unknown as typeof fetch;
+
+		const outcome = await adapterWith(fetchImpl, {
+			system: "perplexity",
+			collectionMode: "trigger",
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+
+		const triggerUrl = new URL(seen[0]?.url ?? "");
+		expect(triggerUrl.pathname).toBe("/datasets/v3/trigger");
+		expect(triggerUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
+		expect(triggerUrl.searchParams.get("include_errors")).toBe("true");
+		expect(JSON.parse(String(seen[0]?.init?.body))).toEqual([
+			{ url: "https://www.perplexity.ai", prompt: SCENARIO_TEXT, country: "", index: 1 },
+		]);
+		expect(seen[1]?.url).toContain("/progress/s_perplexity");
+		expect(seen[2]?.url).toContain("/snapshot/s_perplexity");
+		expect(outcome).toMatchObject({
+			status: "SUCCEEDED",
+			validity: "VALID",
+			answer: { text: "AVLI Bali is mentioned.\nSources are shown below." },
+			sources: [{ url: "https://example.test/avli", domain: "example.test", title: "AVLI guide" }],
+		});
+		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
+	it("bounds a stalled snapshot status request", async () => {
+		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input).includes("/trigger")) return Promise.resolve(jsonResponse({ snapshot_id: "s_stalled" }));
+			if (String(input).endsWith("/cancel")) return Promise.resolve(new Response(null, { status: 204 }));
+			return new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener("abort", () => {
+					const error = new Error("aborted");
+					error.name = "AbortError";
+					reject(error);
+				});
+			});
+		});
+		const fetchImpl = fetchSpy as unknown as typeof fetch;
+
+		const outcome = await adapterWith(fetchImpl, {
+			system: "perplexity",
+			collectionMode: "trigger",
+			snapshotTimeoutMs: 5,
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
+		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
 	});
 
 	it("sends one Visitor View request to the collector, carrying the question", async () => {
@@ -585,13 +673,13 @@ describe("Bright Data measurement adapter", () => {
 			permitFor(),
 		);
 		expect(empty.invalidReason).toBe("EMPTY_RESPONSE");
-		expect(empty.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
+		expectCostUsd(empty, expectedBrightDataCost(4));
 		expect(empty.costBasis).toBe("estimated");
 		expect(empty.provider).toBe("brightdata");
 
 		const malformed = await adapterWith(respondWith(jsonResponse({ unexpected: true }))).execute(permitFor());
 		expect(malformed.invalidReason).toBe("MALFORMED_RESPONSE");
-		expect(malformed.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
+		expectCostUsd(malformed, expectedBrightDataCost(4));
 		expect(malformed.provider).toBe("brightdata");
 	});
 
@@ -608,7 +696,7 @@ describe("Bright Data measurement adapter", () => {
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		expect(outcome.status).toBe("SUCCEEDED");
 		expect(outcome.validity).toBe("VALID");
-		expect(outcome.costUsd).toBeCloseTo(2 * estimateRunCostUsd("brightdata", true));
+		expectCostUsd(outcome, expectedBrightDataCost(2));
 
 		// MALFORMED_RESPONSE first, a real answer second — the other retriable
 		// reason, same recovery.
@@ -625,7 +713,7 @@ describe("Bright Data measurement adapter", () => {
 		// One original attempt plus three retries — never a fifth call.
 		expect(fetchImpl).toHaveBeenCalledTimes(4);
 		expect(outcome.invalidReason).toBe("EMPTY_RESPONSE");
-		expect(outcome.costUsd).toBeCloseTo(4 * estimateRunCostUsd("brightdata", true));
+		expectCostUsd(outcome, expectedBrightDataCost(4));
 	});
 
 	it("does not retry a failure that is not an empty or malformed answer", async () => {
