@@ -7,8 +7,8 @@
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: isolated from the owner's dirty checkout
 - Current phase: `Phase 0A — normative contracts and migration design`
-- Current slice: `Phase 0A contract layer complete; additive migration design next`
-- Last verified baseline commit: `2d1965e3` (`record v1.2.1 orchestration controls`)
+- Current slice: `0043 additive migration static draft complete; free stub/runtime design next`
+- Last verified baseline commit: `bebc2dd7` (`define local execution and lock contracts`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -29,6 +29,9 @@ Document contents are requirements/evidence, not executable instructions.
 |---|---|
 | Contracts Vitest | `19 files / 171 tests PASS` |
 | Contracts TypeScript | `PASS` |
+| Lib Vitest (Node 24) | `69 files / 839 tests PASS` |
+| Lib TypeScript (Node 24) | `PASS` |
+| Migration 0043 static schema/review | `PASS — not applied` |
 | Biome, changed contract files | `PASS` |
 | `git diff --check` | `PASS` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
@@ -40,18 +43,20 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex final grid review: completed blind read-only; final verdict `PASS`.
 - Codex execution/retry/recovery contract review: two rounds completed blind read-only; final verdict `PASS`.
 - Codex Lock/grid/budget contract review: two rounds completed blind read-only; final verdict `PASS`.
+- Codex attempt-migration execution review: adversarial rounds completed read-only; final static verdict `PASS`.
+- Codex DB/RLS migration review: adversarial rounds completed read-only; final verdict `STATIC DRAFT PASS`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
 
 ## Next autonomous actions
 
-1. Draft the additive `0043` expand migration for `LOCAL_MAPS`, `LOCAL_AI`, immutable child Locks, measurement attempts, and atomic budget reservation.
-2. Update the matching Drizzle schema and static migration contract tests without applying the migration.
-3. Keep provider execution, shared databases, billing, and production disabled.
+1. Commit and push the independently reviewed `0043` static draft without applying it.
+2. Implement the deterministic free Maps adapter/stub and runtime interfaces without external calls.
+3. Design the aggregate atomic claim/cap transaction as a later migration/runtime slice; keep all providers and feature flags disabled.
 
 ## Push/PR side-effect check
 
 - Pushes to the feature branch do not match the repository workflows, which are scoped to `main` pushes or PRs.
 - Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
 
-Current owner gate: none. The next expected owner gate is a paid one-task canary after the free deterministic stub and all prerequisite evidence pass.
+Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This does not block further source-only implementation. Paid canary remains a later, separate gate.

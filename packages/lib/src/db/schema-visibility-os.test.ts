@@ -21,6 +21,8 @@ const localTables = [
 	schema.svLocalVisibilityMetrics,
 ];
 
+const attemptTables = [schema.svMeasurementAttempts];
+
 const searchAndReputationTables = [
 	schema.svSearchQueries,
 	schema.svSearchRankObservations,
@@ -197,6 +199,100 @@ describe("Visibility OS Local schema", () => {
 	});
 });
 
+describe("Visibility OS local domain and attempt expand", () => {
+	it("exports one tenant-isolated attempt ledger that is also the spend permit", () => {
+		expect(attemptTables.map((table) => getTableConfig(table).name)).toEqual(["sv_measurement_attempts"]);
+		expect(getTableConfig(schema.svMeasurementAttempts).enableRLS).toBe(true);
+		expect(getTableConfig(schema.svMeasurementAttempts).columns.map((column) => column.name)).toEqual([
+			"id",
+			"reservation_id",
+			"organization_id",
+			"measurement_cycle_id",
+			"domain_id",
+			"observation_ref",
+			"point_id",
+			"item_id",
+			"executor_id",
+			"repeat_index",
+			"base_slot_key",
+			"attempt_index",
+			"execution_key",
+			"status",
+			"budget_state",
+			"reserved_cost_usd",
+			"currency",
+			"surface_cap_usd",
+			"monthly_cap_usd",
+			"price_snapshot_version",
+			"spent_cost_usd",
+			"released_cost_usd",
+			"claimed_at",
+			"lease_expires_at",
+			"submitted_at",
+			"completed_at",
+			"provider_task_id",
+			"raw_ref",
+			"cost_event_id",
+			"retry_reason",
+			"final_invalid_reason",
+			"reconciled_at",
+			"reconciliation_ref",
+			"created_at",
+			"updated_at",
+		]);
+		expect(
+			getTableConfig(schema.svLocalScanCycles).columns.find((column) => column.name === "domain_id")?.default,
+		).toBe("LOCAL_MAPS");
+	});
+
+	it("keeps 0043 additive, dual-readable and free of provider execution side effects", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0043_visibility_os_local_domain_attempts_expand.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+
+		expect(migration).toContain("('LOCAL_MAPS', 'location_keyword_coordinate_provider')");
+		expect(migration).toContain("('LOCAL_AI', 'location_prompt_coordinate_system')");
+		expect(migration).toContain("ALTER COLUMN \"domain_id\" SET DEFAULT 'LOCAL_MAPS'");
+		expect(migration).toContain("CHECK (\"domain_id\" IN ('LOCAL', 'LOCAL_MAPS'))");
+		expect(migration).toContain("CHECK (\"domain_id\" IN ('LOCAL', 'LOCAL_MAPS')) NOT VALID");
+		expect(migration).toContain('VALIDATE CONSTRAINT "sv_local_scan_cycles_domain_check_expand"');
+		expect(migration).toContain('CREATE TABLE "sv_measurement_attempts"');
+		expect(migration).toContain('CHECK ("attempt_index" BETWEEN 1 AND 3)');
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_STATUS_TRANSITION_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_DELETE_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_INITIAL_STATE_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_INITIAL_LEASE_INVALID");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_LEASE_RENEWAL_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_SEQUENCE_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_UNKNOWN_MUST_RESERVE");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_COST_EVENT_MISMATCH");
+		expect(migration).toContain("COST_EVENT_APPEND_ONLY");
+		expect(migration).toContain('AND "provider_task_id" IS NULL AND "raw_ref" IS NULL');
+		expect(migration).toContain("\"executor_id\" !~ '[[:space:]]'");
+		expect(migration).toContain("\"reconciliation_ref\" ~ '[^[:space:]]'");
+		expect(migration).toContain("'TIMEOUT', 'PROVIDER_5XX'");
+		expect(migration).toContain("'MALFORMED_AFTER_3_ATTEMPTS'");
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_measurement_attempts_cost_event_unique"');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_attempts_cost_event_scope_fk"');
+		expect(migration).toContain(
+			'REFERENCES "sv_cost_events"("id", "organization_id", "measurement_cycle_id", "domain_id")',
+		);
+		expect(migration).toContain('ALTER TABLE "sv_measurement_attempts" ENABLE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_measurement_attempts"');
+		expect(migration).toContain('evidence."domain_id" = local_cycle."domain_id"');
+		expect(migration).toContain("WHERE local_cycle.\"domain_id\" IN ('LOCAL', 'LOCAL_MAPS')");
+		expect(migration).not.toContain('UPDATE "sv_measurement_cycles"');
+		expect(migration).not.toContain('UPDATE "sv_local_scan_cycles"');
+		expect(migration).not.toContain('INSERT INTO "sv_measurement_attempts"');
+		expect(migration).not.toContain("feature_flag");
+		expect(migration).not.toContain("provider_call");
+		expect(migration).not.toContain("sv_local_ai_cycles");
+		expect(journal).toContain('"tag": "0043_visibility_os_local_domain_attempts_expand"');
+	});
+});
+
 describe("Visibility OS Search and Reputation schema", () => {
 	it("exports six RLS-enabled domain tables without changing AI run tables", () => {
 		expect(searchAndReputationTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -360,16 +456,23 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through M6 as one ordered numbered migration chain", () => {
+	it("registers M2 through the local-attempt expand as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-5)).toEqual([
+		expect(journal.entries.slice(-6)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
+			{
+				idx: 43,
+				version: "7",
+				when: 1787940005000,
+				tag: "0043_visibility_os_local_domain_attempts_expand",
+				breakpoints: true,
+			},
 		]);
 	});
 

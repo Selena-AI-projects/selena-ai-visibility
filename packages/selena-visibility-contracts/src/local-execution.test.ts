@@ -59,6 +59,24 @@ describe("local execution cardinality and keys", () => {
 				repeatIndex: 0,
 			}),
 		).toThrow();
+		expect(() =>
+			localMapsBaseSlotKey({
+				cycleId: ids.cycleId,
+				pointId: ids.pointId,
+				keywordId: ids.keywordId,
+				providerId: "bad\tprovider",
+				repeatIndex: 0,
+			}),
+		).toThrow("EXECUTION_KEY_PART_WHITESPACE_INVALID");
+		expect(() =>
+			localMapsBaseSlotKey({
+				cycleId: ids.cycleId,
+				pointId: ids.pointId,
+				keywordId: ids.keywordId,
+				providerId: " provider",
+				repeatIndex: 0,
+			}),
+		).toThrow("EXECUTION_KEY_PART_WHITESPACE_INVALID");
 		expect(() => measurementExecutionKey(maps, 4 as 3)).toThrow();
 	});
 });

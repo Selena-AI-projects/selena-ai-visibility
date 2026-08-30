@@ -63,8 +63,8 @@ export type LocalCycleExecutionStatus = (typeof localCycleExecutionStatuses)[num
 const attemptIndexSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
 const keyPartSchema = z
 	.string()
-	.trim()
 	.min(1)
+	.regex(/^\S+$/, "EXECUTION_KEY_PART_WHITESPACE_INVALID")
 	.refine((value) => !value.includes("|"), "EXECUTION_KEY_PART_INVALID");
 const baseSlotKeySchema = z
 	.string()
