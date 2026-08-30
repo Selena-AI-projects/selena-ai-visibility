@@ -8,7 +8,7 @@
 - Worktree: clean; source implementation and candidate-loader regression coverage verified at `9d797104`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `9d797104` (`Test transaction-local Local Maps candidate construction`), not yet pushed; it adds pure builder scope/slot regression coverage on top of the source-only attempt-store boundary. Earlier implementation and evidence commits are pushed to `origin/feature/selena-visibility-v1-2-1`.
+- Last implementation/evidence commit: `9d797104` (`Test transaction-local Local Maps candidate construction`), pushed to `origin/feature/selena-visibility-v1-2-1`; it adds pure builder scope/slot regression coverage on top of the source-only attempt-store boundary.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -32,7 +32,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Lib Vitest (Node 24) | `75 files / 888 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 885/885, web 357/357 (plus 4 skipped)` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 888/888, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
