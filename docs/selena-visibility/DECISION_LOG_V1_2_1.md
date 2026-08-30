@@ -191,3 +191,9 @@
 - Decision: `planCaptureTasks` tracks generated `scenarioId:contextHash:repeatIndex` keys and fails closed with `CAPTURE_TASK_DEDUPE_KEY_DUPLICATE` on collision before returning a plan.
 - Evidence: source-only planner guard and regression test in `dbccc04e`; focused planner tests `7/7`, lib `891/891` and typecheck pass on 2026-08-30.
 - Effect: duplicate manual capture jobs cannot be silently emitted from a malformed lock block; no scheduler, queue or provider path is enabled.
+
+## D-034 — Require check references for live Maps evidence
+
+- Decision: live Maps provenance with `FOUND` or `ABSENT` outcome must carry a non-empty, non-stub `checkReference`; provider-auth, provider-failure and unknown outcomes may carry a nullable reference because no successful observation was established.
+- Evidence: source-only contract and negative/positive tests in `fe74649d`; migration `0044` JSON shape checks, Drizzle schema checks and fixtures were aligned; contracts `230/230`, lib `891/891`, schema `29/29` and typechecks pass on 2026-08-30.
+- Effect: a live Maps result cannot be treated as evidence without an auditable check reference. No migration was applied, provider was registered, credential used or network call made.
