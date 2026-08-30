@@ -1,14 +1,16 @@
 import * as Sentry from "@sentry/node";
-import type { Job, PgBoss } from "pg-boss";
 import { getDeployment } from "@workspace/deployment";
 import type { OnboardingSuggestion } from "@workspace/lib/onboarding";
-import { processPromptJob, type ProcessPromptData } from "./jobs/process-prompt";
-import { generateReportJob, type GenerateReportData } from "./jobs/generate-report";
-import { scheduleMaintenanceJob, type ScheduleMaintenanceData } from "./jobs/schedule-maintenance";
-import { syncAuth0MembershipsJob, type SyncAuth0MembershipsData } from "./jobs/sync-auth0-memberships";
-import { analyzeBrandJob, type AnalyzeBrandData } from "./jobs/analyze-brand";
-import { selenaMeasureJob, type SelenaMeasureData } from "./jobs/selena-measure";
-import { selenaAnswerRetentionJob, type SelenaAnswerRetentionData } from "./jobs/selena-answer-retention";
+import { LOCAL_MEASUREMENT_QUEUE } from "@workspace/lib/selena-local-execution";
+import type { Job, PgBoss } from "pg-boss";
+import { type AnalyzeBrandData, analyzeBrandJob } from "./jobs/analyze-brand";
+import { type GenerateReportData, generateReportJob } from "./jobs/generate-report";
+import { type ProcessPromptData, processPromptJob } from "./jobs/process-prompt";
+import { type ScheduleMaintenanceData, scheduleMaintenanceJob } from "./jobs/schedule-maintenance";
+import { type SelenaAnswerRetentionData, selenaAnswerRetentionJob } from "./jobs/selena-answer-retention";
+import { type SelenaLocalMeasureData, selenaLocalMeasureJob } from "./jobs/selena-local-measure";
+import { type SelenaMeasureData, selenaMeasureJob } from "./jobs/selena-measure";
+import { type SyncAuth0MembershipsData, syncAuth0MembershipsJob } from "./jobs/sync-auth0-memberships";
 
 /**
  * Wraps a pg-boss handler to report errors to Sentry before re-throwing.
@@ -79,6 +81,16 @@ export async function registerHandlers(boss: PgBoss): Promise<void> {
 		withSentry("selena-measure", selenaMeasureJob),
 	);
 	console.log("Registered handler: selena-measure");
+
+	// Local Visibility has a distinct queue. The default consumer is explicitly
+	// owner-gated and performs no database/provider work until a later runtime
+	// slice injects an approved transaction executor.
+	await boss.work<SelenaLocalMeasureData>(
+		LOCAL_MEASUREMENT_QUEUE,
+		{ localConcurrency: 1 },
+		withSentry(LOCAL_MEASUREMENT_QUEUE, selenaLocalMeasureJob),
+	);
+	console.log(`Registered handler: ${LOCAL_MEASUREMENT_QUEUE} (owner-gated)`);
 
 	if (process.env.DEPLOYMENT_MODE === "whitelabel") {
 		await boss.work<SyncAuth0MembershipsData>(

@@ -3,6 +3,7 @@ import { getDeployment } from "@workspace/deployment";
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
 import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
+import { LOCAL_MEASUREMENT_QUEUE } from "@workspace/lib/selena-local-execution";
 import boss from "./boss";
 import { registerHandlers } from "./handlers";
 import { shutdownTelemetry } from "./telemetry";
@@ -69,6 +70,12 @@ async function main() {
 	// action. Retries are off because a claimed permit is spent — a retry could
 	// only produce a second provider call for work authorized once.
 	await boss.createQueue("selena-measure", {
+		retryLimit: 0,
+		expireInSeconds: 60 * 15,
+	});
+	// Separate Local Visibility queue. The registered consumer is owner-gated
+	// until a transaction-owned executor and approved provider are injected.
+	await boss.createQueue(LOCAL_MEASUREMENT_QUEUE, {
 		retryLimit: 0,
 		expireInSeconds: 60 * 15,
 	});

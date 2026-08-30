@@ -197,3 +197,9 @@
 - Decision: live Maps provenance with `FOUND` or `ABSENT` outcome must carry a non-empty, non-stub `checkReference`; provider-auth, provider-failure and unknown outcomes may carry a nullable reference because no successful observation was established.
 - Evidence: source-only contract and negative/positive tests in `fe74649d`; migration `0044` JSON shape checks, Drizzle schema checks and fixtures were aligned; contracts `230/230`, lib `891/891`, schema `29/29` and typechecks pass on 2026-08-30.
 - Effect: a live Maps result cannot be treated as evidence without an auditable check reference. No migration was applied, provider was registered, credential used or network call made.
+
+## D-035 — Keep the Local measurement worker boundary fail-closed
+
+- Decision: register a dedicated `selena-local-measure` queue and consumer with concurrency one and queue retries disabled, but make the default executor return `OWNER_GATE_REQUIRED` with `providerCalls=0`. A later runtime slice must inject the transaction-owned executor explicitly after Lock, budget, RLS and provider approval.
+- Evidence: source-only worker boundary in the feature branch; `apps/worker` typecheck and targeted Biome checks pass on 2026-08-30.
+- Effect: the queue topology and handler seam are explicit for future at-least-once work without acknowledging a fabricated measurement, writing durable state, spending money or registering a provider today.
