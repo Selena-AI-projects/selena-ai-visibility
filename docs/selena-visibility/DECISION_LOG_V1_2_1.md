@@ -173,3 +173,21 @@
 - Decision: do not add a blanket `FORCE ROW LEVEL SECURITY` migration for every `sv_*` table. Public/static tables lack tenant policies, and FORCE alone does not establish a non-owner runtime role or transaction-local tenant context. A safe allowlist, role/GUC plumbing and disposable-DB proof require an owner-approved runtime slice.
 - Authority: bounded read-only adversarial review on 2026-08-30; no migration was retained or applied.
 - Effect: RLS remains `PARTIAL`/owner-gated rather than being overstated as verified; no destructive or runtime database action occurred.
+
+## D-031 — Keep OpenAPI identity branches aligned with the reviewed fallback contract
+
+- Decision: describe Local place-entity confirmation as either a primary Place ID/CID branch or a reviewed name/address fallback branch. The fallback branch requires `REVIEWED_NAME_ADDRESS_FALLBACK`, `REVIEWED_MATCH` and `reviewed=true`, while primary identifiers remain compatible.
+- Evidence: `dbccc04e` updates `packages/api-spec/src/openapi.json`; focused parity tests pass `3/3` on 2026-08-30.
+- Effect: generated/client-facing API documentation no longer contradicts the source validator; this does not add Places lookup or runtime persistence.
+
+## D-032 — Require paired observer coordinates for coordinate mode
+
+- Decision: `observerLatitude` and `observerLongitude` must be supplied together; `observerGeoMode: DECLARED_COORDINATE` is invalid without both. Area and unknown modes remain available without coordinates.
+- Evidence: source-only contract and positive/negative tests in `dbccc04e`; contracts `229/229` and typecheck pass on 2026-08-30.
+- Effect: pin-level Local AI context cannot be represented with a partial or missing coordinate pair; capture proof and manual-only policy remain unchanged.
+
+## D-033 — Reject duplicate manual Local AI task keys before planning
+
+- Decision: `planCaptureTasks` tracks generated `scenarioId:contextHash:repeatIndex` keys and fails closed with `CAPTURE_TASK_DEDUPE_KEY_DUPLICATE` on collision before returning a plan.
+- Evidence: source-only planner guard and regression test in `dbccc04e`; focused planner tests `7/7`, lib `891/891` and typecheck pass on 2026-08-30.
+- Effect: duplicate manual capture jobs cannot be silently emitted from a malformed lock block; no scheduler, queue or provider path is enabled.
