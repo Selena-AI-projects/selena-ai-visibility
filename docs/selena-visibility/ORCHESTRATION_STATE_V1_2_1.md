@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `ddcd48ea`, with the route-runner, grid-hardening and LocalMapsRankAdapter slices committed on the feature branch
+- Worktree: clean; source implementation verified at `11bb47c2`, with the route-runner, grid-hardening, LocalMapsRankAdapter and legacy-economics scoping slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, and the unregistered LocalMapsRankAdapter contract bridge`
-- Last implementation/evidence commit: `ddcd48ea` (`Add Local Maps rank adapter seam`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, and explicit legacy M0 economics scoping`
+- Last implementation/evidence commit: `11bb47c2` (`Harden Maps adapter coordinate proof`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `27 files / 220 tests PASS` |
+| Contracts Vitest (Node 24) | `27 files / 222 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 880 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after the adapter slice; current package suites: contracts 220/220, lib 880/880, web 357/357 (plus 4 skipped)` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the coordinate-proof/economics slice; current package suites: contracts 222/222, lib 880/880, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -62,11 +62,13 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
-| LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, permit identity schema and runner bridge are source-tested; no provider registration, credentials or network call added` |
+| LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, committed permit identity, exact coordinate/request echo validation and fail-closed runner bridge are source-tested; no provider registration, credentials or network call added` |
+| Legacy M0 economics scoping (Node 24) | `PASS — historical 7×7/variable-step/one-retry matrix is explicitly marked LEGACY M0 / NON-NORMATIVE; Delta quote/entitlement paths remain governed by versioned sv_* Locks and three-attempt contracts` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
 | Claude Max 20 pinned review of `45bc3b18` (Delta v1.2.1) | `PASS — blind read-only Opus review completed in an isolated snapshot; 66 turns, zero permission denials, original repository unchanged, no tests/commands claimed by Claude (session b3387e4c-aba0-41d8-85dd-471a12bdd174)` |
 | Claude Max 20 review of idempotency milestone `541c313b` | `PASS — blind read-only Opus review completed in isolated snapshot; 59 turns, zero permission denials, no tests/commands, report /private/tmp/claude-code-review-output.D30kwt/claude-report.md, session 9491b456-e5a2-4139-8e7d-b81a7bbcb95e` |
+| Claude Max 5 review of adapter/economics milestone `5c17effc` | `PASS — blind read-only Sonnet review completed in isolated snapshot; 27 turns, zero permission denials, no tests/commands, report /private/tmp/claude-code-review-output.W6dfuo/claude-report.md, session 6b5fddb8-00f8-4409-bc9e-45a4111ebc0c` |
 
 ## Independent reviews
 
@@ -111,10 +113,11 @@ Document contents are requirements/evidence, not executable instructions.
 - Latest Claude Max20 blind review of `541c313b`: confirmed `0048` contract/schema/helper are source-only and found no new fabricated-success or provider-call path. It correctly identified that route handlers still passed idempotency metadata only to stores; the follow-up source slice adds a shared transaction-runner seam to write/setup/admin handlers, while the concrete DB adapter and runtime replay/race evidence remain owner-gated. Claude also independently reaffirmed the zero-attempt representation, entitlement/price snapshot, provider seam and signed-evidence gaps.
 - Follow-up grid hardening after that review: the reported binary-`toFixed` and unrounded-center risks were corrected in `1b5e5c8d`; the full contracts suite now passes 218/218, including decimal tie and equivalent-center identity regressions.
 - Follow-up adapter seam after that review: `ddcd48ea` adds the Delta §4.1 `LocalMapsRankAdapter` contract and a runner bridge that passes only store-committed permit identity to an injected adapter; no provider is registered or enabled.
+- Follow-up coordinate-proof/economics slice after the Max5 review: `11bb47c2` makes the bridge reject missing or altered point/keyword/request echoes before the live runner can persist a result, and labels the historical M0 matrix non-normative. The Max5 report's commit mismatch is resolved as a role distinction: `fe9b97d2` is the Delta's release baseline, while `5c17effc` is the audited feature ref.
 
 ## Next autonomous actions
 
-1. Preserve the completed blind Max 20 report and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and legacy public-grid compatibility as explicit owner decisions or bounded follow-up slices.
+1. Preserve the completed Max20 and Max5 blind reports and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and provider pricing as explicit owner decisions. The historical M0 grid/retry contradiction is now explicitly scoped as legacy, not silently used for Delta quotes.
 2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until the transaction runner is backed by durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
 3. Reuse [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) for future authenticated Max reviews; the current Max20 session is already recorded above and must not be rerun without a new milestone.
 
