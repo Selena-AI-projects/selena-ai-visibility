@@ -155,3 +155,21 @@
 - Evidence: source-only implementation and targeted adapter tests (`5/5`) plus lib typecheck in `4721fd23`.
 - Authority: safe source-only separation; no provider registration, credential, network, migration, feature-flag or paid execution is enabled.
 - Effect: future runtime work has an explicit contract boundary without turning the rehearsal stub into a false live-provider capability or readiness claim.
+
+## D-028 — Derive the locked Maps provider coordinate wire value
+
+- Decision: expose a pure formatter that parses the materialized, frozen Local Maps request and returns the exact provider `location_coordinate` value as `latitude,longitude,zoom`. The formatter does not recompute grid centers, alter precision, perform I/O or enable a provider.
+- Evidence: source-only implementation in `264badde`, focused adapter test (`5/5`) and contracts typecheck on 2026-08-30.
+- Effect: future provider adapters have one explicit wire representation bound to the committed request; provider registration, credentials and network execution remain owner-gated.
+
+## D-029 — Require reviewed evidence for Maps name/address fallback identity
+
+- Decision: primary `placeId`/CID identity remains backward-compatible. If neither primary identifier exists, setup and active Lock contracts require `matchedName` plus `matchedAddress`, policy `REVIEWED_NAME_ADDRESS_FALLBACK`, status `REVIEWED_MATCH` and `reviewed=true`; unresolved or unreviewed fallback identities are rejected.
+- Evidence: source-only contract and negative-test hardening in `eca55522`; contracts `228/228`, lib `890/890`, web unit `363/363` with four skipped and typechecks on 2026-08-30.
+- Effect: identity matching is explicit and auditable without pretending to perform a Places lookup; identity evidence remains distinct from rank-result evidence and no provider call is enabled.
+
+## D-030 — Keep blanket RLS FORCE migration out of the source-only slice
+
+- Decision: do not add a blanket `FORCE ROW LEVEL SECURITY` migration for every `sv_*` table. Public/static tables lack tenant policies, and FORCE alone does not establish a non-owner runtime role or transaction-local tenant context. A safe allowlist, role/GUC plumbing and disposable-DB proof require an owner-approved runtime slice.
+- Authority: bounded read-only adversarial review on 2026-08-30; no migration was retained or applied.
+- Effect: RLS remains `PARTIAL`/owner-gated rather than being overstated as verified; no destructive or runtime database action occurred.
