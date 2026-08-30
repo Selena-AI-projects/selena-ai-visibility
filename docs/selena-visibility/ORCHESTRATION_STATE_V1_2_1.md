@@ -173,6 +173,7 @@ Document contents are requirements/evidence, not executable instructions.
 - RLS safety reconciliation: a blanket FORCE migration for all `sv_*` tables was evaluated and deliberately not retained because public/static tables lack tenant policies and FORCE alone would not prove the non-owner runtime role or transaction-local tenant context. No migration was added or applied; RLS remains an explicit owner/runtime gate.
 - Review reconciliation: Claude's `34199371` report called the negative-longitude golden case `PARTIAL`, but the current source already contains an explicit San Francisco negative-longitude fixture and assertions in `packages/selena-visibility-contracts/src/visibility-os.test.ts`; that sub-finding is rejected as unsupported by primary repository evidence, with no duplicate test added.
 - Follow-up source-only contract hardening after the Max5 review: `localApiAiResultSchema` now rejects contradictory `VALID`/`INVALID` combinations while preserving `UNKNOWN` for incomplete evidence. Contracts local-api tests `11/11`, package typecheck and Biome checks pass; proof transport, runtime stores and provider execution remain separate gates.
+- Legacy manual-pilot error-envelope audit: pilot routes remain outside the documented API-01 OpenAPI surface and retain their flat `{error, message}` compatibility response. No source-only normalization was applied; a typed envelope would require a separate request-id/error-code compatibility decision and is recorded as P2/owner-gated in D-040.
 
 ## Next autonomous actions
 

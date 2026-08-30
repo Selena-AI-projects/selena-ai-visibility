@@ -227,3 +227,9 @@
 - Decision: the public Local AI result contract accepts `VALID` only with `taskStatus=ACCEPTED` and `validity=VALID`; `INVALID` requires one of the explicit invalid-review task statuses and `validity=INVALID`. `UNKNOWN` remains the honest state for incomplete evidence, including an accepted task whose proof or evidence is missing.
 - Evidence: source-only `localApiAiResultSchema` refinement and regression cases in the feature branch; contracts `11/11`, typecheck and Biome checks pass on 2026-08-30. No runtime or provider path is involved.
 - Effect: contradictory DTO combinations cannot be serialized as authoritative results, while the existing incomplete-evidence semantics are preserved.
+
+## D-040 — Keep legacy manual-pilot error compatibility explicit
+
+- Decision: do not silently replace the legacy manual-pilot routes' flat `{error, message}` responses with the typed Local API envelope. The pilot routes are outside the documented API-01 OpenAPI surface and currently have no request-id/error-code compatibility contract; changing them would be a separate API decision, not a source-only cleanup.
+- Evidence: read-only route/OpenAPI comparison on 2026-08-30: `apps/web/src/routes/api/v1/selena/pilot/**` uses `pilotErrorResponse`, while `packages/api-spec/src/openapi.json` documents no pilot paths. The typed `localApiErrorEnvelopeSchema` is used by the Local API boundary and requires fields unavailable in the legacy helper.
+- Effect: API-01 error-boundary claims remain scoped to the documented Local API; pilot error-envelope normalization is recorded as a P2/owner-gated follow-up and no compatibility-breaking route change is introduced.
