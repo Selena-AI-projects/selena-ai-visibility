@@ -53,6 +53,7 @@ The two DOCX source files are not present in the repository or the current Downl
 | Migration 0048 Local API idempotency records | SOURCE/STATIC PASS — contracts idempotency tests (3/3), lib typecheck, schema/migration invariants and Gate12 chain update PASS; immutable tenant-scoped seven-day replay/conflict boundary and transaction-only helper added; not applied |
 | Migration 0049 CLAIMED→SUBMITTED lease contract | SOURCE/STATIC PASS — forward-only guard-function repair and journal entry; 32 schema tests and lib typecheck PASS; migration not applied and no database started |
 | Disposable PostgreSQL rehearsal harness | SOURCE/STATIC PASS — unique project/preflight collision check, v2/legacy Compose selection, `--pull never`, tmpfs database, fail-closed subordinate scripts, verified teardown and hermetic fake-CLI success/failure/signal tests; Docker/DB/migrations not run |
+| Owner-authorized disposable PostgreSQL run | `BLOCKED_ENV — local Docker/Colima started successfully and the unique rehearsal project was cleaned up, but migration 0044 stopped before 0049 with PostgreSQL operator ambiguity (unknown - unknown) in the validated-result JSONB check; no provider or paid call ran` |
 | Grid decimal/canonical-center hardening (Node 24) | `PASS — explicit decimal ROUND_HALF_UP coordinate formatting and rounded-center geodesy/identity alignment; spherical grid suite 21/21 and contracts typecheck pass` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
