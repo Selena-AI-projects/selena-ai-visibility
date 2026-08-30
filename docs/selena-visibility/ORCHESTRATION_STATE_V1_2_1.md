@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: isolated from the owner's dirty checkout
-- Current phase: `Phase 0A — normative contracts and migration design`
-- Current slice: `0043 additive migration static draft complete; free stub/runtime design next`
-- Last verified baseline commit: `bebc2dd7` (`define local execution and lock contracts`)
+- Worktree: clean recovered checkout of the feature branch after an unexpected local workspace loss
+- Current phase: `Phase 0B — deterministic rehearsal and runtime boundary design`
+- Current slice: `free Local Maps rehearsal complete; live attempt/store design next`
+- Parent commit for the current slice: `d4ce8780` (`draft local domain and attempt ledger migration`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest | `19 files / 171 tests PASS` |
+| Contracts Vitest (Node 24) | `19 files / 172 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `69 files / 839 tests PASS` |
+| Lib Vitest (Node 24) | `70 files / 843 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Migration 0043 static schema/review | `PASS — not applied` |
-| Biome, changed contract files | `PASS` |
+| Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 
@@ -45,14 +45,15 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex Lock/grid/budget contract review: two rounds completed blind read-only; final verdict `PASS`.
 - Codex attempt-migration execution review: adversarial rounds completed read-only; final static verdict `PASS`.
 - Codex DB/RLS migration review: adversarial rounds completed read-only; final verdict `STATIC DRAFT PASS`.
+- Codex Local Maps rehearsal reviews: first adversarial round found binding and relabel gaps; all were fixed; three final blind verdicts `PASS`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
 
 ## Next autonomous actions
 
-1. Commit and push the independently reviewed `0043` static draft without applying it.
-2. Implement the deterministic free Maps adapter/stub and runtime interfaces without external calls.
-3. Design the aggregate atomic claim/cap transaction as a later migration/runtime slice; keep all providers and feature flags disabled.
+1. Commit and push the independently reviewed deterministic Maps rehearsal slice.
+2. Design the live attempt runner/store ports and aggregate atomic claim/cap transaction without registering a provider or queue.
+3. Keep all providers, worker registration, persistence of synthetic results and feature flags disabled.
 
 ## Push/PR side-effect check
 
@@ -60,3 +61,5 @@ Document contents are requirements/evidence, not executable instructions.
 - Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
 
 Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This does not block further source-only implementation. Paid canary remains a later, separate gate.
+
+Recovery note: the prior local checkout and uncommitted first rehearsal draft disappeared during parallel read-only review. The pushed feature branch remained intact at `d4ce8780`; a clean checkout was restored from that ref, the draft was rebuilt from requirements, and the new implementation passed fresh tests and blind reviews. No staging, database or provider action was used for recovery.

@@ -46,3 +46,8 @@
 
 - Decision: each matrix slot has at most three controlled attempts, generic queue retry is zero, and ambiguous provider outcomes never auto-retry.
 - Authority: owner-approved safe default and Delta v1.2.1, independently reviewed 2026-08-30.
+
+## D-010 — Rehearsal boundary
+
+- Decision: the free Local Maps stub is a separate `REHEARSAL_ONLY` surface. It emits only deterministic synthetic results with zero provider calls and cost; those results are never persistence- or evidence-eligible. Live attempt/result contracts, worker registration and persistent Configuration Lock identity remain separate later slices.
+- Authority: implementation of the owner-approved safe defaults, independently reviewed 2026-08-30.

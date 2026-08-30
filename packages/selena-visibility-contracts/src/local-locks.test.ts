@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { localAiDiscoveryLockBlockSchema } from "./local-discovery";
-import { manualLocalAiLockV1Schema, mapsLockV1Schema, readManualLocalAiLock } from "./local-locks";
+import { manualLocalAiLockV1Schema, mapsLockV1Schema, planMapsLockSlots, readManualLocalAiLock } from "./local-locks";
 import { LOCAL_GRID_FORMULA_VERSION, sphericalGridPointsV1 } from "./visibility-os";
 
 const locationId = "11111111-1111-4111-8111-111111111111";
@@ -92,6 +92,29 @@ describe("Maps Lock v1", () => {
 		expect(mapsLockV1Schema.parse(mapsLock)).toMatchObject({ expectedSlots: 125, maxProviderAttempts: 375 });
 	});
 
+	it("plans 125 unique first attempts in stable point-keyword-repeat order", () => {
+		const measurementCycleId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+		const slots = planMapsLockSlots(measurementCycleId, mapsLock);
+		expect(slots).toHaveLength(125);
+		expect(new Set(slots.map((slot) => slot.baseSlotKey)).size).toBe(125);
+		expect(new Set(slots.map((slot) => slot.executionKey)).size).toBe(125);
+		expect(slots[0]).toMatchObject({
+			measurementCycleId,
+			pointId: mapsLock.grid.points[0]?.id,
+			keywordId: mapsLock.keywordSet.keywordIds[0],
+			repeatIndex: 0,
+			attemptIndex: 1,
+			lockVersion: mapsLock.lockVersion,
+			keywordSetVersion: mapsLock.keywordSet.version,
+			providerVersion: mapsLock.provider.version,
+		});
+		expect(slots[5]).toMatchObject({
+			pointId: mapsLock.grid.points[1]?.id,
+			keywordId: mapsLock.keywordSet.keywordIds[0],
+		});
+		expect(slots).toEqual(planMapsLockSlots(measurementCycleId, mapsLock));
+	});
+
 	it("accepts a canonical 3x3 footprint without fixing every lock to 125 slots", () => {
 		const grid = sphericalGridPointsV1({
 			formulaVersion: LOCAL_GRID_FORMULA_VERSION,
@@ -101,10 +124,12 @@ describe("Maps Lock v1", () => {
 			radiusMeters: 3000,
 			size: 3,
 		});
-		expect(mapsLockV1Schema.parse({ ...mapsLock, grid, expectedSlots: 45, maxProviderAttempts: 135 })).toMatchObject({
+		const smallLock = mapsLockV1Schema.parse({ ...mapsLock, grid, expectedSlots: 45, maxProviderAttempts: 135 });
+		expect(smallLock).toMatchObject({
 			expectedSlots: 45,
 			maxProviderAttempts: 135,
 		});
+		expect(planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", smallLock)).toHaveLength(45);
 	});
 
 	it("rejects mismatched location, cardinality, identity and time", () => {
@@ -138,6 +163,12 @@ describe("Maps Lock v1", () => {
 				...mapsLock,
 				provider: { ...mapsLock.provider, placesApiUsed: true },
 			}).success,
+		).toBe(false);
+		expect(
+			mapsLockV1Schema.safeParse({ ...mapsLock, provider: { ...mapsLock.provider, id: "bad provider" } }).success,
+		).toBe(false);
+		expect(
+			mapsLockV1Schema.safeParse({ ...mapsLock, provider: { ...mapsLock.provider, id: "bad|provider" } }).success,
 		).toBe(false);
 	});
 

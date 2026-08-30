@@ -11,7 +11,7 @@
 | ATT-02 | Ambiguous call reconciliation without duplicate spend | Same-attempt reclaim, indefinite reserve and reconciliation provenance statically verified; provider reconciliation absent | `PARTIAL` | Runtime contract |
 | BUD-01 | Atomic reservation/spend/release | Permit-level states, cost scope/amount and append-only guards drafted; aggregate cap transaction absent | `PARTIAL` | Runtime/migration draft |
 | RLS-01 | Non-owner runtime role and transaction-local tenant context | Attempt RLS and tenant-safe FKs drafted; runtime role/GUC proof absent | `PARTIAL` | Disposable DB, then shared staging |
-| MAP-01 | Deterministic free Maps stub | Adapter/stub absent | `NOT_STARTED` | Local |
+| MAP-01 | Deterministic free Maps stub | 125-slot `REHEARSAL_ONLY` adapter; SHA-bound frozen request; zero network/cost; synthetic output is non-persistable and evidence-ineligible | `VERIFIED` | Local |
 | API-01 | Local quote/create/progress/results/evidence APIs | Routes absent | `NOT_STARTED` | Local |
 | PAY-01 | One-task paid canary | No approval and prerequisites incomplete | `NOT_STARTED` | Owner paid gate |
 | PROD-01 | Checkout, recurring scans, production acceptance | Explicitly disabled | `NOT_STARTED` | Owner production gates |

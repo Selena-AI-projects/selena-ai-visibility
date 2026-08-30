@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { localAiDiscoveryLockBlockSchema } from "./local-discovery.js";
-import { MAX_ATTEMPTS_PER_SLOT, maximumProviderAttempts } from "./local-execution.js";
-import { sphericalGridV1Schema } from "./visibility-os.js";
+import {
+	executionKeyPartSchema,
+	localMapsBaseSlotKey,
+	MAX_ATTEMPTS_PER_SLOT,
+	maximumProviderAttempts,
+	measurementExecutionKey,
+} from "./local-execution.js";
+import { sphericalGridPointV1Schema, sphericalGridV1Schema } from "./visibility-os.js";
 
 const usdAmountSchema = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
 
@@ -14,6 +20,24 @@ export const mapsTargetIdentitySchema = z
 		matchPolicy: z.enum(["PLACE_ID_OR_CID", "REVIEWED_NAME_ADDRESS_FALLBACK"]),
 	})
 	.refine((identity) => identity.placeId !== undefined || identity.cid !== undefined, "MAPS_TARGET_IDENTITY_REQUIRED");
+
+export const mapsProviderLockSchema = z.strictObject({
+	id: executionKeyPartSchema,
+	endpoint: z.string().trim().min(1),
+	version: z.string().trim().min(1),
+	rankEvidenceSource: z.literal("MAPS_SERP_PROVIDER"),
+	placesApiUsed: z.literal(false),
+});
+
+export const mapsRequestLockSchema = z.strictObject({
+	device: z.literal("MOBILE"),
+	os: z.string().trim().min(1),
+	language: z.string().trim().min(2).max(35),
+	seDomain: z.string().trim().min(1),
+	zoom: z.number().int().min(0).max(21),
+	depth: z.literal(20),
+	searchThisArea: z.literal(true),
+});
 
 export const mapsLockV1Schema = z
 	.strictObject({
@@ -28,22 +52,8 @@ export const mapsLockV1Schema = z
 			version: z.number().int().positive(),
 			keywordIds: z.array(z.string().uuid()).min(1),
 		}),
-		provider: z.strictObject({
-			id: z.string().trim().min(1),
-			endpoint: z.string().trim().min(1),
-			version: z.string().trim().min(1),
-			rankEvidenceSource: z.literal("MAPS_SERP_PROVIDER"),
-			placesApiUsed: z.literal(false),
-		}),
-		request: z.strictObject({
-			device: z.literal("MOBILE"),
-			os: z.string().trim().min(1),
-			language: z.string().trim().min(2).max(35),
-			seDomain: z.string().trim().min(1),
-			zoom: z.number().int().min(0).max(21),
-			depth: z.literal(20),
-			searchThisArea: z.literal(true),
-		}),
+		provider: mapsProviderLockSchema,
+		request: mapsRequestLockSchema,
 		timestampWindow: z.strictObject({
 			startsAt: z.iso.datetime(),
 			endsAt: z.iso.datetime(),
@@ -86,6 +96,75 @@ export const mapsLockV1Schema = z
 			issues.addIssue({ code: "custom", message: "MAPS_LOCK_TIMESTAMP_WINDOW_INVALID" });
 	});
 export type MapsLockV1 = z.infer<typeof mapsLockV1Schema>;
+
+export const mapsLockSlotPlanSchema = z.strictObject({
+	domainId: z.literal("LOCAL_MAPS"),
+	measurementCycleId: z.string().uuid(),
+	locationId: z.string().uuid(),
+	lockVersion: z.number().int().positive(),
+	keywordSetId: z.string().uuid(),
+	keywordSetVersion: z.number().int().positive(),
+	pointId: z.string().uuid(),
+	pointIndex: z.number().int().nonnegative(),
+	latitude: sphericalGridPointV1Schema.shape.latitude,
+	longitude: sphericalGridPointV1Schema.shape.longitude,
+	keywordId: z.string().uuid(),
+	providerId: executionKeyPartSchema,
+	providerVersion: z.string().trim().min(1),
+	repeatIndex: z.number().int().nonnegative(),
+	baseSlotKey: z.string().min(1),
+	attemptIndex: z.literal(1),
+	executionKey: z.string().min(1),
+});
+export type MapsLockSlotPlan = z.infer<typeof mapsLockSlotPlanSchema>;
+
+/**
+ * Expands one frozen Maps Lock into first-attempt analytical slots only. It
+ * does not reserve attempts, enqueue work, touch a database or call a provider.
+ */
+export function planMapsLockSlots(measurementCycleId: string, input: MapsLockV1): MapsLockSlotPlan[] {
+	const parsedMeasurementCycleId = z.string().uuid().parse(measurementCycleId);
+	const lock = mapsLockV1Schema.parse(input);
+	const slots: MapsLockSlotPlan[] = [];
+	for (const point of lock.grid.points) {
+		for (const keywordId of lock.keywordSet.keywordIds) {
+			for (let repeatIndex = 0; repeatIndex < lock.repeats; repeatIndex += 1) {
+				const baseSlotKey = localMapsBaseSlotKey({
+					cycleId: parsedMeasurementCycleId,
+					pointId: point.id,
+					keywordId,
+					providerId: lock.provider.id,
+					repeatIndex,
+				});
+				slots.push(
+					mapsLockSlotPlanSchema.parse({
+						domainId: "LOCAL_MAPS",
+						measurementCycleId: parsedMeasurementCycleId,
+						locationId: lock.locationId,
+						lockVersion: lock.lockVersion,
+						keywordSetId: lock.keywordSet.id,
+						keywordSetVersion: lock.keywordSet.version,
+						pointId: point.id,
+						pointIndex: point.pointIndex,
+						latitude: point.latitude,
+						longitude: point.longitude,
+						keywordId,
+						providerId: lock.provider.id,
+						providerVersion: lock.provider.version,
+						repeatIndex,
+						baseSlotKey,
+						attemptIndex: 1,
+						executionKey: measurementExecutionKey(baseSlotKey, 1),
+					}),
+				);
+			}
+		}
+	}
+	if (slots.length !== lock.expectedSlots) throw new Error("MAPS_LOCK_PLANNED_SLOT_CARDINALITY_MISMATCH");
+	if (new Set(slots.map((slot) => slot.executionKey)).size !== slots.length)
+		throw new Error("MAPS_LOCK_PLANNED_SLOT_DUPLICATE");
+	return slots;
+}
 
 export const manualLocalAiLockV1Schema = z
 	.strictObject({

@@ -61,7 +61,7 @@ export const localCycleExecutionStatuses = [
 export type LocalCycleExecutionStatus = (typeof localCycleExecutionStatuses)[number];
 
 const attemptIndexSchema = z.union([z.literal(1), z.literal(2), z.literal(3)]);
-const keyPartSchema = z
+export const executionKeyPartSchema = z
 	.string()
 	.min(1)
 	.regex(/^\S+$/, "EXECUTION_KEY_PART_WHITESPACE_INVALID")
@@ -83,7 +83,7 @@ export const localMapsSlotSchema = z.strictObject({
 	cycleId: z.string().uuid(),
 	pointId: z.string().uuid(),
 	keywordId: z.string().uuid(),
-	providerId: keyPartSchema,
+	providerId: executionKeyPartSchema,
 	repeatIndex: z.number().int().nonnegative(),
 });
 export type LocalMapsSlot = z.infer<typeof localMapsSlotSchema>;
@@ -92,7 +92,7 @@ export const localAiSlotSchema = z.strictObject({
 	cycleId: z.string().uuid(),
 	pointId: z.string().uuid(),
 	promptId: z.string().uuid(),
-	systemId: keyPartSchema,
+	systemId: executionKeyPartSchema,
 	repeatIndex: z.number().int().nonnegative(),
 });
 export type LocalAiSlot = z.infer<typeof localAiSlotSchema>;
