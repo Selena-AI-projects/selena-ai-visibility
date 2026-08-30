@@ -14,8 +14,6 @@
 name: Build
 
 on:
-  push:
-    branches: [main, release/selena-visibility-mvp]
   pull_request:
     branches: [main, release/selena-visibility-mvp]
   workflow_dispatch:
