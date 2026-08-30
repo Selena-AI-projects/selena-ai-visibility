@@ -99,3 +99,9 @@
 - Decision: `provider:canary` is a dedicated provider capability scope, modeled outside the client-facing `localApiScopes` union and reused by canary/capabilities handlers.
 - Authority: source-only scope hardening on 2026-08-30; no new production permission is granted by this contract.
 - Effect: provider scope checks cannot drift through untyped string literals; exact production capability-read authorization remains owner-gated.
+
+## D-019 — Injectable signed cursor codec
+
+- Decision: provide an HMAC-SHA256 cursor codec that accepts an injected owner-managed secret and verifies signature plus tenant/cycle/resource binding.
+- Authority: source-only security hardening on 2026-08-30; the live route remains on the unsigned codec until secret provisioning, rotation and runtime proof are separately approved.
+- Effect: tamper-evident cursor behavior is testable without reading or creating credentials, while the current acceptance status remains `PARTIAL` for the unsigned default route.
