@@ -292,6 +292,13 @@ describe("Visibility OS spherical local grid v1", () => {
 			"0.082752",
 		);
 		expect(sphericalGridPointsV1({ ...equatorSpec, centerLatitude: -1.2345645 }).centerLatitude).toBe("-1.234565");
+		expect(sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 1.2345645 }).centerLatitude).toBe("1.234565");
+	});
+
+	it("uses the rounded center for both geodesy and point identity", () => {
+		const precise = sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 1.2345645, centerLongitude: 12.3456784 });
+		const canonical = sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 1.234565, centerLongitude: 12.345678 });
+		expect(precise).toEqual(canonical);
 	});
 
 	it("repeats the same lock exactly and fails closed outside the MVP boundary", () => {

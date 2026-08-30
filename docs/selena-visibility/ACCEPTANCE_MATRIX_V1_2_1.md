@@ -4,7 +4,7 @@
 |---|---|---|---|---|
 | GRID-01 | Versioned spherical grid `sv-grid-sphere-v1` | `packages/selena-visibility-contracts/src/visibility-os.ts` | `VERIFIED` | Local |
 | GRID-02 | 3×3/5×5, 3000 m corner radius, NW row-major | Contract tests | `VERIFIED` | Local |
-| GRID-03 | Canonical antimeridian, fixed scale, UUIDv5 | Regression/golden tests | `VERIFIED` | Local |
+| GRID-03 | Canonical antimeridian, fixed scale, UUIDv5 | Regression/golden tests plus explicit decimal ROUND_HALF_UP and rounded-center identity alignment | `VERIFIED` | Local |
 | DOM-01 | Replace `LOCAL` with `LOCAL_MAPS`; add `LOCAL_AI` | `0045` source-only atomic backfill, strict checks and postconditions statically reviewed; not applied | `PARTIAL` | Disposable DB |
 | LOCK-01 | Immutable versioned child Locks | `0045` source-only unique positive project versions, append-only update/delete/truncate guards and tenant-safe provenance; transactional allocator tests pass; not applied | `PARTIAL` | Disposable DB |
 | ATT-01 | Durable attempt ledger, at most 3 attempts | `sv_measurement_attempts` schema, state guards and sequence controls plus `0047` Local Maps observation cap statically verified; not applied | `PARTIAL` | Disposable DB |

@@ -248,12 +248,36 @@ function normalizeLongitude(value: number): number {
 	return Object.is(normalized, -0) ? 0 : normalized;
 }
 
-// The database contract stores coordinates at numeric(9,6). Formatting all
-// canonical coordinates to that scale prevents equivalent inputs from
-// producing different point IDs because of lexical or floating-point noise.
+// The database contract stores coordinates at numeric(9,6). Convert the
+// number's decimal representation to integer micros before rounding so ties
+// follow decimal ROUND_HALF_UP rather than the binary-double `toFixed` rules.
 function roundHalfUpCoordinate(value: number): string {
-	const magnitude = Math.abs(value).toFixed(6);
-	return value < 0 && magnitude !== "0.000000" ? `-${magnitude}` : magnitude;
+	if (!Number.isFinite(value)) throw new Error("GRID_COORDINATE_NOT_FINITE");
+	const negative = value < 0;
+	const [coefficient, exponentText = "0"] = Math.abs(value).toString().split("e");
+	const exponent = Number(exponentText);
+	const [integerPart, fractionPart = ""] = coefficient.split(".");
+	const digits = `${integerPart}${fractionPart}`;
+	const decimalIndex = integerPart.length + exponent;
+	const integer =
+		decimalIndex <= 0
+			? "0"
+			: decimalIndex >= digits.length
+				? `${digits}${"0".repeat(decimalIndex - digits.length)}`
+				: digits.slice(0, decimalIndex);
+	const fraction =
+		decimalIndex <= 0
+			? `${"0".repeat(-decimalIndex)}${digits}`
+			: decimalIndex >= digits.length
+				? ""
+				: digits.slice(decimalIndex);
+	const scale = BigInt(1_000_000);
+	const micros = BigInt(integer || "0") * scale + BigInt((fraction.slice(0, 6) || "").padEnd(6, "0") || "0");
+	const roundedMicros = (fraction[6] ?? "0") >= "5" ? micros + BigInt(1) : micros;
+	const whole = roundedMicros / scale;
+	const remainder = (roundedMicros % scale).toString().padStart(6, "0");
+	const magnitude = `${whole.toString()}.${remainder}`;
+	return negative && magnitude !== "0.000000" ? `-${magnitude}` : magnitude;
 }
 
 function canonicalLongitude(value: number): string {
@@ -353,8 +377,10 @@ export function sphericalGridPointsV1(input: SphericalGridSpecV1): SphericalGrid
 	const centerLongitude = canonicalLongitude(normalizedCenterLongitude);
 	const half = (spec.size - 1) / 2;
 	const spacingMeters = spec.radiusMeters / (Math.SQRT2 * half);
-	const latitude1 = degreesToRadians(spec.centerLatitude);
-	const longitude1 = degreesToRadians(normalizedCenterLongitude);
+	// Geodesy consumes the same six-decimal canonical center that participates
+	// in point identity; equivalent inputs therefore cannot diverge in IDs.
+	const latitude1 = degreesToRadians(Number(centerLatitude));
+	const longitude1 = degreesToRadians(Number(centerLongitude));
 	const points: SphericalGridPointV1[] = [];
 	const coordinateKeys = new Set<string>();
 

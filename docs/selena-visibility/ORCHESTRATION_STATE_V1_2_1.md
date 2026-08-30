@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `26 files / 217 tests PASS` |
+| Contracts Vitest (Node 24) | `26 files / 218 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 879 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after 0048; prior 15-task graph passed before this source slice. Current package suites: contracts 217/217, lib 879/879; web baseline unchanged at 354/354` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the route/grid slices; prior 15-task graph passed before these source changes. Current package suites: contracts 218/218, lib 879/879, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -43,6 +43,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
 | Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (29/29) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
 | Migration 0048 Local API idempotency records | SOURCE/STATIC PASS — contracts idempotency tests (3/3), lib typecheck, schema/migration invariants and Gate12 chain update PASS; immutable tenant-scoped seven-day replay/conflict boundary and transaction-only helper added; not applied |
+| Grid decimal/canonical-center hardening (Node 24) | `PASS — explicit decimal ROUND_HALF_UP coordinate formatting and rounded-center geodesy/identity alignment; spherical grid suite 21/21 and contracts typecheck pass` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
