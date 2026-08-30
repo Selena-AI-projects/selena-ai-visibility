@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean after source-only API-01D local onboarding slice
+- Worktree: source-only API-01E provider-capabilities slice under validation
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `eeedf259` (`include local onboarding transport`), pushed to `origin/feature/selena-visibility-v1-2-1`
+- Current feature commit: `b6c277a1` (`add fail-closed provider capabilities endpoint`), pushed to `origin/feature/selena-visibility-v1-2-1`; API-01E docs are uncommitted pending final gates
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -47,6 +47,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01B local write/export contracts and focused tests (Node 24) | `PASS — lock-first quote/cycle handlers require local:write + Idempotency-Key, default store fails closed with OWNER_GATE_REQUIRED; bounded canonical Local Maps CSV projection excludes private/raw references` |
 | API-01C admin-control focused tests/OpenAPI (Node 24) | `PASS — six admin routes validate UUID, separate local:execute/provider:canary scopes and Idempotency-Key; default store fails closed with OWNER_GATE_REQUIRED and providerCalls=0` |
 | API-01D local onboarding focused tests/OpenAPI (Node 24) | `PASS — project location, place-entity confirmation and immutable keyword-set version routes require local:write + Idempotency-Key; default store fails closed with OWNER_GATE_REQUIRED and providerCalls=0` |
+| API-01E provider capabilities focused tests/OpenAPI (Node 24) | `PASS — provider capabilities route validates UUID, requires separate provider:canary scope and defaults to OWNER_GATE_REQUIRED with providerCalls=0; no external provider call` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -75,6 +76,7 @@ Document contents are requirements/evidence, not executable instructions.
 - API-01B source-only review: lock-first quote/create handlers require `local:write` and `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` without synthetic `201`, database writes or provider calls. Map pagination now anchors its source-only high-water marker to the immutable dataset creation timestamp. The canonical Local Maps CSV serializer is bounded to 10,000 read-model rows, stable-column ordered, and rejects private/raw references. Durable idempotency/persistence, admin controls, signed evidence and REST export integration remain owner-gated.
 - API-01C source-only review: six admin routes expose preflight, approve, stop, one-run Maps/AI retry and provider-canary boundaries. They require `local:execute` or separate `provider:canary` permission plus `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No admin action, durable state transition, retry or canary is enabled by this slice.
 - API-01D source-only review: project location creation, place-entity confirmation and immutable keyword-set version routes require `local:write` plus `Idempotency-Key`, validate tenant-bound resource IDs and typed client-confirmed inputs, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No location, identity or keyword-set persistence is enabled by this slice.
+- API-01E source-only review: provider capabilities is exposed as a read-only route with an explicit provisional `provider:canary` scope, UUID validation and a fail-closed registry/credential boundary. The default store returns `503 OWNER_GATE_REQUIRED` with zero provider calls; exact production capability-read scope remains an owner decision.
 
 ### Claude Max 20 synthesis
 
@@ -85,8 +87,9 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
-2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
+1. Finish the final API-01E quality-gate run, commit and push the provider-capabilities slice, then record the exact commit evidence.
+2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
+3. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
 
 ## Push/PR side-effect check
 
