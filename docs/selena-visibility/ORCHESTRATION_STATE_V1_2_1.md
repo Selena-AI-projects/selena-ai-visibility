@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
+- Worktree: clean at feature HEAD `5611f226`; source-only signed-cursor route integration, Local Maps attempt cap and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims and 0047 Local Maps attempt-count cap`
-- Last implementation/evidence commit: `fc3e1d8c` (`enforce explicit tenant boundary on local writes`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
+- Last implementation/evidence commit: `5611f226` (`cap Local Maps observation attempts`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -41,7 +41,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
-| Migration 0047 Local Maps attempt-count cap | `SOURCE/STATIC PASS — validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied` |
+| Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (28/28) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
