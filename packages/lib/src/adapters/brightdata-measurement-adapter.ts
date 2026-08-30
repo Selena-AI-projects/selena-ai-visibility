@@ -149,10 +149,11 @@ export function resolveBrightDataCost(reportedCostUsd?: number | null): {
 }
 
 /**
- * The request body, taken from the account's own code examples on 2026-08-25.
+ * The request body follows Bright Data's published examples for these three
+ * collectors.
  * The three collectors do not take the same input: Gemini carries an `index`
  * and a top-level `limit_per_input`, ChatGPT takes the search toggle, and
- * Perplexity takes neither.
+ * Perplexity carries its own index and empty follow-up prompt.
  */
 export function buildBrightDataRequestBody(input: BrightDataRequestInput): Record<string, unknown> {
 	const url = brightDataSurfaceUrl[input.system];
@@ -175,7 +176,9 @@ export function buildBrightDataRequestBody(input: BrightDataRequestInput): Recor
 			],
 		};
 	}
-	return { input: [{ url, prompt: input.prompt, country: "" }] };
+	return {
+		input: [{ url, prompt: input.prompt, country: "", index: 1, additional_prompt: "" }],
+	};
 }
 
 const ANSWER_TEXT_FIELDS = [

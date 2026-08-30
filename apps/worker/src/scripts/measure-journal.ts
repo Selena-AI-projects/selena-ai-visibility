@@ -24,7 +24,7 @@
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
-import { apiModelIds, createOpenRouterAdapter } from "@workspace/lib/adapters/openrouter";
+import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import * as schema from "@workspace/lib/db/schema";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
@@ -136,39 +136,12 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 	]),
 );
 if (selected.has("openrouter")) {
-	// The family routes all five API models to one adapter name, but an
-	// OpenRouter adapter is built around a single model. So the registered
-	// adapter is a dispatcher: it reads the model off the permit it was given
-	// and hands the call to that model's adapter. Choosing by permit is the
-	// same rule the executor uses to choose the adapter itself — the sold
-	// system decides, never a service-wide setting.
-	const openRouterKey = required("OPENROUTER_API_KEY");
-	const byModel = new Map<string, SelenaMeasurementAdapter>(
-		apiModelIds.map((model: string) => [
-			model,
-			createOpenRouterAdapter({
-				apiKey: openRouterKey,
-				model,
-				fetchImpl: fetch,
-				resolveScenarioText: resolvers.resolveScenarioText,
-				resolveExtractionContext: resolvers.resolveExtractionContext,
-			}),
-		]),
-	);
-	const first = byModel.get(apiModelIds[0]);
-	if (!first) throw new Error("SELENA_API_MODELS_EMPTY");
-	adapters.openrouter = {
-		channel: first.channel,
-		measure: (permit) => first.measure(permit),
-		execute: (permit) => {
-			const adapter = permit.systemId ? byModel.get(permit.systemId) : undefined;
-			// A permit whose system has no model is refused rather than measured
-			// by whichever model happens to be first: the wrong model's answer
-			// stored under the right name is worse than no answer.
-			if (!adapter) throw new Error(`SELENA_API_MODEL_UNKNOWN: ${permit.systemId ?? "null"}`);
-			return adapter.execute(permit);
-		},
-	};
+	adapters.openrouter = createOpenRouterFamilyAdapter({
+		apiKey: required("OPENROUTER_API_KEY"),
+		fetchImpl: fetch,
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
 }
 if (Object.keys(adapters).length === 0) {
 	console.error(`SELENA_MEASUREMENT_ADAPTER=${config.adapter} reaches no Visitor View collector`);

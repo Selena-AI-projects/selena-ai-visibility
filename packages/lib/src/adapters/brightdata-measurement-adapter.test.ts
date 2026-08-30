@@ -13,6 +13,7 @@ import { estimateRunCostUsd } from "../usage/cost";
 import {
 	type BrightDataVisitorSystem,
 	brightDataVisitorSurface,
+	buildBrightDataRequestBody,
 	createBrightDataAdapter,
 	extractBrightDataSources,
 	parseBrightDataAnswer,
@@ -106,6 +107,21 @@ afterEach(() => {
 });
 
 describe("Bright Data measurement adapter", () => {
+	it("uses the published Perplexity collector input shape", () => {
+		expect(buildBrightDataRequestBody({ system: "perplexity", prompt: SCENARIO_TEXT })).toEqual({
+			input: [
+				{
+					url: "https://www.perplexity.ai",
+					prompt: SCENARIO_TEXT,
+					country: "",
+					index: 1,
+					additional_prompt: "",
+				},
+			],
+		});
+		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
 	it("sends one Visitor View request to the collector, carrying the question", async () => {
 		const fetchImpl = respondWith(jsonResponse(successPayload()));
 		const permit = permitFor();
