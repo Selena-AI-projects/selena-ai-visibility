@@ -437,6 +437,36 @@ describe("Selena local read API core", () => {
 		});
 	});
 
+	it("does not treat area-mode coordinates as pin-level coordinate proof", async () => {
+		const areaContext = {
+			...localAiObserverContext,
+			observerGeoMode: "DECLARED_AREA" as const,
+		};
+		const task = acceptedAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot(areaContext) })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [
+				{
+					...task,
+					contextHash: contextHash(areaContext),
+					contextSnapshot: {
+						...areaContext,
+						coordinateProofReference: "manual-coordinate-proof-area",
+						pointId: ids.point,
+					},
+				},
+			]),
+			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).resolves.toMatchObject({
+			status: "PARTIAL",
+			items: [{ resultStatus: "UNKNOWN", reasonCode: "ACCEPTANCE_EVIDENCE_INCOMPLETE" }],
+		});
+	});
+
 	it("fails closed when a manual Local AI task hash or query drifts from the lock", async () => {
 		const task = acceptedAiTaskAssetRow();
 		const source = store({

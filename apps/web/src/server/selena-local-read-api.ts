@@ -370,10 +370,12 @@ function hasCoordinateProof(snapshot: unknown): boolean {
 	const parsed = z.record(z.string(), z.unknown()).safeParse(snapshot);
 	if (!parsed.success) return false;
 	const reference = parsed.data.coordinateProofReference;
+	const observerGeoMode = parsed.data.observerGeoMode;
 	const latitude = parsed.data.observerLatitude;
 	const longitude = parsed.data.observerLongitude;
 	const pointId = parsed.data.pointId;
 	return (
+		observerGeoMode === "DECLARED_COORDINATE" &&
 		typeof reference === "string" &&
 		reference.trim().length > 0 &&
 		typeof latitude === "number" &&

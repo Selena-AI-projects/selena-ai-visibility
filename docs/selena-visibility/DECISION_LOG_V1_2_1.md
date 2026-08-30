@@ -215,3 +215,9 @@
 - Decision: the Local queue boundary is fail-closed, but it is not represented as a separate process. The existing worker bootstrap still performs legacy credential refresh, scrape-target validation and pg-boss startup before registering the Local handler; do not describe this as full Local-worker isolation until an owner-approved runtime architecture supplies it.
 - Evidence: read-only inspection of `apps/worker/src/index.ts` and `apps/worker/src/handlers.ts` at `dc91f8d3`; the Local handler itself imports no database, provider or credential implementation and throws its owner gate before acknowledging a job.
 - Effect: the source-only acceptance claim stays limited to queue/handler topology and false-success rejection; process-level startup isolation remains an explicit runtime owner gate.
+
+## D-038 — Require coordinate mode for pin-level Local AI proof
+
+- Decision: a Local AI row may be promoted to `VALID` only when its proof-bearing snapshot declares `observerGeoMode: DECLARED_COORDINATE` in addition to valid latitude/longitude, `pointId` and a non-empty proof reference. Coordinates attached to `DECLARED_AREA` or `UNKNOWN` remain insufficient.
+- Evidence: `hasCoordinateProof` and regression coverage in the feature branch at `603fad81` plus the follow-up source-only patch; targeted web read-API tests `26/26` and web typecheck pass. The existing manual submit route still carries only the immutable observer context, so this decision does not claim an end-to-end proof write path.
+- Effect: area-level context cannot be misclassified as pin-level evidence; proof metadata transport and persistence remain a separate source/runtime slice and no provider or automated Local AI path is enabled.
