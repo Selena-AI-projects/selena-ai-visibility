@@ -1417,6 +1417,12 @@ export function createSelenaRepositories(db: Db) {
 						sizeBytes: number;
 						sha256: string;
 					} | null;
+					coordinateProof?: {
+						privateObjectReference: string;
+						mimeType: string;
+						sizeBytes: number;
+						sha256: string;
+					};
 					idempotencyKey?: string;
 				},
 			) => {
@@ -1441,6 +1447,7 @@ export function createSelenaRepositories(db: Db) {
 						capturedAt: input.capturedAt,
 						transcript: input.transcript,
 						screenshotReference: input.screenshot?.privateObjectReference ?? null,
+						coordinateProofReference: input.coordinateProof?.privateObjectReference ?? null,
 					},
 					block.evidencePolicy,
 				);
@@ -1501,6 +1508,19 @@ export function createSelenaRepositories(db: Db) {
 								sha256: input.screenshot.sha256,
 								sequenceIndex: 0,
 								privateObjectReference: input.screenshot.privateObjectReference,
+								uploadedBy: ctx.actorId,
+								capturedAt: new Date(input.capturedAt),
+							});
+						if (input.coordinateProof)
+							await tx.insert(schema.svObservationEvidenceAssets).values({
+								organizationId: ctx.tenantId,
+								observationId: observation.id,
+								assetType: "COORDINATE_PROOF",
+								mimeType: input.coordinateProof.mimeType,
+								sizeBytes: input.coordinateProof.sizeBytes,
+								sha256: input.coordinateProof.sha256,
+								sequenceIndex: 1,
+								privateObjectReference: input.coordinateProof.privateObjectReference,
 								uploadedBy: ctx.actorId,
 								capturedAt: new Date(input.capturedAt),
 							});

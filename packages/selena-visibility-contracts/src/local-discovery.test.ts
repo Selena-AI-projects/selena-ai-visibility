@@ -93,6 +93,7 @@ const koraId = "11111111-1111-4111-8111-111111111111";
 const twoMoonsId = "22222222-2222-4222-8222-222222222222";
 const scenarioSpaId = "33333333-3333-4333-8333-333333333333";
 const scenarioFoodId = "44444444-4444-4444-8444-444444444444";
+const pointId = "55555555-5555-4555-8555-555555555555";
 
 const moscowContext: ObserverContext = {
 	observerCountryCode: "RU",
@@ -189,8 +190,17 @@ describe("RC7 observer context and context hash", () => {
 				observerGeoMode: "DECLARED_COORDINATE",
 				observerLatitude: 55.75,
 				observerLongitude: 37.62,
+				pointId,
 			}).success,
 		).toBe(true);
+		expect(
+			observerContextSchema.safeParse({
+				...moscowContext,
+				observerGeoMode: "DECLARED_COORDINATE",
+				observerLatitude: 55.75,
+				observerLongitude: 37.62,
+			}).success,
+		).toBe(false);
 	});
 });
 
@@ -262,6 +272,25 @@ describe("RC7 observation submission evidence policy", () => {
 		expect(() =>
 			assertObservationSubmission({ ...submission, screenshotReference: undefined }, lockBlock.evidencePolicy),
 		).toThrow("OBSERVATION_MISSING_SCREENSHOT");
+	});
+
+	it("requires a separate coordinate-proof asset for pin-level captures", () => {
+		const coordinateContext = {
+			...moscowContext,
+			observerGeoMode: "DECLARED_COORDINATE" as const,
+			observerLatitude: 55.75,
+			observerLongitude: 37.62,
+			pointId,
+		};
+		expect(
+			observationSubmissionViolations({ ...submission, context: coordinateContext }, lockBlock.evidencePolicy),
+		).toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
+		expect(
+			observationSubmissionViolations(
+				{ ...submission, context: coordinateContext, coordinateProofReference: "proof/coordinate-1.png" },
+				lockBlock.evidencePolicy,
+			),
+		).not.toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
 	});
 });
 

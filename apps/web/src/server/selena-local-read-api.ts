@@ -139,6 +139,7 @@ export type LocalReadAiTaskAssetRow = {
 	observationValidity: string | null;
 	observationInvalidReason: string | null;
 	evidenceId: string | null;
+	evidenceAssetType: string | null;
 	evidenceSequenceIndex: number | null;
 	evidenceSha256: string | null;
 	evidenceCapturedAt: Date | null;
@@ -359,6 +360,7 @@ function maxIso(values: string[]): string {
 function aiTaskEvidenceUsable(rows: LocalReadAiTaskAssetRow[]): boolean {
 	return rows.some(
 		(row) =>
+			row.evidenceAssetType === "SCREENSHOT" &&
 			row.evidenceId !== null &&
 			row.evidenceSha256 !== null &&
 			/^(?:sha256:)?[a-f0-9]{64}$/.test(row.evidenceSha256) &&
@@ -367,18 +369,29 @@ function aiTaskEvidenceUsable(rows: LocalReadAiTaskAssetRow[]): boolean {
 	);
 }
 
-function hasCoordinateProof(snapshot: unknown): boolean {
+function coordinateProofEvidenceId(rows: LocalReadAiTaskAssetRow[]): string | null {
+	const proof = rows.find(
+		(row) =>
+			row.evidenceAssetType === "COORDINATE_PROOF" &&
+			row.evidenceId !== null &&
+			row.evidenceSha256 !== null &&
+			/^(?:sha256:)?[a-f0-9]{64}$/.test(row.evidenceSha256) &&
+			row.evidenceCapturedAt !== null &&
+			!Number.isNaN(row.evidenceCapturedAt.getTime()),
+	);
+	return proof?.evidenceId ?? null;
+}
+
+function hasCoordinateProof(snapshot: unknown, proofEvidenceId: string | null): boolean {
 	const parsed = z.record(z.string(), z.unknown()).safeParse(snapshot);
 	if (!parsed.success) return false;
-	const reference = parsed.data.coordinateProofReference;
 	const observerGeoMode = parsed.data.observerGeoMode;
 	const latitude = parsed.data.observerLatitude;
 	const longitude = parsed.data.observerLongitude;
 	const pointId = parsed.data.pointId;
 	return (
 		observerGeoMode === "DECLARED_COORDINATE" &&
-		typeof reference === "string" &&
-		reference.trim().length > 0 &&
+		proofEvidenceId !== null &&
 		typeof latitude === "number" &&
 		Number.isFinite(latitude) &&
 		latitude >= -90 &&
@@ -392,18 +405,10 @@ function hasCoordinateProof(snapshot: unknown): boolean {
 	);
 }
 
-const localAiTaskContextSnapshotSchema = observerContextSchema.safeExtend({
-	coordinateProofReference: z.string().trim().min(1).optional(),
-	pointId: z.string().uuid().optional(),
-	observerLatitude: z.number().finite().min(-90).max(90).optional(),
-	observerLongitude: z.number().finite().min(-180).max(180).optional(),
-});
-
 function parseLocalAiTaskObserverContext(snapshot: unknown) {
-	const parsed = localAiTaskContextSnapshotSchema.safeParse(snapshot);
+	const parsed = observerContextSchema.safeParse(snapshot);
 	if (!parsed.success) return null;
-	const { coordinateProofReference: _coordinateProofReference, pointId: _pointId, ...observerContext } = parsed.data;
-	return observerContextSchema.parse(observerContext);
+	return parsed.data;
 }
 
 function nullableContextString(snapshot: unknown, key: string): string | null {
@@ -444,6 +449,7 @@ function evaluateAiTask(rows: LocalReadAiTaskAssetRow[], pilotCycleId: string, s
 			row.observationValidity === first.observationValidity &&
 			row.observationInvalidReason === first.observationInvalidReason,
 	);
+	const coordinateProofReference = coordinateProofEvidenceId(rows);
 	let resultStatus: "VALID" | "INVALID" | "UNKNOWN" = "UNKNOWN";
 	let progressState: "PENDING" | "VALID" | "INVALID" | "UNKNOWN" = "UNKNOWN";
 	let reasonCode: string | null = first.taskStatus;
@@ -461,7 +467,7 @@ function evaluateAiTask(rows: LocalReadAiTaskAssetRow[], pilotCycleId: string, s
 			first.observationValidity === "VALID" &&
 			first.observationId !== null &&
 			aiTaskEvidenceUsable(rows) &&
-			rows.every((row) => hasCoordinateProof(row.contextSnapshot))
+			rows.every((row) => hasCoordinateProof(row.contextSnapshot, coordinateProofReference))
 		) {
 			resultStatus = "VALID";
 			progressState = "VALID";
@@ -491,7 +497,7 @@ function evaluateAiTask(rows: LocalReadAiTaskAssetRow[], pilotCycleId: string, s
 		pointId: nullableContextUuid(first.contextSnapshot, "pointId"),
 		latitude: nullableContextNumber(first.contextSnapshot, "observerLatitude", -90, 90),
 		longitude: nullableContextNumber(first.contextSnapshot, "observerLongitude", -180, 180),
-		coordinateProofReference: nullableContextString(first.contextSnapshot, "coordinateProofReference"),
+		coordinateProofReference,
 		observationId: first.observationId,
 		scenarioId: first.scenarioId,
 		promptId: first.scenarioId,
@@ -966,6 +972,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				observationValidity: svLocalObservations.validity,
 				observationInvalidReason: svLocalObservations.invalidReason,
 				evidenceId: svObservationEvidenceAssets.id,
+				evidenceAssetType: svObservationEvidenceAssets.assetType,
 				evidenceSequenceIndex: svObservationEvidenceAssets.sequenceIndex,
 				evidenceSha256: svObservationEvidenceAssets.sha256,
 				evidenceCapturedAt: svObservationEvidenceAssets.capturedAt,

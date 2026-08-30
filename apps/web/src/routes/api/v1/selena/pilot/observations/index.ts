@@ -8,23 +8,36 @@ import { pilotDisabledResponse, pilotErrorResponse } from "../../../../../../lib
 
 const repositories = createSelenaRepositories(db);
 
-const submissionSchema = z.object({
-	captureTaskId: z.string().uuid(),
-	idempotencyKey: z.string().min(1).max(200),
-	capturedAt: z.iso.datetime(),
-	queryText: z.string().min(1),
-	context: observerContextSchema,
-	orderingState: z.enum(orderingStates).optional(),
-	transcript: z.string().min(1),
-	// The screenshot reference stays an opaque string end to end: the server
-	// records it as evidence but never dereferences it.
-	screenshot: z.object({
-		privateObjectReference: z.string().min(1),
-		mimeType: z.string().min(1),
-		sizeBytes: z.number().int().positive(),
-		sha256: z.string().regex(/^[0-9a-f]{64}$/),
-	}),
+const evidenceAssetSchema = z.strictObject({
+	privateObjectReference: z.string().min(1),
+	mimeType: z.string().min(1),
+	sizeBytes: z.number().int().positive(),
+	sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
+
+const submissionSchema = z
+	.object({
+		captureTaskId: z.string().uuid(),
+		idempotencyKey: z.string().min(1).max(200),
+		capturedAt: z.iso.datetime(),
+		queryText: z.string().min(1),
+		context: observerContextSchema,
+		orderingState: z.enum(orderingStates).optional(),
+		transcript: z.string().min(1),
+		// The screenshot reference stays an opaque string end to end: the server
+		// records it as evidence but never dereferences it.
+		screenshot: evidenceAssetSchema,
+		coordinateProof: evidenceAssetSchema.optional(),
+	})
+	.superRefine((submission, issues) => {
+		if (submission.context.observerGeoMode === "DECLARED_COORDINATE" && submission.coordinateProof === undefined) {
+			issues.addIssue({
+				code: "custom",
+				path: ["coordinateProof"],
+				message: "DECLARED_COORDINATE_REQUIRES_COORDINATE_PROOF",
+			});
+		}
+	});
 
 const submitObservation = createSelenaApiHandler(async ({ request, auth }) => {
 	const parsed = submissionSchema.safeParse(await request.json());

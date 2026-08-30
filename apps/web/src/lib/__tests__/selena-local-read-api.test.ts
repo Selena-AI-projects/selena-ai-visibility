@@ -25,6 +25,7 @@ const ids = {
 	scenario: "10000000-0000-4000-8000-000000000020",
 	aiObservation: "10000000-0000-4000-8000-000000000021",
 	aiEvidence: "10000000-0000-4000-8000-000000000022",
+	aiCoordinateProof: "10000000-0000-4000-8000-000000000023",
 	dataset: "10000000-0000-4000-8000-000000000003",
 	location: "10000000-0000-4000-8000-000000000004",
 	grid: "10000000-0000-4000-8000-000000000005",
@@ -58,6 +59,7 @@ const localAiObserverContext = {
 	observerGeoMode: "DECLARED_COORDINATE",
 	observerLatitude: -8.506854,
 	observerLongitude: 115.262482,
+	pointId: ids.point,
 	appLocale: "en-ID",
 	queryLanguage: "en",
 	deviceClass: "DESKTOP",
@@ -130,10 +132,6 @@ function acceptedAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 		queryTextSnapshot: "best coffee in Ubud",
 		contextSnapshot: {
 			...localAiObserverContext,
-			coordinateProofReference: "manual-coordinate-proof-1",
-			pointId: ids.point,
-			observerLatitude: -8.506854,
-			observerLongitude: 115.262482,
 		},
 		observationId: ids.aiObservation,
 		observationCapturedAt: new Date("2026-08-30T02:05:00.000Z"),
@@ -141,10 +139,21 @@ function acceptedAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 		observationValidity: "VALID",
 		observationInvalidReason: null,
 		evidenceId: ids.aiEvidence,
+		evidenceAssetType: "SCREENSHOT",
 		evidenceSequenceIndex: 0,
 		evidenceSha256: "b".repeat(64),
 		evidenceCapturedAt: new Date("2026-08-30T02:05:00.000Z"),
 		evidenceCreatedAt: new Date("2026-08-30T02:06:00.000Z"),
+	};
+}
+
+function coordinateProofAiTaskAssetRow(): LocalReadAiTaskAssetRow {
+	return {
+		...acceptedAiTaskAssetRow(),
+		evidenceId: ids.aiCoordinateProof,
+		evidenceAssetType: "COORDINATE_PROOF",
+		evidenceSequenceIndex: 1,
+		evidenceSha256: "c".repeat(64),
 	};
 }
 
@@ -158,6 +167,7 @@ function pendingAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 		observationValidity: null,
 		observationInvalidReason: null,
 		evidenceId: null,
+		evidenceAssetType: null,
 		evidenceSequenceIndex: null,
 		evidenceSha256: null,
 		evidenceCapturedAt: null,
@@ -367,10 +377,11 @@ describe("Selena local read API core", () => {
 
 	it("projects one accepted manual Local AI task only when its reviewed observation has evidence", async () => {
 		const task = acceptedAiTaskAssetRow();
+		const proof = coordinateProofAiTaskAssetRow();
 		const source = store({
 			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
 			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
-			listAiTaskAssets: vi.fn(async () => [task]),
+			listAiTaskAssets: vi.fn(async () => [task, proof]),
 			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
 		});
 		const api = createSelenaLocalReadApi(source);
@@ -395,7 +406,8 @@ describe("Selena local read API core", () => {
 					taskStatus: "ACCEPTED",
 					resultStatus: "VALID",
 					capturedAt: "2026-08-30T02:05:00.000Z",
-					evidenceIds: [ids.aiEvidence],
+					evidenceIds: [ids.aiEvidence, ids.aiCoordinateProof],
+					coordinateProofReference: ids.aiCoordinateProof,
 					reasonCode: null,
 				},
 			],
@@ -423,7 +435,7 @@ describe("Selena local read API core", () => {
 		const source = store({
 			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
 			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
-			listAiTaskAssets: vi.fn(async () => [{ ...task, contextSnapshot: localAiObserverContext }]),
+			listAiTaskAssets: vi.fn(async () => [task]),
 		});
 		const api = createSelenaLocalReadApi(source);
 
@@ -452,12 +464,9 @@ describe("Selena local read API core", () => {
 				{
 					...task,
 					contextHash: contextHash(areaContext),
-					contextSnapshot: {
-						...areaContext,
-						coordinateProofReference: "manual-coordinate-proof-area",
-						pointId: ids.point,
-					},
+					contextSnapshot: areaContext,
 				},
+				{ ...coordinateProofAiTaskAssetRow(), contextHash: contextHash(areaContext), contextSnapshot: areaContext },
 			]),
 			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
 		});
@@ -490,6 +499,7 @@ describe("Selena local read API core", () => {
 			observerLongitude: 115.262482,
 		};
 		const task = acceptedAiTaskAssetRow();
+		const proof = coordinateProofAiTaskAssetRow();
 		const source = store({
 			findCycle: vi.fn(async () => ({
 				...cycle,
@@ -500,12 +510,9 @@ describe("Selena local read API core", () => {
 				{
 					...task,
 					contextHash: contextHash(observedContext),
-					contextSnapshot: {
-						...observedContext,
-						coordinateProofReference: "manual-coordinate-proof-1",
-						pointId: ids.point,
-					},
+					contextSnapshot: observedContext,
 				},
+				{ ...proof, contextHash: contextHash(observedContext), contextSnapshot: observedContext },
 			]),
 			listAiEvidence: vi.fn(async () => [aiEvidenceRow()]),
 		});

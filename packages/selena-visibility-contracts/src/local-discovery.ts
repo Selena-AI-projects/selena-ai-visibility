@@ -68,6 +68,7 @@ export const observerContextSchema = z
 		observerGeoMode: z.enum(observerGeoModes),
 		observerLatitude: z.number().min(-90).max(90).optional(),
 		observerLongitude: z.number().min(-180).max(180).optional(),
+		pointId: z.string().uuid().optional(),
 		appLocale: z.string().trim().min(2).max(35),
 		queryLanguage: z.string().trim().min(2).max(35),
 		deviceClass: z.enum(observerDeviceClasses),
@@ -83,6 +84,8 @@ export const observerContextSchema = z
 			issues.addIssue({ code: "custom", message: "OBSERVER_COORDINATES_MUST_BE_PAIRED" });
 		if (context.observerGeoMode === "DECLARED_COORDINATE" && (!hasLatitude || !hasLongitude))
 			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_COORDINATES" });
+		if (context.observerGeoMode === "DECLARED_COORDINATE" && context.pointId === undefined)
+			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_POINT_ID" });
 	});
 export type ObserverContext = z.infer<typeof observerContextSchema>;
 
@@ -230,6 +233,7 @@ export type ObservationSubmissionInput = {
 	capturedAt?: string | Date | null;
 	transcript?: string | null;
 	screenshotReference?: string | null;
+	coordinateProofReference?: string | null;
 };
 
 const hasValidTimestamp = (value: string | Date | null | undefined): boolean =>
@@ -241,13 +245,19 @@ export function observationSubmissionViolations(
 ): string[] {
 	const violations: string[] = [];
 	if (policy.queryRequired && !submission.queryText?.trim()) violations.push("OBSERVATION_MISSING_QUERY_TEXT");
-	if (policy.contextRequired && !observerContextSchema.safeParse(submission.context).success)
-		violations.push("OBSERVATION_MISSING_CONTEXT");
+	const parsedContext = observerContextSchema.safeParse(submission.context);
+	if (policy.contextRequired && !parsedContext.success) violations.push("OBSERVATION_MISSING_CONTEXT");
 	if (policy.timestampRequired && !hasValidTimestamp(submission.capturedAt))
 		violations.push("OBSERVATION_MISSING_CAPTURED_AT");
 	if (policy.transcriptRequired && !submission.transcript?.trim()) violations.push("OBSERVATION_MISSING_TRANSCRIPT");
 	if (policy.screenshotRequired && !submission.screenshotReference?.trim())
 		violations.push("OBSERVATION_MISSING_SCREENSHOT");
+	if (
+		parsedContext.success &&
+		parsedContext.data.observerGeoMode === "DECLARED_COORDINATE" &&
+		!submission.coordinateProofReference?.trim()
+	)
+		violations.push("OBSERVATION_MISSING_COORDINATE_PROOF");
 	return violations;
 }
 
