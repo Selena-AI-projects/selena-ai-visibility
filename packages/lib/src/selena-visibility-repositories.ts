@@ -7,6 +7,7 @@ import {
 	contextHash,
 	expectedObservations,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextIdentityKey,
 	localAiTaskContextSnapshotSchema,
 	type ObservationReviewDecision,
 	type OrderingState,
@@ -1448,12 +1449,19 @@ export function createSelenaRepositories(db: Db) {
 						capturedAt: input.capturedAt,
 						transcript: input.transcript,
 						screenshotReference: input.screenshot?.privateObjectReference ?? null,
+						screenshotSha256: input.screenshot?.sha256 ?? null,
 						coordinateProofReference: input.coordinateProof?.privateObjectReference ?? null,
+						coordinateProofSha256: input.coordinateProof?.sha256 ?? null,
 					},
 					block.evidencePolicy,
 				);
 				const submittedContextSnapshot = localAiTaskContextSnapshotSchema.parse(input.context);
 				const taskContextSnapshot = localAiTaskContextSnapshotSchema.parse(task.contextSnapshot);
+				const taskContextIdentity = localAiTaskContextIdentityKey(taskContextSnapshot);
+				if (
+					!block.observerContexts.some((candidate) => localAiTaskContextIdentityKey(candidate) === taskContextIdentity)
+				)
+					throw new Error("OBSERVATION_POINT_OUTSIDE_LOCK");
 				if (submittedContextSnapshot.pointId !== taskContextSnapshot.pointId)
 					throw new Error("OBSERVATION_POINT_MISMATCH");
 				const context = observerContextFromTaskSnapshot(submittedContextSnapshot);

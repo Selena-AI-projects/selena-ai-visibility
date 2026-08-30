@@ -472,6 +472,31 @@ describe("Selena local read API core", () => {
 		});
 	});
 
+	it("fails closed when a malformed duplicate accompanies one usable coordinate proof", async () => {
+		const task = acceptedAiTaskAssetRow();
+		const proof = coordinateProofAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [
+				task,
+				proof,
+				{
+					...proof,
+					evidenceId: ids.aiCoordinateProofDuplicate,
+					evidenceSequenceIndex: 2,
+					evidenceSha256: "not-a-sha256",
+				},
+			]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).resolves.toMatchObject({
+			status: "PARTIAL",
+			items: [{ resultStatus: "UNKNOWN", reasonCode: "ACCEPTANCE_EVIDENCE_INCOMPLETE" }],
+		});
+	});
+
 	it("does not treat area-mode coordinates as pin-level coordinate proof", async () => {
 		const areaContext = {
 			...localAiObserverContext,
@@ -509,6 +534,30 @@ describe("Selena local read API core", () => {
 			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
 			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
 			listAiTaskAssets: vi.fn(async () => [{ ...task, contextHash: "f".repeat(64) }]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		await expect(api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle })).rejects.toThrow(
+			"LOCAL_AI_TASK_OUTSIDE_LOCK",
+		);
+	});
+
+	it("fails closed when a task pointId drifts from the Lock without changing its context hash", async () => {
+		const task = acceptedAiTaskAssetRow();
+		const driftedContext = {
+			...localAiObserverContext,
+			pointId: ids.aiCoordinateProofDuplicate,
+		};
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [
+				{
+					...task,
+					contextSnapshot: driftedContext,
+					contextHash: localAiTaskContextHash(driftedContext),
+				},
+			]),
 		});
 		const api = createSelenaLocalReadApi(source);
 

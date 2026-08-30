@@ -20,9 +20,11 @@ import {
 	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
 	localAiTaskContextHash,
+	localAiTaskContextIdentityKey,
 	localAiTaskContextSnapshotSchema,
 	localDiscoveryConfigFromEnv,
 	type ObserverContext,
+	observationEvidenceAssetsAreDistinct,
 	observationSubmissionViolations,
 	observerContextSchema,
 	type PilotObservation,
@@ -177,6 +179,9 @@ describe("RC7 observer context and context hash", () => {
 	it("hashes conditions, not the capture moment", () => {
 		expect(contextHash({ ...moscowContext, capturedAt: "2026-08-18T22:15:00.000Z" })).toBe(hash);
 		expect(localAiTaskContextHash({ ...moscowContext, pointId })).toBe(hash);
+		expect(localAiTaskContextIdentityKey({ ...moscowContext, pointId })).not.toBe(
+			localAiTaskContextIdentityKey({ ...moscowContext, pointId: scenarioFoodId }),
+		);
 		expect(contextHash(moscowContext)).toMatch(/^[0-9a-f]{64}$/);
 		expect(contextHash({ ...moscowContext, observerLocality: "Kazan" })).not.toBe(hash);
 	});
@@ -283,10 +288,40 @@ describe("RC7 observation submission evidence policy", () => {
 		).toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
 		expect(
 			observationSubmissionViolations(
-				{ ...submission, context: coordinateContext, coordinateProofReference: "proof/coordinate-1.png" },
+				{
+					...submission,
+					context: coordinateContext,
+					screenshotSha256: "a".repeat(64),
+					coordinateProofReference: "proof/coordinate-1.png",
+					coordinateProofSha256: "b".repeat(64),
+				},
 				lockBlock.evidencePolicy,
 			),
 		).not.toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
+		expect(
+			observationEvidenceAssetsAreDistinct(
+				{ privateObjectReference: "evidence/screen.png", sha256: "a".repeat(64) },
+				{ privateObjectReference: "evidence/proof.png", sha256: "b".repeat(64) },
+			),
+		).toBe(true);
+		for (const coordinateProof of [
+			{ privateObjectReference: "evidence/obs-1/screen-1.png", sha256: "b".repeat(64) },
+			{ privateObjectReference: "evidence/proof.png", sha256: "a".repeat(64) },
+			{ privateObjectReference: "evidence/proof.png", sha256: `sha256:${"a".repeat(64)}` },
+		]) {
+			expect(
+				observationSubmissionViolations(
+					{
+						...submission,
+						context: coordinateContext,
+						screenshotSha256: "a".repeat(64),
+						coordinateProofReference: coordinateProof.privateObjectReference,
+						coordinateProofSha256: coordinateProof.sha256,
+					},
+					lockBlock.evidencePolicy,
+				),
+			).toContain("OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT");
+		}
 	});
 });
 

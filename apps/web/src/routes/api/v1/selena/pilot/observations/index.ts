@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
-import { localAiTaskContextSnapshotSchema, orderingStates } from "@workspace/selena-visibility-contracts";
+import {
+	localAiTaskContextSnapshotSchema,
+	observationEvidenceAssetsAreDistinct,
+	orderingStates,
+} from "@workspace/selena-visibility-contracts";
 import { z } from "zod";
 import { createSelenaApiHandler } from "../../../../../../lib/selena-api-handler";
 import { pilotDisabledResponse, pilotErrorResponse } from "../../../../../../lib/selena-pilot-gate";
@@ -35,6 +39,17 @@ const submissionSchema = z
 				code: "custom",
 				path: ["coordinateProof"],
 				message: "DECLARED_COORDINATE_REQUIRES_COORDINATE_PROOF",
+			});
+		}
+		if (
+			submission.context.observerGeoMode === "DECLARED_COORDINATE" &&
+			submission.coordinateProof !== undefined &&
+			!observationEvidenceAssetsAreDistinct(submission.screenshot, submission.coordinateProof)
+		) {
+			issues.addIssue({
+				code: "custom",
+				path: ["coordinateProof"],
+				message: "OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT",
 			});
 		}
 	});

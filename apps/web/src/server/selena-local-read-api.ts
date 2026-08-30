@@ -17,6 +17,7 @@ import {
 	LOCAL_API_EVIDENCE_TTL_SECONDS,
 	type LocalApiCursorResource,
 	localAiTaskContextHash,
+	localAiTaskContextIdentityKey,
 	localAiTaskContextSnapshotSchema,
 	localApiAiResultsResponseSchema,
 	localApiEvidenceResponseSchema,
@@ -371,16 +372,16 @@ function aiTaskEvidenceUsable(rows: LocalReadAiTaskAssetRow[]): boolean {
 }
 
 function coordinateProofEvidenceId(rows: LocalReadAiTaskAssetRow[]): string | null {
-	const proofs = rows.filter(
-		(row) =>
-			row.evidenceAssetType === "COORDINATE_PROOF" &&
-			row.evidenceId !== null &&
-			row.evidenceSha256 !== null &&
-			/^(?:sha256:)?[a-f0-9]{64}$/.test(row.evidenceSha256) &&
-			row.evidenceCapturedAt !== null &&
-			!Number.isNaN(row.evidenceCapturedAt.getTime()),
-	);
-	return proofs.length === 1 ? (proofs[0]?.evidenceId ?? null) : null;
+	const proofs = rows.filter((row) => row.evidenceAssetType === "COORDINATE_PROOF");
+	if (proofs.length !== 1) return null;
+	const proof = proofs[0];
+	return proof?.evidenceId !== null &&
+		proof?.evidenceSha256 !== null &&
+		/^(?:sha256:)?[a-f0-9]{64}$/.test(proof.evidenceSha256) &&
+		proof.evidenceCapturedAt !== null &&
+		!Number.isNaN(proof.evidenceCapturedAt.getTime())
+		? proof.evidenceId
+		: null;
 }
 
 function hasCoordinateProof(snapshot: unknown, proofEvidenceId: string | null): boolean {
@@ -583,8 +584,8 @@ async function evaluateLocalAi(store: SelenaLocalReadStore, cycle: LocalReadCycl
 	for (const row of rows) grouped.set(row.captureTaskId, [...(grouped.get(row.captureTaskId) ?? []), row]);
 	if (grouped.size > expected) throw new Error("LOCAL_AI_PROGRESS_EXCEEDS_EXPECTED");
 	const allowedScenarioIds = new Set(lock.lock.discovery.scenarios.map((scenario) => scenario.scenarioId));
-	const allowedContextHashes = new Set(
-		lock.lock.discovery.observerContexts.map((context) => localAiTaskContextHash(context)),
+	const allowedContextIdentities = new Set(
+		lock.lock.discovery.observerContexts.map((context) => localAiTaskContextIdentityKey(context)),
 	);
 	for (const row of rows) {
 		const context = parseLocalAiTaskObserverContext(row.contextSnapshot);
@@ -596,7 +597,7 @@ async function evaluateLocalAi(store: SelenaLocalReadStore, cycle: LocalReadCycl
 			row.queryTextSnapshot !== scenario.queryText ||
 			context.queryLanguage !== scenario.language ||
 			!allowedScenarioIds.has(row.scenarioId) ||
-			!allowedContextHashes.has(row.contextHash) ||
+			!allowedContextIdentities.has(localAiTaskContextIdentityKey(row.contextSnapshot)) ||
 			row.repeatIndex < 0 ||
 			row.repeatIndex >= lock.lock.discovery.repeats
 		)
@@ -1247,7 +1248,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 
 	async findEvidenceHighWater({ tenantId, measurementCycleId, pilotCycleId }) {
 		const [maps] = await db
-			.select({ capturedAt: sql<Date | null>`max(${svEvidenceIndex.capturedAt})` })
+			.select({ createdAt: sql<Date | null>`max(${svEvidenceIndex.createdAt})` })
 			.from(svEvidenceIndex)
 			.innerJoin(
 				svMeasurementDatasets,
@@ -1265,9 +1266,9 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 					eq(svMeasurementDatasets.immutable, true),
 				),
 			);
-		if (!pilotCycleId) return maps?.capturedAt ?? null;
+		if (!pilotCycleId) return maps?.createdAt ?? null;
 		const [ai] = await db
-			.select({ capturedAt: sql<Date | null>`max(${svObservationEvidenceAssets.capturedAt})` })
+			.select({ createdAt: sql<Date | null>`max(${svObservationEvidenceAssets.createdAt})` })
 			.from(svObservationEvidenceAssets)
 			.innerJoin(
 				svLocalObservations,
@@ -1286,7 +1287,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 			.where(
 				and(eq(svObservationEvidenceAssets.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)),
 			);
-		const candidates = [maps?.capturedAt, ai?.capturedAt].filter((value): value is Date => value instanceof Date);
+		const candidates = [maps?.createdAt, ai?.createdAt].filter((value): value is Date => value instanceof Date);
 		return candidates.reduce<Date | null>((latest, value) => (!latest || value > latest ? value : latest), null);
 	},
 };

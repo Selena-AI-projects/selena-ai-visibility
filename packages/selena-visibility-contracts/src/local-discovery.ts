@@ -116,6 +116,13 @@ export function localAiTaskContextHash(snapshot: unknown): string {
 	return contextHash(observerContextFromTaskSnapshot(snapshot));
 }
 
+// pointId is intentionally excluded from the backward-compatible condition
+// hash, so Lock membership must compare this stronger identity instead.
+export function localAiTaskContextIdentityKey(snapshot: unknown): string {
+	const parsed = localAiTaskContextSnapshotSchema.parse(snapshot);
+	return `${localAiTaskContextHash(parsed)}:${parsed.pointId ?? ""}`;
+}
+
 // ---------------------------------------------------------------------------
 // RC7 §7.4 — the localAiDiscovery lock block.
 // ---------------------------------------------------------------------------
@@ -247,8 +254,33 @@ export type ObservationSubmissionInput = {
 	capturedAt?: string | Date | null;
 	transcript?: string | null;
 	screenshotReference?: string | null;
+	screenshotSha256?: string | null;
 	coordinateProofReference?: string | null;
+	coordinateProofSha256?: string | null;
 };
+
+export type ObservationEvidenceAssetIdentity = {
+	privateObjectReference: string;
+	sha256: string;
+};
+
+export function observationEvidenceAssetsAreDistinct(
+	screenshot: ObservationEvidenceAssetIdentity,
+	coordinateProof: ObservationEvidenceAssetIdentity,
+): boolean {
+	const screenshotSha256 = screenshot.sha256
+		.trim()
+		.toLowerCase()
+		.replace(/^sha256:/, "");
+	const coordinateProofSha256 = coordinateProof.sha256
+		.trim()
+		.toLowerCase()
+		.replace(/^sha256:/, "");
+	return (
+		screenshot.privateObjectReference.trim() !== coordinateProof.privateObjectReference.trim() &&
+		screenshotSha256 !== coordinateProofSha256
+	);
+}
 
 const hasValidTimestamp = (value: string | Date | null | undefined): boolean =>
 	value != null && Number.isFinite(new Date(value).getTime());
@@ -272,6 +304,25 @@ export function observationSubmissionViolations(
 		!submission.coordinateProofReference?.trim()
 	)
 		violations.push("OBSERVATION_MISSING_COORDINATE_PROOF");
+	if (
+		parsedContext.success &&
+		parsedContext.data.observerGeoMode === "DECLARED_COORDINATE" &&
+		submission.screenshotReference?.trim() &&
+		submission.screenshotSha256?.trim() &&
+		submission.coordinateProofReference?.trim() &&
+		submission.coordinateProofSha256?.trim() &&
+		!observationEvidenceAssetsAreDistinct(
+			{
+				privateObjectReference: submission.screenshotReference,
+				sha256: submission.screenshotSha256,
+			},
+			{
+				privateObjectReference: submission.coordinateProofReference,
+				sha256: submission.coordinateProofSha256,
+			},
+		)
+	)
+		violations.push("OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT");
 	return violations;
 }
 
