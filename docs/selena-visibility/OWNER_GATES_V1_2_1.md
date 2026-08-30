@@ -11,6 +11,7 @@ Owner authorization received on 2026-08-30:
 | Push feature branch | `APPROVED` | `feature/selena-visibility-v1-2-1` only |
 | Draft PR | `APPROVED` | Review only; no merge |
 | Apply migrations to disposable PostgreSQL | `AWAITING_EXPLICIT_COMMAND` | Repository rules require a separate explicit migration-run instruction; source-only drafts remain approved |
+| Blind Claude Max full-spec review | `AWAITING_OWNER_INPUT` | Supply the two original DOCX specification files; no reconstructed ledger or paid API fallback may replace them |
 | Paid provider call | `NOT_REACHED` | Requires exact provider, request count, maximum spend, and stop plan |
 | Credentials | `NOT_REACHED` | Creation, reading, rotation, or connection requires separate approval |
 | Shared staging | `NOT_REACHED` | Migration, data mutation, task enqueue, or flag enablement requires separate approval |
@@ -29,6 +30,9 @@ These decisions are intentionally not inferred from a caller, process locale, or
 | Canonical Configuration Lock paths for Local Maps caps and price version | `OWNER_DECISION_REQUIRED` | The first runtime caller must not be able to invent its own spend authority |
 | Runtime database role and grant model | `OWNER_DECISION_REQUIRED` | Role activation changes application-wide RLS behavior and can cause an outage without transaction-local tenant plumbing |
 | Maximum live-attempt lease TTL | `OWNER_DECISION_REQUIRED` | The current 300-second examples are test data, not a proven product invariant |
+| CLAIMED→SUBMITTED lease mutation contract | `OWNER_DECISION_REQUIRED` | The store extends the lease during submission, while migration 0044 currently blocks that change; choose a forward migration or a different runtime lease design before rehearsal |
+| Immutable Maps keyword request snapshot | `OWNER_DECISION_REQUIRED` | The current Lock freezes keyword IDs/version but candidate construction reads mutable current text; choose the versioned snapshot/backfill contract before live execution |
+| Point-aware Local AI task identity | `OWNER_DECISION_REQUIRED` | Compatibility contextHash excludes pointId, while database task uniqueness uses that hash; choose a versioned identity/migration posture before supporting point-distinct equal-condition contexts |
 | `profileReviewLock` contract | `OWNER_DECISION_REQUIRED` | Delta names this child block but never defines its fields; owner must define it or remove it from the required Lock |
 | Rollback posture for migrations 0043–0048 | `OWNER_DECISION_REQUIRED` | Delta requires forward/replay/rollback proof, but destructive down scripts are not defined; owner must approve reversible disposable-DB scripts or an explicit forward-only exception |
 | Commercial cap/retry source of truth | `OWNER_DECISION_REQUIRED` | Delta targets total provider caps of $15/$30 and up to three attempts, while the existing catalog contains $12/$28 and `one_technical_invalid`; no silent product-policy choice is allowed |

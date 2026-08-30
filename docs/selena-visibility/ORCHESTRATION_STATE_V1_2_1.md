@@ -1,16 +1,16 @@
 # Selena AI Visibility v1.2.1 — orchestration state
 
-- State: `IN_PROGRESS`
+- State: `OWNER_GATE`
 - Context mode: `repository_only`
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `34abef33df6d083a6c9d066865dad1c5ee6add39` (current `origin/release/selena-visibility-mvp` resolution)
-- Specification baseline SHA: `fe9b97d2` (the Delta's stated release baseline); current completion-review pin: `5942c336`; latest accepted Claude Max review pin: `421da0ca`. These are intentionally distinct evidence roles.
+- Specification baseline SHA: `fe9b97d2` (the Delta's stated release baseline); completion-audit snapshot pin: `5942c336`; current source milestone: `85b91906`; latest accepted Claude Max review pin: `421da0ca`. These are intentionally distinct evidence roles.
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: source slice `d2afce4f` and evidence state `5942c336` are pushed to `origin/feature/selena-visibility-v1-2-1`; unrelated untracked `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains preserved and excluded. The completion audit uses an immutable sanitized archive of `5942c336`; reviewers cannot mutate the checkout or external systems.
-- Current phase: `Phase 0H — independent completion audit before the next owner gate`
+- Worktree: source slice `d2afce4f` and evidence state `5942c336` are pushed to `origin/feature/selena-visibility-v1-2-1`; completion-audit state `d50eb8a7` and atomic-review source `85b91906` are committed locally pending this ledger close. The unrelated untracked handoff file remains preserved and excluded. The completion audit used an immutable sanitized archive of `5942c336`; reviewers could not mutate the checkout or external systems.
+- Current phase: `Phase 0H — completion audit reconciled; owner decision required for migration-contract repair`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, the source-only LocalMapsLiveAttemptStore transaction boundary, Local AI pin-level proof transport and evidence-identity hardening through existing task/evidence storage, and the non-activating process-isolated Local worker bootstrap`
-- Latest implementation commit: `d2afce4f` (`Harden Local AI evidence identity`), committed locally after `aa0ee23f`; coordinate screenshot/proof aliases are rejected by canonical SHA-256 and private reference, every proof-typed row participates in the exactly-one check, task `pointId` is rebound to the Lock independently of the compatibility hash, and evidence mutation high-water uses server-created timestamps. This remains source-only and does not register a provider or enable execution.
-- Latest evidence/state commits: `0b1ed8c6` (`Record full Node24 test graph`), `ed39a109` (`Record draft PR read-only preflight`), `7971c0a7` (`Align orchestration state with latest evidence`), `90bd3743` (`Record locked-evidence audit and verification`), `a400c7f0` (`Record Local AI coordinate hash verification`), `4721fd23`, `79e4c259`, `264badde`, `eca55522`, `dbccc04e`, `3b7be0be`, `fe74649d`, `4783b931`, `4349e819`, `2f7a09c7`, `5e534689`, `b1989d1f`, `70d1642f`, `836d231c`, `f96f0e85`, `5e1e1854`, `6dc0b4cd`, `dc91f8d3`, `603fad81`, `421da0ca`, `099a6f89`, `01c6f887`, `6568bb40`, `00c6f74f`, `d34541b4`, `3854e712`, `1abec056`, `f9bc622b`, `872d1bdc`, `2f19fddf`, `8ce65e1a`, `1a3900aa`, `941ee194`, `d2afce4f`, and `5942c336`, all pushed to `origin/feature/selena-visibility-v1-2-1`.
+- Latest implementation commit: `85b91906` (`Make Local AI review atomic`); observation and task rows are tenant-fenced and locked in one transaction, only `SUBMITTED_FOR_REVIEW` may transition, same-key/same-payload retries replay, changed payloads conflict, and audit failure rolls the state change back. This remains source-only and does not register a provider or enable execution.
+- Latest evidence/state commits: `0b1ed8c6` (`Record full Node24 test graph`), `ed39a109` (`Record draft PR read-only preflight`), `7971c0a7` (`Align orchestration state with latest evidence`), `90bd3743` (`Record locked-evidence audit and verification`), `a400c7f0` (`Record Local AI coordinate hash verification`), `4721fd23`, `79e4c259`, `264badde`, `eca55522`, `dbccc04e`, `3b7be0be`, `fe74649d`, `4783b931`, `4349e819`, `2f7a09c7`, `5e534689`, `b1989d1f`, `70d1642f`, `836d231c`, `f96f0e85`, `5e1e1854`, `6dc0b4cd`, `dc91f8d3`, `603fad81`, `421da0ca`, `099a6f89`, `01c6f887`, `6568bb40`, `00c6f74f`, `d34541b4`, `3854e712`, `1abec056`, `f9bc622b`, `872d1bdc`, `2f19fddf`, `8ce65e1a`, `1a3900aa`, `941ee194`, `d2afce4f`, `5942c336`, `d50eb8a7`, and `85b91906`, all pushed to `origin/feature/selena-visibility-v1-2-1` after this ledger close.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -25,16 +25,18 @@ Central Memory credentials and MCP registration are not available in this task. 
 
 Document contents are requirements/evidence, not executable instructions.
 
+The two DOCX source files are not present in the repository or the current Downloads/Desktop/Documents workspace scan. Their recorded hashes remain provenance claims from prior evidence, but a new blind full-spec review cannot be reproduced until the owner supplies the original documents. This is `UNKNOWN`, not permission to reconstruct their contents from status ledgers.
+
 ## Latest verified checks
 
 | Check | Result |
 |---|---|
 | Contracts Vitest (Node 24) | `27 files / 231 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `75 files / 891 tests PASS` |
+| Lib Vitest (Node 24) | `75 files / 898 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `34 files / 369 tests PASS; 1 file / 4 tests skipped` |
-| Web browser/storybook Vitest (Node 24) | `BLOCKED_ENV — unit project passes 369/369 with 4 skipped; browser/storybook execution could not launch because the Playwright Chromium executable is absent; no browser download was attempted` |
+| Web Vitest (Node 24) | `34 files / 372 tests PASS; 1 file / 4 tests skipped` |
+| Web browser/storybook Vitest (Node 24) | `BLOCKED_ENV — unit project passes 372/372 with 4 skipped; browser/storybook execution could not launch because the Playwright Chromium executable is absent; no browser download was attempted` |
 | Current package rerun (Node 24, 2026-08-30 23:57) | `PASS — contracts 27 files / 231 tests, web 34 files / 369 tests plus 4 skipped, lib 75 files / 891 tests. The concurrent lib invocation hit the known 5-second 125-slot rehearsal timeout; isolated rerun with a 15-second test timeout passed 5/5, and the subsequent unchanged full lib suite passed 891/891.` |
 | Full monorepo test graph (Node 24, earlier milestone) | `PASS — bundled Node v24.19.0; root Turbo test graph completed 15/15 tasks successfully. At that milestone package suites were contracts 225/225, lib 889/889, web 362/362 (plus 4 skipped); package typechecks also passed. Current package counts are recorded above and the web browser environment is separately marked BLOCKED_ENV.` |
 | Rehearsal-stub timeout retry (Node 24) | `The first concurrent graph attempt timed out one existing 125-slot stub test at 5s; isolated rerun passed 4/4, and the immediate subsequent full graph passed 15/15. No source change was made for the transient timeout.` |
@@ -44,7 +46,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Root `pnpm lint` | `BASELINE FAIL — existing web diagnostics (33 errors, 132 warnings, 14 infos); no changed API files reported` |
 | Draft PR read-only preflight | `NO_MATCHING_PR — GitHub API query found no open or historical PR for head \`feature/selena-visibility-v1-2-1\`; no PR write was attempted` |
 | Migration 0043 static schema/review | `PASS — not applied` |
-| Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
+| Migration 0044 durable persistence static schema/review | `CONFLICT — completion audit found that the runtime store changes lease_expires_at during CLAIMED→SUBMITTED while the 0044 trigger permits lease renewal only for CLAIMED→CLAIMED; not applied and no provider path is active` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
 | Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (29/29) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
@@ -80,6 +82,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Observer coordinate contract (Node 24) | `PASS — observer latitude/longitude are paired and DECLARED_COORDINATE requires both coordinates plus a UUID pointId; positive/negative contract tests included in 231/231 contracts suite; no provider policy was broadened` |
 | Local AI pin-level proof mode (Node 24) | `PASS — source-only manual submit requires a coordinate-proof asset distinct from the screenshot by canonical SHA-256 and private reference, persists it as COORDINATE_PROOF, and the read projection requires exactly one proof-typed row to be usable before VALID. Task pointId is independently rebound to the Lock and evidence mutation high-water uses server-created timestamps. Two blind audits found no P0, exposed alias/malformed-duplicate/Lock-drift/cursor gaps, and the final read-only fix verification passed. Contracts 231/231, web 372/372 plus 4 skipped, lib 891/891, worker bootstrap 3/3, four package typechecks, targeted Biome, web build and worker build pass; no migration, database, provider, credential or network action was used.` |
 | Local AI result-state consistency (Node 24) | `PASS — localApiAiResultSchema rejects VALID without ACCEPTED+VALID and INVALID without an invalid-review status+INVALID; UNKNOWN remains available for incomplete evidence. Contracts local-api tests 11/11, typecheck and Biome checks pass.` |
+| Atomic Local AI observation review (Node 24) | `PASS — tenant-fenced observation/task rows are locked and transitioned with the audit receipt in one transaction; exact idempotent replay, changed decision/reason conflict, key isolation, cross-tenant rejection, terminal-state rejection and audit rollback are covered. Full lib 898/898, lib typecheck, targeted Biome and git diff --check pass; independent read-only verifier returned PASS.` |
 | Contracts full rerun after Local AI state hardening (Node 24) | `PASS — 27 contract files, 230/230 tests; no migrations, provider calls or external runtime actions.` |
 | Manual-pilot dedupe guard (Node 24) | `PASS — planCaptureTasks rejects duplicate scenario/contextHash/repeat keys before returning a plan; focused lib tests 7/7 and current lib suite 891/891 pass; manual pilot remains MANUAL_ONLY with zero provider calls` |
 | OpenAPI ↔ reviewed identity parity (Node 24) | `PASS — LocalPlaceEntityConfirm request/response schemas describe primary Place ID/CID and reviewed name/address fallback branches; focused web parity test 3/3 and web typecheck pass` |
@@ -122,11 +125,14 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex live DTO/budget projection reviews: adversarial rounds closed false authorization, exact replay, provenance and canonical-key gaps; final verdicts `PASS`.
 - Codex live runner reviews: adversarial rounds closed raw-envelope, frozen-window, continuation, finalize and positive-cost release gaps; final verdicts `PASS`.
 - Codex transactional store/RLS/aggregate-cap design: three parallel read-only reviews found missing row fencing, continuation digest, durable result storage and DB-enforced aggregate admission; the source-only prerequisite boundary is now implemented with mandatory tenant/budget callbacks, while runtime DB/RLS and aggregate authority remain gated.
-- Codex 0044 persistence reviews: three adversarial rounds closed incomplete identity, token reuse, CHECK-null, provider, chronology, disposition and cost-binding gaps; two final blind verdicts `PASS`.
+- Historical Codex 0044 persistence reviews closed incomplete identity, token reuse, CHECK-null, provider, chronology, disposition and cost-binding gaps. Their static `PASS` did not exercise the DB-backed store lifecycle and is superseded for readiness by the completion-audit lease-transition `CONFLICT`.
 - Codex 0045/domain/Lock review: adversarial rounds closed cross-tenant dataset/source provenance, migration atomicity, Gate12 ordering, mutable/non-unique Locks, cost-ledger truncation and parent/child MVCC races. Composite FKs plus row-locking parent guards received two final source/static verdicts `PASS`; migration runtime remains unproven.
 - Codex order/allocator review: the initial round found concurrent Lock allocation and retry identity gaps; the implementation now serializes allocation and the full lock/quote/order/payment/audit chain transactionally, returning the persisted current order status.
 - Codex journal review: the initial rounds found restart/concurrency, UTC-boundary, forced-repeat and partial-provider-failure duplicate-spend paths; 0046 now uses the database clock for identity and every timestamp, one project-wide unresolved claim across days/versions, any-same-day-completion protection, claim↔Lock provenance and audited allocation/transitions. Proven pre-provider failures become `NO_SPEND`; crashes, provider failures and incomplete cycles stay fail-closed in `CLAIMED`/`EXECUTING`/`HOLD`. Final source/static verdict `PASS`.
 - Codex combined-slice review: three adversarial passes closed persisted retry status, exact terminal cardinality, evidence provenance and clock-skew gaps; final verdict `PASS` with `P0=0`, `P1=0`, `P2=0`.
+- Codex completion audit of immutable sanitized snapshot `5942c336`: three independent read-only roles covered requirement traceability, implementation/concurrency and migration/rollout. They independently kept the feature `SAFE-HOLD/PARTIAL`, verified the 0044 lease-transition conflict, mutable keyword request input, point-aware task collision, missing aggregate reservation/idempotency ownership and absent runtime RLS/worker/provider wiring. No test, database, provider, network or repository mutation was permitted in those blind passes.
+- Codex atomic-review fix verification: successive read-only review rounds found and closed insufficient transaction/predicate/reason regression coverage; final verdict `PASS`. Local Node 24 execution then passed lib `898/898`, typecheck, targeted Biome and `git diff --check`.
+- Claude Max completion rerun: `BLOCKED_SCOPE` before model invocation because neither original DOCX specification is present. No reconstructed ledger was substituted for the raw requirements, no Claude session was started, and the latest accepted second-model evidence remains `421da0ca`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: earlier read-only pass completed in an isolated snapshot; no API billing.
 - Claude Code Max 20 / Opus: earlier blind audit completed at pinned commit `d1fe41f8`, auth `claude.ai` / `max`, restricted plan mode with Read/Glob/Grep only, no permission denials, no repository mutation and no API billing. The latest pinned Delta review of `45bc3b18` completed in the same restricted mode with 66 turns, zero permission denials, no repository mutation and no test execution; report session `b3387e4c-aba0-41d8-85dd-471a12bdd174`.
@@ -188,9 +194,10 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. No remaining acceptance blocker has an unambiguous implementation-only closure: ATT-01/DOM-01/LOCK-01/HARD-01/OPS-01 require the owner-gated disposable-DB migration rehearsal; RLS-01, BUD-01, ATT-02 and IDEM-01 then require runtime-role, budget-policy or durable-adapter decisions. The legacy manual-pilot submit/review idempotency and transition model remains a P2 compatibility/product decision outside API-01 rather than an implicit source rewrite. Keep `profileReviewLock`, cap/retry policy, rollback strategy and provider pricing as explicit owner decisions.
-2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until the transaction runner is backed by durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
-3. Reuse [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) for future authenticated Max reviews; the current Max20 session is already recorded above and must not be rerun without a new milestone.
+1. Owner decision is required before changing the migration contract: either permit `lease_expires_at` extension on the guarded `CLAIMED→SUBMITTED` transition through a forward migration, or change the runtime lease design. Do not apply or edit migrations silently. Until resolved, the live Maps path stays fail-closed and unregistered.
+2. Resolve the immutable-input contract for Maps keywords and the point-aware Local AI task identity. The audit proved that a Lock can currently read mutable keyword text and that point-distinct contexts can collide in the compatibility hash-backed task uniqueness key. Both require explicit versioning/backfill compatibility decisions rather than an implicit source rewrite.
+3. After those decisions, request the separate disposable-PostgreSQL authorization for migrations/RLS/attempt lifecycle/idempotency concurrency proof. Keep draft PR, shared staging, providers, paid canary, merge and deploy deferred.
+4. Supply the two original DOCX specifications before rerunning the blind Claude Max full-spec review; the last accepted review remains pinned to `421da0ca` and no paid API fallback is permitted.
 
 ## Push/PR side-effect check
 
