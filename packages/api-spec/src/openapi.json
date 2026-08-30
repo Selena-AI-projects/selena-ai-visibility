@@ -594,6 +594,127 @@
 				},
 				"required": ["limit", "nextCursor"]
 			},
+			"LocalScanQuoteRequest": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"configurationLockId": { "type": "string", "format": "uuid" }
+				},
+				"required": ["configurationLockId"]
+			},
+			"LocalScanQuoteResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "Lock-derived Local Maps quote. The current implementation is fail-closed until runtime schema/RLS proof is owner-approved.",
+				"properties": {
+					"quoteId": { "type": "string", "format": "uuid" },
+					"locationId": { "type": "string", "format": "uuid" },
+					"configurationLockId": { "type": "string", "format": "uuid" },
+					"lockVersion": { "type": "integer", "minimum": 1 },
+					"status": { "type": "string", "enum": ["ISSUED", "BUDGET_BLOCKED"] },
+					"surfaces": { "type": "array", "items": { "type": "string", "enum": ["LOCAL_MAPS"] } },
+					"maps": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"points": { "type": "integer", "minimum": 1 },
+							"keywords": { "type": "integer", "minimum": 1 },
+							"repeats": { "type": "integer", "minimum": 1 },
+							"captureDepth": { "type": "integer", "minimum": 1 },
+							"tasks": { "type": "integer", "minimum": 1 },
+							"maxProviderAttempts": { "type": "integer", "minimum": 1 }
+						},
+						"required": ["points", "keywords", "repeats", "captureDepth", "tasks", "maxProviderAttempts"]
+					},
+					"providerEnvelope": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"id": { "type": "string", "minLength": 1 },
+							"endpoint": { "type": "string", "minLength": 1 },
+							"version": { "type": "string", "minLength": 1 },
+							"rankEvidenceSource": { "type": "string", "enum": ["MAPS_SERP_PROVIDER"] },
+							"externalProviderCalls": { "type": "integer", "enum": [0] }
+						},
+						"required": ["id", "endpoint", "version", "rankEvidenceSource", "externalProviderCalls"]
+					},
+					"priceAmount": { "type": "string", "pattern": "^(?:0|[1-9]\\d*)\\.\\d{2}$" },
+					"currency": { "type": "string", "enum": ["USD"] },
+					"budget": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"currency": { "type": "string", "enum": ["USD"] },
+							"worstCaseCostUsd": { "type": "string", "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$" },
+							"surfaceCapUsd": { "type": "string", "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$" },
+							"monthlyCapUsd": { "type": "string", "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d{1,6})?$" },
+							"priceSnapshotVersion": { "type": "string", "minLength": 1 }
+						},
+						"required": ["currency", "worstCaseCostUsd", "surfaceCapUsd", "monthlyCapUsd", "priceSnapshotVersion"]
+					},
+					"caveats": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+					"expiresAt": { "type": "string", "format": "date-time" }
+				},
+				"required": [
+					"quoteId",
+					"locationId",
+					"configurationLockId",
+					"lockVersion",
+					"status",
+					"surfaces",
+					"maps",
+					"providerEnvelope",
+					"priceAmount",
+					"currency",
+					"budget",
+					"caveats",
+					"expiresAt"
+				]
+			},
+			"LocalScanCycleCreateRequest": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"quoteId": { "type": "string", "format": "uuid" },
+					"configurationLockId": { "type": "string", "format": "uuid" },
+					"gridDefinitionId": { "type": "string", "format": "uuid" }
+				},
+				"required": ["quoteId", "configurationLockId", "gridDefinitionId"]
+			},
+			"LocalScanCycleCreateResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"cycleId": { "type": "string", "format": "uuid" },
+					"measurementCycleId": { "type": "string", "format": "uuid" },
+					"locationId": { "type": "string", "format": "uuid" },
+					"projectId": { "type": "string", "format": "uuid" },
+					"configurationLockId": { "type": "string", "format": "uuid" },
+					"gridDefinitionId": { "type": "string", "format": "uuid" },
+					"status": { "type": "string", "enum": ["CREATED"] },
+					"domainId": { "type": "string", "enum": ["LOCAL_MAPS"] },
+					"expectedObservations": { "type": "integer", "minimum": 1 },
+					"createdObservations": { "type": "integer", "enum": [0] },
+					"providerCalls": { "type": "integer", "enum": [0] },
+					"providerExecution": { "type": "string", "enum": ["MANUAL_ONLY_UNTIL_APPROVED"] },
+					"createdAt": { "type": "string", "format": "date-time" }
+				},
+				"required": [
+					"cycleId",
+					"measurementCycleId",
+					"locationId",
+					"projectId",
+					"configurationLockId",
+					"gridDefinitionId",
+					"status",
+					"domainId",
+					"expectedObservations",
+					"createdObservations",
+					"providerCalls",
+					"providerExecution",
+					"createdAt"
+				]
+			},
 			"LocalApiProgressCounts": {
 				"type": "object",
 				"additionalProperties": false,
@@ -1019,6 +1140,14 @@
 					}
 				}
 			},
+			"LocalApiOwnerGateRequired": {
+				"description": "Local writes are fail-closed until the target schema, tenant RLS and owner authorization are verified.",
+				"content": {
+					"application/json": {
+						"schema": { "$ref": "#/components/schemas/LocalApiErrorEnvelope" }
+					}
+				}
+			},
 			"LocalApiInternalServerError": {
 				"description": "The local visibility read could not be completed",
 				"content": {
@@ -1030,6 +1159,80 @@
 		}
 	},
 	"paths": {
+		"/selena/locations/{locationId}/local-scan/quote": {
+			"post": {
+				"summary": "Calculate a locked Local Maps quote",
+				"description": "Calculates scope and cost from an immutable configuration lock. Requires `local:write`; the current implementation fails closed until target-schema and tenant-RLS runtime proof is owner-approved. This endpoint performs zero provider calls.",
+				"operationId": "createSelenaLocalScanQuote",
+				"tags": ["Selena Local Visibility"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "locationId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": true,
+						"description": "8–128 character idempotency key retained by the future persistence adapter.",
+						"schema": { "type": "string", "minLength": 8, "maxLength": 128 }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalScanQuoteRequest" } } }
+				},
+				"responses": {
+					"201": {
+						"description": "Lock-derived quote",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalScanQuoteResponse" } } }
+					},
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"422": { "$ref": "#/components/responses/ValidationError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/locations/{locationId}/local-scan-cycles": {
+			"post": {
+				"summary": "Create a locked Local Maps cycle",
+				"description": "Creates a locked cycle from a tenant-owned quote, lock and immutable grid. Requires `local:write`; cycle creation performs zero provider calls and remains fail-closed until target-schema and tenant-RLS runtime proof is owner-approved.",
+				"operationId": "createSelenaLocalScanCycle",
+				"tags": ["Selena Local Visibility"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "locationId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": true,
+						"description": "8–128 character idempotency key retained by the future persistence adapter.",
+						"schema": { "type": "string", "minLength": 8, "maxLength": 128 }
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": { "schema": { "$ref": "#/components/schemas/LocalScanCycleCreateRequest" } }
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created locked Local Maps cycle",
+						"content": {
+							"application/json": { "schema": { "$ref": "#/components/schemas/LocalScanCycleCreateResponse" } }
+						}
+					},
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"422": { "$ref": "#/components/responses/ValidationError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
 		"/selena/local-scan-cycles/{cycleId}/progress": {
 			"get": {
 				"summary": "Get local scan cycle progress",

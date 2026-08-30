@@ -253,7 +253,7 @@ function store(overrides: Partial<SelenaLocalReadStore> = {}): SelenaLocalReadSt
 		listAiTaskAssets: vi.fn(async (): Promise<LocalReadAiTaskAssetRow[]> => []),
 		listAiEvidence: vi.fn(async (): Promise<LocalReadAiEvidenceRow[]> => []),
 		countMapObservations: vi.fn(async () => ({ valid: 1, invalid: 1, unknown: 1 })),
-		findMapDatasetId: vi.fn(async () => ids.dataset),
+		findMapDatasetId: vi.fn(async () => ({ id: ids.dataset, createdAt: new Date("2026-08-30T01:30:00.000Z") })),
 		listMapResults: vi.fn(async () => []),
 		listEvidence: vi.fn(async () => []),
 		...overrides,
@@ -526,6 +526,23 @@ describe("Selena local read API core", () => {
 			status: "UNKNOWN",
 			targetRank: null,
 			reasonCode: "SOURCE_PROVENANCE_UNKNOWN",
+		});
+	});
+
+	it("anchors an empty Maps page to the immutable dataset creation high-water mark", async () => {
+		const api = createSelenaLocalReadApi(
+			store({
+				findMapDatasetId: vi.fn(async () => ({
+					id: ids.dataset,
+					createdAt: new Date("2026-08-30T03:00:00.000Z"),
+				})),
+			}),
+		);
+
+		await expect(
+			api.mapResults({ tenantId: "tenant-a", cycleId: ids.cycle, limit: 50, after: null }),
+		).resolves.toMatchObject({
+			snapshotVersion: "2026-08-30T03:00:00.000Z",
 		});
 	});
 

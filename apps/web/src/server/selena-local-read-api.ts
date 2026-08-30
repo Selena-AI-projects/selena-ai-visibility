@@ -169,7 +169,7 @@ export type SelenaLocalReadStore = {
 		after: LocalReadCursorPosition | null;
 	}): Promise<LocalReadAiEvidenceRow[]>;
 	countMapObservations(input: { tenantId: string; cycleId: string }): Promise<LocalReadMapCounts>;
-	findMapDatasetId(input: { tenantId: string; cycleId: string }): Promise<string | null>;
+	findMapDatasetId(input: { tenantId: string; cycleId: string }): Promise<{ id: string; createdAt: Date } | null>;
 	listMapResults(input: {
 		tenantId: string;
 		cycleId: string;
@@ -636,8 +636,12 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 			snapshotVersion?: string | null;
 		}) {
 			const cycle = await ownedCycle(input.tenantId, input.cycleId);
-			const snapshotVersion = assertCursorSnapshot(cycle, input.snapshotVersion);
-			const [counts, datasetId] = await Promise.all([store.countMapObservations(input), store.findMapDatasetId(input)]);
+			const [counts, dataset] = await Promise.all([store.countMapObservations(input), store.findMapDatasetId(input)]);
+			const snapshotVersion = assertCursorSnapshot(
+				cycle,
+				input.snapshotVersion,
+				maxIso([safeIso(cycle.updatedAt), ...(dataset ? [safeIso(dataset.createdAt)] : [])]),
+			);
 			const progress = mapProgress(cycle, counts);
 			const page = pageRows(
 				await store.listMapResults({
@@ -654,7 +658,7 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 			);
 			const pageDatasetIds = new Set(page.items.map((row) => row.datasetId));
 			if (pageDatasetIds.size > 1) throw new Error("LOCAL_MAPS_MULTIPLE_DATASETS");
-			const effectiveDatasetId = datasetId ?? [...pageDatasetIds][0] ?? null;
+			const effectiveDatasetId = dataset?.id ?? [...pageDatasetIds][0] ?? null;
 			if (page.items.some((row) => row.datasetId !== effectiveDatasetId))
 				throw new Error("LOCAL_MAPS_DATASET_IDENTITY_MISMATCH");
 			return {
@@ -1034,15 +1038,23 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 
 	async findMapDatasetId({ tenantId, cycleId }) {
 		const datasets = await db
-			.select({ id: svVisibilityMapDatasets.datasetId })
+			.select({ id: svVisibilityMapDatasets.datasetId, createdAt: svMeasurementDatasets.createdAt })
 			.from(svVisibilityMapDatasets)
+			.innerJoin(
+				svMeasurementDatasets,
+				and(
+					eq(svMeasurementDatasets.id, svVisibilityMapDatasets.datasetId),
+					eq(svMeasurementDatasets.organizationId, svVisibilityMapDatasets.organizationId),
+					eq(svMeasurementDatasets.cycleId, svVisibilityMapDatasets.measurementCycleId),
+				),
+			)
 			.where(
 				and(eq(svVisibilityMapDatasets.organizationId, tenantId), eq(svVisibilityMapDatasets.localCycleId, cycleId)),
 			)
 			.orderBy(asc(svVisibilityMapDatasets.datasetId))
 			.limit(2);
 		if (datasets.length > 1) throw new Error("LOCAL_MAPS_MULTIPLE_DATASETS");
-		return datasets[0]?.id ?? null;
+		return datasets[0] ?? null;
 	},
 
 	async listMapResults({ tenantId, cycleId, limit, after }) {
@@ -1084,6 +1096,14 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				isStale: svVisibilityMapPoints.isStale,
 			})
 			.from(svVisibilityMapPoints)
+			.innerJoin(
+				svMeasurementDatasets,
+				and(
+					eq(svMeasurementDatasets.id, svVisibilityMapPoints.datasetId),
+					eq(svMeasurementDatasets.organizationId, svVisibilityMapPoints.organizationId),
+					eq(svMeasurementDatasets.cycleId, svVisibilityMapPoints.measurementCycleId),
+				),
+			)
 			.innerJoin(
 				svEvidenceIndex,
 				and(

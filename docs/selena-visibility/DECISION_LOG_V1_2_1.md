@@ -75,3 +75,15 @@
 - Decision: the source-only read API validates cursor shape and tenant/cycle/resource binding, but does not claim tamper-evident cursors or a complete database high-water mark. Evidence access remains explicitly `UNAVAILABLE/SIGNING_UNAVAILABLE` until an owner-approved signing key, object-storage adapter and runtime proof exist.
 - Authority: reconciliation of two fresh blind Codex API-01A reviews on 2026-08-30.
 - Effect: API-01 remains `PARTIAL`; no cursor secret, credentials, provider call, staging/production action or paid execution is introduced implicitly.
+
+## D-015 — Local quote/create mutation boundary
+
+- Decision: Local quote and cycle creation use lock-first request contracts, require `local:write` and an 8–128 character `Idempotency-Key`, and pass a canonical body hash to the persistence adapter. The default adapter fails closed with `503 OWNER_GATE_REQUIRED`; no synthetic success, legacy-table write, migration apply or provider call is allowed before target-schema and tenant-RLS proof.
+- Authority: implementation of the owner-approved fail-closed defaults and Delta v1.2.1, independently reviewed source-only on 2026-08-30.
+- Effect: API-01 now has source-only transport/projection coverage while durable idempotency, commercial pricing persistence and runtime authorization remain explicit owner gates.
+
+## D-016 — Canonical Local Maps export projection
+
+- Decision: Local Maps CSV serialization is a pure, bounded projection of the tenant-scoped read contract with stable columns, explicit `UNKNOWN`/null semantics and no private/raw references. A REST download route, object storage and signed URL are deferred until runtime evidence and owner authorization exist.
+- Authority: implementation and contract tests on 2026-08-30.
+- Effect: export formatting is deterministic without implying that a canonical database dataset or signed evidence capability is available.
