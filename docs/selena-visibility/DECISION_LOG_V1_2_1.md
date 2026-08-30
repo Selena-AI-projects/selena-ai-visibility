@@ -141,3 +141,10 @@
 - Decision: every Local write, setup and admin adapter input must carry the `tenantId` copied from the authenticated context, alongside the existing auth context and canonical body hash.
 - Authority: source-only defense-in-depth hardening on 2026-08-30.
 - Effect: future durable adapters receive an explicit tenant boundary and tests detect accidental omission; this does not replace database-enforced RLS or transaction-local tenant context, which remain owner-gated.
+
+## D-026 — Preserve declared observer coordinates in Local AI context identity
+
+- Decision: Local AI task revalidation removes only coordinate-proof metadata (`coordinateProofReference` and `pointId`) before recomputing `contextHash`; `observerLatitude` and `observerLongitude` remain part of the observer conditions and therefore remain hash-bound.
+- Evidence: source-only correction in `79e4c259`, web Local Read API regression coverage (`25/25` focused; `363/363` web suite, 4 skipped), web typecheck pass.
+- Authority: safe source-only integrity default; no migration, provider call, credential, network or feature-flag activation.
+- Effect: a declared coordinate change cannot be hidden behind a proof-field parse, while valid locked coordinate contexts remain readable; Local AI automation and runtime activation remain disabled.

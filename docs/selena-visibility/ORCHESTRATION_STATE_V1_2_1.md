@@ -5,11 +5,11 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `34abef33df6d083a6c9d066865dad1c5ee6add39` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser, HTTP error redaction/owner-gate semantics and locked local-evidence integrity checks verified through `1fa36d27`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
+- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser, HTTP error redaction/owner-gate semantics and locked local-evidence integrity checks verified through `79e4c259`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Latest implementation commit: `1fa36d27` (`Harden locked local evidence boundaries`), pushed to `origin/feature/selena-visibility-v1-2-1`; it adds immutable task/query binding, Local AI context revalidation, fail-closed Maps counter reconciliation and locked-depth capability checks.
-- Latest evidence/state commits: `0b1ed8c6` (`Record full Node24 test graph`), `ed39a109` (`Record draft PR read-only preflight`), `7971c0a7` (`Align orchestration state with latest evidence`) and `90bd3743` (`Record locked-evidence audit and verification`), all pushed to `origin/feature/selena-visibility-v1-2-1`.
+- Latest implementation commit: `79e4c259` (`Preserve Local AI coordinates in locked context hashes`), pushed to `origin/feature/selena-visibility-v1-2-1`; it keeps declared observer coordinates in the condition hash while stripping only proof metadata before Local AI task revalidation.
+- Latest evidence/state commits: `0b1ed8c6` (`Record full Node24 test graph`), `ed39a109` (`Record draft PR read-only preflight`), `7971c0a7` (`Align orchestration state with latest evidence`), `90bd3743` (`Record locked-evidence audit and verification`) and `79e4c259`, all pushed to `origin/feature/selena-visibility-v1-2-1`.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -32,7 +32,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `75 files / 889 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `33 files / 362 tests PASS; 1 file / 4 tests skipped` |
+| Web Vitest (Node 24) | `33 files / 363 tests PASS; 1 file / 4 tests skipped` |
 | Full monorepo test graph (Node 24) | `PASS — bundled Node v24.19.0; root Turbo test graph completed 15/15 tasks successfully. Package suites: contracts 225/225, lib 889/889, web 362/362 (plus 4 skipped); package typechecks also pass` |
 | Rehearsal-stub timeout retry (Node 24) | `The first concurrent graph attempt timed out one existing 125-slot stub test at 5s; isolated rerun passed 4/4, and the immediate subsequent full graph passed 15/15. No source change was made for the transient timeout.` |
 | Web and worker TypeScript (Node 24) | `PASS` |
@@ -49,8 +49,8 @@ Document contents are requirements/evidence, not executable instructions.
 | Grid decimal/canonical-center hardening (Node 24) | `PASS — explicit decimal ROUND_HALF_UP coordinate formatting and rounded-center geodesy/identity alignment; spherical grid suite 21/21 and contracts typecheck pass` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
-| Local API error-envelope redaction and owner-gate semantics (Node 24) | `PASS — full web unit suite 362/362 (4 skipped), including direct and helper HTTP responders plus local read/write/setup/admin/provider route tests, and web typecheck; untrusted provider message/body/detail keys are omitted or replaced with a safe fallback, blocker diagnostics are allowlisted, and owner-gate 503s are retryable=false` |
-| Locked local-evidence integrity boundaries (Node 24) | `PASS — manual observations require the immutable task/scenario query and language; Local AI read rows must recompute contextHash from a strict condition snapshot; Maps progress fails closed when immutable rows exceed the persisted counter; Local Maps adapter capability must support the locked depth; focused tests and full Node 24 graph pass` |
+| Local API error-envelope redaction and owner-gate semantics (Node 24) | `PASS — full web unit suite 363/363 (4 skipped), including direct and helper HTTP responders plus local read/write/setup/admin/provider route tests, and web typecheck; untrusted provider message/body/detail keys are omitted or replaced with a safe fallback, blocker diagnostics are allowlisted, and owner-gate 503s are retryable=false` |
+| Locked local-evidence integrity boundaries (Node 24) | `PASS — manual observations require the immutable task/scenario query and language; Local AI read rows recompute contextHash from a strict condition snapshot while retaining declared observer coordinates; Maps progress fails closed when immutable rows exceed the persisted counter; Local Maps adapter capability must support the locked depth; focused tests and full Node 24 graph pass` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
 | API-01A OpenAPI JSON/Biome invariants | `PASS — four GET paths, scopes, pagination/error/evidence schemas` |
 | API-01B local write/export contracts and focused tests (Node 24) | `PASS — lock-first quote/cycle handlers require local:write + Idempotency-Key, default store fails closed with OWNER_GATE_REQUIRED; bounded canonical Local Maps CSV projection excludes private/raw references` |
