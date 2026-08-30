@@ -111,3 +111,9 @@
 - Decision: include the existing read-only provider-capabilities route in the canonical OpenAPI document, with its explicit `provider:canary` scope and fail-closed owner-gate response.
 - Authority: route/OpenAPI parity audit and JSON validation on 2026-08-30.
 - Effect: all 26 documented paths now have route-tree coverage; no provider registry, credential or external call is enabled by the specification update.
+
+## D-021 — Bidirectional API-01 route contract check
+
+- Decision: validate the Selena API-01 OpenAPI surface in both directions: every documented path/method must have a concrete route file, and the documented route set must not omit a required API-01 path.
+- Authority: source-only route-file/OpenAPI audit on 2026-08-30 (`16` API-01 paths, no missing route or method).
+- Effect: future API-01 additions must update both transport and canonical OpenAPI evidence; this check does not authorize runtime execution or provider access.
