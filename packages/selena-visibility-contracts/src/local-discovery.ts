@@ -60,21 +60,30 @@ export const observerDeviceClasses = ["MOBILE_IOS", "MOBILE_ANDROID", "DESKTOP",
 export const observerAccountStates = ["SIGNED_OUT", "SIGNED_IN", "UNKNOWN"] as const;
 export const observerPersonalizationStates = ["ON", "OFF", "UNKNOWN"] as const;
 
-export const observerContextSchema = z.strictObject({
-	observerCountryCode: z.string().trim().min(2).max(2),
-	observerAdminArea: z.string().trim().min(1).max(160).optional(),
-	observerLocality: z.string().trim().min(1).max(160).optional(),
-	observerGeoMode: z.enum(observerGeoModes),
-	observerLatitude: z.number().min(-90).max(90).optional(),
-	observerLongitude: z.number().min(-180).max(180).optional(),
-	appLocale: z.string().trim().min(2).max(35),
-	queryLanguage: z.string().trim().min(2).max(35),
-	deviceClass: z.enum(observerDeviceClasses),
-	accountState: z.enum(observerAccountStates),
-	personalizationState: z.enum(observerPersonalizationStates),
-	timezone: z.string().trim().min(1).max(64),
-	capturedAt: z.iso.datetime(),
-});
+export const observerContextSchema = z
+	.strictObject({
+		observerCountryCode: z.string().trim().min(2).max(2),
+		observerAdminArea: z.string().trim().min(1).max(160).optional(),
+		observerLocality: z.string().trim().min(1).max(160).optional(),
+		observerGeoMode: z.enum(observerGeoModes),
+		observerLatitude: z.number().min(-90).max(90).optional(),
+		observerLongitude: z.number().min(-180).max(180).optional(),
+		appLocale: z.string().trim().min(2).max(35),
+		queryLanguage: z.string().trim().min(2).max(35),
+		deviceClass: z.enum(observerDeviceClasses),
+		accountState: z.enum(observerAccountStates),
+		personalizationState: z.enum(observerPersonalizationStates),
+		timezone: z.string().trim().min(1).max(64),
+		capturedAt: z.iso.datetime(),
+	})
+	.superRefine((context, issues) => {
+		const hasLatitude = context.observerLatitude !== undefined;
+		const hasLongitude = context.observerLongitude !== undefined;
+		if (hasLatitude !== hasLongitude)
+			issues.addIssue({ code: "custom", message: "OBSERVER_COORDINATES_MUST_BE_PAIRED" });
+		if (context.observerGeoMode === "DECLARED_COORDINATE" && (!hasLatitude || !hasLongitude))
+			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_COORDINATES" });
+	});
 export type ObserverContext = z.infer<typeof observerContextSchema>;
 
 // The hash identifies the observation *conditions*, not the moment — two

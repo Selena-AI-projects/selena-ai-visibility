@@ -621,13 +621,31 @@
 				"properties": {
 					"placeId": { "type": "string", "minLength": 1, "maxLength": 300 },
 					"cid": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"matchedName": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"matchedAddress": { "type": "string", "minLength": 1, "maxLength": 500 },
 					"mapsUrl": { "type": "string", "format": "uri" },
 					"identitySource": { "type": "string", "enum": ["USER_CONFIRMED", "PROVIDER_EVIDENCE"] },
 					"matchPolicy": { "type": "string", "enum": ["PLACE_ID_OR_CID", "REVIEWED_NAME_ADDRESS_FALLBACK"] },
-					"matchStatus": { "type": "string", "enum": ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"] }
+					"matchStatus": { "type": "string", "enum": ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"] },
+					"reviewed": { "type": "boolean" }
 				},
 				"required": ["mapsUrl", "identitySource", "matchPolicy"],
-				"description": "At least one of placeId or cid is required; identity is not rank evidence."
+				"oneOf": [
+					{
+						"anyOf": [{ "required": ["placeId"] }, { "required": ["cid"] }],
+						"properties": { "matchPolicy": { "enum": ["PLACE_ID_OR_CID"] } }
+					},
+					{
+						"required": ["matchedName", "matchedAddress", "matchStatus", "reviewed"],
+						"properties": {
+							"matchPolicy": { "enum": ["REVIEWED_NAME_ADDRESS_FALLBACK"] },
+							"matchStatus": { "enum": ["REVIEWED_MATCH"] },
+							"reviewed": { "enum": [true] }
+						},
+						"not": { "anyOf": [{ "required": ["placeId"] }, { "required": ["cid"] }] }
+					}
+				],
+				"description": "Identity is either a Place ID/CID or an explicitly reviewed name/address fallback; identity is not rank evidence."
 			},
 			"LocalKeywordSetCreateRequest": {
 				"type": "object",
@@ -679,11 +697,27 @@
 					"locationId": { "type": "string", "format": "uuid" },
 					"placeId": { "type": "string", "minLength": 1, "maxLength": 300 },
 					"cid": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"matchedName": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"matchedAddress": { "type": "string", "minLength": 1, "maxLength": 500 },
 					"mapsUrl": { "type": "string", "format": "uri" },
-					"matchStatus": { "type": "string", "enum": ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"] }
+					"matchStatus": { "type": "string", "enum": ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"] },
+					"reviewed": { "type": "boolean" }
 				},
 				"required": ["locationId", "mapsUrl", "matchStatus"],
-				"description": "At least one of placeId or cid is present."
+				"oneOf": [
+					{
+						"anyOf": [{ "required": ["placeId"] }, { "required": ["cid"] }]
+					},
+					{
+						"required": ["matchedName", "matchedAddress", "reviewed"],
+						"properties": {
+							"matchStatus": { "enum": ["REVIEWED_MATCH"] },
+							"reviewed": { "enum": [true] }
+						},
+						"not": { "anyOf": [{ "required": ["placeId"] }, { "required": ["cid"] }] }
+					}
+				],
+				"description": "Response identity is either a Place ID/CID or an explicitly reviewed name/address fallback."
 			},
 			"LocalKeywordSetCreateResponse": {
 				"type": "object",

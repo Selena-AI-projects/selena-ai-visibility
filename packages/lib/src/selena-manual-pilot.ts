@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import {
-	type LocalAiDiscoveryLockBlock,
-	type ObserverContext,
 	assertObservationCardinality,
 	contextHash,
+	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
+	type ObserverContext,
 } from "@workspace/selena-visibility-contracts";
 
 // RC7 Phase E planning is pure: a lock block goes in, a finite task matrix
@@ -27,6 +27,7 @@ export function captureTaskDedupeKey(scenarioId: string, hash: string, repeatInd
 export function planCaptureTasks(block: LocalAiDiscoveryLockBlock): PlannedCaptureTask[] {
 	const parsed = localAiDiscoveryLockBlockSchema.parse(block);
 	const tasks: PlannedCaptureTask[] = [];
+	const seenDedupeKeys = new Set<string>();
 	for (const scenario of parsed.scenarios) {
 		for (const context of parsed.observerContexts) {
 			const hash = contextHash(context);
@@ -35,6 +36,9 @@ export function planCaptureTasks(block: LocalAiDiscoveryLockBlock): PlannedCaptu
 				// the matrix product, so planning task expected+1 must be impossible
 				// even if a caller bypasses parse.
 				assertObservationCardinality(tasks.length, parsed.expectedObservations);
+				const dedupeKey = captureTaskDedupeKey(scenario.scenarioId, hash, repeatIndex);
+				if (seenDedupeKeys.has(dedupeKey)) throw new Error("CAPTURE_TASK_DEDUPE_KEY_DUPLICATE");
+				seenDedupeKeys.add(dedupeKey);
 				tasks.push({
 					scenarioId: scenario.scenarioId,
 					contextHash: hash,
@@ -42,7 +46,7 @@ export function planCaptureTasks(block: LocalAiDiscoveryLockBlock): PlannedCaptu
 					repeatIndex,
 					queryTextSnapshot: scenario.queryText,
 					targetEntityIdsSnapshot: [...scenario.targetEntityIds],
-					dedupeKey: captureTaskDedupeKey(scenario.scenarioId, hash, repeatIndex),
+					dedupeKey,
 				});
 			}
 		}

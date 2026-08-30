@@ -176,6 +176,22 @@ describe("RC7 observer context and context hash", () => {
 		expect(contextHash(moscowContext)).toMatch(/^[0-9a-f]{64}$/);
 		expect(contextHash({ ...moscowContext, observerLocality: "Kazan" })).not.toBe(hash);
 	});
+
+	it("requires paired coordinates and coordinates for DECLARED_COORDINATE mode", () => {
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerLatitude: 55.75 }).success).toBe(false);
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerLongitude: 37.62 }).success).toBe(false);
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerGeoMode: "DECLARED_COORDINATE" }).success).toBe(
+			false,
+		);
+		expect(
+			observerContextSchema.safeParse({
+				...moscowContext,
+				observerGeoMode: "DECLARED_COORDINATE",
+				observerLatitude: 55.75,
+				observerLongitude: 37.62,
+			}).success,
+		).toBe(true);
+	});
 });
 
 describe("RC7 lock block and observation cardinality", () => {
