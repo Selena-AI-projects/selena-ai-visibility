@@ -51,19 +51,21 @@ export type LocalMapsAttemptSourceSnapshot = {
 		organizationId: string;
 		measurementCycleId: string;
 		configurationLockId: string;
+		locationId: string;
 		provider: string;
 	};
 	lockId: string;
 	lock: MapsLockV1;
 	slot: MapsLockSlotPlan;
 	keyword: LocalMapsLiveKeyword;
+	keywordLocationId: string;
 };
 
 /** Build a candidate solely from transaction-local, frozen source snapshots. */
 export function buildLocalMapsSubmittedCandidate(input: {
 	source: LocalMapsAttemptSourceSnapshot;
 }): LocalMapsLiveSubmittedCandidate {
-	const { attempt, measurementCycle, localCycle, lockId } = input.source;
+	const { attempt, measurementCycle, localCycle, lockId, keywordLocationId } = input.source;
 	const lock = mapsLockV1Schema.parse(input.source.lock);
 	const slot = mapsLockSlotPlanSchema.parse(input.source.slot);
 	const keyword = localMapsLiveKeywordSchema.parse(input.source.keyword);
@@ -78,10 +80,12 @@ export function buildLocalMapsSubmittedCandidate(input: {
 		localCycle.organizationId !== attempt.organizationId ||
 		localCycle.measurementCycleId !== attempt.measurementCycleId ||
 		localCycle.configurationLockId !== lockId ||
+		localCycle.locationId !== lock.locationId ||
 		localCycle.provider !== attempt.executorId ||
 		localCycle.id.length === 0
 	)
 		throw new Error("LOCAL_MAPS_ATTEMPT_LOCAL_CYCLE_SCOPE_MISMATCH");
+	if (keywordLocationId !== lock.locationId) throw new Error("LOCAL_MAPS_ATTEMPT_KEYWORD_LOCATION_MISMATCH");
 	if (
 		slot.measurementCycleId !== attempt.measurementCycleId ||
 		slot.pointId !== attempt.pointId ||
@@ -166,6 +170,7 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 			organizationId: schema.svLocalScanCycles.organizationId,
 			measurementCycleId: schema.svLocalScanCycles.measurementCycleId,
 			configurationLockId: schema.svLocalScanCycles.configurationLockId,
+			locationId: schema.svLocalScanCycles.locationId,
 			provider: schema.svLocalScanCycles.provider,
 		})
 		.from(schema.svLocalScanCycles)
@@ -192,7 +197,11 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 	if (!lockRow) throw new Error("LOCAL_MAPS_CONFIGURATION_LOCK_NOT_FOUND");
 	const lock = mapsLockV1Schema.parse(lockRow.snapshot);
 	const [keywordRow] = await tx
-		.select({ id: schema.svLocalKeywords.id, text: schema.svLocalKeywords.text })
+		.select({
+			id: schema.svLocalKeywords.id,
+			text: schema.svLocalKeywords.text,
+			locationId: schema.svLocalKeywords.locationId,
+		})
 		.from(schema.svLocalKeywords)
 		.where(
 			and(
@@ -214,6 +223,7 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 		lockId: lockRow.id,
 		lock,
 		slot,
+		keywordLocationId: keywordRow.locationId,
 		keyword: {
 			id: keywordRow.id,
 			text: keywordRow.text,

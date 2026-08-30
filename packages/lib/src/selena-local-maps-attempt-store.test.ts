@@ -147,11 +147,13 @@ function candidateSource(): LocalMapsAttemptSourceSnapshot {
 			organizationId: candidateIds.organizationId,
 			measurementCycleId: candidateIds.measurementCycleId,
 			configurationLockId: candidateIds.configurationLockId,
+			locationId: candidateIds.locationId,
 			provider: candidateLock.provider.id,
 		},
 		lockId: candidateIds.configurationLockId,
 		lock: candidateLock,
 		slot,
+		keywordLocationId: candidateIds.locationId,
 		keyword: {
 			id: candidateIds.keywordId,
 			text: "couples massage ubud",
@@ -316,5 +318,14 @@ describe("buildLocalMapsSubmittedCandidate", () => {
 		expect(() => buildLocalMapsSubmittedCandidate({ source: { ...source, slot: otherSlot } })).toThrow(
 			"LOCAL_MAPS_ATTEMPT_SLOT_SCOPE_MISMATCH",
 		);
+	});
+
+	it("rejects a keyword resolved for a different location", () => {
+		const source = candidateSource();
+		expect(() =>
+			buildLocalMapsSubmittedCandidate({
+				source: { ...source, keywordLocationId: "99999999-9999-4999-8999-999999999999" },
+			}),
+		).toThrow("LOCAL_MAPS_ATTEMPT_KEYWORD_LOCATION_MISMATCH");
 	});
 });
