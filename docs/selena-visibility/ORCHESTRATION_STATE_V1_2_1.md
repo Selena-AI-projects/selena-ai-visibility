@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean recovered checkout of the feature branch after an unexpected local workspace loss
-- Current phase: `Phase 0C — source-only live runner and transactional store design`
-- Current slice: `durable row-version/token and result-persistence prerequisites complete source-only; aggregate budget/store activation remains blocked on explicit owner decisions`
-- Parent commit for the current slice: `24187119` (`add source-only local maps live runner`)
+- Worktree: recovered feature checkout with the current source-only hardening slice in review
+- Current phase: `Phase 0D — source-only consistency, provenance and spend-safety hardening`
+- Current slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
+- Parent commit for the current slice: `d1fe41f8` (`add durable local maps persistence prerequisites`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -29,11 +29,15 @@ Document contents are requirements/evidence, not executable instructions.
 |---|---|
 | Contracts Vitest (Node 24) | `21 files / 191 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `71 files / 867 tests PASS` |
+| Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Live runner targeted Vitest (Node 24) | `1 file / 21 tests PASS` |
+| Web Vitest (Node 24) | `26 files / 300 tests PASS; 1 file / 4 tests skipped` |
+| Web and worker TypeScript (Node 24) | `PASS` |
+| Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Migration 0043 static schema/review | `PASS — not applied` |
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
+| Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
+| Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
@@ -52,14 +56,26 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex live runner reviews: adversarial rounds closed raw-envelope, frozen-window, continuation, finalize and positive-cost release gaps; final verdicts `PASS`.
 - Codex transactional store/RLS/aggregate-cap design: three parallel read-only reviews found missing row fencing, continuation digest, durable result storage and DB-enforced aggregate admission; safe source-only prerequisite boundary agreed.
 - Codex 0044 persistence reviews: three adversarial rounds closed incomplete identity, token reuse, CHECK-null, provider, chronology, disposition and cost-binding gaps; two final blind verdicts `PASS`.
+- Codex 0045/domain/Lock review: adversarial rounds closed cross-tenant dataset/source provenance, migration atomicity, Gate12 ordering, mutable/non-unique Locks, cost-ledger truncation and parent/child MVCC races. Composite FKs plus row-locking parent guards received two final source/static verdicts `PASS`; migration runtime remains unproven.
+- Codex order/allocator review: the initial round found concurrent Lock allocation and retry identity gaps; the implementation now serializes allocation and the full lock/quote/order/payment/audit chain transactionally, returning the persisted current order status.
+- Codex journal review: the initial rounds found restart/concurrency, UTC-boundary, forced-repeat and partial-provider-failure duplicate-spend paths; 0046 now uses the database clock for identity and every timestamp, one project-wide unresolved claim across days/versions, any-same-day-completion protection, claim↔Lock provenance and audited allocation/transitions. Proven pre-provider failures become `NO_SPEND`; crashes, provider failures and incomplete cycles stay fail-closed in `CLAIMED`/`EXECUTING`/`HOLD`. Final source/static verdict `PASS`.
+- Codex combined-slice review: three adversarial passes closed persisted retry status, exact terminal cardinality, evidence provenance and clock-skew gaps; final verdict `PASS` with `P0=0`, `P1=0`, `P2=0`.
 - Codex rollout-gate review: completed read-only.
-- Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
+- Claude Code Max 5 / Sonnet: earlier read-only pass completed in an isolated snapshot; no API billing.
+- Claude Code Max 20 / Opus: blind audit completed at pinned commit `d1fe41f8`, auth `claude.ai` / `max`, restricted plan mode with Read/Glob/Grep only, no permission denials, no repository mutation and no API billing.
+
+### Claude Max 20 synthesis
+
+- `CONSENSUS`: 0044's deep persistence boundary is strong source-only, while paid canary/production remain blocked by the absent aggregate budget store, runtime RLS proof, provider adapter and execution wiring.
+- `CLAUDE_ONLY`, locally confirmed: stale `LOCAL` emission/backfill gap; non-unique and mutable Configuration Lock; no `TRUNCATE` guard on `sv_cost_events`; Local Visibility copy describes a Maps measurement that is not yet runnable.
+- `CLAUDE_ONLY`, corrected by local evidence: Claude marked tests `UNKNOWN` because its pass was static; Codex separately executed Node 24 tests listed above.
+- `DISAGREEMENT`: none material. Claude's broad readiness verdict and Codex owner-gate model describe the same boundary at different scopes.
 
 ## Next autonomous actions
 
-1. Commit and push the independently reviewed source-only 0044 row-version/token/candidate/result persistence prerequisites.
-2. Present the four explicit owner decisions needed for the authoritative aggregate budget claim/finalize CAS store.
-3. Keep all migrations, providers, runtime grants, worker registration, persistence of synthetic results and feature flags disabled.
+1. Freeze the reviewed source-only slice in a local commit and run the pinned read-only Claude Code Max verifier.
+2. Resolve any verified Claude finding, then push the accepted slice to the authorised feature branch.
+3. Continue source-only aggregate budget/store design while keeping migrations, providers, runtime grants, worker registration, synthetic persistence and feature flags disabled.
 
 ## Push/PR side-effect check
 

@@ -8,10 +8,15 @@ import {
 	svProjectProfiles,
 	svProjects,
 	svPromptFamilies,
+	svQuotes,
 	svScenarios,
 } from "@workspace/lib/db/schema";
 import { lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
-import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
+import {
+	allocateConfigurationLockInTransaction,
+	createSelenaRepositories,
+	type SelenaRepositoryContext,
+} from "@workspace/lib/selena-visibility-repositories";
 import {
 	analysisSubjectsSchema,
 	apiModelIds,
@@ -31,6 +36,7 @@ import {
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import { approveOrder, enqueueOrderRunsForOrder } from "./selena-admin-orders";
+import { freezeSelenaOrderRequest, matchesFrozenSelenaOrderRequest } from "./selena-order-idempotency";
 
 // The order desk: where a confirmed brand profile becomes an order the
 // operator queue can act on. It contacts no provider and starts no run — it
@@ -243,13 +249,86 @@ type OrderDraftInput = {
 };
 
 export async function createSelenaOrderDraft(context: SelenaRepositoryContext, data: OrderDraftInput) {
-	{
-		// The payment gate decides before anything is written: a desk that
-		// cannot record the payment must not leave a half-built order behind.
-		assertPaymentAllowed(paymentConfigFromEnv(process.env), "test");
+	return db.transaction(async (tx) => {
+		// The provider event key is globally unique in the ledger, so its lock is
+		// global too. It serializes both same-tenant retries and a cross-tenant
+		// collision before either path can mint immutable rows.
+		await tx.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended('selena-order-draft:test:' || ${data.idempotencyKey}, 0))`,
+		);
+		const [existing] = await tx
+			.select({
+				paymentId: svPayments.id,
+				paymentOrganizationId: svPayments.organizationId,
+				paymentStatus: svPayments.status,
+				orderId: svOrders.id,
+				orderOrganizationId: svOrders.organizationId,
+				orderProjectId: svOrders.projectId,
+				orderStatus: svOrders.status,
+				orderCap: svOrders.orderCap,
+				lockId: svConfigurationLocks.id,
+				lockOrganizationId: svConfigurationLocks.organizationId,
+				lockProjectId: svConfigurationLocks.projectId,
+				lockVersion: svConfigurationLocks.version,
+				lockSnapshot: svConfigurationLocks.snapshot,
+				lockExpectedRuns: svConfigurationLocks.expectedRuns,
+				quoteId: svQuotes.id,
+				quoteOrganizationId: svQuotes.organizationId,
+				quoteProjectId: svQuotes.projectId,
+				quoteLockId: svQuotes.lockId,
+				quotePrice: svQuotes.priceAmount,
+				quoteCurrency: svQuotes.currency,
+				quoteExpectedRuns: svQuotes.expectedRuns,
+			})
+			.from(svPayments)
+			.innerJoin(svOrders, eq(svOrders.id, svPayments.orderId))
+			.innerJoin(svQuotes, eq(svQuotes.id, svOrders.quoteId))
+			.innerJoin(svConfigurationLocks, eq(svConfigurationLocks.id, svOrders.lockId))
+			.where(and(eq(svPayments.provider, "test"), eq(svPayments.providerEventId, data.idempotencyKey)))
+			.limit(1);
+		if (existing) {
+			const snapshot =
+				typeof existing.lockSnapshot === "object" && existing.lockSnapshot !== null
+					? (existing.lockSnapshot as Record<string, unknown>)
+					: {};
+			const sameRequest =
+				existing.paymentOrganizationId === context.tenantId &&
+				existing.orderOrganizationId === context.tenantId &&
+				existing.quoteOrganizationId === context.tenantId &&
+				existing.lockOrganizationId === context.tenantId &&
+				existing.paymentStatus === "SUCCEEDED" &&
+				existing.orderProjectId === data.projectId &&
+				existing.quoteProjectId === data.projectId &&
+				existing.lockProjectId === data.projectId &&
+				existing.quoteLockId === existing.lockId &&
+				existing.quoteExpectedRuns === existing.lockExpectedRuns &&
+				matchesFrozenSelenaOrderRequest(snapshot.orderRequest, data);
+			if (!sameRequest) throw new Error("SELENA_ORDER_IDEMPOTENCY_CONFLICT");
+			const retryPlan = SELENA_CATALOG[data.planId as SelenaPlanId];
+			return {
+				orderId: existing.orderId,
+				lockId: existing.lockId,
+				lockVersion: existing.lockVersion,
+				quoteId: existing.quoteId,
+				planId: retryPlan.planId,
+				planName: retryPlan.name,
+				price: Number(existing.quotePrice),
+				currency: existing.quoteCurrency,
+				expectedRuns: existing.lockExpectedRuns,
+				budgetCap: Number(existing.orderCap),
+				status: existing.orderStatus,
+				paymentRecorded: true,
+			};
+		}
 
+		// A disabled payment gate blocks only a new write. A completed retry
+		// above is a read of the result already committed under this key.
+		assertPaymentAllowed(paymentConfigFromEnv(process.env), "test");
 		const plan = SELENA_CATALOG[data.planId as SelenaPlanId];
-		const approved = await db
+		const scope = scopeForPlan(plan, data.scenarioIds);
+		const expectedRuns = expectedRunsFromScope(scope);
+
+		const approved = await tx
 			.select({ id: svScenarios.id, text: svScenarios.text, language: svScenarios.language })
 			.from(svScenarios)
 			.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
@@ -274,8 +353,6 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 					`SELENA_QUESTION_LIMIT_EXCEEDED: this plan takes up to ${plan.questionLimitPerMeasurement} questions (${scenarioCap} language scenarios) per measurement, got ${data.scenarioIds.length}`,
 				);
 		}
-		const scope = scopeForPlan(plan, data.scenarioIds);
-		const expectedRuns = expectedRunsFromScope(scope);
 		// The pricing page quotes a monthly allowance (300/800 answers); an
 		// order that would overrun it is refused with the numbers, not queued
 		// quietly. Usage counts the calendar month's created cycles — orders
@@ -285,7 +362,7 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			const monthStart = new Date();
 			monthStart.setUTCDate(1);
 			monthStart.setUTCHours(0, 0, 0, 0);
-			const [usage] = await db
+			const [usage] = await tx
 				.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
 				.from(svCycles)
 				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
@@ -306,7 +383,13 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		// Frozen with the scope: analysis looks for exactly the brand and
 		// competitors the customer agreed to, so a later profile edit cannot
 		// change what a paid report says.
-		const profile = await repositories.profiles.get(context, data.projectId);
+		const [profile] = await tx
+			.select()
+			.from(svProjectProfiles)
+			.where(
+				and(eq(svProjectProfiles.projectId, data.projectId), eq(svProjectProfiles.organizationId, context.tenantId)),
+			)
+			.limit(1);
 		if (!profile) throw new Error("SELENA_PROFILE_MISSING");
 		const subjects = analysisSubjectsSchema.parse({
 			brand: {
@@ -316,20 +399,10 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			competitors: readProfileCompetitors(profile.competitorSnapshot),
 		});
 
-		const [priorVersion] = await db
-			.select({ version: sql<number>`coalesce(max(${svConfigurationLocks.version}), 0)::int` })
-			.from(svConfigurationLocks)
-			.where(
-				and(
-					eq(svConfigurationLocks.projectId, data.projectId),
-					eq(svConfigurationLocks.organizationId, context.tenantId),
-				),
-			);
-
-		const lock = await repositories.locks.create(context, {
+		const lock = await allocateConfigurationLockInTransaction(tx, context, {
 			projectId: data.projectId,
-			version: (priorVersion?.version ?? 0) + 1,
 			snapshot: {
+				orderRequest: freezeSelenaOrderRequest(data),
 				measurementScope: scope,
 				analysisSubjects: subjects,
 				// The extraction resolver prefers this block over the live
@@ -351,27 +424,37 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			budgetCap: String(plan.providerBudgetCap),
 		});
 
-		const quote = await repositories.quotes.create(context, {
-			projectId: data.projectId,
-			lockId: lock.id,
-			status: "ISSUED",
-			priceAmount: String(plan.price),
-			currency: plan.currency,
-			expectedRuns,
-			expiresAt: new Date(Date.now() + 7 * 86400000),
-		});
+		const [quote] = await tx
+			.insert(svQuotes)
+			.values({
+				organizationId: context.tenantId,
+				projectId: data.projectId,
+				lockId: lock.id,
+				status: "ISSUED",
+				priceAmount: String(plan.price),
+				currency: plan.currency,
+				expectedRuns,
+				expiresAt: new Date(Date.now() + 7 * 86400000),
+			})
+			.returning();
+		if (!quote) throw new Error("SELENA_ORDER_DRAFT_WRITE_FAILED");
 
-		const order = await repositories.orders.create(context, {
-			projectId: data.projectId,
-			quoteId: quote.id,
-			lockId: lock.id,
-			status: "AWAITING_PAYMENT",
-			// The order cap bounds provider spend, not the price: it is what
-			// preflight measures the worst-case run cost against.
-			orderCap: String(plan.providerBudgetCap),
-		});
+		const [order] = await tx
+			.insert(svOrders)
+			.values({
+				organizationId: context.tenantId,
+				projectId: data.projectId,
+				quoteId: quote.id,
+				lockId: lock.id,
+				status: "AWAITING_PAYMENT",
+				// The order cap bounds provider spend, not the price: it is what
+				// preflight measures the worst-case run cost against.
+				orderCap: String(plan.providerBudgetCap),
+			})
+			.returning();
+		if (!order) throw new Error("SELENA_ORDER_DRAFT_WRITE_FAILED");
 
-		const [payment] = await db
+		const [payment] = await tx
 			.insert(svPayments)
 			.values({
 				organizationId: context.tenantId,
@@ -384,13 +467,13 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			})
 			.onConflictDoNothing({ target: [svPayments.provider, svPayments.providerEventId] })
 			.returning({ id: svPayments.id });
-		if (payment)
-			await db
-				.update(svOrders)
-				.set({ status: "PAID_REVIEW_REQUIRED", paidAt: new Date(), updatedAt: new Date() })
-				.where(and(eq(svOrders.id, order.id), eq(svOrders.organizationId, context.tenantId)));
+		if (!payment) throw new Error("SELENA_ORDER_IDEMPOTENCY_CONFLICT");
+		await tx
+			.update(svOrders)
+			.set({ status: "PAID_REVIEW_REQUIRED", paidAt: new Date(), updatedAt: new Date() })
+			.where(and(eq(svOrders.id, order.id), eq(svOrders.organizationId, context.tenantId)));
 
-		await db.insert(svAuditEvents).values({
+		await tx.insert(svAuditEvents).values({
 			organizationId: context.tenantId,
 			actorId: context.actorId,
 			event: "ORDER_DRAFTED",
@@ -419,10 +502,10 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			currency: plan.currency,
 			expectedRuns,
 			budgetCap: plan.providerBudgetCap,
-			status: payment ? "PAID_REVIEW_REQUIRED" : "AWAITING_PAYMENT",
-			paymentRecorded: Boolean(payment),
+			status: "PAID_REVIEW_REQUIRED",
+			paymentRecorded: true,
 		};
-	}
+	});
 }
 
 /**

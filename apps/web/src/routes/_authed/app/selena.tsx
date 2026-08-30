@@ -649,8 +649,8 @@ function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeature
 						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
 							{tr(
 								locale,
-								"How consistently the business appears in Google Maps local results across approved coordinates and searches.",
-								"Насколько стабильно бизнес появляется в локальной выдаче Google Maps по утверждённым координатам и запросам.",
+								"A planned Google Maps visibility view for approved coordinates and searches. Data appears only after a separately approved local scan is enabled and completed.",
+								"Запланированный обзор видимости в Google Maps по утверждённым координатам и запросам. Данные появятся только после отдельного утверждения, включения и завершения локального скана.",
 							)}
 						</p>
 					</div>

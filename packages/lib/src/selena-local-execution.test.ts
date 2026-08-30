@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	executeLocalObservation,
 	LOCAL_MEASUREMENT_DOMAIN,
 	LOCAL_MEASUREMENT_QUEUE,
-	executeLocalObservation,
 	retryLocalObservation,
 } from "./selena-local-execution";
 
@@ -27,7 +27,7 @@ function dependencies() {
 
 describe("Local observation execution guard", () => {
 	it("keeps the Local domain on its own queue", () => {
-		expect(LOCAL_MEASUREMENT_DOMAIN).toBe("LOCAL");
+		expect(LOCAL_MEASUREMENT_DOMAIN).toBe("LOCAL_MAPS");
 		expect(LOCAL_MEASUREMENT_QUEUE).toBe("selena-local-measure");
 		expect(LOCAL_MEASUREMENT_QUEUE).not.toBe("selena-measure");
 	});

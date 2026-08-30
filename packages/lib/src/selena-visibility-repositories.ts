@@ -49,6 +49,56 @@ function writable(ctx: SelenaRepositoryContext) {
 		throw new Error("Forbidden: API key lacks client:write permission");
 }
 
+type ConfigurationLockAllocation = Omit<
+	typeof schema.svConfigurationLocks.$inferInsert,
+	"organizationId" | "createdBy" | "version"
+> & {
+	expectedVersion?: number;
+};
+
+export async function allocateConfigurationLockInTransaction(
+	tx: Tx,
+	ctx: SelenaRepositoryContext,
+	value: ConfigurationLockAllocation,
+) {
+	writable(ctx);
+	const [project] = await tx
+		.select({ id: schema.svProjects.id })
+		.from(schema.svProjects)
+		.where(and(eq(schema.svProjects.id, value.projectId), eq(schema.svProjects.organizationId, ctx.tenantId)))
+		.limit(1);
+	if (!project) throw new Error("Not found: project is outside AuthContext tenant");
+	await tx.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended('selena-configuration-lock:' || ${value.projectId}, 0))`,
+	);
+
+	const [latest] = await tx
+		.select({ version: sql<number>`coalesce(max(${schema.svConfigurationLocks.version}), 0)::int` })
+		.from(schema.svConfigurationLocks)
+		.where(
+			and(
+				eq(schema.svConfigurationLocks.projectId, value.projectId),
+				eq(schema.svConfigurationLocks.organizationId, ctx.tenantId),
+			),
+		);
+	const currentVersion = Number(latest?.version ?? 0);
+	if (currentVersion >= 2_147_483_647) throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_EXHAUSTED");
+	const version = currentVersion + 1;
+	if (value.expectedVersion !== undefined && value.expectedVersion !== version)
+		throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT");
+
+	const { expectedVersion: _expectedVersion, ...lockValue } = value;
+	const [lock] = await tx
+		.insert(schema.svConfigurationLocks)
+		.values({ ...lockValue, version, organizationId: ctx.tenantId, createdBy: ctx.actorId })
+		.onConflictDoNothing({
+			target: [schema.svConfigurationLocks.projectId, schema.svConfigurationLocks.version],
+		})
+		.returning();
+	if (!lock) throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT");
+	return lock;
+}
+
 export function createSelenaRepositories(db: Db) {
 	const assertProjectOwned = async (ctx: SelenaRepositoryContext, projectId: string) => {
 		const [project] = await db
@@ -255,18 +305,8 @@ export function createSelenaRepositories(db: Db) {
 			},
 		},
 		locks: {
-			create: async (
-				ctx: SelenaRepositoryContext,
-				value: Omit<typeof schema.svConfigurationLocks.$inferInsert, "organizationId" | "createdBy">,
-			) => {
-				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				return (
-					await db
-						.insert(schema.svConfigurationLocks)
-						.values({ ...value, organizationId: ctx.tenantId, createdBy: ctx.actorId })
-						.returning()
-				)[0];
+			allocate: async (ctx: SelenaRepositoryContext, value: ConfigurationLockAllocation) => {
+				return db.transaction((tx) => allocateConfigurationLockInTransaction(tx, ctx, value));
 			},
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
 				db
@@ -472,9 +512,7 @@ export function createSelenaRepositories(db: Db) {
 				const [scenario] = await db
 					.select()
 					.from(schema.svScenarios)
-					.where(
-						and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)),
-					)
+					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
 					.limit(1);
 				if (!scenario) throw new Error("Not found: scenario is outside AuthContext tenant");
 				if (scenario.status !== "PROPOSED") throw new Error("SELENA_SCENARIO_NOT_REVIEWABLE");
@@ -487,9 +525,7 @@ export function createSelenaRepositories(db: Db) {
 						...(editedText === undefined ? {} : { text: editedText }),
 						updatedAt: new Date(),
 					})
-					.where(
-						and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)),
-					)
+					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
 					.returning();
 				await recordAudit(
 					db,

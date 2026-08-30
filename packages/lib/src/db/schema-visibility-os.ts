@@ -51,6 +51,17 @@ export const svMeasurementCycles = pgTable(
 			table.domainId,
 			table.organizationId,
 		),
+		idDomainOrganizationLockUnique: uniqueIndex("sv_measurement_cycles_id_domain_org_lock_unique").on(
+			table.id,
+			table.domainId,
+			table.organizationId,
+			table.configurationLockId,
+		),
+		configurationLockScopeReference: foreignKey({
+			columns: [table.configurationLockId, table.organizationId],
+			foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.organizationId],
+			name: "sv_measurement_cycles_configuration_lock_scope_fk",
+		}),
 		orgDomainIdx: index("sv_measurement_cycles_org_domain_idx").on(table.organizationId, table.domainId),
 	}),
 ).enableRLS();
@@ -248,6 +259,7 @@ export const svSourceSnapshots = pgTable(
 			table.contentSha256,
 		),
 		orgCapturedIdx: index("sv_source_snapshots_org_captured_idx").on(table.organizationId, table.capturedAt),
+		idOrganizationUnique: uniqueIndex("sv_source_snapshots_id_organization_unique").on(table.id, table.organizationId),
 	}),
 ).enableRLS();
 
@@ -265,10 +277,8 @@ export const svEvidenceIndex = pgTable(
 			.notNull()
 			.references(() => svMeasurementCycles.id),
 		observationRef: text("observation_ref").notNull(),
-		datasetId: uuid("dataset_id")
-			.notNull()
-			.references(() => svMeasurementDatasets.id),
-		sourceSnapshotId: uuid("source_snapshot_id").references(() => svSourceSnapshots.id),
+		datasetId: uuid("dataset_id").notNull(),
+		sourceSnapshotId: uuid("source_snapshot_id"),
 		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 	},
@@ -278,9 +288,19 @@ export const svEvidenceIndex = pgTable(
 			table.observationRef,
 		),
 		cycleDomainReference: foreignKey({
-			columns: [table.cycleId, table.domainId],
-			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			columns: [table.cycleId, table.domainId, table.organizationId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId, svMeasurementCycles.organizationId],
 			name: "sv_evidence_index_cycle_domain_fk",
+		}),
+		datasetScopeReference: foreignKey({
+			columns: [table.datasetId, table.cycleId, table.organizationId],
+			foreignColumns: [svMeasurementDatasets.id, svMeasurementDatasets.cycleId, svMeasurementDatasets.organizationId],
+			name: "sv_evidence_index_dataset_cycle_org_fk",
+		}),
+		sourceSnapshotScopeReference: foreignKey({
+			columns: [table.sourceSnapshotId, table.organizationId],
+			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.organizationId],
+			name: "sv_evidence_index_source_snapshot_org_fk",
 		}),
 		orgCycleIdx: index("sv_evidence_index_org_cycle_idx").on(table.organizationId, table.cycleId),
 	}),
@@ -427,8 +447,13 @@ export const svLocalScanCycles = pgTable(
 			table.gridDefinitionId,
 		),
 		measurementDomainReference: foreignKey({
-			columns: [table.measurementCycleId, table.domainId],
-			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			columns: [table.measurementCycleId, table.domainId, table.organizationId, table.configurationLockId],
+			foreignColumns: [
+				svMeasurementCycles.id,
+				svMeasurementCycles.domainId,
+				svMeasurementCycles.organizationId,
+				svMeasurementCycles.configurationLockId,
+			],
 			name: "sv_local_scan_cycles_measurement_domain_fk",
 		}),
 		gridLocationReference: foreignKey({
@@ -437,7 +462,7 @@ export const svLocalScanCycles = pgTable(
 			name: "sv_local_scan_cycles_grid_location_fk",
 		}),
 		orgLocationIdx: index("sv_local_scan_cycles_org_location_idx").on(table.organizationId, table.locationId),
-		domainCheck: check("sv_local_scan_cycles_domain_check", sql`${table.domainId} IN ('LOCAL', 'LOCAL_MAPS')`),
+		domainCheck: check("sv_local_scan_cycles_domain_check", sql`${table.domainId} = 'LOCAL_MAPS'`),
 		cardinalityCheck: check(
 			"sv_local_scan_cycles_cardinality_check",
 			sql`${table.expectedObservations} > 0 AND ${table.createdObservations} >= 0 AND ${table.createdObservations} <= ${table.expectedObservations}`,

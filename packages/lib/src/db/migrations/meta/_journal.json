@@ -316,6 +316,20 @@
       "when": 1787940006000,
       "tag": "0044_visibility_os_local_live_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787940007000,
+      "tag": "0045_visibility_os_domain_and_lock_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787940008000,
+      "tag": "0046_selena_journal_daily_claims",
+      "breakpoints": true
     }
   ]
 }

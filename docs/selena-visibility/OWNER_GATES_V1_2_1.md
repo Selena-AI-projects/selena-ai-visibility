@@ -29,5 +29,8 @@ These decisions are intentionally not inferred from a caller, process locale, or
 | Canonical Configuration Lock paths for Local Maps caps and price version | `OWNER_DECISION_REQUIRED` | The first runtime caller must not be able to invent its own spend authority |
 | Runtime database role and grant model | `OWNER_DECISION_REQUIRED` | Role activation changes application-wide RLS behavior and can cause an outage without transaction-local tenant plumbing |
 | Maximum live-attempt lease TTL | `OWNER_DECISION_REQUIRED` | The current 300-second examples are test data, not a proven product invariant |
+| `profileReviewLock` contract | `OWNER_DECISION_REQUIRED` | Delta names this child block but never defines its fields; owner must define it or remove it from the required Lock |
 
 Until these are confirmed, source-only fencing/result persistence may advance, but aggregate budget claim/finalize SQL, runtime grants, worker registration and provider activation stay disabled.
+
+The `0046` daily journal claim uses the database UTC clock only as an operational restart identity, not as the commercial monthly billing period. One unresolved claim blocks the entire project across UTC days and question-set versions. A proven pre-provider failure is audited as `NO_SPEND`; a crash, provider failure, incomplete ledger/cycle or other ambiguous attempt remains unresolved as `CLAIMED`, `EXECUTING`, or `HOLD` and blocks all repeats, including `SELENA_JOURNAL_FORCE=1`, until an owner-authorised evidence review defines the recovery action. No automatic retry of ambiguous work is authorised.

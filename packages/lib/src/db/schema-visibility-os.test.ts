@@ -485,6 +485,336 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).not.toContain("provider_call");
 		expect(journal).toContain('"tag": "0044_visibility_os_local_live_persistence"');
 	});
+
+	it("retires the legacy Local domain and makes configuration locks append-only", () => {
+		const migration0044 = readFileSync(
+			new URL("./migrations/0044_visibility_os_local_live_persistence.sql", import.meta.url),
+			"utf8",
+		);
+		const migration = readFileSync(
+			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
+			"utf8",
+		);
+		const hardeningGate = readFileSync(
+			new URL("../../../../tools/visibility_os_0045_hardening_e2e.sh", import.meta.url),
+			"utf8",
+		);
+		const gate12 = readFileSync(new URL("../../../../tools/visibility_os_gate12_e2e.sh", import.meta.url), "utf8");
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+		const dialect = new PgDialect();
+		const lockConfig = getTableConfig(schema.svConfigurationLocks);
+		const projectConfig = getTableConfig(schema.svProjects);
+		const projectVersionIndex = lockConfig.indexes.find(
+			(index) => index.config.name === "sv_locks_project_version_unique",
+		);
+		const projectIdentityIndex = projectConfig.indexes.find(
+			(index) => index.config.name === "sv_projects_id_organization_unique",
+		);
+		const lockIdentityIndex = lockConfig.indexes.find(
+			(index) => index.config.name === "sv_configuration_locks_id_organization_unique",
+		);
+		const lockProjectIdentityIndex = lockConfig.indexes.find(
+			(index) => index.config.name === "sv_configuration_locks_id_project_org_unique",
+		);
+		const measurementCycleConfig = getTableConfig(schema.svMeasurementCycles);
+		const measurementCycleIdentityIndex = measurementCycleConfig.indexes.find(
+			(index) => index.config.name === "sv_measurement_cycles_id_domain_org_lock_unique",
+		);
+		const measurementCycleLockReference = measurementCycleConfig.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_measurement_cycles_configuration_lock_scope_fk")
+			?.reference();
+		const localCycleMeasurementReference = getTableConfig(schema.svLocalScanCycles)
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_local_scan_cycles_measurement_domain_fk")
+			?.reference();
+		const evidenceCycleReference = getTableConfig(schema.svEvidenceIndex)
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_cycle_domain_fk")
+			?.reference();
+		const evidenceDatasetReference = getTableConfig(schema.svEvidenceIndex)
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_dataset_cycle_org_fk")
+			?.reference();
+		const evidenceSourceReference = getTableConfig(schema.svEvidenceIndex)
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_source_snapshot_org_fk")
+			?.reference();
+		const sourceIdentityIndex = getTableConfig(schema.svSourceSnapshots).indexes.find(
+			(index) => index.config.name === "sv_source_snapshots_id_organization_unique",
+		);
+		const projectOrganizationReference = lockConfig.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_configuration_locks_project_organization_fk")
+			?.reference();
+		const versionCheck = lockConfig.checks.find(
+			(candidate) => candidate.name === "sv_configuration_locks_version_check",
+		);
+		const localDomainCheck = getTableConfig(schema.svLocalScanCycles).checks.find(
+			(candidate) => candidate.name === "sv_local_scan_cycles_domain_check",
+		);
+
+		expect(projectVersionIndex?.config.unique).toBe(true);
+		expect(projectVersionIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
+			"project_id",
+			"version",
+		]);
+		expect(projectIdentityIndex?.config.unique).toBe(true);
+		expect(projectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
+			"id",
+			"organization_id",
+		]);
+		expect(lockIdentityIndex?.config.unique).toBe(true);
+		expect(lockIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
+			"id",
+			"organization_id",
+		]);
+		expect(lockProjectIdentityIndex?.config.unique).toBe(true);
+		expect(
+			lockProjectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+		).toEqual(["id", "project_id", "organization_id"]);
+		expect(measurementCycleIdentityIndex?.config.unique).toBe(true);
+		expect(
+			measurementCycleIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+		).toEqual(["id", "domain_id", "organization_id", "configuration_lock_id"]);
+		expect(measurementCycleLockReference?.columns.map((column) => column.name)).toEqual([
+			"configuration_lock_id",
+			"organization_id",
+		]);
+		expect(measurementCycleLockReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+		]);
+		expect(localCycleMeasurementReference?.columns.map((column) => column.name)).toEqual([
+			"measurement_cycle_id",
+			"domain_id",
+			"organization_id",
+			"configuration_lock_id",
+		]);
+		expect(localCycleMeasurementReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"domain_id",
+			"organization_id",
+			"configuration_lock_id",
+		]);
+		expect(evidenceCycleReference?.columns.map((column) => column.name)).toEqual([
+			"cycle_id",
+			"domain_id",
+			"organization_id",
+		]);
+		expect(evidenceCycleReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"domain_id",
+			"organization_id",
+		]);
+		expect(evidenceDatasetReference?.columns.map((column) => column.name)).toEqual([
+			"dataset_id",
+			"cycle_id",
+			"organization_id",
+		]);
+		expect(evidenceDatasetReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"cycle_id",
+			"organization_id",
+		]);
+		expect(evidenceSourceReference?.columns.map((column) => column.name)).toEqual([
+			"source_snapshot_id",
+			"organization_id",
+		]);
+		expect(evidenceSourceReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(sourceIdentityIndex?.config.unique).toBe(true);
+		expect(projectOrganizationReference?.columns.map((column) => column.name)).toEqual([
+			"project_id",
+			"organization_id",
+		]);
+		expect(projectOrganizationReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+		]);
+		expect(versionCheck && dialect.sqlToQuery(versionCheck.value).sql).toContain('"version" > 0');
+		expect(localDomainCheck && dialect.sqlToQuery(localDomainCheck.value).sql).toContain(
+			"\"domain_id\" = 'LOCAL_MAPS'",
+		);
+
+		expect(migration0044).not.toContain('CREATE TRIGGER "sv_prevent_cost_event_truncate"');
+		expect(migration).toContain('CREATE TRIGGER "sv_prevent_cost_event_truncate"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_cost_events"');
+		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_mutation"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_configuration_locks"');
+		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_truncate"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_configuration_locks"');
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION");
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
+		expect(migration).toContain("LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH");
+		expect(migration).toContain("LOCAL_MAPS_0045_LOCATION_LOCK_PROJECT_SCOPE_MISMATCH");
+		expect(migration).toContain('CHECK ("version" > 0) NOT VALID');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_locks_project_version_unique"');
+		expect(migration.indexOf('CREATE UNIQUE INDEX "sv_locks_project_version_unique"')).toBeLessThan(
+			migration.indexOf('DROP INDEX "sv_locks_project_version_idx"'),
+		);
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_projects_id_organization_unique"');
+		expect(migration).toContain('CONSTRAINT "sv_configuration_locks_project_organization_fk"');
+		expect(migration).toContain('FOREIGN KEY ("project_id", "organization_id")');
+		expect(migration).toContain('REFERENCES "sv_projects" ("id", "organization_id") NOT VALID');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_configuration_locks_id_organization_unique"');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_configuration_locks_id_project_org_unique"');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_measurement_cycles_id_domain_org_lock_unique"');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_cycles_configuration_lock_scope_fk"');
+		expect(migration).toContain('FOREIGN KEY ("configuration_lock_id", "organization_id")');
+		expect(migration).toContain('"measurement_cycle_id", "domain_id", "organization_id", "configuration_lock_id"');
+		expect(migration).toContain('FOREIGN KEY ("cycle_id", "domain_id", "organization_id")');
+		expect(migration).toContain('CONSTRAINT "sv_evidence_index_dataset_cycle_org_fk"');
+		expect(migration).toContain('FOREIGN KEY ("dataset_id", "cycle_id", "organization_id")');
+		expect(migration).toContain('CONSTRAINT "sv_evidence_index_source_snapshot_org_fk"');
+		expect(migration).toContain('FOREIGN KEY ("source_snapshot_id", "organization_id")');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_source_snapshots_id_organization_unique"');
+		expect(migration).toContain('FOREIGN KEY ("measurement_cycle_id", "domain_id", "organization_id")');
+		expect(migration).toContain('CREATE TRIGGER "sv_guard_local_cycle_project_scope"');
+		expect(migration).toContain('CREATE TRIGGER "sv_guard_local_entity_scope_mutation"');
+		expect(migration).toContain('CREATE TRIGGER "sv_guard_local_location_scope_mutation"');
+		expect(migration).toContain("FOR UPDATE OF location");
+		expect(migration).toContain("FOR UPDATE OF entity");
+		expect(migration).toContain("LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION");
+		expect(migration).toContain("LOCAL_MAPS_0045_EVIDENCE_COLLISION");
+		expect(migration).toContain("LOCAL_MAPS_0045_EVIDENCE_PROVENANCE_SCOPE_MISMATCH");
+		const firstBackfillWrite = migration.indexOf('UPDATE "sv_measurement_cycles"');
+		const costTriggerDisable = migration.indexOf('DISABLE TRIGGER "sv_prevent_cost_event_mutation"');
+		const exclusiveLock = migration.indexOf('LOCK TABLE\n\t"sv_projects"');
+		const projectLock = migration.indexOf('"sv_projects",', exclusiveLock);
+		const configurationLock = migration.indexOf('"sv_configuration_locks",', exclusiveLock);
+		for (const preflight of [
+			"LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED",
+			"CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION",
+			"CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH",
+			"MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH",
+			"CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION",
+			"LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION",
+			"LOCAL_MAPS_0045_EVIDENCE_COLLISION",
+			"LOCAL_MAPS_0045_LEGACY_ATTEMPT_IDENTITY",
+			"LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH",
+			"LOCAL_MAPS_0045_LOCATION_LOCK_PROJECT_SCOPE_MISMATCH",
+			"LOCAL_MAPS_0045_COST_SCOPE_MISMATCH",
+			"LOCAL_MAPS_0045_EVIDENCE_PROVENANCE_SCOPE_MISMATCH",
+		]) {
+			expect(migration.indexOf(preflight)).toBeGreaterThan(-1);
+			expect(migration.indexOf(preflight)).toBeLessThan(firstBackfillWrite);
+			expect(migration.indexOf(preflight)).toBeLessThan(costTriggerDisable);
+		}
+		expect(exclusiveLock).toBeGreaterThan(-1);
+		expect(exclusiveLock).toBe(0);
+		expect(exclusiveLock).toBeLessThan(migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'));
+		expect(projectLock).toBeLessThan(configurationLock);
+		expect(exclusiveLock).toBeLessThan(migration.indexOf("LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED"));
+		expect(migration).toContain('DISABLE TRIGGER "sv_prevent_cost_event_mutation"');
+		expect(migration).toContain('ENABLE TRIGGER "sv_prevent_cost_event_mutation"');
+		expect(migration).not.toMatch(/(?:DISABLE|ENABLE) TRIGGER (?:ALL|USER)/);
+		expect(migration.match(/DISABLE TRIGGER/g)).toHaveLength(1);
+		expect(migration.match(/ENABLE TRIGGER/g)).toHaveLength(1);
+		expect(migration).toContain('ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk" NOT DEFERRABLE');
+		expect(migration).toContain('ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk" NOT DEFERRABLE');
+		expect(migration).toContain('ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk" NOT DEFERRABLE');
+		for (const table of [
+			"sv_measurement_cycles",
+			"sv_local_scan_cycles",
+			"sv_cost_events",
+			"sv_evidence_index",
+			"sv_findings",
+			"sv_recommendations",
+		]) {
+			expect(migration).toContain(`UPDATE "${table}"`);
+		}
+		expect(migration).toContain("CHECK (\"domain_id\" = 'LOCAL_MAPS') NOT VALID");
+		expect(migration).toContain("WHERE local_cycle.\"domain_id\" = 'LOCAL_MAPS'");
+		expect(migration).toContain('DELETE FROM "sv_measurement_domains"');
+		expect(migration).toContain("LOCAL_MAPS_0045_POSTCONDITION_FAILED");
+		expect(migration).not.toContain("GRANT ");
+		expect(migration).not.toContain("provider_call");
+		expect(migration).not.toContain("monthly_budget");
+		expect(journal).toContain('"tag": "0045_visibility_os_domain_and_lock_hardening"');
+		expect(hardeningGate).toContain("apply_through_0044");
+		expect(hardeningGate).toContain("--single-transaction");
+		expect(hardeningGate).toContain("assert_failed_migration_is_atomic");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
+		expect(hardeningGate).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
+		expect(hardeningGate).toContain("LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH");
+		expect(hardeningGate).toContain("LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION");
+		expect(hardeningGate).toContain("LOCAL_MAPS_0045_EVIDENCE_COLLISION");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_APPEND_ONLY");
+		expect(hardeningGate).toContain("COST_EVENT_APPEND_ONLY");
+		expect(hardeningGate).toContain("tgenabled <> 'O'");
+		expect(gate12).toContain('--single-transaction < "$migration"');
+		expect(gate12).toContain("sv_journal_daily_claims_project_organization_fk");
+		expect(gate12).toContain("complete numbered migration chain through 0046");
+		const gate12Through0036 = gate12.indexOf("10#$migration_number > 36");
+		const gate12RegistryFixture = gate12.indexOf('bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh"');
+		const gate12HistoricalChain = gate12.indexOf('bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh"');
+		const gate12Apply0043 = gate12.indexOf("0043_visibility_os_local_domain_attempts_expand.sql");
+		const gate12Apply0044 = gate12.indexOf("0044_visibility_os_local_live_persistence.sql");
+		const gate12Apply0045 = gate12.indexOf("0045_visibility_os_domain_and_lock_hardening.sql");
+		const gate12Apply0046 = gate12.indexOf("0046_selena_journal_daily_claims.sql");
+		const gate12Marker = gate12.indexOf("sv_journal_daily_claims_project_organization_fk");
+		const gate12Seed = gate12.indexOf("INSERT INTO organization");
+		expect(gate12).toContain('if [[ "$fresh_database" == true ]]');
+		expect(gate12Through0036).toBeGreaterThan(-1);
+		expect(gate12Through0036).toBeLessThan(gate12RegistryFixture);
+		expect(gate12RegistryFixture).toBeLessThan(gate12HistoricalChain);
+		expect(gate12HistoricalChain).toBeLessThan(gate12Apply0043);
+		expect(gate12Apply0043).toBeLessThan(gate12Apply0044);
+		expect(gate12Apply0044).toBeLessThan(gate12Apply0045);
+		expect(gate12Apply0045).toBeLessThan(gate12Apply0046);
+		expect(gate12Apply0046).toBeLessThan(gate12Marker);
+		expect(gate12Marker).toBeLessThan(gate12Seed);
+	});
+
+	it("persists fail-closed daily journal claims before any provider-capable restart", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0046_selena_journal_daily_claims.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+		const config = getTableConfig(schema.svJournalDailyClaims);
+		const identity = config.indexes.find((index) => index.config.name === "sv_journal_daily_claims_identity_unique");
+		const unresolved = config.indexes.find(
+			(index) => index.config.name === "sv_journal_daily_claims_unresolved_unique",
+		);
+		const lockIdentity = config.indexes.find((index) => index.config.name === "sv_journal_daily_claims_lock_unique");
+		const projectReference = config.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_journal_daily_claims_project_organization_fk")
+			?.reference();
+		const lockReference = config.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_journal_daily_claims_lock_project_org_fk")
+			?.reference();
+
+		expect(config.enableRLS).toBe(true);
+		expect(identity?.config.unique).toBe(true);
+		expect(unresolved?.config.unique).toBe(true);
+		expect(lockIdentity?.config.unique).toBe(true);
+		expect(identity?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
+			"organization_id",
+			"project_id",
+			"question_set_version",
+			"utc_day",
+			"attempt",
+		]);
+		expect(projectReference?.columns.map((column) => column.name)).toEqual(["project_id", "organization_id"]);
+		expect(projectReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(lockReference?.columns.map((column) => column.name)).toEqual([
+			"configuration_lock_id",
+			"project_id",
+			"organization_id",
+		]);
+		expect(lockReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "project_id", "organization_id"]);
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_journal_daily_claims_identity_unique"');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_journal_daily_claims_unresolved_unique"');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_journal_daily_claims_lock_unique"');
+		expect(migration).toContain('CONSTRAINT "sv_journal_daily_claims_utc_day_check"');
+		expect(migration).toContain('CONSTRAINT "sv_journal_daily_claims_execution_link_check"');
+		expect(migration).toContain("JOURNAL_DAILY_CLAIM_LOCK_PROVENANCE_MISMATCH");
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_journal_daily_claims"');
+		expect(migration).toContain("JOURNAL_DAILY_CLAIM_TRANSITION_BLOCKED");
+		expect(migration).toContain("JOURNAL_DAILY_CLAIM_INITIAL_STATE_BLOCKED");
+		expect(migration).toContain('BEFORE INSERT OR UPDATE OR DELETE ON "sv_journal_daily_claims"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_journal_daily_claims"');
+		expect(migration).not.toContain("GRANT ");
+		expect(journal).toContain('"tag": "0046_selena_journal_daily_claims"');
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -650,11 +980,11 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through local live persistence as one ordered numbered migration chain", () => {
+	it("registers M2 through local domain hardening as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-7)).toEqual([
+		expect(journal.entries.slice(-9)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -672,6 +1002,20 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940006000,
 				tag: "0044_visibility_os_local_live_persistence",
+				breakpoints: true,
+			},
+			{
+				idx: 45,
+				version: "7",
+				when: 1787940007000,
+				tag: "0045_visibility_os_domain_and_lock_hardening",
+				breakpoints: true,
+			},
+			{
+				idx: 46,
+				version: "7",
+				when: 1787940008000,
+				tag: "0046_selena_journal_daily_claims",
 				breakpoints: true,
 			},
 		]);

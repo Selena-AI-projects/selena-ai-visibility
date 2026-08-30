@@ -5,19 +5,36 @@ compose_file="${1:-../tmp/selena-visibility-test-compose.yml}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 database_url="${DATABASE_URL:-postgres://selena_test:selena_test@127.0.0.1:55432/selena_visibility_test}"
 psql=(docker-compose -p selena-visibility-test -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+fresh_database=false
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.organization')")" != "organization" ]]; then
 	for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
-		"${psql[@]}" < "$migration" >/dev/null
+		migration_name="$(basename "$migration")"
+		migration_number="${migration_name%%_*}"
+		if ((10#$migration_number > 36)); then
+			continue
+		fi
+		"${psql[@]}" --single-transaction < "$migration" >/dev/null
+	done
+	fresh_database=true
+fi
+
+if [[ "$fresh_database" == true ]]; then
+	bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh" "$compose_file" >/dev/null
+	bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh" "$compose_file" >/dev/null
+	for migration in \
+		"$repo_root/packages/lib/src/db/migrations/0043_visibility_os_local_domain_attempts_expand.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0044_visibility_os_local_live_persistence.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0046_selena_journal_daily_claims.sql"; do
+		"${psql[@]}" --single-transaction < "$migration" >/dev/null
 	done
 fi
 
-if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_outcome_sources')")" != "sv_outcome_sources" ]]; then
-	echo "Gate 12 requires the complete numbered migration chain through 0042" >&2
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_journal_daily_claims') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_journal_daily_claims'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_journal_daily_claims'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('sv_journal_daily_claims_project_organization_fk', 'sv_journal_daily_claims_lock_project_org_fk', 'sv_journal_daily_claims_utc_day_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_journal_daily_claims' AND indexname = 'sv_journal_daily_claims_unresolved_unique' AND indexdef LIKE '%WHERE%') AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_journal_daily_claims'::regclass AND tgname IN ('sv_guard_journal_daily_claim_mutation', 'sv_prevent_journal_daily_claim_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2)")" != "t" ]]; then
+	echo "Gate 12 requires the complete numbered migration chain through 0046" >&2
 	exit 1
 fi
-
-bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh" "$compose_file" >/dev/null
 
 "${psql[@]}" <<'SQL'
 INSERT INTO organization (id, name, slug, created_at)
@@ -63,6 +80,14 @@ DECLARE
 	verification_outcome_id uuid;
 	outcome_window_id uuid;
 	assessment_id uuid;
+	journal_claim_id uuid;
+	journal_bad_lock_id uuid;
+	journal_other_project_id uuid;
+	journal_other_lock_id uuid;
+	journal_lock_id uuid;
+	journal_hold_id uuid;
+	journal_hold_lock_id uuid;
+	blocked boolean;
 	local_cost_snapshot jsonb := '{"plannedCalls":1,"worstCaseCalls":1,"worstCaseCost":0}'::jsonb;
 BEGIN
 	INSERT INTO sv_projects (organization_id, name, category, country, region, languages, status)
@@ -158,7 +183,7 @@ BEGIN
 	INSERT INTO sv_measurement_cycles (
 		organization_id, domain_id, domain_cycle_id, configuration_lock_id, status
 	)
-	VALUES (org_id, 'LOCAL', baseline_domain_cycle_id, lock_id, 'RUNNING')
+	VALUES (org_id, 'LOCAL_MAPS', baseline_domain_cycle_id, lock_id, 'RUNNING')
 	RETURNING id INTO baseline_measurement_cycle_id;
 	INSERT INTO sv_measurement_datasets (organization_id, cycle_id, dataset_key, version)
 	VALUES (org_id, baseline_measurement_cycle_id, 'gate12-local', 1)
@@ -185,7 +210,7 @@ BEGIN
 	UPDATE sv_measurement_cycles SET status = 'COMPLETED' WHERE id = baseline_measurement_cycle_id;
 	INSERT INTO sv_evidence_index (organization_id, domain_id, cycle_id, observation_ref, dataset_id, captured_at)
 	VALUES (
-		org_id, 'LOCAL', baseline_measurement_cycle_id, baseline_observation_id::text,
+		org_id, 'LOCAL_MAPS', baseline_measurement_cycle_id, baseline_observation_id::text,
 		baseline_dataset_id, '2026-08-01T02:00:00Z'
 	);
 
@@ -193,7 +218,7 @@ BEGIN
 	INSERT INTO sv_measurement_cycles (
 		organization_id, domain_id, domain_cycle_id, configuration_lock_id, status
 	)
-	VALUES (org_id, 'LOCAL', verification_domain_cycle_id, lock_id, 'RUNNING')
+	VALUES (org_id, 'LOCAL_MAPS', verification_domain_cycle_id, lock_id, 'RUNNING')
 	RETURNING id INTO verification_measurement_cycle_id;
 	INSERT INTO sv_measurement_datasets (organization_id, cycle_id, dataset_key, version)
 	VALUES (org_id, verification_measurement_cycle_id, 'gate12-local', 2)
@@ -220,7 +245,7 @@ BEGIN
 	UPDATE sv_measurement_cycles SET status = 'COMPLETED' WHERE id = verification_measurement_cycle_id;
 	INSERT INTO sv_evidence_index (organization_id, domain_id, cycle_id, observation_ref, dataset_id, captured_at)
 	VALUES (
-		org_id, 'LOCAL', verification_measurement_cycle_id, verification_observation_id::text,
+		org_id, 'LOCAL_MAPS', verification_measurement_cycle_id, verification_observation_id::text,
 		verification_dataset_id, '2026-09-15T02:00:00Z'
 	);
 
@@ -228,7 +253,7 @@ BEGIN
 		organization_id, cycle_id, domain_id, location_id, severity, category, title, detail
 	)
 	VALUES (
-		org_id, ai_cycle_id, 'LOCAL', location_id, 'high', 'visibility',
+		org_id, ai_cycle_id, 'LOCAL_MAPS', location_id, 'high', 'visibility',
 		'Gate 12 stub finding', 'Deterministic finding from stub Local observations'
 	)
 	RETURNING id INTO finding_id;
@@ -236,7 +261,7 @@ BEGIN
 		organization_id, cycle_id, finding_id, domain_id, location_id, priority, title, action, rationale
 	)
 	VALUES (
-		org_id, ai_cycle_id, finding_id, 'LOCAL', location_id, 'high', 'Gate 12 stub recommendation',
+		org_id, ai_cycle_id, finding_id, 'LOCAL_MAPS', location_id, 'high', 'Gate 12 stub recommendation',
 		'Publish the approved deterministic change', 'Stub evidence requests a verification cycle'
 	)
 	RETURNING id INTO recommendation_id;
@@ -366,6 +391,178 @@ BEGIN
 		(org_id, 'gate12-stub', 'VISIBILITY_OS_VERIFICATION_COMPLETED', 'verification_cycle', verification_cycle_id::text, '{"source":"stub"}', '2026-08-01T00:11:00Z'),
 		(org_id, 'gate12-stub', 'VISIBILITY_OS_BEFORE_AFTER_GENERATED', 'dataset', verification_dataset_id::text, '{"baselineRank":5,"verificationRank":3}', '2026-08-01T00:12:00Z'),
 		(org_id, 'gate12-stub', 'VISIBILITY_OS_ATTRIBUTION_ASSESSED', 'assessment', assessment_id::text, '{"verdict":"NOT_MEASURED","outcome":"UNKNOWN"}', '2026-08-01T00:13:00Z');
+
+	INSERT INTO sv_journal_daily_claims (
+		organization_id, project_id, question_set_version, utc_day, attempt
+	)
+	VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 1)
+	RETURNING id INTO journal_claim_id;
+	INSERT INTO sv_projects (organization_id, name, category, country, status)
+	VALUES (org_id, 'Gate 12 Other Project', 'test', 'ID', 'DRAFT')
+	RETURNING id INTO journal_other_project_id;
+	INSERT INTO sv_configuration_locks (
+		organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+	)
+	VALUES (
+		org_id, journal_other_project_id, 1,
+		jsonb_build_object(
+			'journalClaim', jsonb_build_object(
+				'id', journal_claim_id::text,
+				'utcDay', (current_timestamp AT TIME ZONE 'UTC')::date::text,
+				'attempt', 1
+			)
+		),
+		'gate12-journal-stub', 1, 0, 'gate12-journal-stub'
+	)
+	RETURNING id INTO journal_other_lock_id;
+	blocked := false;
+	BEGIN
+		UPDATE sv_journal_daily_claims
+		SET configuration_lock_id = journal_other_lock_id, updated_at = now()
+		WHERE id = journal_claim_id;
+	EXCEPTION WHEN raise_exception THEN
+		IF SQLERRM <> 'JOURNAL_DAILY_CLAIM_LOCK_PROVENANCE_MISMATCH' THEN RAISE; END IF;
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_CROSS_PROJECT_LOCK_ACCEPTED';
+	END IF;
+	INSERT INTO sv_configuration_locks (
+		organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+	)
+	VALUES (
+		org_id, project_id, 2,
+		jsonb_build_object(
+			'journalClaim', jsonb_build_object(
+				'id', gen_random_uuid()::text,
+				'utcDay', (current_timestamp AT TIME ZONE 'UTC')::date::text,
+				'attempt', 1
+			)
+		),
+		'gate12-journal-stub', 1, 0, 'gate12-journal-stub'
+	)
+	RETURNING id INTO journal_bad_lock_id;
+	blocked := false;
+	BEGIN
+		UPDATE sv_journal_daily_claims
+		SET configuration_lock_id = journal_bad_lock_id, updated_at = now()
+		WHERE id = journal_claim_id;
+	EXCEPTION WHEN raise_exception THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_BAD_LOCK_PROVENANCE_ACCEPTED';
+	END IF;
+	INSERT INTO sv_configuration_locks (
+		organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+	)
+	VALUES (
+		org_id, project_id, 3,
+		jsonb_build_object(
+			'journalClaim', jsonb_build_object(
+				'id', journal_claim_id::text,
+				'utcDay', (current_timestamp AT TIME ZONE 'UTC')::date::text,
+				'attempt', 1
+			)
+		),
+		'gate12-journal-stub', 1, 0, 'gate12-journal-stub'
+	)
+	RETURNING id INTO journal_lock_id;
+	UPDATE sv_journal_daily_claims
+	SET configuration_lock_id = journal_lock_id, updated_at = now()
+	WHERE id = journal_claim_id;
+	blocked := false;
+	BEGIN
+		INSERT INTO sv_journal_daily_claims (
+			organization_id, project_id, question_set_version, utc_day, attempt
+		)
+		VALUES (org_id, project_id, 'gate12-journal-v2', (current_timestamp AT TIME ZONE 'UTC')::date, 1);
+	EXCEPTION WHEN unique_violation THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_CROSS_VERSION_CONCURRENT_CLAIM_ACCEPTED';
+	END IF;
+	UPDATE sv_journal_daily_claims SET status = 'EXECUTING', updated_at = now() WHERE id = journal_claim_id;
+	UPDATE sv_journal_daily_claims
+	SET status = 'COMPLETED', completed_at = now(), updated_at = now()
+	WHERE id = journal_claim_id;
+	blocked := false;
+	BEGIN
+		UPDATE sv_journal_daily_claims SET status = 'HOLD', completed_at = NULL, updated_at = now()
+		WHERE id = journal_claim_id;
+	EXCEPTION WHEN raise_exception THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_TERMINAL_MUTATION_ACCEPTED';
+	END IF;
+	INSERT INTO sv_journal_daily_claims (
+		organization_id, project_id, question_set_version, utc_day, attempt
+	)
+	VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 2)
+	RETURNING id INTO journal_claim_id;
+	UPDATE sv_journal_daily_claims SET status = 'NO_SPEND', updated_at = now() WHERE id = journal_claim_id;
+
+	INSERT INTO sv_journal_daily_claims (
+		organization_id, project_id, question_set_version, utc_day, attempt, claimed_at, updated_at
+	)
+	VALUES (
+		org_id, project_id, 'gate12-journal-v1',
+		((current_timestamp AT TIME ZONE 'UTC')::date - 1), 1,
+		current_timestamp - interval '1 day', current_timestamp - interval '1 day'
+	)
+	RETURNING id INTO journal_hold_id;
+	INSERT INTO sv_configuration_locks (
+		organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+	)
+	VALUES (
+		org_id, project_id, 4,
+		jsonb_build_object(
+			'journalClaim', jsonb_build_object(
+				'id', journal_hold_id::text,
+				'utcDay', ((current_timestamp AT TIME ZONE 'UTC')::date - 1)::text,
+				'attempt', 1
+			)
+		),
+		'gate12-journal-stub', 1, 0, 'gate12-journal-stub'
+	)
+	RETURNING id INTO journal_hold_lock_id;
+	UPDATE sv_journal_daily_claims
+	SET configuration_lock_id = journal_hold_lock_id, updated_at = now()
+	WHERE id = journal_hold_id;
+	UPDATE sv_journal_daily_claims SET status = 'EXECUTING', updated_at = now() WHERE id = journal_hold_id;
+	UPDATE sv_journal_daily_claims SET status = 'HOLD', updated_at = now() WHERE id = journal_hold_id;
+	blocked := false;
+	BEGIN
+		INSERT INTO sv_journal_daily_claims (
+			organization_id, project_id, question_set_version, utc_day, attempt
+		)
+		VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 3);
+	EXCEPTION WHEN unique_violation THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_CROSS_DAY_HOLD_BYPASSED';
+	END IF;
+	blocked := false;
+	BEGIN
+		DELETE FROM sv_journal_daily_claims WHERE id = journal_hold_id;
+	EXCEPTION WHEN raise_exception THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_DELETE_ACCEPTED';
+	END IF;
+	blocked := false;
+	BEGIN
+		TRUNCATE sv_journal_daily_claims;
+	EXCEPTION WHEN raise_exception THEN
+		blocked := true;
+	END;
+	IF NOT blocked THEN
+		RAISE EXCEPTION 'GATE12_JOURNAL_TRUNCATE_ACCEPTED';
+	END IF;
 END $$;
 SQL
 

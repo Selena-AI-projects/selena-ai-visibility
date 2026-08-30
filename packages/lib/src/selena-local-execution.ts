@@ -1,6 +1,6 @@
 import { assertLocalObservationCardinality } from "@workspace/selena-visibility-contracts";
 
-export const LOCAL_MEASUREMENT_DOMAIN = "LOCAL" as const;
+export const LOCAL_MEASUREMENT_DOMAIN = "LOCAL_MAPS" as const;
 export const LOCAL_MEASUREMENT_QUEUE = "selena-local-measure" as const;
 
 export type LocalCycleExecutionState = {

@@ -36,7 +36,7 @@ import {
 	runMeasurementForPermit,
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
-import { and, eq, gte } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
@@ -251,40 +251,164 @@ async function inPool<T, R>(items: T[], size: number, worker: (item: T) => Promi
 	return results;
 }
 
+type DailyClaimDecision =
+	| { kind: "CLAIMED"; id: string; attempt: number; utcDay: string }
+	| { kind: "ALREADY_COMPLETED"; attempt: number; utcDay: string }
+	| { kind: "HOLD"; attempt: number; status: string; utcDay: string };
+
 /**
- * Whether this project's current question set was already measured today.
+ * Claim one project/version/UTC-day before any provider-capable chain exists.
  *
- * The guard is not tidiness. A one-off command lives on a platform that
- * restarts what exits, and a restart that re-measures is a restart that spends
- * again — so a second run on the same day for the same set costs nothing and
- * says why.
+ * The transaction-scoped advisory lock makes allocation deterministic; the
+ * unique database identity makes it durable. A CLAIMED or HOLD row is treated
+ * as ambiguous spend and blocks even FORCE. FORCE may only allocate the next
+ * attempt after the prior attempt is proven COMPLETED.
  */
-async function alreadyMeasuredToday(projectId: string, version: string): Promise<boolean> {
-	const dayStart = new Date();
-	dayStart.setUTCHours(0, 0, 0, 0);
-	const [prior] = await db
-		.select({ id: schema.svConfigurationLocks.id })
-		.from(schema.svConfigurationLocks)
-		.where(
-			and(
-				eq(schema.svConfigurationLocks.projectId, projectId),
-				eq(schema.svConfigurationLocks.organizationId, tenantId),
-				eq(schema.svConfigurationLocks.engineSha, version),
-				gte(schema.svConfigurationLocks.createdAt, dayStart),
-			),
-		)
-		.limit(1);
-	return Boolean(prior);
+async function acquireDailyClaim(projectId: string, version: string): Promise<DailyClaimDecision> {
+	return db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		const clockResult = await tx.execute(sql`SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS utc_day`);
+		const clock = clockResult.rows?.[0] as { utc_day?: string } | undefined;
+		if (!clock?.utc_day) throw new Error("SELENA_JOURNAL_DATABASE_CLOCK_UNAVAILABLE");
+		const utcDay = clock.utc_day;
+		await tx.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended('selena-journal:' || ${tenantId} || ':' || ${projectId}::text, 0))`,
+		);
+		const [unresolved] = await tx
+			.select({
+				attempt: schema.svJournalDailyClaims.attempt,
+				status: schema.svJournalDailyClaims.status,
+				utcDay: schema.svJournalDailyClaims.utcDay,
+			})
+			.from(schema.svJournalDailyClaims)
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.projectId, projectId),
+					inArray(schema.svJournalDailyClaims.status, ["CLAIMED", "EXECUTING", "HOLD"]),
+				),
+			)
+			.orderBy(desc(schema.svJournalDailyClaims.utcDay), desc(schema.svJournalDailyClaims.attempt))
+			.limit(1);
+		if (unresolved) {
+			return {
+				kind: "HOLD",
+				attempt: unresolved.attempt,
+				status: unresolved.status,
+				utcDay: unresolved.utcDay,
+			};
+		}
+		const [completed] = await tx
+			.select({ attempt: schema.svJournalDailyClaims.attempt })
+			.from(schema.svJournalDailyClaims)
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.projectId, projectId),
+					eq(schema.svJournalDailyClaims.questionSetVersion, version),
+					eq(schema.svJournalDailyClaims.utcDay, utcDay),
+					eq(schema.svJournalDailyClaims.status, "COMPLETED"),
+				),
+			)
+			.orderBy(desc(schema.svJournalDailyClaims.attempt))
+			.limit(1);
+
+		if (completed && !FORCE) return { kind: "ALREADY_COMPLETED", attempt: completed.attempt, utcDay };
+
+		const [prior] = await tx
+			.select({ attempt: schema.svJournalDailyClaims.attempt, status: schema.svJournalDailyClaims.status })
+			.from(schema.svJournalDailyClaims)
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.projectId, projectId),
+					eq(schema.svJournalDailyClaims.questionSetVersion, version),
+					eq(schema.svJournalDailyClaims.utcDay, utcDay),
+				),
+			)
+			.orderBy(desc(schema.svJournalDailyClaims.attempt))
+			.limit(1);
+
+		const attempt = (prior?.attempt ?? 0) + 1;
+		const [claim] = await tx
+			.insert(schema.svJournalDailyClaims)
+			.values({
+				organizationId: tenantId,
+				projectId,
+				questionSetVersion: version,
+				utcDay,
+				attempt,
+				status: "CLAIMED",
+			})
+			.returning({ id: schema.svJournalDailyClaims.id });
+		if (!claim) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_FAILED");
+		await tx.insert(schema.svAuditEvents).values({
+			organizationId: tenantId,
+			actorId: ctx.actorId,
+			event: "JOURNAL_DAILY_CLAIM_CLAIMED",
+			subjectKind: "journal_daily_claim",
+			subjectId: claim.id,
+			details: { questionSetVersion: version, utcDay, attempt, forced: FORCE },
+		});
+		return { kind: "CLAIMED", id: claim.id, attempt, utcDay };
+	});
+}
+
+async function linkDailyClaim(claimId: string, configurationLockId: string): Promise<void> {
+	await db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		const [linked] = await tx
+			.update(schema.svJournalDailyClaims)
+			.set({ configurationLockId, updatedAt: sql`CURRENT_TIMESTAMP` })
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.id, claimId),
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.status, "CLAIMED"),
+					sql`${schema.svJournalDailyClaims.configurationLockId} IS NULL`,
+				),
+			)
+			.returning({ id: schema.svJournalDailyClaims.id });
+		if (!linked) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LINK_CONFLICT");
+	});
+}
+
+async function transitionDailyClaim(
+	claimId: string,
+	fromStatus: "CLAIMED" | "EXECUTING",
+	status: "EXECUTING" | "NO_SPEND" | "HOLD" | "COMPLETED",
+): Promise<void> {
+	await db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		const [settled] = await tx
+			.update(schema.svJournalDailyClaims)
+			.set({
+				status,
+				completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null,
+				updatedAt: sql`CURRENT_TIMESTAMP`,
+			})
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.id, claimId),
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.status, fromStatus),
+				),
+			)
+			.returning({ id: schema.svJournalDailyClaims.id });
+		if (!settled) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_SETTLEMENT_CONFLICT");
+		await tx.insert(schema.svAuditEvents).values({
+			organizationId: tenantId,
+			actorId: ctx.actorId,
+			event: `JOURNAL_DAILY_CLAIM_${status}`,
+			subjectKind: "journal_daily_claim",
+			subjectId: claimId,
+			details: { fromStatus, toStatus: status },
+		});
+	});
 }
 
 async function measure(slug: string): Promise<void> {
 	const { project, scenario } = await projectFor(slug);
-	if (!FORCE && (await alreadyMeasuredToday(project.id, scenario.version))) {
-		console.log(
-			`${scenario.brand}: already measured today on ${scenario.version} — set SELENA_JOURNAL_FORCE=1 to repeat`,
-		);
-		return;
-	}
 	const rows = await scenarioRowsFor(project.id, slug);
 	// The surfaces the collectors are pointed at, under the names the catalog
 	// sells them as — the adapter's own map, so the two cannot drift apart.
@@ -313,6 +437,18 @@ async function measure(slug: string): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
+	const claim = await acquireDailyClaim(project.id, scenario.version);
+	if (claim.kind === "ALREADY_COMPLETED") {
+		console.log(
+			`${scenario.brand}: already measured on ${claim.utcDay} attempt ${claim.attempt} — set SELENA_JOURNAL_FORCE=1 to repeat`,
+		);
+		return;
+	}
+	if (claim.kind === "HOLD") {
+		throw new Error(
+			`SELENA_JOURNAL_DAILY_CLAIM_HOLD: ${claim.utcDay} attempt ${claim.attempt} is ${claim.status}; inspect spend evidence before any repeat`,
+		);
+	}
 
 	console.log(`\n${scenario.brand} — ${rows.length} questions × ${systems.length} systems (~$${cost.toFixed(4)})`);
 	if (scenario.ownership === "third-party") {
@@ -323,87 +459,124 @@ async function measure(slug: string): Promise<void> {
 		);
 	}
 
-	const profile = await repositories.profiles.get(ctx, project.id);
-	if (!profile) throw new Error(`SELENA_PROFILE_MISSING: ${slug}`);
-	const [prior] = await db
-		.select({ version: schema.svConfigurationLocks.version })
-		.from(schema.svConfigurationLocks)
-		.where(
-			and(
-				eq(schema.svConfigurationLocks.projectId, project.id),
-				eq(schema.svConfigurationLocks.organizationId, tenantId),
-			),
-		)
-		.orderBy(schema.svConfigurationLocks.version);
-
-	const lock = await repositories.locks.create(ctx, {
-		projectId: project.id,
-		version: (prior?.version ?? 0) + 1,
-		snapshot: {
-			measurementScope: { scenarios: rows.map((row) => row.id), systems, repeats: 1 },
-			// Frozen with the scope so a later profile edit cannot change what
-			// this measurement is read against.
-			profile: lockedProfileBlock(profile),
-			questionSetVersion: scenario.version,
-		},
-		engineSha: scenario.version,
-		expectedRuns,
-		budgetCap: String(maxCostUsd),
-	});
-	const quote = await repositories.quotes.create(ctx, {
-		projectId: project.id,
-		lockId: lock.id,
-		status: "ACCEPTED",
-		priceAmount: "0",
-		currency: "USD",
-		expectedRuns,
-		expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-	});
-	const order = await repositories.orders.create(ctx, {
-		projectId: project.id,
-		quoteId: quote.id,
-		lockId: lock.id,
-		orderCap: String(maxCostUsd),
-	});
-	// The owner measuring her own projects: there is no customer payment to
-	// record, and running this command is the decision the desk would ask for.
-	await db.update(schema.svOrders).set({ status: "PAID_REVIEW_REQUIRED" }).where(eq(schema.svOrders.id, order.id));
-
-	const dispatch = await repositories.dispatch.createPermits(ctx, order.id, {
-		approval: {
-			fromStatus: "PAID_REVIEW_REQUIRED",
-			auditEvent: "ORDER_APPROVED",
-			auditDetails: { source: "selena-measure-journal", slug, questionSetVersion: scenario.version },
-		},
-	});
-
-	let done = 0;
-	const outcomes = await inPool(dispatch.permits, CONCURRENCY, async (permit) => {
-		const result = await runMeasurementForPermit({
-			permitId: permit.id,
-			ctx,
-			store: repositories.runs,
-			adapters,
-			config,
+	let providerBoundaryCrossed = false;
+	try {
+		const profile = await repositories.profiles.get(ctx, project.id);
+		if (!profile) throw new Error(`SELENA_PROFILE_MISSING: ${slug}`);
+		const lock = await repositories.locks.allocate(ctx, {
+			projectId: project.id,
+			snapshot: {
+				measurementScope: { scenarios: rows.map((row) => row.id), systems, repeats: 1 },
+				// Frozen with the scope so a later profile edit cannot change what
+				// this measurement is read against.
+				profile: lockedProfileBlock(profile),
+				questionSetVersion: scenario.version,
+				journalClaim: { id: claim.id, utcDay: claim.utcDay, attempt: claim.attempt },
+			},
+			engineSha: scenario.version,
+			expectedRuns,
+			budgetCap: String(maxCostUsd),
 		});
-		done += 1;
-		if (done % CONCURRENCY === 0 || done === dispatch.permits.length) {
-			console.log(`  ${done}/${dispatch.permits.length}`);
-		}
-		return result;
-	});
+		await linkDailyClaim(claim.id, lock.id);
+		const quote = await repositories.quotes.create(ctx, {
+			projectId: project.id,
+			lockId: lock.id,
+			status: "ACCEPTED",
+			priceAmount: "0",
+			currency: "USD",
+			expectedRuns,
+			expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+		});
+		const order = await repositories.orders.create(ctx, {
+			projectId: project.id,
+			quoteId: quote.id,
+			lockId: lock.id,
+			orderCap: String(maxCostUsd),
+		});
+		// The owner measuring her own projects: there is no customer payment to
+		// record, and running this command is the decision the desk would ask for.
+		await db.update(schema.svOrders).set({ status: "PAID_REVIEW_REQUIRED" }).where(eq(schema.svOrders.id, order.id));
 
-	const failed = outcomes.filter((outcome) => outcome.status !== "completed").length;
-	const { rows: ledger, mentions } = await repositories.runs.ledgerForCycle(ctx, dispatch.cycleId);
-	const valid = ledger.filter((row) => row.validity === "VALID").length;
-	console.log(
-		`  cycle ${dispatch.cycleId}: ${valid} valid of ${dispatch.permits.length} asked, ${mentions.length} mention rows` +
-			(failed > 0 ? `, ${failed} did not complete` : ""),
-	);
-	// Coverage before conclusions: a rate over a fraction of the sample is a
-	// different number wearing the same sign.
-	if (valid / dispatch.permits.length < 0.8) {
-		console.log("  coverage below four fifths — read the counts, not a rate");
+		const dispatch = await repositories.dispatch.createPermits(ctx, order.id, {
+			approval: {
+				fromStatus: "PAID_REVIEW_REQUIRED",
+				auditEvent: "ORDER_APPROVED",
+				auditDetails: {
+					source: "selena-measure-journal",
+					slug,
+					questionSetVersion: scenario.version,
+					journalClaim: { id: claim.id, utcDay: claim.utcDay, attempt: claim.attempt },
+				},
+			},
+		});
+
+		providerBoundaryCrossed = true;
+		await transitionDailyClaim(claim.id, "CLAIMED", "EXECUTING");
+		let done = 0;
+		const outcomes = await inPool(dispatch.permits, CONCURRENCY, async (permit) => {
+			const result = await runMeasurementForPermit({
+				permitId: permit.id,
+				ctx,
+				store: repositories.runs,
+				adapters,
+				config,
+			});
+			done += 1;
+			if (done % CONCURRENCY === 0 || done === dispatch.permits.length) {
+				console.log(`  ${done}/${dispatch.permits.length}`);
+			}
+			return result;
+		});
+
+		const failed = outcomes.filter(
+			(outcome) => outcome.status !== "completed" || outcome.outcome.status !== "SUCCEEDED",
+		).length;
+		const { rows: ledger, mentions } = await repositories.runs.ledgerForCycle(ctx, dispatch.cycleId);
+		const [terminalCycle] = await db
+			.select({
+				status: schema.svCycles.status,
+				expectedRuns: schema.svCycles.expectedRuns,
+				completedRuns: schema.svCycles.completedRuns,
+			})
+			.from(schema.svCycles)
+			.where(and(eq(schema.svCycles.id, dispatch.cycleId), eq(schema.svCycles.organizationId, tenantId)))
+			.limit(1);
+		const valid = ledger.filter((row) => row.validity === "VALID").length;
+		console.log(
+			`  cycle ${dispatch.cycleId}: ${valid} valid of ${dispatch.permits.length} asked, ${mentions.length} mention rows` +
+				(failed > 0 ? `, ${failed} did not complete` : ""),
+		);
+		// Coverage before conclusions: a rate over a fraction of the sample is a
+		// different number wearing the same sign.
+		if (valid / dispatch.permits.length < 0.8) {
+			console.log("  coverage below four fifths — read the counts, not a rate");
+		}
+		if (
+			failed > 0 ||
+			ledger.length !== dispatch.permits.length ||
+			!terminalCycle ||
+			!(["QC_REQUIRED", "READY"] as const).includes(terminalCycle.status as "QC_REQUIRED" | "READY") ||
+			terminalCycle.expectedRuns !== dispatch.permits.length ||
+			terminalCycle.completedRuns !== terminalCycle.expectedRuns
+		) {
+			throw new Error(
+				`SELENA_JOURNAL_INCOMPLETE_CYCLE: outcomes=${dispatch.permits.length - failed}/${dispatch.permits.length}, ledger=${ledger.length}, cycle=${terminalCycle?.completedRuns ?? "missing"}/${terminalCycle?.expectedRuns ?? "missing"} ${terminalCycle?.status ?? "missing"}`,
+			);
+		}
+		await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED");
+	} catch (error) {
+		try {
+			await transitionDailyClaim(
+				claim.id,
+				providerBoundaryCrossed ? "EXECUTING" : "CLAIMED",
+				providerBoundaryCrossed ? "HOLD" : "NO_SPEND",
+			);
+		} catch (settlementError) {
+			console.error(
+				`${slug}: daily claim remains fail-closed after settlement error: ${settlementError instanceof Error ? settlementError.message : String(settlementError)}`,
+			);
+		}
+		throw error;
 	}
 }
 
