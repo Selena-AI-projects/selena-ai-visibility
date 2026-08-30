@@ -148,3 +148,10 @@
 - Evidence: source-only correction in `79e4c259`, web Local Read API regression coverage (`25/25` focused; `363/363` web suite, 4 skipped), web typecheck pass.
 - Authority: safe source-only integrity default; no migration, provider call, credential, network or feature-flag activation.
 - Effect: a declared coordinate change cannot be hidden behind a proof-field parse, while valid locked coordinate contexts remain readable; Local AI automation and runtime activation remain disabled.
+
+## D-027 — Keep Maps rehearsal and normative adapter paths fail-closed
+
+- Decision: retain the deterministic stub as the only runnable zero-call rehearsal, and expose the normative `LocalMapsRankAdapter` shape through a disabled guard whose `execute` and `normalize` operations reject with `LOCAL_MAPS_REHEARSAL_NOT_LIVE` before any I/O. The reserved `stub-local-maps-v1` identity cannot enter the live provider path.
+- Evidence: source-only implementation and targeted adapter tests (`5/5`) plus lib typecheck in `4721fd23`.
+- Authority: safe source-only separation; no provider registration, credential, network, migration, feature-flag or paid execution is enabled.
+- Effect: future runtime work has an explicit contract boundary without turning the rehearsal stub into a false live-provider capability or readiness claim.
