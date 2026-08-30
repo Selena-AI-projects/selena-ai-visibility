@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `24 files / 212 tests PASS` |
+| Contracts Vitest (Node 24) | `25 files / 214 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `32 files / 351 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `PASS — 15 turbo test/check-type tasks completed successfully; contracts 212/212, lib 877/877 and web 351/351 are included` |
+| Web Vitest (Node 24) | `32 files / 352 tests PASS; 1 file / 4 tests skipped` |
+| Full monorepo test graph (Node 24) | `PASS — 15 turbo test/check-type tasks completed successfully; contracts 214/214, lib 877/877 and web 352/352 are included` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
