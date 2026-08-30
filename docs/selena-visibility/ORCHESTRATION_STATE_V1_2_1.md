@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser and HTTP error redaction/owner-gate semantics verified at `f68f8e2c`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
+- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser and HTTP error redaction/owner-gate semantics verified at `a0f6d132`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `f68f8e2c` (`Restrict API diagnostic blocker values`), pushed to `origin/feature/selena-visibility-v1-2-1`; the preceding `6a8f05b3`/`105abeb8` add client-envelope redaction and mark owner-gate 503s non-retryable, while this follow-up restricts blocker diagnostics to known safe values.
+- Last implementation/evidence commit: `a0f6d132` (`Apply redaction to base API error responses`), pushed to `origin/feature/selena-visibility-v1-2-1`; the preceding `6a8f05b3`/`105abeb8`/`f68f8e2c` add client-envelope redaction, non-retryable owner-gates and allowlisted blocker diagnostics, while this follow-up applies the same boundary to direct error responses and preserves approved validation text.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -31,7 +31,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `75 files / 889 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `33 files / 359 tests PASS; 1 file / 4 tests skipped` |
+| Web Vitest (Node 24) | `33 files / 360 tests PASS; 1 file / 4 tests skipped` |
 | Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 889/889, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
@@ -46,7 +46,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Grid decimal/canonical-center hardening (Node 24) | `PASS — explicit decimal ROUND_HALF_UP coordinate formatting and rounded-center geodesy/identity alignment; spherical grid suite 21/21 and contracts typecheck pass` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
-| Local API error-envelope redaction and owner-gate semantics (Node 24) | `PASS — full web unit suite 359/359 (4 skipped), including HTTP-helper and local read/write/setup/admin/provider route tests, plus web typecheck; untrusted provider message/body/detail keys are omitted or replaced with a safe fallback, blocker diagnostics are allowlisted, and owner-gate 503s are retryable=false` |
+| Local API error-envelope redaction and owner-gate semantics (Node 24) | `PASS — full web unit suite 360/360 (4 skipped), including direct and helper HTTP responders plus local read/write/setup/admin/provider route tests, and web typecheck; untrusted provider message/body/detail keys are omitted or replaced with a safe fallback, blocker diagnostics are allowlisted, and owner-gate 503s are retryable=false` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
 | API-01A OpenAPI JSON/Biome invariants | `PASS — four GET paths, scopes, pagination/error/evidence schemas` |
 | API-01B local write/export contracts and focused tests (Node 24) | `PASS — lock-first quote/cycle handlers require local:write + Idempotency-Key, default store fails closed with OWNER_GATE_REQUIRED; bounded canonical Local Maps CSV projection excludes private/raw references` |
