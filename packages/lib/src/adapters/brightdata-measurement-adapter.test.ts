@@ -205,9 +205,46 @@ describe("Bright Data measurement adapter", () => {
 			snapshotPollMs: 0,
 		}).execute(permitFor({ systemId: "Perplexity" }));
 
-		expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
+		expect(outcome).toMatchObject({
+			status: "INVALID",
+			invalidReason: "SNAPSHOT_NOT_READY",
+			rawResponseReference: "brightdata:s_stalled",
+		});
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
+	});
+
+	it("keeps polling a Perplexity snapshot beyond five minutes", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const readyAt = Date.now() + 6 * 60_000;
+		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			const url = String(input);
+			if (url.includes("/trigger")) return jsonResponse({ snapshot_id: "s_slow_perplexity" });
+			if (url.includes("/progress/")) return jsonResponse({ status: Date.now() >= readyAt ? "ready" : "running" });
+			if (url.includes("/snapshot/"))
+				return jsonResponse([{ answer_html: "<p>AVLI is recommended after the long collection.</p>" }]);
+			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
+		});
+		const fetchImpl = fetchSpy as unknown as typeof fetch;
+
+		try {
+			const outcomePromise = adapterWith(fetchImpl, {
+				system: "perplexity",
+				collectionMode: "trigger",
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(6 * 60_000);
+			const outcome = await outcomePromise;
+
+			expect(outcome).toMatchObject({
+				status: "SUCCEEDED",
+				validity: "VALID",
+				answer: { text: "AVLI is recommended after the long collection." },
+			});
+			expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith("/cancel"))).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("sends one Visitor View request to the collector, carrying the question", async () => {

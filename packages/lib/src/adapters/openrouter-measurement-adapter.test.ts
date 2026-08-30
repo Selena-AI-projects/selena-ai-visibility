@@ -165,13 +165,40 @@ describe("OpenRouter measurement adapter", () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(apiModelIds.length);
 		expect(globalFetch).not.toHaveBeenCalled();
-		expect(
-			(fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map(
-				([, init]) => JSON.parse(String((init as RequestInit | undefined)?.body)).model,
-			),
-		).toEqual([...apiModelIds]);
+		const requestBodies = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map(([, init]) =>
+			JSON.parse(String((init as RequestInit | undefined)?.body)),
+		);
+		expect(requestBodies.map((body) => body.model)).toEqual([...apiModelIds]);
+		expect(requestBodies.find((body) => body.model === "qwen/qwen3.5-9b")?.reasoning).toEqual({ effort: "none" });
+		expect(requestBodies.filter((body) => body.model !== "qwen/qwen3.5-9b").every((body) => !body.reasoning)).toBe(
+			true,
+		);
 		expect(outcomes.map((outcome) => outcome.measurement?.system)).toEqual([...apiModelIds]);
 		expect(outcomes.map((outcome) => outcome.measurement?.model)).toEqual([...apiModelIds]);
+	});
+
+	it("keeps a safe reference when Qwen returns reasoning without final content", async () => {
+		const fetchImpl = respondWith(
+			jsonResponse(
+				successPayload({
+					id: "gen-qwen-empty",
+					choices: [{ message: { content: "", reasoning: "private reasoning must not be stored" } }],
+				}),
+			),
+		);
+		const outcome = await adapterWith(fetchImpl, { model: "qwen/qwen3.5-9b" }).execute(
+			permitFor({ systemId: "qwen/qwen3.5-9b" }),
+		);
+		const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+
+		expect(body.reasoning).toEqual({ effort: "none" });
+		expect(outcome).toMatchObject({
+			status: "INVALID",
+			validity: "INVALID",
+			invalidReason: "EMPTY_RESPONSE",
+			rawResponseReference: "openrouter:gen-qwen-empty",
+		});
+		expect(JSON.stringify(outcome)).not.toContain("private reasoning");
 	});
 
 	it("refuses a non-catalog API model before transport", async () => {
