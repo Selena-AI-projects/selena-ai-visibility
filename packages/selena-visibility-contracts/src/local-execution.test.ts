@@ -10,6 +10,7 @@ import {
 	MAX_ATTEMPTS_PER_SLOT,
 	maximumProviderAttempts,
 	measurementExecutionKey,
+	parseMeasurementExecutionKey,
 } from "./local-execution";
 
 const ids = {
@@ -49,7 +50,18 @@ describe("local execution cardinality and keys", () => {
 		expect(maps).toBe(`LOCAL_MAPS|${ids.cycleId}|${ids.pointId}|${ids.keywordId}|dataforseo-maps-v1|0`);
 		expect(localAi).toBe(`LOCAL_AI|${ids.cycleId}|${ids.pointId}|${ids.promptId}|ask-maps|1`);
 		expect(maps).not.toBe(localAi);
-		expect(measurementExecutionKey(maps, 3)).toBe(`${maps}|3`);
+		const execution = measurementExecutionKey(maps, 3);
+		expect(execution).toBe(`${maps}|3`);
+		expect(parseMeasurementExecutionKey(execution)).toEqual({
+			domainId: "LOCAL_MAPS",
+			cycleId: ids.cycleId,
+			pointId: ids.pointId,
+			itemId: ids.keywordId,
+			providerId: "dataforseo-maps-v1",
+			repeatIndex: 0,
+			attemptIndex: 3,
+			baseSlotKey: maps,
+		});
 		expect(() =>
 			localMapsBaseSlotKey({
 				cycleId: ids.cycleId,
@@ -78,6 +90,10 @@ describe("local execution cardinality and keys", () => {
 			}),
 		).toThrow("EXECUTION_KEY_PART_WHITESPACE_INVALID");
 		expect(() => measurementExecutionKey(maps, 4 as 3)).toThrow();
+		expect(() => parseMeasurementExecutionKey(`${maps}|0`)).toThrow("MEASUREMENT_EXECUTION_KEY_INVALID");
+		expect(() => parseMeasurementExecutionKey(maps.replace("LOCAL_MAPS", "LOCAL"))).toThrow(
+			"MEASUREMENT_EXECUTION_KEY_INVALID",
+		);
 	});
 });
 

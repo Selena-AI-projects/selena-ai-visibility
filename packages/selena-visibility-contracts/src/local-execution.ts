@@ -79,6 +79,51 @@ const baseSlotKeySchema = z
 		);
 	}, "BASE_SLOT_KEY_INVALID");
 
+const measurementExecutionKeySchema = z
+	.string()
+	.trim()
+	.refine((value) => {
+		const parts = value.split("|");
+		return (
+			parts.length === 7 &&
+			localExecutionDomainIds.includes(parts[0] as LocalExecutionDomainId) &&
+			z.string().uuid().safeParse(parts[1]).success &&
+			z.string().uuid().safeParse(parts[2]).success &&
+			z.string().uuid().safeParse(parts[3]).success &&
+			executionKeyPartSchema.safeParse(parts[4]).success &&
+			/^(?:0|[1-9]\d{0,9})$/.test(parts[5] ?? "") &&
+			Number(parts[5]) <= 2_147_483_647 &&
+			/^[123]$/.test(parts[6] ?? "")
+		);
+	}, "MEASUREMENT_EXECUTION_KEY_INVALID");
+
+export type ParsedMeasurementExecutionKey = {
+	domainId: LocalExecutionDomainId;
+	cycleId: string;
+	pointId: string;
+	itemId: string;
+	providerId: string;
+	repeatIndex: number;
+	attemptIndex: 1 | 2 | 3;
+	baseSlotKey: string;
+};
+
+/** Parse the single persisted seven-part execution-key grammar. */
+export function parseMeasurementExecutionKey(value: string): ParsedMeasurementExecutionKey {
+	const parsed = measurementExecutionKeySchema.parse(value);
+	const [domainId, cycleId, pointId, itemId, providerId, repeatIndex, attemptIndex] = parsed.split("|");
+	return {
+		domainId: domainId as LocalExecutionDomainId,
+		cycleId,
+		pointId,
+		itemId,
+		providerId,
+		repeatIndex: Number(repeatIndex),
+		attemptIndex: Number(attemptIndex) as 1 | 2 | 3,
+		baseSlotKey: [domainId, cycleId, pointId, itemId, providerId, repeatIndex].join("|"),
+	};
+}
+
 export const localMapsSlotSchema = z.strictObject({
 	cycleId: z.string().uuid(),
 	pointId: z.string().uuid(),
@@ -112,7 +157,9 @@ export function localAiBaseSlotKey(input: LocalAiSlot): string {
 export function measurementExecutionKey(baseSlotKey: string, attemptIndex: 1 | 2 | 3): string {
 	const base = baseSlotKeySchema.parse(baseSlotKey);
 	const attempt = attemptIndexSchema.parse(attemptIndex);
-	return `${base}|${attempt}`;
+	const executionKey = `${base}|${attempt}`;
+	parseMeasurementExecutionKey(executionKey);
+	return executionKey;
 }
 
 export type LocalCardinalityShape = {

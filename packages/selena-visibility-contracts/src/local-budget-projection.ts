@@ -1,26 +1,20 @@
 import { z } from "zod";
-import { executionKeyPartSchema } from "./local-execution.js";
+import { executionKeyPartSchema, parseMeasurementExecutionKey } from "./local-execution.js";
 
 const usdAmountSchema = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
 const periodKeySchema = z.string().regex(/^\d{4}-(?:0[1-9]|1[0-2])$/);
+
 const localMapsExecutionKeySchema = z
 	.string()
 	.min(1)
 	.regex(/^\S+$/)
 	.superRefine((key, issues) => {
-		const parts = key.split("|");
-		if (
-			parts.length !== 7 ||
-			parts[0] !== "LOCAL_MAPS" ||
-			!z.string().uuid().safeParse(parts[1]).success ||
-			!z.string().uuid().safeParse(parts[2]).success ||
-			!z.string().uuid().safeParse(parts[3]).success ||
-			!executionKeyPartSchema.safeParse(parts[4]).success ||
-			!/^(?:0|[1-9]\d{0,9})$/.test(parts[5] ?? "") ||
-			Number(parts[5]) > 2_147_483_647 ||
-			!new Set(["1", "2", "3"]).has(parts[6] ?? "")
-		)
+		try {
+			if (parseMeasurementExecutionKey(key).domainId !== "LOCAL_MAPS")
+				throw new Error("LOCAL_BUDGET_EXECUTION_KEY_DOMAIN_INVALID");
+		} catch {
 			issues.addIssue({ code: "custom", message: "LOCAL_BUDGET_EXECUTION_KEY_INVALID" });
+		}
 	});
 
 function toMicros(amount: string): bigint {
@@ -51,8 +45,13 @@ export const localBudgetExposureSnapshotRowSchema = z
 		priceSnapshotVersion: executionKeyPartSchema,
 	})
 	.superRefine((row, issues) => {
-		if (row.executionKey.split("|")[1] !== row.measurementCycleId)
-			issues.addIssue({ code: "custom", message: "LOCAL_BUDGET_EXECUTION_CYCLE_MISMATCH", path: ["executionKey"] });
+		try {
+			if (parseMeasurementExecutionKey(row.executionKey).cycleId !== row.measurementCycleId)
+				issues.addIssue({ code: "custom", message: "LOCAL_BUDGET_EXECUTION_CYCLE_MISMATCH", path: ["executionKey"] });
+		} catch {
+			// The field schema owns malformed-key reporting; do not mask it with a
+			// second parser exception while refining the surrounding object.
+		}
 		if (row.budgetState !== "SPENT" && toMicros(row.spentCostUsd) !== BigInt(0))
 			issues.addIssue({ code: "custom", message: "LOCAL_BUDGET_NON_SPENT_ROW_HAS_SPEND", path: ["spentCostUsd"] });
 	});
@@ -71,10 +70,19 @@ export const localBudgetClaimProjectionInputSchema = z
 		monthlyCapUsd: usdAmountSchema,
 		priceSnapshotVersion: executionKeyPartSchema,
 	})
-	.refine((claim) => claim.executionKey.split("|")[1] === claim.measurementCycleId, {
-		message: "LOCAL_BUDGET_EXECUTION_CYCLE_MISMATCH",
-		path: ["executionKey"],
-	});
+	.refine(
+		(claim) => {
+			try {
+				return parseMeasurementExecutionKey(claim.executionKey).cycleId === claim.measurementCycleId;
+			} catch {
+				return false;
+			}
+		},
+		{
+			message: "LOCAL_BUDGET_EXECUTION_CYCLE_MISMATCH",
+			path: ["executionKey"],
+		},
+	);
 export type LocalBudgetClaimProjectionInput = z.infer<typeof localBudgetClaimProjectionInputSchema>;
 
 export type LocalBudgetClaimProjection = {
