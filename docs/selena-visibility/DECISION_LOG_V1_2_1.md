@@ -203,3 +203,9 @@
 - Decision: register a dedicated `selena-local-measure` queue and consumer with concurrency one and queue retries disabled, but make the default executor return `OWNER_GATE_REQUIRED` with `providerCalls=0`. A later runtime slice must inject the transaction-owned executor explicitly after Lock, budget, RLS and provider approval.
 - Evidence: source-only worker boundary in the feature branch; `apps/worker` typecheck and targeted Biome checks pass on 2026-08-30.
 - Effect: the queue topology and handler seam are explicit for future at-least-once work without acknowledging a fabricated measurement, writing durable state, spending money or registering a provider today.
+
+## D-036 — Quarantine the historical planar grid generator
+
+- Decision: move the pre-v1.2.1 planar `squareGridPoints` implementation into an explicit compatibility-only module and mark it deprecated. Preserve its exports for the historical micro-slice, while normative Local Maps code continues to use `sphericalGridPointsV1` exclusively.
+- Evidence: source-only refactor in the feature branch; contracts `230/230`, contracts typecheck and targeted Biome checks pass on 2026-08-30. Repository search found no non-test production caller of the planar generator.
+- Effect: the legacy algorithm remains available only for backward-compatible historical tests and cannot be mistaken for the v1.2.1 spherical grid implementation; no migration, provider or runtime path changed.
