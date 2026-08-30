@@ -47,6 +47,7 @@ declare global {
 			readonly SELENA_RUNTIME_DATABASE_CA_PEM?: string;
 			readonly DATABASE_URL: string;
 			readonly APP_URL?: string;
+			readonly AUTH_TRUSTED_ORIGINS?: string;
 			readonly SCRAPE_TARGETS?: string;
 			readonly OPENAI_API_KEY: string;
 			readonly ANTHROPIC_API_KEY: string;
