@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: feature checkout with the source-only API-01 read slice validated locally; commit pending
-- Current phase: `Phase 0F — API-01 read contracts and Local AI projection`
+- Worktree: clean feature checkout after the source-only API-01 read slice push
+- Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `3684d93c` (`harden visibility execution consistency`), pushed to `origin/feature/selena-visibility-v1-2-1`
+- Current feature commit: `257fc595` (`implement tenant-scoped local visibility read API`), pushed to `origin/feature/selena-visibility-v1-2-1`
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
