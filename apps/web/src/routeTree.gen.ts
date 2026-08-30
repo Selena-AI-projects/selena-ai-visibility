@@ -96,6 +96,12 @@ import { Route as ApiV1SelenaLocationsLocationIdLocalScanCyclesRouteImport } fro
 import { Route as ApiV1SelenaPilotCyclesIndexRouteImport } from './routes/api/v1/selena/pilot/cycles/index'
 import { Route as ApiV1SelenaPilotObservationsIndexRouteImport } from './routes/api/v1/selena/pilot/observations/index'
 import { Route as ApiV1SelenaReadinessScansScanIdRouteImport } from './routes/api/v1/selena/readiness/scans/$scanId'
+import { Route as ApiV1SelenaAdminLocalAiRunsRunIdRetryRouteImport } from './routes/api/v1/selena/admin/local-ai-runs/$runId/retry'
+import { Route as ApiV1SelenaAdminLocalMapRunsRunIdRetryRouteImport } from './routes/api/v1/selena/admin/local-map-runs/$runId/retry'
+import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+import { Route as ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport } from './routes/api/v1/selena/admin/providers/$providerId/canary'
 import { Route as ApiV1SelenaLocationsLocationIdLocalScanQuoteRouteImport } from './routes/api/v1/selena/locations/$locationId/local-scan/quote'
 import { Route as ApiV1SelenaPilotObservationsObservationIdReviewRouteImport } from './routes/api/v1/selena/pilot/observations/$observationId/review'
 import { Route as ApiV1SelenaPilotCyclesCycleIdTasksIndexRouteImport } from './routes/api/v1/selena/pilot/cycles/$cycleId/tasks/index'
@@ -568,6 +574,42 @@ const ApiV1SelenaReadinessScansScanIdRoute =
     path: '/api/v1/selena/readiness/scans/$scanId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute =
+  ApiV1SelenaAdminLocalAiRunsRunIdRetryRouteImport.update({
+    id: '/api/v1/selena/admin/local-ai-runs/$runId/retry',
+    path: '/api/v1/selena/admin/local-ai-runs/$runId/retry',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute =
+  ApiV1SelenaAdminLocalMapRunsRunIdRetryRouteImport.update({
+    id: '/api/v1/selena/admin/local-map-runs/$runId/retry',
+    path: '/api/v1/selena/admin/local-map-runs/$runId/retry',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute =
+  ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport.update({
+    id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve',
+    path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute =
+  ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRouteImport.update({
+    id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight',
+    path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute =
+  ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport.update({
+    id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop',
+    path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminProvidersProviderIdCanaryRoute =
+  ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport.update({
+    id: '/api/v1/selena/admin/providers/$providerId/canary',
+    path: '/api/v1/selena/admin/providers/$providerId/canary',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute =
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRouteImport.update({
     id: '/api/v1/selena/locations/$locationId/local-scan/quote',
@@ -686,6 +728,12 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
   '/api/v1/selena/pilot/cycles/': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations/': typeof ApiV1SelenaPilotObservationsIndexRoute
+  '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-map-runs/$runId/retry': typeof ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -775,6 +823,12 @@ export interface FileRoutesByTo {
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
   '/api/v1/selena/pilot/cycles': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations': typeof ApiV1SelenaPilotObservationsIndexRoute
+  '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-map-runs/$runId/retry': typeof ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -870,6 +924,12 @@ export interface FileRoutesById {
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
   '/api/v1/selena/pilot/cycles/': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations/': typeof ApiV1SelenaPilotObservationsIndexRoute
+  '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-map-runs/$runId/retry': typeof ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
+  '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -965,6 +1025,12 @@ export interface FileRouteTypes {
     | '/api/v1/selena/readiness/scans/$scanId'
     | '/api/v1/selena/pilot/cycles/'
     | '/api/v1/selena/pilot/observations/'
+    | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-map-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1054,6 +1120,12 @@ export interface FileRouteTypes {
     | '/api/v1/selena/readiness/scans/$scanId'
     | '/api/v1/selena/pilot/cycles'
     | '/api/v1/selena/pilot/observations'
+    | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-map-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1148,6 +1220,12 @@ export interface FileRouteTypes {
     | '/api/v1/selena/readiness/scans/$scanId'
     | '/api/v1/selena/pilot/cycles/'
     | '/api/v1/selena/pilot/observations/'
+    | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-map-runs/$runId/retry'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+    | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1205,6 +1283,12 @@ export interface RootRouteChildren {
   ApiV1SelenaReadinessScansScanIdRoute: typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
   ApiV1SelenaPilotCyclesIndexRoute: typeof ApiV1SelenaPilotCyclesIndexRoute
   ApiV1SelenaPilotObservationsIndexRoute: typeof ApiV1SelenaPilotObservationsIndexRoute
+  ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute: typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
+  ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute: typeof ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute
+  ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
+  ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
+  ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  ApiV1SelenaAdminProvidersProviderIdCanaryRoute: typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute: typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   ApiV1SelenaPilotObservationsObservationIdReviewRoute: typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute: typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -1822,6 +1906,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaReadinessScansScanIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/admin/local-ai-runs/$runId/retry': {
+      id: '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+      path: '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+      fullPath: '/api/v1/selena/admin/local-ai-runs/$runId/retry'
+      preLoaderRoute: typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/local-map-runs/$runId/retry': {
+      id: '/api/v1/selena/admin/local-map-runs/$runId/retry'
+      path: '/api/v1/selena/admin/local-map-runs/$runId/retry'
+      fullPath: '/api/v1/selena/admin/local-map-runs/$runId/retry'
+      preLoaderRoute: typeof ApiV1SelenaAdminLocalMapRunsRunIdRetryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': {
+      id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+      path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+      fullPath: '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
+      preLoaderRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': {
+      id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+      path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+      fullPath: '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
+      preLoaderRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': {
+      id: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+      path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+      fullPath: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+      preLoaderRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/providers/$providerId/canary': {
+      id: '/api/v1/selena/admin/providers/$providerId/canary'
+      path: '/api/v1/selena/admin/providers/$providerId/canary'
+      fullPath: '/api/v1/selena/admin/providers/$providerId/canary'
+      preLoaderRoute: typeof ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/locations/$locationId/local-scan/quote': {
       id: '/api/v1/selena/locations/$locationId/local-scan/quote'
       path: '/api/v1/selena/locations/$locationId/local-scan/quote'
@@ -2068,6 +2194,18 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1SelenaPilotCyclesIndexRoute: ApiV1SelenaPilotCyclesIndexRoute,
   ApiV1SelenaPilotObservationsIndexRoute:
     ApiV1SelenaPilotObservationsIndexRoute,
+  ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute:
+    ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute,
+  ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute:
+    ApiV1SelenaAdminLocalMapRunsRunIdRetryRoute,
+  ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute:
+    ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute,
+  ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute:
+    ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute,
+  ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute:
+    ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute,
+  ApiV1SelenaAdminProvidersProviderIdCanaryRoute:
+    ApiV1SelenaAdminProvidersProviderIdCanaryRoute,
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute:
     ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute,
   ApiV1SelenaPilotObservationsObservationIdReviewRoute:

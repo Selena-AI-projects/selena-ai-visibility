@@ -1159,6 +1159,132 @@
 		}
 	},
 	"paths": {
+		"/selena/admin/local-scan-cycles/{cycleId}/preflight": {
+			"post": {
+				"summary": "Run Local Scan preflight",
+				"description": "Runs the owner-gated Local Maps preflight. Requires `local:execute`; the source-only implementation fails closed until runtime schema, RLS and permit proof exist.",
+				"operationId": "preflightSelenaLocalScanCycle",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "cycleId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Preflight accepted by a durable admin adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/admin/local-scan-cycles/{cycleId}/approve": {
+			"post": {
+				"summary": "Approve a Local Scan cycle",
+				"description": "Approves a cycle only after preflight and permit checks. Requires `local:execute`; source-only transport fails closed.",
+				"operationId": "approveSelenaLocalScanCycle",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "cycleId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Approval accepted by a durable admin adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/admin/local-scan-cycles/{cycleId}/stop": {
+			"post": {
+				"summary": "Stop a Local Scan cycle",
+				"description": "Stops future permits for one cycle. Requires `local:execute`; source-only transport fails closed.",
+				"operationId": "stopSelenaLocalScanCycle",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "cycleId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Stop accepted by a durable admin adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/admin/local-map-runs/{runId}/retry": {
+			"post": {
+				"summary": "Retry one Local Maps run",
+				"description": "Requests one controlled retry for a single run, never a whole grid. Requires `local:execute`; source-only transport fails closed.",
+				"operationId": "retrySelenaLocalMapRun",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "runId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Retry accepted by a durable admin adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/admin/local-ai-runs/{runId}/retry": {
+			"post": {
+				"summary": "Retry one Local AI run",
+				"description": "Requests one controlled manual Local AI retry. Requires `local:execute`; source-only transport fails closed and cannot automate MANUAL_ONLY capture.",
+				"operationId": "retrySelenaLocalAiRun",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "runId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Retry accepted by a durable admin adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
+		"/selena/admin/providers/{providerId}/canary": {
+			"post": {
+				"summary": "Request an owner-approved provider canary",
+				"description": "Requests a bounded one-task provider canary. Requires `provider:canary`; source-only transport fails closed and performs zero provider calls.",
+				"operationId": "canarySelenaProvider",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "providerId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
+				],
+				"responses": {
+					"202": { "description": "Canary request accepted by an owner-approved adapter" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"409": { "$ref": "#/components/responses/ConflictError" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
 		"/selena/locations/{locationId}/local-scan/quote": {
 			"post": {
 				"summary": "Calculate a locked Local Maps quote",

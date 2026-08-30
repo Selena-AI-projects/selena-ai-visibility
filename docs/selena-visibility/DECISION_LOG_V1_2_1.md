@@ -87,3 +87,9 @@
 - Decision: Local Maps CSV serialization is a pure, bounded projection of the tenant-scoped read contract with stable columns, explicit `UNKNOWN`/null semantics and no private/raw references. A REST download route, object storage and signed URL are deferred until runtime evidence and owner authorization exist.
 - Authority: implementation and contract tests on 2026-08-30.
 - Effect: export formatting is deterministic without implying that a canonical database dataset or signed evidence capability is available.
+
+## D-017 — Local admin control transport boundary
+
+- Decision: preflight, approve, stop, single-run retry and provider-canary routes are explicit admin operations. They require `local:execute` or the separate `provider:canary` permission plus `Idempotency-Key`; the default store fails closed with `503 OWNER_GATE_REQUIRED` and reports zero provider calls.
+- Authority: implementation and focused tests of API-01C on 2026-08-30.
+- Effect: the API surface is now explicit and auditable without granting execution, bypassing approval, or implying runtime RLS, durable idempotency or paid-canary readiness.
