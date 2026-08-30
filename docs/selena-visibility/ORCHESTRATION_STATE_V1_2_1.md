@@ -3,12 +3,12 @@
 - State: `IN_PROGRESS`
 - Context mode: `repository_only`
 - Canonical ref: `origin/release/selena-visibility-mvp`
-- Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
+- Canonical SHA: `34abef33df6d083a6c9d066865dad1c5ee6add39` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser and HTTP error redaction/owner-gate semantics verified at `a0f6d132`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
+- Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser and HTTP error redaction/owner-gate semantics verified through `8536d0b3`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `a0f6d132` (`Apply redaction to base API error responses`), pushed to `origin/feature/selena-visibility-v1-2-1`; the preceding `6a8f05b3`/`105abeb8`/`f68f8e2c` add client-envelope redaction, non-retryable owner-gates and allowlisted blocker diagnostics, while this follow-up applies the same boundary to direct error responses and preserves approved validation text.
+- Last implementation/evidence commit: `8536d0b3` (`Record centralized API error boundary`), pushed to `origin/feature/selena-visibility-v1-2-1`; implementation commits through `a0f6d132` add client-envelope redaction, non-retryable owner-gates, allowlisted blocker diagnostics and direct-responder coverage, while this commit records the final evidence.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
