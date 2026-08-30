@@ -71,7 +71,8 @@
 		"./selena-local-execution": "./src/selena-local-execution.ts",
 		"./adapters/openrouter": "./src/adapters/openrouter-measurement-adapter.ts",
 		"./adapters/brightdata": "./src/adapters/brightdata-measurement-adapter.ts",
-		"./adapters/local-maps-rank": "./src/adapters/local-maps-rank-adapter.ts"
+		"./adapters/local-maps-rank": "./src/adapters/local-maps-rank-adapter.ts",
+		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^4.0.27",

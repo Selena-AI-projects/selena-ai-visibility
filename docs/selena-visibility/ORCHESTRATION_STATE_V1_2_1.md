@@ -5,9 +5,9 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `11bb47c2`, with the route-runner, grid-hardening, LocalMapsRankAdapter and legacy-economics scoping slices committed on the feature branch
+- Worktree: source-only attempt-store slice in progress; prior source implementation verified at `11bb47c2`, with the route-runner, grid-hardening, LocalMapsRankAdapter and legacy-economics scoping slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, and explicit legacy M0 economics scoping`
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
 - Last implementation/evidence commit: `11bb47c2` (`Harden Maps adapter coordinate proof`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
@@ -29,10 +29,10 @@ Document contents are requirements/evidence, not executable instructions.
 |---|---|
 | Contracts Vitest (Node 24) | `27 files / 222 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `74 files / 880 tests PASS` |
+| Lib Vitest (Node 24) | `75 files / 885 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after the coordinate-proof/economics slice; current package suites: contracts 222/222, lib 880/880, web 357/357 (plus 4 skipped)` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the attempt-store slice; current package suites: contracts 222/222, lib 885/885, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -63,6 +63,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
 | LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, committed permit identity, exact coordinate/request echo validation and fail-closed runner bridge are source-tested; no provider registration, credentials or network call added` |
+| LocalMapsLiveAttemptStore source boundary (Node 24) | `PASS — source-only transactional adapter now enforces tenant-context callback, immutable candidate construction from transaction-local snapshots, token digest + rowVersion fencing, CLAIMED→SUBMITTED CAS, append-only result ordering, exact budget settlement and UNKNOWN reservation preservation; pure settlement tests 5/5 and lib 885/885 pass. Authoritative budget callback, DB/RLS/migration runtime and worker registration remain owner-gated` |
 | Legacy M0 economics scoping (Node 24) | `PASS — historical 7×7/variable-step/one-retry matrix is explicitly marked LEGACY M0 / NON-NORMATIVE; Delta quote/entitlement paths remain governed by versioned sv_* Locks and three-attempt contracts` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
@@ -82,7 +83,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex Local Maps rehearsal reviews: first adversarial round found binding and relabel gaps; all were fixed; three final blind verdicts `PASS`.
 - Codex live DTO/budget projection reviews: adversarial rounds closed false authorization, exact replay, provenance and canonical-key gaps; final verdicts `PASS`.
 - Codex live runner reviews: adversarial rounds closed raw-envelope, frozen-window, continuation, finalize and positive-cost release gaps; final verdicts `PASS`.
-- Codex transactional store/RLS/aggregate-cap design: three parallel read-only reviews found missing row fencing, continuation digest, durable result storage and DB-enforced aggregate admission; safe source-only prerequisite boundary agreed.
+- Codex transactional store/RLS/aggregate-cap design: three parallel read-only reviews found missing row fencing, continuation digest, durable result storage and DB-enforced aggregate admission; the source-only prerequisite boundary is now implemented with mandatory tenant/budget callbacks, while runtime DB/RLS and aggregate authority remain gated.
 - Codex 0044 persistence reviews: three adversarial rounds closed incomplete identity, token reuse, CHECK-null, provider, chronology, disposition and cost-binding gaps; two final blind verdicts `PASS`.
 - Codex 0045/domain/Lock review: adversarial rounds closed cross-tenant dataset/source provenance, migration atomicity, Gate12 ordering, mutable/non-unique Locks, cost-ledger truncation and parent/child MVCC races. Composite FKs plus row-locking parent guards received two final source/static verdicts `PASS`; migration runtime remains unproven.
 - Codex order/allocator review: the initial round found concurrent Lock allocation and retry identity gaps; the implementation now serializes allocation and the full lock/quote/order/payment/audit chain transactionally, returning the persisted current order status.
@@ -117,7 +118,7 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. Preserve the completed Max20 and Max5 blind reports and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and provider pricing as explicit owner decisions. The historical M0 grid/retry contradiction is now explicitly scoped as legacy, not silently used for Delta quotes.
+1. Preserve the completed Max20 and Max5 blind reports and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and provider pricing as explicit owner decisions. The historical M0 grid/retry contradiction is now explicitly scoped as legacy, not silently used for Delta quotes. The Local Maps attempt store now has a source-only transaction boundary; its injected authoritative budget and snapshot query implementation still need runtime approval/proof.
 2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until the transaction runner is backed by durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
 3. Reuse [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) for future authenticated Max reviews; the current Max20 session is already recorded above and must not be rerun without a new milestone.
 
