@@ -70,7 +70,7 @@ export const mapsLockV1Schema = z
 			surfaceCapUsd: usdAmountSchema,
 			monthlyCapUsd: usdAmountSchema,
 			worstCaseCostUsd: usdAmountSchema,
-			priceSnapshotVersion: z.string().trim().min(1),
+			priceSnapshotVersion: executionKeyPartSchema,
 		}),
 	})
 	.superRefine((lock, issues) => {
