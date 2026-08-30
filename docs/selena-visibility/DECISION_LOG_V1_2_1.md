@@ -258,6 +258,12 @@
 - Evidence: verifier result `BLOCKED_REPO_MUTATION`; exact status delta was `?? HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`. No Claude readiness verdict is accepted from that run.
 - Effect: the prior valid Claude review at `421da0ca` remains the latest accepted second-model evidence; a later review may be rerun only from a stable, owner-confirmed baseline.
 
+## D-045 — Do not adopt the uncommitted coordinate-proof diff unchanged
+
+- Decision: keep the concurrent coordinate-proof persistence changes outside the feature branch until their hash semantics are reconciled. Adding `pointId` to `observerContextSchema` currently makes it part of `contextHash`, conflicting with D-026's committed rule that proof metadata is stripped while observation coordinates remain hash-bound.
+- Evidence: independent read-only audit of the uncommitted diff on 2026-08-31 identified the conflict at `packages/selena-visibility-contracts/src/local-discovery.ts`; targeted contract (`231/231`), Local Discovery (`28/28`) and web read-API (`27/27`) reports were green, but no old-lock/hash compatibility proof or stable commit exists.
+- Effect: `LOCAL-AI-PROOF-01` remains `PARTIAL`; the external work-in-progress is preserved and excluded from feature commits. Adoption requires either a proof-aware snapshot that strips `pointId` from `contextHash` or an explicit superseding decision with lock regeneration/migration evidence, plus route/repository integration and duplicate-proof policy tests.
+
 ## D-045 — Store Local AI coordinate proof as distinct evidence
 
 - Decision: bind every `DECLARED_COORDINATE` observer context to a UUID `pointId`, require manual submission to supply a separate coordinate-proof asset, and persist that asset as `COORDINATE_PROOF` beside the required screenshot. A Local AI result becomes `VALID` only when both assets are usable; the public `coordinateProofReference` is the evidence asset UUID and never the private object reference.
