@@ -233,3 +233,9 @@
 - Decision: do not silently replace the legacy manual-pilot routes' flat `{error, message}` responses with the typed Local API envelope. The pilot routes are outside the documented API-01 OpenAPI surface and currently have no request-id/error-code compatibility contract; changing them would be a separate API decision, not a source-only cleanup.
 - Evidence: read-only route/OpenAPI comparison on 2026-08-30: `apps/web/src/routes/api/v1/selena/pilot/**` uses `pilotErrorResponse`, while `packages/api-spec/src/openapi.json` documents no pilot paths. The typed `localApiErrorEnvelopeSchema` is used by the Local API boundary and requires fields unavailable in the legacy helper.
 - Effect: API-01 error-boundary claims remain scoped to the documented Local API; pilot error-envelope normalization is recorded as a P2/owner-gated follow-up and no compatibility-breaking route change is introduced.
+
+## D-041 — Include Local AI evidence creation in cursor snapshots
+
+- Decision: derive the Local AI result snapshot high-water mark from both the task update timestamps and every attached evidence asset's `createdAt`. Adding evidence to an existing manual observation therefore invalidates previously issued AI cursors instead of allowing a stale page to survive a state change.
+- Evidence: source-only change in `apps/web/src/server/selena-local-read-api.ts`; the store projection now carries `svObservationEvidenceAssets.createdAt`, and the focused read-API regression passes `27/27` with web typecheck and Biome checks on 2026-08-30.
+- Effect: Local AI result/progress pagination remains snapshot-consistent for evidence additions without changing the manual-only/provider/migration boundary; runtime database high-water proof remains owner-gated.

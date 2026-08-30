@@ -142,6 +142,7 @@ export type LocalReadAiTaskAssetRow = {
 	evidenceSequenceIndex: number | null;
 	evidenceSha256: string | null;
 	evidenceCapturedAt: Date | null;
+	evidenceCreatedAt: Date | null;
 };
 
 export type LocalReadAiEvidenceRow = {
@@ -518,7 +519,10 @@ function evaluateAiTask(rows: LocalReadAiTaskAssetRow[], pilotCycleId: string, s
 		capturedAt: first.observationCapturedAt ? safeIso(first.observationCapturedAt) : null,
 		evidenceIds,
 		position: { sortValue: safeIso(first.taskCreatedAt), tieBreakerId: first.captureTaskId },
-		updatedAt: safeIso(first.taskUpdatedAt),
+		updatedAt: maxIso([
+			safeIso(first.taskUpdatedAt),
+			...rows.flatMap((row) => (row.evidenceCreatedAt ? [safeIso(row.evidenceCreatedAt)] : [])),
+		]),
 	};
 }
 
@@ -965,6 +969,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				evidenceSequenceIndex: svObservationEvidenceAssets.sequenceIndex,
 				evidenceSha256: svObservationEvidenceAssets.sha256,
 				evidenceCapturedAt: svObservationEvidenceAssets.capturedAt,
+				evidenceCreatedAt: svObservationEvidenceAssets.createdAt,
 			})
 			.from(svCaptureTasks)
 			.innerJoin(

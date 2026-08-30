@@ -144,6 +144,7 @@ function acceptedAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 		evidenceSequenceIndex: 0,
 		evidenceSha256: "b".repeat(64),
 		evidenceCapturedAt: new Date("2026-08-30T02:05:00.000Z"),
+		evidenceCreatedAt: new Date("2026-08-30T02:06:00.000Z"),
 	};
 }
 
@@ -160,6 +161,7 @@ function pendingAiTaskAssetRow(): LocalReadAiTaskAssetRow {
 		evidenceSequenceIndex: null,
 		evidenceSha256: null,
 		evidenceCapturedAt: null,
+		evidenceCreatedAt: null,
 	};
 }
 
@@ -701,6 +703,29 @@ describe("Selena local read API core", () => {
 				limit: 1,
 				after: null,
 				snapshotVersion: "2026-08-30T02:00:00.000Z",
+			}),
+		).rejects.toMatchObject({ code: "CURSOR_STALE", status: 409 });
+	});
+
+	it("invalidates Local AI cursors when evidence is added after the task snapshot", async () => {
+		const task = acceptedAiTaskAssetRow();
+		const source = store({
+			findCycle: vi.fn(async () => ({ ...cycle, configurationSnapshot: localAiSnapshot() })),
+			findAiPilot: vi.fn(async () => ({ state: "ONE" as const, pilot: acceptedAiPilot() })),
+			listAiTaskAssets: vi.fn(async () => [task]),
+		});
+		const api = createSelenaLocalReadApi(source);
+
+		const firstPage = await api.aiResults({ tenantId: "tenant-a", cycleId: ids.cycle });
+		expect(firstPage.snapshotVersion).toBe("2026-08-30T02:10:00.000Z");
+
+		source.listAiTaskAssets = vi.fn(async () => [{ ...task, evidenceCreatedAt: new Date("2026-08-30T03:00:00.000Z") }]);
+
+		await expect(
+			api.aiResults({
+				tenantId: "tenant-a",
+				cycleId: ids.cycle,
+				snapshotVersion: firstPage.snapshotVersion,
 			}),
 		).rejects.toMatchObject({ code: "CURSOR_STALE", status: 409 });
 	});
