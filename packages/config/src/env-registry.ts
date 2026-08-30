@@ -65,6 +65,12 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Public base URL of the web app. Required in cloud (used for auth, email links, and Stripe redirects); written by `elmo init` for local.",
 	},
 	{
+		name: "AUTH_TRUSTED_ORIGINS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Comma-separated additional HTTP(S) origins accepted by Better Auth.",
+	},
+	{
 		name: "BETTER_AUTH_SECRET",
 		scope: "server",
 		requiredBy: VALIDATED_MODES,
