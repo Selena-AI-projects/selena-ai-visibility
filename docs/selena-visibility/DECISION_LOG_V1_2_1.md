@@ -63,3 +63,15 @@
 - Decision: durable row-version/token prerequisites and append-only validated-result storage are a source-only prerequisite slice. The row-version column is not itself a fence: the future transactional writer must require an expected version and exact token digest. Aggregate budget admission must be one authoritative database write, never a read-only `FITS` oracle, and claim/finalize/reconciliation must share one deterministic lock order.
 - Authority: implementation of D-002 and D-003, supported by three independent read-only store/RLS/lock reviews on 2026-08-30.
 - Boundary: monthly period semantics, Configuration Lock budget paths, runtime role/grants and maximum lease TTL remain unresolved owner decisions. No migration apply, grants, store registration or provider activation is implied.
+
+## D-013 — Local read API truth boundary
+
+- Decision: the client-facing Local read surface is tenant-scoped and read-only. Maps results require immutable source provenance; Local AI is exposed only when a frozen `MANUAL_ONLY` lock can be mapped to exactly one pilot, with task/observation review agreement and evidence-backed validity. Missing locks are `NOT_INCLUDED`; missing, ambiguous or structurally inconsistent manual data fails closed as `UNKNOWN`.
+- Authority: implementation of the owner-approved safe defaults and Delta v1.2.1, independently reviewed in source-only blind passes on 2026-08-30.
+- Boundary: quote/create mutations, database/RLS runtime proof, signed evidence credentials and any provider or paid execution remain separate owner-gated slices. Evidence never returns opaque private object references.
+
+## D-014 — API-01A pagination and signing boundary
+
+- Decision: the source-only read API validates cursor shape and tenant/cycle/resource binding, but does not claim tamper-evident cursors or a complete database high-water mark. Evidence access remains explicitly `UNAVAILABLE/SIGNING_UNAVAILABLE` until an owner-approved signing key, object-storage adapter and runtime proof exist.
+- Authority: reconciliation of two fresh blind Codex API-01A reviews on 2026-08-30.
+- Effect: API-01 remains `PARTIAL`; no cursor secret, credentials, provider call, staging/production action or paid execution is introduced implicitly.

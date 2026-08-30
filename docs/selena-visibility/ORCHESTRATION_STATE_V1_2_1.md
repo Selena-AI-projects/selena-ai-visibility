@@ -5,8 +5,8 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean feature checkout after the reviewed source-only hardening push
-- Current phase: `Phase 0E — remaining source-only acceptance gaps`
+- Worktree: feature checkout with the source-only API-01 read slice validated locally; commit pending
+- Current phase: `Phase 0F — API-01 read contracts and Local AI projection`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
 - Current feature commit: `3684d93c` (`harden visibility execution consistency`), pushed to `origin/feature/selena-visibility-v1-2-1`
 - Feature flags: off
@@ -27,19 +27,22 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `21 files / 191 tests PASS` |
+| Contracts Vitest (Node 24) | `22 files / 202 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `26 files / 300 tests PASS; 1 file / 4 tests skipped` |
+| Web Vitest (Node 24) | `28 files / 332 tests PASS; 1 file / 4 tests skipped` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
+| Root `pnpm lint` | `BASELINE FAIL — existing web diagnostics (33 errors, 132 warnings, 14 infos); no changed API files reported` |
 | Migration 0043 static schema/review | `PASS — not applied` |
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
+| API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
+| API-01A OpenAPI JSON/Biome invariants | `PASS — four GET paths, scopes, pagination/error/evidence schemas` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -64,6 +67,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: earlier read-only pass completed in an isolated snapshot; no API billing.
 - Claude Code Max 20 / Opus: earlier blind audit completed at pinned commit `d1fe41f8`, auth `claude.ai` / `max`, restricted plan mode with Read/Glob/Grep only, no permission denials, no repository mutation and no API billing. A new pinned review of `3684d93c` was attempted in the same restricted mode but stopped before reading the snapshot with `401 OAuth access token has expired`; preserved session `0638efee-5ca1-4b9e-a57a-6dcc48a1a2f5`. Re-authentication is a credential gate.
+- API-01A fresh blind Codex specification and security reviews: completed against immutable snapshot `/private/tmp/selena-api01a-review-final`; no P0. They independently confirmed tenant/scope fencing, no provider calls, and fail-closed unsigned evidence. Review verdict remains `FAIL / API-01A PARTIAL` because cursor tamper evidence, complete high-water snapshot stability, runtime RLS proof, and signed evidence capability are not available in this source-only slice. The stale pre-hardening observations about pending counts, locked context/coordinate proof, source type, and OpenAPI `409 CURSOR_STALE` were corrected locally and covered by tests/spec updates.
 
 ### Claude Max 20 synthesis
 
@@ -74,8 +78,8 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. Select and implement the next source-only acceptance block while keeping migrations, providers, runtime grants, worker registration, synthetic persistence and feature flags disabled.
-2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of `3684d93c` and reconcile any verified finding.
+1. Commit and push the validated API-01A source-only slice, then record the exact commit evidence.
+2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
 3. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`.
 
 ## Push/PR side-effect check

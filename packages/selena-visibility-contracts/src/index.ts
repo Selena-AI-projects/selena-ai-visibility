@@ -122,6 +122,7 @@ export * from "./anonymous-suggest.js";
 export * from "./catalog.js";
 export * from "./evidence-loop.js";
 export * from "./free-auto-dispatch.js";
+export * from "./local-api.js";
 // The matrix renderer and the micro-slice fixture stay out of the product
 // surface: one generates a document, the other is test data.
 export * from "./local-cycle-cost.js";
