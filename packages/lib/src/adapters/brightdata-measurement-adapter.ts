@@ -473,6 +473,32 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				clearTimeout(timer);
 			}
 		};
+		const downloadSnapshot = async (signal: AbortSignal): Promise<unknown | null> => {
+			const snapshot = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, {
+				headers,
+				signal,
+			});
+			if (!snapshot.ok) {
+				await snapshot.body?.cancel().catch(() => {});
+				return null;
+			}
+			const body = await readBodyWithinLimit(snapshot, maxResponseBytes);
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(body);
+			} catch {
+				parsed = body;
+			}
+			// Bright Data can return a 200 progress envelope while the result is
+			// still being built. Do not mistake that envelope for an answer, but
+			// accept a real result even when /progress has not caught up yet.
+			const record = asRecord(Array.isArray(parsed) ? parsed[0] : parsed);
+			const status = typeof record?.status === "string" ? record.status.toLowerCase() : "";
+			if (["building", "running", "pending", "queued"].includes(status) && Object.keys(record ?? {}).length <= 3)
+				return null;
+			return parsed;
+		};
+		let pollCount = 0;
 		while (Date.now() < deadline) {
 			const state = await beforeDeadline(async (signal) => {
 				const progress = await deps.fetchImpl(`${PROGRESS_ENDPOINT}/${encodeURIComponent(snapshotId)}`, {
@@ -487,27 +513,19 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			});
 			if (state?.status === "ready") break;
 			if (state?.status === "failed" || state?.status === "error" || state?.status === "cancelled") return null;
+			pollCount += 1;
+			// /progress and /snapshot are eventually consistent. A result can be
+			// downloadable while the monitor still says running, so probe the
+			// download endpoint once per minute without creating another collection.
+			if (snapshotPollMs > 0 && pollCount % 6 === 0) {
+				const earlyBody = await beforeDeadline(downloadSnapshot);
+				if (earlyBody !== null) return earlyBody;
+			}
 			const remaining = deadline - Date.now();
 			if (remaining <= 0) return null;
 			await new Promise((resolve) => setTimeout(resolve, Math.min(snapshotPollMs, remaining)));
 		}
-		const body = await beforeDeadline(async (signal) => {
-			const snapshot = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, {
-				headers,
-				signal,
-			});
-			if (!snapshot.ok) {
-				await snapshot.body?.cancel().catch(() => {});
-				return null;
-			}
-			return readBodyWithinLimit(snapshot, maxResponseBytes);
-		});
-		if (body === null) return null;
-		try {
-			return JSON.parse(body);
-		} catch {
-			return body;
-		}
+		return beforeDeadline(downloadSnapshot);
 	}
 
 	/**
