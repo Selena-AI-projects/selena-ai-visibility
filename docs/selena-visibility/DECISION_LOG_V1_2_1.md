@@ -93,3 +93,9 @@
 - Decision: preflight, approve, stop, single-run retry and provider-canary routes are explicit admin operations. They require `local:execute` or the separate `provider:canary` permission plus `Idempotency-Key`; the default store fails closed with `503 OWNER_GATE_REQUIRED` and reports zero provider calls.
 - Authority: implementation and focused tests of API-01C on 2026-08-30.
 - Effect: the API surface is now explicit and auditable without granting execution, bypassing approval, or implying runtime RLS, durable idempotency or paid-canary readiness.
+
+## D-018 — Provider canary scope separation
+
+- Decision: `provider:canary` is a dedicated provider capability scope, modeled outside the client-facing `localApiScopes` union and reused by canary/capabilities handlers.
+- Authority: source-only scope hardening on 2026-08-30; no new production permission is granted by this contract.
+- Effect: provider scope checks cannot drift through untyped string literals; exact production capability-read authorization remains owner-gated.
