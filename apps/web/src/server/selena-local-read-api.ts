@@ -389,7 +389,7 @@ function hasCoordinateProof(snapshot: unknown): boolean {
 	);
 }
 
-const localAiTaskContextSnapshotSchema = observerContextSchema.extend({
+const localAiTaskContextSnapshotSchema = observerContextSchema.safeExtend({
 	coordinateProofReference: z.string().trim().min(1).optional(),
 	pointId: z.string().uuid().optional(),
 	observerLatitude: z.number().finite().min(-90).max(90).optional(),
