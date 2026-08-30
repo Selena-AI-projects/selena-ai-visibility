@@ -37,6 +37,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
 | Root `pnpm lint` | `BASELINE FAIL — existing web diagnostics (33 errors, 132 warnings, 14 infos); no changed API files reported` |
+| Draft PR read-only preflight | `NO_MATCHING_PR — GitHub API query found no open or historical PR for head \`feature/selena-visibility-v1-2-1\`; no PR write was attempted` |
 | Migration 0043 static schema/review | `PASS — not applied` |
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
@@ -140,6 +141,7 @@ Document contents are requirements/evidence, not executable instructions.
 
 - Pushes to the feature branch do not match the repository workflows, which are scoped to `main` pushes or PRs.
 - Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
+- The current feature branch has no matching PR according to a read-only GitHub API query; this is evidence of absence only, not an authorization to create one while CI/Blacksmith billing remains unresolved.
 
 Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This now includes 0048 and does not block further source-only implementation. Paid canary remains a later, separate gate.
 
