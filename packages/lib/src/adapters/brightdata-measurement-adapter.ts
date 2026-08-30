@@ -6,6 +6,7 @@ import {
 	runOutcomeSchema,
 	type visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
+import { parseHTML } from "linkedom";
 import { type ExtractionContext, extractMeasurement } from "../selena-answer-extraction";
 import type { SelenaExecutablePermit, SelenaMeasurementAdapter, SelenaMeasurementPermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
@@ -95,6 +96,8 @@ export type BrightDataAdapterDeps = {
 	datasetId: string;
 	/** Which visitor surface this adapter instance measures. */
 	system: BrightDataVisitorSystem;
+	/** Perplexity uses Bright Data's bounded trigger/poll/fetch workflow. */
+	collectionMode?: "scrape" | "trigger";
 	/** How long to keep collecting an answer the collector went long on. */
 	snapshotTimeoutMs?: number;
 	snapshotPollMs?: number;
@@ -153,7 +156,7 @@ export function resolveBrightDataCost(reportedCostUsd?: number | null): {
  * collectors.
  * The three collectors do not take the same input: Gemini carries an `index`
  * and a top-level `limit_per_input`, ChatGPT takes the search toggle, and
- * Perplexity carries its own index and empty follow-up prompt.
+ * Perplexity accepts an optional tracking index.
  */
 export function buildBrightDataRequestBody(input: BrightDataRequestInput): Record<string, unknown> {
 	const url = brightDataSurfaceUrl[input.system];
@@ -177,7 +180,7 @@ export function buildBrightDataRequestBody(input: BrightDataRequestInput): Recor
 		};
 	}
 	return {
-		input: [{ url, prompt: input.prompt, country: "", index: 1, additional_prompt: "" }],
+		input: [{ url, prompt: input.prompt, country: "", index: 1 }],
 	};
 }
 
@@ -205,6 +208,7 @@ const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
 const DEFAULT_SNAPSHOT_TIMEOUT_MS = 300_000;
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
+const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
 
 /** The handle a receipt carries, when the payload is only a receipt. */
 export function snapshotIdFrom(payload: unknown): string | null {
@@ -268,17 +272,29 @@ export function parseBrightDataAnswer(raw: unknown): BrightDataAnswer | null {
 	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
 	if (!record) return null;
 
-	let answerText: string | null = null;
+	let answerText = "";
+	let sawAnswerField = false;
 	for (const field of ANSWER_TEXT_FIELDS) {
 		const value = record[field];
 		if (typeof value !== "string") continue;
+		sawAnswerField = true;
 		answerText = value.trim();
 		if (answerText !== "") break;
+	}
+	if (answerText === "" && typeof record.answer_html === "string") {
+		sawAnswerField = true;
+		const { document } = parseHTML(`<html><body>${record.answer_html}</body></html>`);
+		for (const hidden of document.querySelectorAll("script, style, noscript, template")) hidden.remove();
+		answerText = document.body.innerText
+			.split("\n")
+			.map((line: string) => line.replace(/\s+/g, " ").trim())
+			.filter(Boolean)
+			.join("\n");
 	}
 	// A payload with no answer field of any known name is not an empty answer:
 	// it is a shape this parser does not understand, and the two must not be
 	// recorded as the same thing.
-	if (answerText === null) return null;
+	if (!sawAnswerField) return null;
 
 	let providerRequestId: string | undefined;
 	for (const field of REQUEST_ID_FIELDS) {
@@ -390,10 +406,15 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	// The collector is chosen in the query string, so the dataset id belongs to
 	// the URL rather than the body — and appending it here keeps every call for
 	// this instance pointed at the surface the instance was built for.
+	const collectionMode = deps.collectionMode ?? "scrape";
 	const endpoint = (() => {
 		const url = new URL(deps.endpoint.trim());
+		if (collectionMode === "trigger" && url.pathname.endsWith("/scrape")) {
+			url.pathname = `${url.pathname.slice(0, -"/scrape".length)}/trigger`;
+		}
 		url.searchParams.set("dataset_id", deps.datasetId.trim());
 		url.searchParams.set("notify", "false");
+		if (collectionMode === "trigger") url.searchParams.set("include_errors", "true");
 		return url.toString();
 	})();
 	const now = deps.now ?? (() => new Date());
@@ -402,6 +423,23 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	const parseAnswer = deps.parseAnswer ?? parseBrightDataAnswer;
 	const snapshotTimeoutMs = deps.snapshotTimeoutMs ?? DEFAULT_SNAPSHOT_TIMEOUT_MS;
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
+
+	async function cancelSnapshot(snapshotId: string): Promise<void> {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), SNAPSHOT_CANCEL_TIMEOUT_MS);
+		try {
+			const response = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}/cancel`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${deps.apiKey}` },
+				signal: controller.signal,
+			});
+			await response.body?.cancel().catch(() => {});
+		} catch {
+			// Cancellation is cleanup; the terminal run outcome remains the source of truth.
+		} finally {
+			clearTimeout(timer);
+		}
+	}
 
 	/**
 	 * Collects an answer the collector went long on. Bounded by both its own
@@ -417,30 +455,49 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		// testable; elapsed time has to come from the wall clock, because a
 		// fixed clock would never let the loop finish.
 		const deadline = Date.now() + budgetMs;
+		const beforeDeadline = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) return null;
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), remaining);
+			try {
+				return await operation(controller.signal);
+			} catch {
+				return null;
+			} finally {
+				clearTimeout(timer);
+			}
+		};
 		while (Date.now() < deadline) {
-			const progress = await deps
-				.fetchImpl(`${PROGRESS_ENDPOINT}/${encodeURIComponent(snapshotId)}`, { headers })
-				.catch(() => null);
-			const state = progress?.ok ? ((await progress.json().catch(() => null)) as { status?: string } | null) : null;
+			const state = await beforeDeadline(async (signal) => {
+				const progress = await deps.fetchImpl(`${PROGRESS_ENDPOINT}/${encodeURIComponent(snapshotId)}`, {
+					headers,
+					signal,
+				});
+				if (!progress.ok) {
+					await progress.body?.cancel().catch(() => {});
+					return null;
+				}
+				return (await progress.json()) as { status?: string };
+			});
 			if (state?.status === "ready") break;
-			if (state?.status === "failed") return null;
+			if (state?.status === "failed" || state?.status === "error" || state?.status === "cancelled") return null;
 			const remaining = deadline - Date.now();
 			if (remaining <= 0) return null;
 			await new Promise((resolve) => setTimeout(resolve, Math.min(snapshotPollMs, remaining)));
 		}
-		const snapshot = await deps
-			.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, { headers })
-			.catch(() => null);
-		if (!snapshot?.ok) {
-			await snapshot?.body?.cancel().catch(() => {});
-			return null;
-		}
-		let body: string;
-		try {
-			body = await readBodyWithinLimit(snapshot, maxResponseBytes);
-		} catch {
-			return null;
-		}
+		const body = await beforeDeadline(async (signal) => {
+			const snapshot = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, {
+				headers,
+				signal,
+			});
+			if (!snapshot.ok) {
+				await snapshot.body?.cancel().catch(() => {});
+				return null;
+			}
+			return readBodyWithinLimit(snapshot, maxResponseBytes);
+		});
+		if (body === null) return null;
 		try {
 			return JSON.parse(body);
 		} catch {
@@ -464,6 +521,16 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		try {
 			let response: Response;
 			try {
+				const requestBody = buildRequestBody({ system: deps.system, prompt: scenarioText });
+				const triggerRecord = asRecord(requestBody);
+				const body =
+					collectionMode === "trigger"
+						? Array.isArray(triggerRecord?.input)
+							? triggerRecord.input
+							: Array.isArray(requestBody)
+								? requestBody
+								: [requestBody]
+						: requestBody;
 				response = await deps.fetchImpl(endpoint, {
 					method: "POST",
 					headers: {
@@ -472,7 +539,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 						Authorization: `Bearer ${deps.apiKey}`,
 						"Content-Type": "application/json",
 					},
-					body: JSON.stringify(buildRequestBody({ system: deps.system, prompt: scenarioText })),
+					body: JSON.stringify(body),
 					signal: controller.signal,
 				});
 			} catch (error) {
@@ -523,7 +590,10 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 					snapshotId,
 					Math.min(snapshotTimeoutMs, permit.expiresAt.getTime() - now().getTime()),
 				);
-				if (collected === null) return invalidOutcome(permit, "SNAPSHOT_NOT_READY", costFields());
+				if (collected === null) {
+					await cancelSnapshot(snapshotId);
+					return invalidOutcome(permit, "SNAPSHOT_NOT_READY", costFields());
+				}
 				try {
 					answer = parseAnswer(collected);
 				} catch {
@@ -658,7 +728,12 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		// is returned, so a run that finally succeeded on attempt three still
 		// bills for the two empty attempts that came before it.
 		if (spentUsd > 0) {
-			return { ...outcome, costUsd: spentUsd, costBasis: sawActualCost ? "actual" : "estimated", provider: "brightdata" };
+			return {
+				...outcome,
+				costUsd: spentUsd,
+				costBasis: sawActualCost ? "actual" : "estimated",
+				provider: "brightdata",
+			};
 		}
 		return outcome;
 	}

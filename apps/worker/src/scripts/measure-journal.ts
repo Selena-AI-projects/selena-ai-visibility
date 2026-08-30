@@ -124,6 +124,7 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 			datasetId:
 				process.env[`SELENA_BRIGHTDATA_DATASET_${surface.toUpperCase()}`]?.trim() || BRIGHTDATA_DATASET_IDS[surface],
 			system: surface,
+			collectionMode: surface === "perplexity" ? "trigger" : "scrape",
 			fetchImpl: fetch,
 			resolveScenarioText: resolvers.resolveScenarioText,
 			resolveExtractionContext: resolvers.resolveExtractionContext,
