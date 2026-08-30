@@ -195,6 +195,51 @@ export type SphericalGridV1 = {
 	points: SphericalGridPointV1[];
 };
 
+export const sphericalGridPointV1Schema = z.strictObject({
+	id: z.string().uuid(),
+	pointIndex: z.number().int().nonnegative(),
+	row: z.number().int().nonnegative(),
+	column: z.number().int().nonnegative(),
+	latitude: z.string().regex(/^-?\d{1,2}\.\d{6}$/),
+	longitude: z.string().regex(/^-?(?:\d{1,2}|1[0-7]\d|180)\.\d{6}$/),
+	distanceMeters: z.number().finite().nonnegative(),
+	bearingDegrees: z.number().finite().min(-180).lt(180),
+	canonical: z.string().min(1),
+});
+
+export const sphericalGridV1Schema = z
+	.strictObject({
+		formulaVersion: z.literal(LOCAL_GRID_FORMULA_VERSION),
+		locationId: z.string().uuid(),
+		centerLatitude: z.string().regex(/^-?\d{1,2}\.\d{6}$/),
+		centerLongitude: z
+			.string()
+			.regex(/^-?(?:\d{1,2}|1[0-7]\d|180)\.\d{6}$/)
+			.refine((value) => Number(value) >= -180 && Number(value) < 180, "GRID_LONGITUDE_NOT_CANONICAL"),
+		radiusMeters: z.literal(LOCAL_GRID_RADIUS_METERS),
+		size: z.union([z.literal(3), z.literal(5)]),
+		spacingMeters: z.number().finite().positive(),
+		points: z.array(sphericalGridPointV1Schema),
+	})
+	.superRefine((grid, issues) => {
+		let expected: SphericalGridV1;
+		try {
+			expected = sphericalGridPointsV1({
+				formulaVersion: grid.formulaVersion,
+				locationId: grid.locationId,
+				centerLatitude: Number(grid.centerLatitude),
+				centerLongitude: Number(grid.centerLongitude),
+				radiusMeters: grid.radiusMeters,
+				size: grid.size,
+			});
+		} catch {
+			issues.addIssue({ code: "custom", message: "GRID_CANONICAL_REGENERATION_FAILED" });
+			return;
+		}
+		if (JSON.stringify(grid) !== JSON.stringify(expected))
+			issues.addIssue({ code: "custom", message: "GRID_ORDERED_POINTS_NOT_CANONICAL" });
+	});
+
 const degreesToRadians = (value: number): number => (value * Math.PI) / 180;
 const radiansToDegrees = (value: number): number => (value * 180) / Math.PI;
 

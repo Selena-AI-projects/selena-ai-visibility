@@ -36,3 +36,13 @@
 
 - Decision: new persistence and provider features deploy disabled; enablement is gated separately after evidence passes.
 - Authority: owner-approved safe default, 2026-08-30.
+
+## D-008 — Attempt identity and recovery
+
+- Decision: `LOCAL_MAPS` and `LOCAL_AI` execution keys use distinct domain prefixes. A stale pre-submission claim may only reclaim the same attempt and reservation; it cannot allocate a new attempt or budget reservation.
+- Authority: implementation of owner-approved duplicate-spend safe default, independently reviewed 2026-08-30.
+
+## D-009 — Retry boundary
+
+- Decision: each matrix slot has at most three controlled attempts, generic queue retry is zero, and ambiguous provider outcomes never auto-retry.
+- Authority: owner-approved safe default and Delta v1.2.1, independently reviewed 2026-08-30.

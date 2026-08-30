@@ -126,6 +126,8 @@ export * from "./free-auto-dispatch.js";
 // surface: one generates a document, the other is test data.
 export * from "./local-cycle-cost.js";
 export * from "./local-discovery.js";
+export * from "./local-execution.js";
+export * from "./local-locks.js";
 export * from "./measurement-execution.js";
 export * from "./measurement-scope.js";
 export * from "./outcome-layer.js";

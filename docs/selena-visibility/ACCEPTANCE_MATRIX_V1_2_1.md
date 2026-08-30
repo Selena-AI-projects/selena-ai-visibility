@@ -5,11 +5,11 @@
 | GRID-01 | Versioned spherical grid `sv-grid-sphere-v1` | `packages/selena-visibility-contracts/src/visibility-os.ts` | `VERIFIED` | Local |
 | GRID-02 | 3×3/5×5, 3000 m corner radius, NW row-major | Contract tests | `VERIFIED` | Local |
 | GRID-03 | Canonical antimeridian, fixed scale, UUIDv5 | Regression/golden tests | `VERIFIED` | Local |
-| DOM-01 | Replace `LOCAL` with `LOCAL_MAPS`; add `LOCAL_AI` | No additive migration yet | `NOT_STARTED` | Migration draft |
-| LOCK-01 | Immutable versioned child Locks | Existing JSON snapshot is insufficient | `NOT_STARTED` | Migration draft |
-| ATT-01 | Durable attempt ledger, at most 3 attempts | `sv_measurement_attempts` absent | `NOT_STARTED` | Migration draft |
-| ATT-02 | Ambiguous call reconciliation without duplicate spend | Provider task reconciliation absent | `NOT_STARTED` | Provider contract |
-| BUD-01 | Atomic reservation/spend/release | Frozen quote only | `NOT_STARTED` | Migration draft |
+| DOM-01 | Replace `LOCAL` with `LOCAL_MAPS`; add `LOCAL_AI` | Six-domain contract verified; additive migration absent | `PARTIAL` | Migration draft |
+| LOCK-01 | Immutable versioned child Locks | Maps/Local AI Lock v1 schemas and tests verified; persistence absent | `PARTIAL` | Migration draft |
+| ATT-01 | Durable attempt ledger, at most 3 attempts | Attempt state/retry/recovery contract verified; table absent | `PARTIAL` | Migration draft |
+| ATT-02 | Ambiguous call reconciliation without duplicate spend | `UNKNOWN_RECONCILIATION` and same-attempt reclaim contract verified; provider reconciliation absent | `PARTIAL` | Provider contract |
+| BUD-01 | Atomic reservation/spend/release | Exact Lock cap validation verified; atomic persistence absent | `PARTIAL` | Migration draft |
 | RLS-01 | Non-owner runtime role and transaction-local tenant context | Policies exist; runtime proof absent | `PARTIAL` | Disposable DB, then shared staging |
 | MAP-01 | Deterministic free Maps stub | Adapter/stub absent | `NOT_STARTED` | Local |
 | API-01 | Local quote/create/progress/results/evidence APIs | Routes absent | `NOT_STARTED` | Local |

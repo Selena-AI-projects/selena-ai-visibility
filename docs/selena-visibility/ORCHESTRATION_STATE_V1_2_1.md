@@ -7,8 +7,8 @@
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: isolated from the owner's dirty checkout
 - Current phase: `Phase 0A — normative contracts and migration design`
-- Current slice: `domain/Lock/attempt/budget contracts`
-- Last verified commit: `267eeb23` (`add deterministic spherical local grid`)
+- Current slice: `Phase 0A contract layer complete; additive migration design next`
+- Last verified baseline commit: `2d1965e3` (`record v1.2.1 orchestration controls`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,7 +27,7 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest | `17 files / 158 tests PASS` |
+| Contracts Vitest | `19 files / 171 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Biome, changed contract files | `PASS` |
 | `git diff --check` | `PASS` |
@@ -38,13 +38,15 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex specification audit: completed read-only.
 - Codex implementation review: completed read-only; antimeridian and HALF_UP regressions fixed and retested.
 - Codex final grid review: completed blind read-only; final verdict `PASS`.
+- Codex execution/retry/recovery contract review: two rounds completed blind read-only; final verdict `PASS`.
+- Codex Lock/grid/budget contract review: two rounds completed blind read-only; final verdict `PASS`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
 
 ## Next autonomous actions
 
-1. Draft additive contracts and migration design for `LOCAL_MAPS`, `LOCAL_AI`, Lock hierarchy, measurement attempts, and atomic budget reservation.
-2. Inspect migration ordering and foreign-key dependencies before writing SQL.
+1. Draft the additive `0043` expand migration for `LOCAL_MAPS`, `LOCAL_AI`, immutable child Locks, measurement attempts, and atomic budget reservation.
+2. Update the matching Drizzle schema and static migration contract tests without applying the migration.
 3. Keep provider execution, shared databases, billing, and production disabled.
 
 ## Push/PR side-effect check
