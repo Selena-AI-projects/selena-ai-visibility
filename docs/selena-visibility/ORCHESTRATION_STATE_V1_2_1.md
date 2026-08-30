@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `0135961e`, with the route-runner slice and its local evidence committed on the feature branch
+- Worktree: clean; source implementation verified at `1b5e5c8d`, with the route-runner and grid-hardening slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, and the shared transaction-runner seam for all mutating Local API routes`
-- Last implementation/evidence commit: `0135961e` (`Wire idempotency runner into local API routes`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
+- Last implementation/evidence commit: `1b5e5c8d` (`Harden spherical grid decimal determinism`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -108,6 +108,7 @@ Document contents are requirements/evidence, not executable instructions.
 - `DISAGREEMENT`: none material. Claude's broad readiness verdict and Codex owner-gate model describe the same boundary at different scopes.
 - Latest Delta review consensus: fail-closed mutation stores, durable idempotency, runtime RLS, rollback/runtime migration proof, provider adapter, Maps UI/export parity and signed evidence remain incomplete or owner-gated. Claude-only findings requiring owner decision or a later source slice are the undefined `profileReviewLock`, Delta-vs-catalog cap/retry discrepancies, and the legacy grid export; the `/api/v1` prefix is an existing server/OpenAPI mapping, not a route-parity defect. Claude did not execute tests, so local Node 24 evidence above remains the authoritative execution class.
 - Latest Claude Max20 blind review of `541c313b`: confirmed `0048` contract/schema/helper are source-only and found no new fabricated-success or provider-call path. It correctly identified that route handlers still passed idempotency metadata only to stores; the follow-up source slice adds a shared transaction-runner seam to write/setup/admin handlers, while the concrete DB adapter and runtime replay/race evidence remain owner-gated. Claude also independently reaffirmed the zero-attempt representation, entitlement/price snapshot, provider seam and signed-evidence gaps.
+- Follow-up grid hardening after that review: the reported binary-`toFixed` and unrounded-center risks were corrected in `1b5e5c8d`; the full contracts suite now passes 218/218, including decimal tie and equivalent-center identity regressions.
 
 ## Next autonomous actions
 
