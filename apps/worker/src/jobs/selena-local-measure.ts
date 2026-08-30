@@ -45,6 +45,12 @@ export async function selenaLocalMeasureJob(
 ): Promise<void> {
 	for (const job of jobs) {
 		const result = await executor(job.data);
+		// Do not let pg-boss acknowledge an owner-gated job as a successful
+		// measurement. With queue retries disabled, the failed job remains an
+		// explicit operational signal until an approved executor is wired.
+		if (result.status === "OWNER_GATE_REQUIRED") {
+			throw new Error(`${result.reason}:${job.data.localCycleId}`);
+		}
 		console.warn(
 			`[selena-local-measure] ${job.data.localCycleId}: ${result.status} (${result.reason}); providerCalls=${result.providerCalls}`,
 		);

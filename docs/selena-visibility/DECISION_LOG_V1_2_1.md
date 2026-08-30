@@ -200,9 +200,9 @@
 
 ## D-035 — Keep the Local measurement worker boundary fail-closed
 
-- Decision: register a dedicated `selena-local-measure` queue and consumer with concurrency one and queue retries disabled, but make the default executor return `OWNER_GATE_REQUIRED` with `providerCalls=0`. A later runtime slice must inject the transaction-owned executor explicitly after Lock, budget, RLS and provider approval.
-- Evidence: source-only worker boundary in the feature branch; `apps/worker` typecheck and targeted Biome checks pass on 2026-08-30.
-- Effect: the queue topology and handler seam are explicit for future at-least-once work without acknowledging a fabricated measurement, writing durable state, spending money or registering a provider today.
+- Decision: register a dedicated `selena-local-measure` queue and consumer with concurrency one and queue retries disabled, but make the default executor return `OWNER_GATE_REQUIRED` with `providerCalls=0`; the handler throws that gate instead of acknowledging a false success. A later runtime slice must inject the transaction-owned executor explicitly after Lock, budget, RLS and provider approval.
+- Evidence: source-only worker boundary in the feature branch; `apps/worker` typecheck and targeted Biome checks pass, and a local `tsx` smoke confirms the default handler throws `LOCAL_RUNTIME_EXECUTOR_NOT_REGISTERED` on an accidental job (2026-08-30).
+- Effect: the queue topology and handler seam are explicit for future at-least-once work; an accidental job fails visibly rather than being acknowledged as measured, while no durable state is written, money spent or provider registered today.
 
 ## D-036 — Quarantine the historical planar grid generator
 
