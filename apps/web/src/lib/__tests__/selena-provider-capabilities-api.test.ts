@@ -28,6 +28,7 @@ describe("Selena provider capabilities API", () => {
 		expect(response.status).toBe(503);
 		expect((await response.json()).error).toMatchObject({
 			code: "OWNER_GATE_REQUIRED",
+			retryable: false,
 			details: { providerCalls: 0 },
 		});
 	});

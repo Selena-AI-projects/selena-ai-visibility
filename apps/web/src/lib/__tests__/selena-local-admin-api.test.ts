@@ -39,6 +39,7 @@ describe("Selena local admin API", () => {
 		for (const response of responses) {
 			expect((await response.json()).error).toMatchObject({
 				code: "OWNER_GATE_REQUIRED",
+				retryable: false,
 				details: { providerCalls: 0 },
 			});
 		}

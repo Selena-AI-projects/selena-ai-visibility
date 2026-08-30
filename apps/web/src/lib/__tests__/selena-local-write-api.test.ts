@@ -144,6 +144,7 @@ describe("Selena local write API", () => {
 		expect(cycleResponse.status).toBe(503);
 		expect((await cycleResponse.json()).error).toMatchObject({
 			code: "OWNER_GATE_REQUIRED",
+			retryable: false,
 			details: expect.objectContaining({ operation: "cycle", providerCalls: 0 }),
 		});
 	});
