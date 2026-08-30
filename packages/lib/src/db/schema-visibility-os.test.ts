@@ -401,6 +401,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain("'schemaVersion'::text");
 		expect(migration).toContain("'providerTaskId'::text");
 		expect(migration).toContain("'amountUsd'::text");
+		expect(migration).toContain('("validated_result"->\'provider\') -');
+		expect(migration).toContain('("validated_result"->\'event\') -');
 		expect(migration).toContain('ADD COLUMN "submission_token_hash" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_fingerprint" text');
 		expect(migration).toContain('ADD COLUMN "submitted_candidate_canonical" text');

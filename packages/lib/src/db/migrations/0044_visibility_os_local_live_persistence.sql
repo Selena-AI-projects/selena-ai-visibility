@@ -220,7 +220,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND jsonb_typeof("validated_result"->'evidenceEligible') = 'boolean'
 			AND jsonb_typeof("validated_result"->'provider') = 'object'
 			AND "validated_result"->'provider' ?& array['id', 'version', 'providerTaskId']
-			AND "validated_result"->'provider' - 'id'::text - 'version'::text - 'providerTaskId'::text = '{}'::jsonb
+			AND ("validated_result"->'provider') - 'id'::text - 'version'::text - 'providerTaskId'::text = '{}'::jsonb
 			AND jsonb_typeof("validated_result"#>'{provider,id}') = 'string'
 			AND length("validated_result"#>>'{provider,id}') > 0
 			AND "validated_result"#>>'{provider,id}' !~ '[[:space:]]'
@@ -234,7 +234,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND "validated_result"->'provenance' ?& array[
 				'evidenceKind', 'checkReference', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'
 			]
-			AND "validated_result"->'provenance'
+				AND ("validated_result"->'provenance')
 				- 'evidenceKind'::text - 'checkReference'::text - 'rawResponseReference'::text - 'rawResponseSha256'::text - 'providerObservedAt'::text
 				= '{}'::jsonb
 			AND "validated_result"#>>'{provenance,evidenceKind}' = 'MAPS_SERP_PROVIDER'
@@ -255,7 +255,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') IN ('string', 'null')
 			AND jsonb_typeof("validated_result"->'cost') = 'object'
 			AND "validated_result"->'cost' ?& array['status', 'currency', 'amountUsd', 'basis']
-			AND "validated_result"->'cost' - 'status'::text - 'currency'::text - 'amountUsd'::text - 'basis'::text = '{}'::jsonb
+			AND ("validated_result"->'cost') - 'status'::text - 'currency'::text - 'amountUsd'::text - 'basis'::text = '{}'::jsonb
 			AND jsonb_typeof("validated_result"#>'{cost,status}') = 'string'
 			AND "validated_result"#>>'{cost,currency}' = 'USD'
 			AND (
@@ -282,7 +282,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'string')
 				OR (("validated_result"#>>'{event,kind}' = 'RETRYABLE_FAILURE'
-						AND "validated_result"->'event' - 'kind'::text - 'reason'::text = '{}'::jsonb
+						AND ("validated_result"->'event') - 'kind'::text - 'reason'::text = '{}'::jsonb
 						AND "validated_result"#>>'{event,reason}' IN (
 							'EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT',
 							'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE'
