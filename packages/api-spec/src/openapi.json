@@ -1409,6 +1409,25 @@
 				}
 			}
 		},
+		"/selena/admin/providers/{providerId}/capabilities": {
+			"get": {
+				"summary": "Read provider capabilities",
+				"description": "Reads the registered provider capability envelope. Requires `provider:canary`; source-only transport fails closed until the provider registry, credentials and runtime gates are verified, and performs zero provider calls.",
+				"operationId": "getSelenaProviderCapabilities",
+				"tags": ["Selena Local Visibility Admin"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{ "name": "providerId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+				],
+				"responses": {
+					"200": { "description": "Provider capability envelope" },
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"503": { "$ref": "#/components/responses/LocalApiOwnerGateRequired" }
+				}
+			}
+		},
 		"/selena/locations/{locationId}/local-scan/quote": {
 			"post": {
 				"summary": "Calculate a locked Local Maps quote",

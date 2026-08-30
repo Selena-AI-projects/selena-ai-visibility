@@ -105,3 +105,9 @@
 - Decision: provide an HMAC-SHA256 cursor codec that accepts an injected owner-managed secret and verifies signature plus tenant/cycle/resource binding.
 - Authority: source-only security hardening on 2026-08-30; route activation still depends on separately approved secret provisioning, rotation and runtime proof.
 - Effect: read routes can emit and validate tamper-evident cursors when an owner-managed secret is injected, while the default dependency remains unsigned and API-01 stays `PARTIAL` until that gate is proven.
+
+## D-020 — OpenAPI capability-route parity
+
+- Decision: include the existing read-only provider-capabilities route in the canonical OpenAPI document, with its explicit `provider:canary` scope and fail-closed owner-gate response.
+- Authority: route/OpenAPI parity audit and JSON validation on 2026-08-30.
+- Effect: all 26 documented paths now have route-tree coverage; no provider registry, credential or external call is enabled by the specification update.
