@@ -8,7 +8,8 @@
 - Worktree: clean; source implementation, candidate-loader regression coverage, Lock-location scope binding, shared execution-key parser and HTTP error redaction/owner-gate semantics verified through `8536d0b3`, with the route-runner, grid-hardening, LocalMapsRankAdapter, legacy-economics scoping and transactional attempt-store slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, the unregistered LocalMapsRankAdapter contract/coordinate-proof bridge, explicit legacy M0 economics scoping, and the source-only LocalMapsLiveAttemptStore transaction boundary`
-- Last implementation/evidence commit: `8536d0b3` (`Record centralized API error boundary`), pushed to `origin/feature/selena-visibility-v1-2-1`; implementation commits through `a0f6d132` add client-envelope redaction, non-retryable owner-gates, allowlisted blocker diagnostics and direct-responder coverage, while this commit records the final evidence.
+- Latest implementation commit: `5ad2adc3` (`Pin owner gate retry semantics in route tests`), pushed to `origin/feature/selena-visibility-v1-2-1`; it follows the centralized API error boundary and records explicit `retryable:false` assertions for all owner-gated mutation routes.
+- Latest evidence/state commits: `0b1ed8c6` (`Record full Node24 test graph`) and `ed39a109` (`Record draft PR read-only preflight`), both pushed to `origin/feature/selena-visibility-v1-2-1`.
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
