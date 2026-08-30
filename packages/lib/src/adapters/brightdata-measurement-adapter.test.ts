@@ -424,6 +424,26 @@ describe("Bright Data measurement adapter", () => {
 		expect(parseBrightDataAnswer({ nothing: "known" })).toBeNull();
 	});
 
+	it("recovers displayed Perplexity sources from answer-section HTML", () => {
+		const sources = extractBrightDataSources({
+			citations: [],
+			links_attached: [],
+			sources: [],
+			answer_section_html: [
+				'<a href="https://nostimobali.com/">1</a>',
+				'<a href="https://www.tripadvisor.com/Restaurant_Review">2</a>',
+				'<a href="https://nostimobali.com/">duplicate</a>',
+				'<a href="https://www.perplexity.ai/search/internal">provider page</a>',
+				'<a href="javascript:alert(1)">not a source</a>',
+			].join(""),
+		});
+
+		expect(sources).toEqual([
+			{ url: "https://nostimobali.com/", domain: "nostimobali.com" },
+			{ url: "https://www.tripadvisor.com/Restaurant_Review", domain: "tripadvisor.com" },
+		]);
+	});
+
 	it("collects the answer a receipt stands for instead of refusing the receipt", async () => {
 		// The scrape call replies with a handle when the collector runs long.
 		// Stopping there would record a produced, billed answer as unreadable.
