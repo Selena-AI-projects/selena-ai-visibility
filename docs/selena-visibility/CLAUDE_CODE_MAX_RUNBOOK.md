@@ -75,4 +75,3 @@ so; local test output remains a separate `LOCAL_EXECUTED` evidence class.
 An authentication failure, billing block, or quota exhaustion is not a test
 failure. Keep the corresponding state distinct and leave owner-gated actions
 unstarted.
-
