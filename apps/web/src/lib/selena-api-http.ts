@@ -37,6 +37,13 @@ const SAFE_DETAIL_KEYS = new Set([
 ]);
 const SAFE_SCOPES = new Set(["local:read", "local:write", "local:execute", "evidence:read", "provider:canary"]);
 const SAFE_SURFACES = new Set(["LOCAL_AI", "LOCAL_MAPS"]);
+const SAFE_BLOCKERS = new Set([
+	"LOCAL_SCHEMA_NOT_APPLIED_OR_RLS_UNVERIFIED",
+	"LOCAL_SETUP_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
+	"LOCAL_ADMIN_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
+	"PROVIDER_REGISTRY_OR_CREDENTIALS_UNVERIFIED",
+	"SAFE_BLOCKER",
+]);
 
 const SAFE_MESSAGES_BY_CODE: Record<string, string> = {
 	AUTH_FORBIDDEN: "The API key cannot access this tenant.",
@@ -91,7 +98,7 @@ function safeErrorDetails(details: Record<string, unknown> | undefined): Record<
 			(value === "redacted" || (typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value)))
 		)
 			safe[key] = value;
-		else if (key === "blocker" && typeof value === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(value)) safe[key] = value;
+		else if (key === "blocker" && typeof value === "string" && SAFE_BLOCKERS.has(value)) safe[key] = value;
 		else if (key === "operation" && typeof value === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(value))
 			safe[key] = value;
 	}

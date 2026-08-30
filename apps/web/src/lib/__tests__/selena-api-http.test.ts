@@ -108,6 +108,7 @@ describe("Selena local API HTTP helpers", () => {
 				providerCalls: 0,
 				blocker: "SAFE_BLOCKER",
 				operation: "preflight",
+				unsafeBlocker: "PROVIDER_SECRET",
 				secret: "must-not-leak",
 			}),
 			"request-detail-redaction",
