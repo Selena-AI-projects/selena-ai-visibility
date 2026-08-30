@@ -59,7 +59,7 @@ describe("Selena local setup API", () => {
 	});
 
 	it("requires local:write and idempotency before dispatch", async () => {
-		const store = { execute: vi.fn(async () => undefined) };
+		const store = { execute: vi.fn(async () => null) };
 		const denied = createSelenaLocalSetupRouteHandlers({
 			authenticate: async () => ({ ...auth, permissions: ["local:read"] }),
 			store,
@@ -78,7 +78,7 @@ describe("Selena local setup API", () => {
 	});
 
 	it("passes tenant-bound setup input and hash to a future durable adapter", async () => {
-		const store = { execute: vi.fn(async () => undefined) };
+		const store = { execute: vi.fn(async () => null) };
 		const handlers = createSelenaLocalSetupRouteHandlers({
 			authenticate: async () => auth,
 			store,
@@ -96,5 +96,30 @@ describe("Selena local setup API", () => {
 				bodyHash: expect.stringMatching(/^sha256:/),
 			}),
 		);
+	});
+
+	it("returns a typed success only when the durable adapter supplies a valid result", async () => {
+		const store = {
+			execute: vi.fn(async () => ({
+				locationId,
+				projectId,
+				status: "CREATED" as const,
+				normalizedCoordinates: { latitude: -8.5, longitude: 115.2, precision: "COORDINATE" as const },
+			})),
+		};
+		const handlers = createSelenaLocalSetupRouteHandlers({
+			authenticate: async () => auth,
+			store,
+			requestId: () => "request-setup-success",
+		});
+
+		const response = await handlers.createLocation(request(locationBody), projectId);
+		expect(response.status).toBe(201);
+		expect(await response.json()).toEqual({
+			locationId,
+			projectId,
+			status: "CREATED",
+			normalizedCoordinates: { latitude: -8.5, longitude: 115.2, precision: "COORDINATE" },
+		});
 	});
 });

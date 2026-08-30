@@ -652,6 +652,61 @@
 				},
 				"required": ["language", "keywords"]
 			},
+			"LocalBusinessLocationCreateResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"locationId": { "type": "string", "format": "uuid" },
+					"projectId": { "type": "string", "format": "uuid" },
+					"status": { "type": "string", "enum": ["CREATED"] },
+					"normalizedCoordinates": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"latitude": { "type": "number", "minimum": -85, "maximum": 85 },
+							"longitude": { "type": "number", "minimum": -180, "maximum": 180 },
+							"precision": { "type": "string", "enum": ["CITY", "ADDRESS", "COORDINATE", "UNKNOWN"] }
+						},
+						"required": ["latitude", "longitude", "precision"]
+					}
+				},
+				"required": ["locationId", "projectId", "status", "normalizedCoordinates"]
+			},
+			"LocalPlaceEntityConfirmResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"locationId": { "type": "string", "format": "uuid" },
+					"placeId": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"cid": { "type": "string", "minLength": 1, "maxLength": 300 },
+					"mapsUrl": { "type": "string", "format": "uri" },
+					"matchStatus": { "type": "string", "enum": ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"] }
+				},
+				"required": ["locationId", "mapsUrl", "matchStatus"],
+				"description": "At least one of placeId or cid is present."
+			},
+			"LocalKeywordSetCreateResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"locationId": { "type": "string", "format": "uuid" },
+					"keywordSetId": { "type": "string", "format": "uuid" },
+					"version": { "type": "integer", "minimum": 1 },
+					"status": { "type": "string", "enum": ["CREATED"] }
+				},
+				"required": ["locationId", "keywordSetId", "version", "status"]
+			},
+			"LocalAdminActionResponse": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"operation": { "type": "string", "enum": ["preflight", "approve", "stop", "maps-retry", "ai-retry", "provider-canary"] },
+					"resourceId": { "type": "string", "format": "uuid" },
+					"status": { "type": "string", "enum": ["ACCEPTED", "QUEUED", "STOPPED"] },
+					"providerCalls": { "type": "integer", "minimum": 0 }
+				},
+				"required": ["operation", "resourceId", "status", "providerCalls"]
+			},
 			"LocalScanQuoteRequest": {
 				"type": "object",
 				"additionalProperties": false,
@@ -1232,7 +1287,10 @@
 				],
 				"requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalBusinessLocationCreateRequest" } } } },
 				"responses": {
-					"201": { "description": "Business location accepted by a durable adapter" },
+					"201": {
+						"description": "Business location accepted by a durable adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalBusinessLocationCreateResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1254,7 +1312,10 @@
 				],
 				"requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalPlaceEntityConfirmRequest" } } } },
 				"responses": {
-					"200": { "description": "Place identity accepted by a durable adapter" },
+					"200": {
+						"description": "Place identity accepted by a durable adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalPlaceEntityConfirmResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1276,7 +1337,10 @@
 				],
 				"requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalKeywordSetCreateRequest" } } } },
 				"responses": {
-					"201": { "description": "Keyword-set version accepted by a durable adapter" },
+					"201": {
+						"description": "Keyword-set version accepted by a durable adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalKeywordSetCreateResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1297,7 +1361,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Preflight accepted by a durable admin adapter" },
+					"202": {
+						"description": "Preflight accepted by a durable admin adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1318,7 +1385,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Approval accepted by a durable admin adapter" },
+					"202": {
+						"description": "Approval accepted by a durable admin adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1339,7 +1409,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Stop accepted by a durable admin adapter" },
+					"202": {
+						"description": "Stop accepted by a durable admin adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1360,7 +1433,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Retry accepted by a durable admin adapter" },
+					"202": {
+						"description": "Retry accepted by a durable admin adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1381,7 +1457,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Retry accepted by a durable admin adapter" },
+					"202": {
+						"description": "Retry accepted by a durable admin adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
@@ -1402,7 +1481,10 @@
 					{ "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "minLength": 8, "maxLength": 128 } }
 				],
 				"responses": {
-					"202": { "description": "Canary request accepted by an owner-approved adapter" },
+					"202": {
+						"description": "Canary request accepted by an owner-approved adapter",
+						"content": { "application/json": { "schema": { "$ref": "#/components/schemas/LocalAdminActionResponse" } } }
+					},
 					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
 					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
 					"403": { "$ref": "#/components/responses/LocalApiForbidden" },

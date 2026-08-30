@@ -1,11 +1,17 @@
 import { randomUUID } from "node:crypto";
 import {
 	type LocalBusinessLocationCreateRequest,
+	type LocalBusinessLocationCreateResponse,
 	type LocalKeywordSetCreateRequest,
+	type LocalKeywordSetCreateResponse,
 	type LocalPlaceEntityConfirmRequest,
+	type LocalPlaceEntityConfirmResponse,
 	localBusinessLocationCreateRequestSchema,
+	localBusinessLocationCreateResponseSchema,
 	localKeywordSetCreateRequestSchema,
+	localKeywordSetCreateResponseSchema,
 	localPlaceEntityConfirmRequestSchema,
+	localPlaceEntityConfirmResponseSchema,
 } from "@workspace/selena-visibility-contracts";
 import {
 	hashIdempotencyBody,
@@ -24,6 +30,11 @@ type LocalSetupBody =
 	| LocalPlaceEntityConfirmRequest
 	| LocalKeywordSetCreateRequest;
 
+type LocalSetupResult =
+	| LocalBusinessLocationCreateResponse
+	| LocalPlaceEntityConfirmResponse
+	| LocalKeywordSetCreateResponse;
+
 type LocalSetupStoreInput = {
 	auth: AuthContext;
 	operation: LocalSetupOperation;
@@ -34,7 +45,7 @@ type LocalSetupStoreInput = {
 };
 
 export type SelenaLocalSetupStore = {
-	execute(input: LocalSetupStoreInput): Promise<void>;
+	execute(input: LocalSetupStoreInput): Promise<LocalSetupResult | null>;
 };
 
 export const LOCAL_SETUP_OWNER_GATE_CODE = "OWNER_GATE_REQUIRED" as const;
@@ -131,7 +142,7 @@ export function createSelenaLocalSetupRouteHandlers(
 			const idempotencyKey = parseIdempotencyKey(request.headers);
 			const body = await read(request);
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
-			await dependencies.store.execute({
+			const result = await dependencies.store.execute({
 				auth,
 				operation,
 				resourceId: validatedResourceId,
@@ -139,13 +150,29 @@ export function createSelenaLocalSetupRouteHandlers(
 				bodyHash,
 				body,
 			});
-			throw new SelenaApiHttpError(
-				503,
-				LOCAL_SETUP_OWNER_GATE_CODE,
-				"Local setup action did not produce a durable response.",
-				true,
-				{ providerCalls: 0, operation },
-			);
+			if (result === null)
+				throw new SelenaApiHttpError(
+					503,
+					LOCAL_SETUP_OWNER_GATE_CODE,
+					"Local setup action did not produce a durable response.",
+					true,
+					{ providerCalls: 0, operation },
+				);
+			const parsed =
+				operation === "location-create"
+					? localBusinessLocationCreateResponseSchema.safeParse(result)
+					: operation === "place-entity-confirm"
+						? localPlaceEntityConfirmResponseSchema.safeParse(result)
+						: localKeywordSetCreateResponseSchema.safeParse(result);
+			if (!parsed.success)
+				throw new SelenaApiHttpError(
+					503,
+					LOCAL_SETUP_OWNER_GATE_CODE,
+					"Local setup action did not produce a valid durable response.",
+					true,
+					{ providerCalls: 0, operation },
+				);
+			return Response.json(parsed.data, { status: operation === "place-entity-confirm" ? 200 : 201 });
 		} catch (error) {
 			return routeError(error, requestId);
 		}

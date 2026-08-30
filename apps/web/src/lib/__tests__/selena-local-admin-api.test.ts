@@ -45,7 +45,7 @@ describe("Selena local admin API", () => {
 	});
 
 	it("keeps local execution and provider canary scopes separate", async () => {
-		const store = { execute: vi.fn(async () => undefined) };
+		const store = { execute: vi.fn(async () => null) };
 		const localDenied = createSelenaLocalAdminRouteHandlers({
 			authenticate: async () => ({ ...auth, permissions: ["local:read"] }),
 			store,
@@ -63,7 +63,7 @@ describe("Selena local admin API", () => {
 	});
 
 	it("requires idempotency and validates the resource UUID before dispatch", async () => {
-		const store = { execute: vi.fn(async () => undefined) };
+		const store = { execute: vi.fn(async () => null) };
 		const handlers = createSelenaLocalAdminRouteHandlers({
 			authenticate: async () => auth,
 			store,
@@ -75,7 +75,7 @@ describe("Selena local admin API", () => {
 	});
 
 	it("passes tenant-bound body hash to an adapter but still requires a durable response", async () => {
-		const store = { execute: vi.fn(async () => undefined) };
+		const store = { execute: vi.fn(async () => null) };
 		const handlers = createSelenaLocalAdminRouteHandlers({
 			authenticate: async () => auth,
 			store,
@@ -93,5 +93,30 @@ describe("Selena local admin API", () => {
 				bodyHash: expect.stringMatching(/^sha256:/),
 			}),
 		);
+	});
+
+	it("returns 202 only when the durable adapter supplies a typed result", async () => {
+		const store = {
+			execute: vi.fn(async () => ({
+				operation: "stop" as const,
+				resourceId: cycleId,
+				status: "STOPPED" as const,
+				providerCalls: 0,
+			})),
+		};
+		const handlers = createSelenaLocalAdminRouteHandlers({
+			authenticate: async () => auth,
+			store,
+			requestId: () => "request-admin-success",
+		});
+
+		const response = await handlers.stop(request({ reason: "owner-request" }), cycleId);
+		expect(response.status).toBe(202);
+		expect(await response.json()).toEqual({
+			operation: "stop",
+			resourceId: cycleId,
+			status: "STOPPED",
+			providerCalls: 0,
+		});
 	});
 });

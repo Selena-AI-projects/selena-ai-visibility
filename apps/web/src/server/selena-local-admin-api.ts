@@ -30,8 +30,16 @@ type LocalAdminStoreInput = {
 	body: Record<string, unknown>;
 };
 
+const localAdminSuccessResponseSchema = z.strictObject({
+	operation: z.enum(localAdminOperations),
+	resourceId: z.string().uuid(),
+	status: z.enum(["ACCEPTED", "QUEUED", "STOPPED"]),
+	providerCalls: z.number().int().nonnegative(),
+});
+type LocalAdminSuccessResponse = z.infer<typeof localAdminSuccessResponseSchema>;
+
 export type SelenaLocalAdminStore = {
-	execute(input: LocalAdminStoreInput): Promise<void>;
+	execute(input: LocalAdminStoreInput): Promise<LocalAdminSuccessResponse | null>;
 };
 
 /**
@@ -143,7 +151,7 @@ export function createSelenaLocalAdminRouteHandlers(
 			const idempotencyKey = parseIdempotencyKey(request.headers);
 			const body = await readOptionalJson(request);
 			const bodyHash = hashIdempotencyBody({ operation, resourceId: validatedResourceId, body });
-			await dependencies.store.execute({
+			const result = await dependencies.store.execute({
 				auth,
 				operation,
 				resourceId: validatedResourceId,
@@ -151,16 +159,24 @@ export function createSelenaLocalAdminRouteHandlers(
 				bodyHash,
 				body,
 			});
-			throw new SelenaApiHttpError(
-				503,
-				LOCAL_ADMIN_OWNER_GATE_CODE,
-				"Admin action did not produce a durable response.",
-				true,
-				{
-					providerCalls: 0,
-					operation,
-				},
-			);
+			if (result === null)
+				throw new SelenaApiHttpError(
+					503,
+					LOCAL_ADMIN_OWNER_GATE_CODE,
+					"Admin action did not produce a durable response.",
+					true,
+					{ providerCalls: 0, operation },
+				);
+			const parsed = localAdminSuccessResponseSchema.safeParse(result);
+			if (!parsed.success)
+				throw new SelenaApiHttpError(
+					503,
+					LOCAL_ADMIN_OWNER_GATE_CODE,
+					"Admin action did not produce a valid durable response.",
+					true,
+					{ providerCalls: 0, operation },
+				);
+			return Response.json(parsed.data, { status: 202 });
 		} catch (error) {
 			return routeError(error, requestId);
 		}

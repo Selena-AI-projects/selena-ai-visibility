@@ -64,3 +64,36 @@ export const localKeywordSetCreateRequestSchema = z.strictObject({
 		.max(500),
 });
 export type LocalKeywordSetCreateRequest = z.infer<typeof localKeywordSetCreateRequestSchema>;
+
+export const localBusinessLocationCreateResponseSchema = z.strictObject({
+	locationId: uuid,
+	projectId: uuid,
+	status: z.literal("CREATED"),
+	normalizedCoordinates: z.strictObject({
+		latitude: z.number().finite().min(-85).max(85),
+		longitude: z.number().finite().min(-180).max(180),
+		precision: z.enum(["CITY", "ADDRESS", "COORDINATE", "UNKNOWN"]),
+	}),
+});
+export type LocalBusinessLocationCreateResponse = z.infer<typeof localBusinessLocationCreateResponseSchema>;
+
+export const localPlaceEntityConfirmResponseSchema = z
+	.strictObject({
+		locationId: uuid,
+		placeId: z.string().trim().min(1).max(300).optional(),
+		cid: z.string().trim().min(1).max(300).optional(),
+		mapsUrl: z.url(),
+		matchStatus: z.enum(["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"]),
+	})
+	.refine((input) => input.placeId !== undefined || input.cid !== undefined, {
+		message: "MAPS_TARGET_IDENTITY_REQUIRED",
+	});
+export type LocalPlaceEntityConfirmResponse = z.infer<typeof localPlaceEntityConfirmResponseSchema>;
+
+export const localKeywordSetCreateResponseSchema = z.strictObject({
+	locationId: uuid,
+	keywordSetId: uuid,
+	version: z.number().int().positive(),
+	status: z.literal("CREATED"),
+});
+export type LocalKeywordSetCreateResponse = z.infer<typeof localKeywordSetCreateResponseSchema>;
