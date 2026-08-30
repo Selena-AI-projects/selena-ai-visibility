@@ -112,7 +112,10 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					endpoint: process.env.SELENA_BRIGHTDATA_ENDPOINT?.trim() || BRIGHTDATA_DEFAULT_ENDPOINT,
 					datasetId: brightDataDatasetId(surface),
 					system: surface,
-					collectionMode: surface === "perplexity" ? "trigger" : "scrape",
+					// Use the synchronous scrape surface for all visitor systems. If
+					// Bright Data returns a snapshot receipt, the adapter still follows
+					// it through progress and download without changing the request path.
+					collectionMode: "scrape",
 					fetchImpl: fetch,
 					resolveScenarioText: resolvers.resolveScenarioText,
 					resolveExtractionContext: resolvers.resolveExtractionContext,
