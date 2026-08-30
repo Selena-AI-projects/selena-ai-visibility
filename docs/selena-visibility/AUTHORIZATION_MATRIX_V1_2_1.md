@@ -9,7 +9,7 @@ Default rule: anything not explicitly `ALLOWED` is not authorised.
 | Disposable local DB validation | New disposable DB only | `ALLOWED` | No shared data/provider calls | Owner safe matrix | Local resource use |
 | Free deterministic stubs | Local test process | `ALLOWED` | No provider network | Owner safe matrix | None |
 | Codex subagents | Read-only or explicit non-overlapping ownership | `ALLOWED` | No external mutation | Owner workflow approval | Model usage only |
-| Claude Code Max review | Isolated read-only snapshot | `ALLOWED` | Subscription auth only; no paid API fallback | Owner workflow approval | Subject to subscription limits |
+| Claude Code Max review | Isolated read-only snapshot | `ALLOWED` | Subscription auth only; no paid API fallback; procedure in [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) | Owner workflow approval | Subject to subscription limits |
 | Atomic commit | `feature/selena-visibility-v1-2-1` | `ALLOWED` | No amend/rebase/history rewrite | Owner quote, 2026-08-30 | Local Git state |
 | Push | Same feature branch | `ALLOWED` | Feature pushes do not match current workflow triggers | Owner quote, 2026-08-30 | No repository workflow observed |
 | Draft PR | Feature branch to `main` | `OWNER_GATE` until CI billing is resolved | No merge | Owner quote plus default-deny for paid side effects | Build/E2E/smoke/license/CLA; Blacksmith billing UNKNOWN |

@@ -106,6 +106,7 @@ Document contents are requirements/evidence, not executable instructions.
 
 1. Preserve the completed blind Max 20 report and implement only source-only findings that do not choose unresolved product policy; keep `profileReviewLock`, cap/retry policy, rollback strategy and legacy public-grid compatibility as explicit owner decisions or bounded follow-up slices.
 2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, owner-managed signed-cursor/evidence activation, RLS proof and owner-gated execution evidence exist.
+3. Reuse [CLAUDE_CODE_MAX_RUNBOOK.md](./CLAUDE_CODE_MAX_RUNBOOK.md) for future authenticated Max reviews; the current Max20 session is already recorded above and must not be rerun without a new milestone.
 
 ## Push/PR side-effect check
 
