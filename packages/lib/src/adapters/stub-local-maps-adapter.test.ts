@@ -8,7 +8,11 @@ import {
 	sphericalGridPointsV1,
 } from "@workspace/selena-visibility-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLocalMapsRehearsalRequest, createStubLocalMapsAdapter } from "./stub-local-maps-adapter";
+import {
+	createDisabledLocalMapsRankAdapter,
+	createLocalMapsRehearsalRequest,
+	createStubLocalMapsAdapter,
+} from "./stub-local-maps-adapter";
 
 const ids = {
 	measurementCycleId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -172,6 +176,24 @@ describe("deterministic Local Maps rehearsal stub", () => {
 				: ({ ...result, event: { kind: "FOUND" as const }, targetRank: 1 } as const);
 		expect(() => assertLocalMapsRehearsalResultMatchesRequest(request, opposite)).toThrow(
 			"LOCAL_MAPS_REHEARSAL_RESULT_REQUEST_MISMATCH",
+		);
+	});
+
+	it("exposes a normative adapter-shaped guard that cannot enter the live path", async () => {
+		const adapter = createDisabledLocalMapsRankAdapter();
+		expect(adapter.quote(lock)).toEqual({
+			tasks: 125,
+			maxProviderAttempts: 375,
+			worstCaseCostUsd: "0.225000",
+			currency: "USD",
+			priceSnapshotVersion: "maps-provider-test-v1",
+		});
+		expect(adapter.capability()).toMatchObject({
+			coordinateProof: "EXACT_REQUEST_ECHO_REQUIRED",
+			maxDepth: 20,
+		});
+		await expect(adapter.execute(undefined as never, undefined as never)).rejects.toThrow(
+			"LOCAL_MAPS_REHEARSAL_NOT_LIVE",
 		);
 	});
 });

@@ -6,6 +6,11 @@ import {
 	localMapsRehearsalDeterministicOutcome,
 	localMapsRehearsalRequestSchema,
 	localMapsRehearsalResultSchema,
+	maximumProviderAttempts,
+	mapsLockV1Schema,
+	type LocalMapsRankAdapter,
+	type LocalMapsRankCapability,
+	type LocalMapsRankQuote,
 	STUB_LOCAL_MAPS_ADAPTER_ID,
 } from "@workspace/selena-visibility-contracts";
 
@@ -69,6 +74,46 @@ export function createStubLocalMapsAdapter(): LocalMapsRehearsalAdapter {
 				targetRank: outcome.targetRank,
 			});
 			return assertLocalMapsRehearsalResultMatchesRequest(request, result);
+		},
+	};
+}
+
+type DisabledLocalMapsRankResult = { readonly disabled: true };
+
+/**
+ * Type-shaped rehearsal guard for the normative live adapter boundary. It is
+ * deliberately impossible to dispatch: the reserved `stub-` id is rejected
+ * by the live request schema, and execute/normalize fail before any I/O. The
+ * deterministic result-producing rehearsal remains `createStubLocalMapsAdapter`.
+ */
+export function createDisabledLocalMapsRankAdapter(): LocalMapsRankAdapter<DisabledLocalMapsRankResult> {
+	return {
+		id: STUB_LOCAL_MAPS_ADAPTER_ID,
+		version: "rehearsal-only-v1",
+		endpoint: "disabled://local-maps",
+		quote(lock): LocalMapsRankQuote {
+			const parsed = mapsLockV1Schema.parse(lock);
+			return {
+				tasks: parsed.expectedSlots,
+				maxProviderAttempts: maximumProviderAttempts(parsed.expectedSlots),
+				worstCaseCostUsd: parsed.budget.worstCaseCostUsd,
+				currency: "USD",
+				priceSnapshotVersion: parsed.budget.priceSnapshotVersion,
+			};
+		},
+		async execute(): Promise<DisabledLocalMapsRankResult> {
+			throw new Error("LOCAL_MAPS_REHEARSAL_NOT_LIVE");
+		},
+		normalize(): ReturnType<LocalMapsRankAdapter<DisabledLocalMapsRankResult>["normalize"]> {
+			throw new Error("LOCAL_MAPS_REHEARSAL_NOT_LIVE");
+		},
+		capability(): LocalMapsRankCapability {
+			return {
+				coordinateProof: "EXACT_REQUEST_ECHO_REQUIRED",
+				rawEvidenceReference: "REQUIRED",
+				supportsAbsentWithinDepth: true,
+				maxDepth: 20,
+			};
 		},
 	};
 }
