@@ -8,7 +8,7 @@
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `158d281f` (`record bidirectional API contract parity`), pushed to `origin/feature/selena-visibility-v1-2-1`; local test graph, build, signed-cursor integration and bidirectional API-01/OpenAPI parity evidence are recorded
+- Current feature commit: `cde8cad6` (`sync orchestration head evidence`), pushed to `origin/feature/selena-visibility-v1-2-1`; local test graph, build, signed-cursor integration and bidirectional API-01/OpenAPI parity evidence are recorded
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
