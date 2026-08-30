@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import {
 	LOCAL_API_DEFAULT_LIMIT,
 	LOCAL_API_MAX_LIMIT,
@@ -106,6 +106,18 @@ export function encodeSelenaApiCursor(payload: LocalApiCursorPayload): string {
 	return Buffer.from(JSON.stringify(parsed), "utf8").toString("base64url");
 }
 
+/**
+ * Signed cursor codec for a future runtime that injects an owner-managed key.
+ * The default API deliberately continues using the unsigned codec until that
+ * key is provisioned and rotation/retention policy is proven.
+ */
+export function encodeSelenaApiCursorSigned(payload: LocalApiCursorPayload, secret: string): string {
+	if (secret.length < 16) throw new Error("CURSOR_SIGNING_SECRET_INVALID");
+	const unsigned = encodeSelenaApiCursor(payload);
+	const signature = createHmac("sha256", secret).update(unsigned, "utf8").digest("base64url");
+	return `${unsigned}.${signature}`;
+}
+
 function invalidCursor(): SelenaApiHttpError {
 	return new SelenaApiHttpError(400, "CURSOR_INVALID", "Cursor is invalid for this resource.");
 }
@@ -127,6 +139,21 @@ export function decodeSelenaApiCursor(cursor: string, binding: LocalApiCursorBin
 		if (error instanceof SelenaApiHttpError) throw error;
 		throw invalidCursor();
 	}
+}
+
+export function decodeSelenaApiCursorSigned(
+	cursor: string,
+	binding: LocalApiCursorBinding,
+	secret: string,
+): LocalApiCursorPayload {
+	if (secret.length < 16) throw new Error("CURSOR_SIGNING_SECRET_INVALID");
+	const parts = cursor.split(".");
+	if (parts.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(parts[0]) || !/^[A-Za-z0-9_-]+$/.test(parts[1]))
+		throw invalidCursor();
+	const expected = createHmac("sha256", secret).update(parts[0], "utf8").digest();
+	const received = Buffer.from(parts[1], "base64url");
+	if (received.length !== expected.length || !timingSafeEqual(received, expected)) throw invalidCursor();
+	return decodeSelenaApiCursor(parts[0], binding);
 }
 
 export type SelenaApiCursorQuery = {

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	decodeSelenaApiCursor,
+	decodeSelenaApiCursorSigned,
 	encodeSelenaApiCursor,
+	encodeSelenaApiCursorSigned,
 	hashIdempotencyBody,
 	parseIdempotencyKey,
 	parseSelenaApiCursor,
@@ -135,6 +137,17 @@ describe("Selena local API HTTP helpers", () => {
 				}),
 			);
 		}
+	});
+
+	it("supports an injected tamper-evident cursor secret without making it implicit", () => {
+		const secret = "owner-managed-test-secret";
+		const cursor = encodeSelenaApiCursorSigned(cursorPayload, secret);
+		expect(cursor).toContain(".");
+		expect(decodeSelenaApiCursorSigned(cursor, binding, secret)).toEqual(cursorPayload);
+		expect(() => decodeSelenaApiCursorSigned(cursor, binding, "another-owner-secret")).toThrowError(
+			expect.objectContaining({ status: 400, code: "CURSOR_INVALID" }),
+		);
+		expect(() => encodeSelenaApiCursorSigned(cursorPayload, "short")).toThrow("CURSOR_SIGNING_SECRET_INVALID");
 	});
 
 	it("rejects a canonical cursor with a non-date sort key or non-UUID tie breaker", () => {
