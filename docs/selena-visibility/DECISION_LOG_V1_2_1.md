@@ -103,5 +103,5 @@
 ## D-019 — Injectable signed cursor codec
 
 - Decision: provide an HMAC-SHA256 cursor codec that accepts an injected owner-managed secret and verifies signature plus tenant/cycle/resource binding.
-- Authority: source-only security hardening on 2026-08-30; the live route remains on the unsigned codec until secret provisioning, rotation and runtime proof are separately approved.
-- Effect: tamper-evident cursor behavior is testable without reading or creating credentials, while the current acceptance status remains `PARTIAL` for the unsigned default route.
+- Authority: source-only security hardening on 2026-08-30; route activation still depends on separately approved secret provisioning, rotation and runtime proof.
+- Effect: read routes can emit and validate tamper-evident cursors when an owner-managed secret is injected, while the default dependency remains unsigned and API-01 stays `PARTIAL` until that gate is proven.

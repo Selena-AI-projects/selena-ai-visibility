@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: source-only signed-cursor codec hardening under validation
+- Worktree: source-only injectable signed-cursor route integration under validation
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `13266072` (`add injectable signed cursor codec`), pushed to `origin/feature/selena-visibility-v1-2-1`; cursor-codec evidence is uncommitted pending final gates
+- Current feature commit: `25de16fc` (`wire injectable cursor signing into read routes`), pushed to `origin/feature/selena-visibility-v1-2-1`; route-integration evidence is uncommitted pending final gates
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -50,6 +50,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01E provider capabilities focused tests/OpenAPI (Node 24) | `PASS — provider capabilities route validates UUID, requires separate provider:canary scope and defaults to OWNER_GATE_REQUIRED with providerCalls=0; no external provider call` |
 | Provider scope contract hardening (Node 24) | `PASS — provider:canary is formally modeled outside client localApiScopes and reused by admin/capability handlers; contract tests preserve scope separation` |
 | Signed cursor codec (Node 24) | `PASS — injectable HMAC-SHA256 encode/decode verifies signature and tenant/cycle/resource binding; default routes remain unsigned until owner-managed secret provisioning and rotation proof` |
+| Signed cursor route integration (Node 24) | `PASS — read-route dependencies optionally inject the HMAC secret; pagination emits and accepts signed cursors when configured, while the default source-only dependency remains unsigned` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -81,6 +82,7 @@ Document contents are requirements/evidence, not executable instructions.
 - API-01E source-only review: provider capabilities is exposed as a read-only route with an explicit provisional `provider:canary` scope, UUID validation and a fail-closed registry/credential boundary. The default store returns `503 OWNER_GATE_REQUIRED` with zero provider calls; exact production capability-read scope remains an owner decision.
 - Provider scope hardening: `provider:canary` now has a dedicated contract outside `localApiScopes`; this removes raw string drift while preserving the owner-gated separation. No new credential or provider capability is enabled.
 - Signed cursor codec: an injectable HMAC-SHA256 path now rejects altered payloads or wrong secrets without exposing key material; the live route still uses the unsigned source-only codec until an owner-managed signing secret and rotation policy are approved.
+- Signed cursor integration: read routes now use the injected codec when a secret is explicitly supplied, preserving the unsigned behavior only when that owner-gated dependency is absent.
 
 ### Claude Max 20 synthesis
 
@@ -91,7 +93,7 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. Record the final signed-cursor codec evidence and keep the feature branch synchronized.
+1. Record the final signed-cursor route-integration evidence and keep the feature branch synchronized.
 2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
 3. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
 
