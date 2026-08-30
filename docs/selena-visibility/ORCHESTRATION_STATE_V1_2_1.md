@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: source-only API-01B quote/create/export slice under validation
+- Worktree: clean feature checkout after source-only API-01B quote/create/export slice
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `337d6433` (`record API-01A push evidence`), pushed to `origin/feature/selena-visibility-v1-2-1`; API-01B changes are currently uncommitted pending final gates
+- Current feature commit: `4b95f404` (`implement local visibility write and export boundaries`), pending push to `origin/feature/selena-visibility-v1-2-1`
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -69,7 +69,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Claude Code Max 5 / Sonnet: earlier read-only pass completed in an isolated snapshot; no API billing.
 - Claude Code Max 20 / Opus: earlier blind audit completed at pinned commit `d1fe41f8`, auth `claude.ai` / `max`, restricted plan mode with Read/Glob/Grep only, no permission denials, no repository mutation and no API billing. A new pinned review of `3684d93c` was attempted in the same restricted mode but stopped before reading the snapshot with `401 OAuth access token has expired`; preserved session `0638efee-5ca1-4b9e-a57a-6dcc48a1a2f5`. Re-authentication is a credential gate.
 - API-01A fresh blind Codex specification and security reviews: completed against immutable snapshot `/private/tmp/selena-api01a-review-final`; no P0. They independently confirmed tenant/scope fencing, no provider calls, and fail-closed unsigned evidence. Review verdict remains `FAIL / API-01A PARTIAL` because cursor tamper evidence, complete high-water snapshot stability, runtime RLS proof, and signed evidence capability are not available in this source-only slice. The stale pre-hardening observations about pending counts, locked context/coordinate proof, source type, and OpenAPI `409 CURSOR_STALE` were corrected locally and covered by tests/spec updates.
-- API-01B source-only review: lock-first quote/create handlers require `local:write` and `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` without synthetic `201`, database writes or provider calls. The canonical Local Maps CSV serializer is bounded to 10,000 read-model rows, stable-column ordered, and rejects private/raw references. Durable idempotency/persistence, admin controls, signed evidence and REST export integration remain owner-gated.
+- API-01B source-only review: lock-first quote/create handlers require `local:write` and `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` without synthetic `201`, database writes or provider calls. Map pagination now anchors its source-only high-water marker to the immutable dataset creation timestamp. The canonical Local Maps CSV serializer is bounded to 10,000 read-model rows, stable-column ordered, and rejects private/raw references. Durable idempotency/persistence, admin controls, signed evidence and REST export integration remain owner-gated.
 
 ### Claude Max 20 synthesis
 
