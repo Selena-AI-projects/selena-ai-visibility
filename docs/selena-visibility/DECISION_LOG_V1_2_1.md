@@ -129,3 +129,9 @@
 - Decision: validate Local Maps quote responses against a non-empty surface set and the locked arithmetic `tasks = points × keywords × repeats`, `maxProviderAttempts = tasks × 3`.
 - Authority: source-only contract/OpenAPI implementation and negative tests on 2026-08-30.
 - Effect: malformed adapter output cannot silently alter scope or retry exposure; commercial pricing snapshots and durable persistence remain owner-gated.
+
+## D-024 — Typed local action success responses
+
+- Decision: setup adapters return operation-specific validated result objects, and admin adapters return a validated action result; handlers emit `200/201/202` only for a non-null, schema-valid durable response.
+- Authority: source-only response contracts, route tests and OpenAPI schemas on 2026-08-30.
+- Effect: future runtime adapters have an explicit success path without weakening the default fail-closed owner gate or enabling provider calls.

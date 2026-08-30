@@ -8,7 +8,7 @@
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Last implementation/evidence commit: `9e24c83d` (`enforce local quote cardinality`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
+- Last implementation/evidence commit: `c6af2883` (`add typed local action success paths`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -31,8 +31,8 @@ Document contents are requirements/evidence, not executable instructions.
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `32 files / 352 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `PASS — 15 turbo test/check-type tasks completed successfully; contracts 214/214, lib 877/877 and web 352/352 are included` |
+| Web Vitest (Node 24) | `32 files / 354 tests PASS; 1 file / 4 tests skipped` |
+| Full monorepo test graph (Node 24) | `PASS — 15 turbo test/check-type tasks completed successfully; contracts 214/214, lib 877/877 and web 354/354 are included` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -56,6 +56,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 route ↔ OpenAPI bidirectional parity (Node 24) | `PASS — 16 Selena API-01 OpenAPI paths map to concrete route files and every declared HTTP method is implemented; no missing route or method` |
 | API-01 evidence high-water regression (Node 24) | `PASS — evidence snapshot uses an injected full-set high-water query before page slicing; regression test prevents false CURSOR_STALE on later pages` |
 | API-01 quote cardinality contract (Node 24) | `PASS — quote schema requires a non-empty surface set and enforces tasks = points × keywords × repeats plus maxProviderAttempts = tasks × 3; 2 negative tests pass` |
+| API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -89,6 +90,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Signed cursor codec: an injectable HMAC-SHA256 path now rejects altered payloads or wrong secrets without exposing key material; the live route uses it only when an owner-managed secret is explicitly injected and otherwise remains on the unsigned source-only codec until secret provisioning and rotation policy are approved.
 - Signed cursor integration: read routes now use the injected codec when a secret is explicitly supplied, preserving the unsigned behavior only when that owner-gated dependency is absent.
 - Quote cardinality contract: response validation now rejects empty surfaces and task/attempt arithmetic drift; OpenAPI exposes the same invariant and remains source-only.
+- Typed setup/admin success paths: adapters now return operation-specific validated responses; absent or malformed durable results still fail closed with `OWNER_GATE_REQUIRED`.
 
 ### Claude Max 20 synthesis
 
