@@ -102,6 +102,21 @@ describe("Selena local API HTTP helpers", () => {
 		expect(body).not.toContain("providerToken");
 	});
 
+	it("applies the same redaction when callers use the base error responder", async () => {
+		const response = selenaApiErrorResponse(500, {
+			code: "INTERNAL_ERROR",
+			message: "raw provider response with secret-value",
+			requestId: "request-base-redaction",
+			retryable: false,
+			details: { rawBody: "secret-value", providerCalls: 0 },
+		});
+		const body = await response.text();
+		expect(body).toContain('"message":"The request could not be completed."');
+		expect(body).toContain('"providerCalls":0');
+		expect(body).not.toContain("secret-value");
+		expect(body).not.toContain("rawBody");
+	});
+
 	it("keeps only bounded diagnostic detail keys", async () => {
 		const response = selenaApiHttpErrorResponse(
 			new SelenaApiHttpError(503, "OWNER_GATE_REQUIRED", "raw internal owner-gate detail", true, {

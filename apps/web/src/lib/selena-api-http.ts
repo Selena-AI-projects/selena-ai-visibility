@@ -53,6 +53,7 @@ const SAFE_MESSAGES_BY_CODE: Record<string, string> = {
 	CURSOR_STALE: "The collection changed after this cursor was issued. Restart pagination from the first page.",
 	IDEMPOTENCY_KEY_INVALID: "Idempotency-Key must contain 8 to 128 characters without surrounding whitespace.",
 	IDEMPOTENCY_KEY_REQUIRED: "Idempotency-Key header is required.",
+	IDEMPOTENCY_KEY_REUSED: "The key was already used for another request body.",
 	INTERNAL_ERROR: "The request could not be completed.",
 	JSON_INVALID: "Request body must be valid JSON.",
 	LIMIT_INVALID: "Limit must be an integer between 1 and 200.",
@@ -61,6 +62,7 @@ const SAFE_MESSAGES_BY_CODE: Record<string, string> = {
 	PAGINATION_QUERY_INVALID: "Limit and cursor may be supplied at most once.",
 	PRICE_INVALID: "The commercial quote price is invalid.",
 	RESOURCE_ID_INVALID: "resourceId must be a valid UUID.",
+	VALIDATION_ERROR: "The request body or path is invalid.",
 };
 
 function safeErrorMessage(code: string, message: string): string {
@@ -119,7 +121,14 @@ export function selenaApiErrorResponse(status: number, input: SelenaApiErrorInpu
 	if (!Number.isInteger(status) || status < 400 || status > 599) {
 		throw new Error("LOCAL_API_ERROR_STATUS_INVALID");
 	}
-	const envelope = localApiErrorEnvelopeSchema.parse({ error: input });
+	const details = safeErrorDetails(input.details);
+	const envelope = localApiErrorEnvelopeSchema.parse({
+		error: {
+			...input,
+			message: safeErrorMessage(input.code, input.message),
+			...(details ? { details } : {}),
+		},
+	});
 	return Response.json(envelope, { status });
 }
 
