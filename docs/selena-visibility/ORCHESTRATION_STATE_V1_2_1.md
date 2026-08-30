@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean; source implementation verified at `1b5e5c8d`, with the route-runner and grid-hardening slices committed on the feature branch
+- Worktree: clean; source implementation verified at `ddcd48ea`, with the route-runner, grid-hardening and LocalMapsRankAdapter slices committed on the feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, and the shared transaction-runner seam for all mutating Local API routes`
-- Last implementation/evidence commit: `1b5e5c8d` (`Harden spherical grid decimal determinism`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, 0048 Local API idempotency persistence boundary, the shared transaction-runner seam for all mutating Local API routes, and the unregistered LocalMapsRankAdapter contract bridge`
+- Last implementation/evidence commit: `ddcd48ea` (`Add Local Maps rank adapter seam`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `26 files / 218 tests PASS` |
+| Contracts Vitest (Node 24) | `27 files / 220 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `74 files / 879 tests PASS` |
+| Lib Vitest (Node 24) | `74 files / 880 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `33 files / 357 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `NOT RE-RUN after the route/grid slices; prior 15-task graph passed before these source changes. Current package suites: contracts 218/218, lib 879/879, web 357/357 (plus 4 skipped)` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after the adapter slice; current package suites: contracts 220/220, lib 880/880, web 357/357 (plus 4 skipped)` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -62,6 +62,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01 typed setup/admin success paths (Node 24) | `PASS — injected durable adapters can return validated location/place/keyword-set 200/201 responses and admin 202 response; null/default adapters remain OWNER_GATE_REQUIRED; focused tests pass` |
 | API-01 explicit tenant adapter boundary (Node 24) | `PASS — authenticated tenantId is copied explicitly into every write, setup and admin adapter input; focused tests and web typecheck pass; this is defense-in-depth, not runtime RLS proof` |
 | API-01 idempotency route runner seam (Node 24) | `PASS — shared transaction-owned runner is wired into write, setup and admin handlers; runner replay bypass and successful-range guards covered by tests; concrete DB adapter remains owner/runtime-gated` |
+| LocalMapsRankAdapter seam (Node 24) | `PASS — normative quote/execute/normalize/capability contract, lock-cardinality/price assertion, permit identity schema and runner bridge are source-tested; no provider registration, credentials or network call added` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude CLI authentication (current check) | `PASS — claude.ai first-party subscription status is max; no API fallback selected` |
 | Claude Max 20 pinned review of `45bc3b18` (Delta v1.2.1) | `PASS — blind read-only Opus review completed in an isolated snapshot; 66 turns, zero permission denials, original repository unchanged, no tests/commands claimed by Claude (session b3387e4c-aba0-41d8-85dd-471a12bdd174)` |
@@ -109,6 +110,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Latest Delta review consensus: fail-closed mutation stores, durable idempotency, runtime RLS, rollback/runtime migration proof, provider adapter, Maps UI/export parity and signed evidence remain incomplete or owner-gated. Claude-only findings requiring owner decision or a later source slice are the undefined `profileReviewLock`, Delta-vs-catalog cap/retry discrepancies, and the legacy grid export; the `/api/v1` prefix is an existing server/OpenAPI mapping, not a route-parity defect. Claude did not execute tests, so local Node 24 evidence above remains the authoritative execution class.
 - Latest Claude Max20 blind review of `541c313b`: confirmed `0048` contract/schema/helper are source-only and found no new fabricated-success or provider-call path. It correctly identified that route handlers still passed idempotency metadata only to stores; the follow-up source slice adds a shared transaction-runner seam to write/setup/admin handlers, while the concrete DB adapter and runtime replay/race evidence remain owner-gated. Claude also independently reaffirmed the zero-attempt representation, entitlement/price snapshot, provider seam and signed-evidence gaps.
 - Follow-up grid hardening after that review: the reported binary-`toFixed` and unrounded-center risks were corrected in `1b5e5c8d`; the full contracts suite now passes 218/218, including decimal tie and equivalent-center identity regressions.
+- Follow-up adapter seam after that review: `ddcd48ea` adds the Delta §4.1 `LocalMapsRankAdapter` contract and a runner bridge that passes only store-committed permit identity to an injected adapter; no provider is registered or enabled.
 
 ## Next autonomous actions
 
