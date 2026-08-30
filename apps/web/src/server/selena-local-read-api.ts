@@ -1057,6 +1057,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				svEvidenceIndex,
 				and(
 					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
+					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
 					eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
 					eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
 					eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),
@@ -1149,6 +1150,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				svEvidenceIndex,
 				and(
 					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
+					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
 					eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
 					eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
 					eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),

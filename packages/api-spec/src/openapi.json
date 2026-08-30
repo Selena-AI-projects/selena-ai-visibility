@@ -1677,7 +1677,7 @@
 							"type": "string",
 							"minLength": 1,
 							"maxLength": 4096,
-							"pattern": "^[A-Za-z0-9_-]+$"
+							"pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)?$"
 						}
 					},
 					{
@@ -1730,7 +1730,7 @@
 							"type": "string",
 							"minLength": 1,
 							"maxLength": 4096,
-							"pattern": "^[A-Za-z0-9_-]+$"
+							"pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)?$"
 						}
 					},
 					{
@@ -1783,7 +1783,7 @@
 							"type": "string",
 							"minLength": 1,
 							"maxLength": 4096,
-							"pattern": "^[A-Za-z0-9_-]+$"
+							"pattern": "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)?$"
 						}
 					},
 					{

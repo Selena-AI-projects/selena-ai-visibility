@@ -10,6 +10,9 @@ type Schema = {
 	oneOf?: Schema[];
 };
 
+type CursorParameter = { name: string; schema: { pattern: string } };
+const openApiPaths = openApiSpec.paths as unknown as Record<string, { get: { parameters: CursorParameter[] } }>;
+
 const requestSchema = openApiSpec.components.schemas.LocalPlaceEntityConfirmRequest as Schema;
 const responseSchema = openApiSpec.components.schemas.LocalPlaceEntityConfirmResponse as Schema;
 
@@ -104,5 +107,17 @@ describe("Local setup OpenAPI identity parity", () => {
 				reviewed: false,
 			}),
 		).toBe(false);
+	});
+
+	it("accepts both unsigned and signed opaque cursors on every paginated Local surface", () => {
+		const expectedPattern = "^[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)?$";
+		for (const path of [
+			"/selena/local-scan-cycles/{cycleId}/map-results",
+			"/selena/local-scan-cycles/{cycleId}/ai-results",
+			"/selena/local-scan-cycles/{cycleId}/evidence",
+		]) {
+			const cursorParameter = openApiPaths[path].get.parameters.find((parameter) => parameter.name === "cursor");
+			expect(cursorParameter?.schema.pattern).toBe(expectedPattern);
+		}
 	});
 });

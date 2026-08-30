@@ -239,3 +239,15 @@
 - Decision: derive the Local AI result snapshot high-water mark from both the task update timestamps and every attached evidence asset's `createdAt`. Adding evidence to an existing manual observation therefore invalidates previously issued AI cursors instead of allowing a stale page to survive a state change.
 - Evidence: source-only change in `apps/web/src/server/selena-local-read-api.ts`; the store projection now carries `svObservationEvidenceAssets.createdAt`, and the focused read-API regression passes `27/27` with web typecheck and Biome checks on 2026-08-30.
 - Effect: Local AI result/progress pagination remains snapshot-consistent for evidence additions without changing the manual-only/provider/migration boundary; runtime database high-water proof remains owner-gated.
+
+## D-042 — Keep signed cursor wire format aligned with OpenAPI
+
+- Decision: document the cursor query as the union of the unsigned base64url token and the owner-gated `base64url.signature` form emitted by the signed codec. The default remains unsigned until secret provisioning and rotation are approved.
+- Evidence: source-only OpenAPI pattern update for map-results, ai-results and evidence plus a parity regression in `selena-openapi-local-setup-parity.test.ts`; the three paginated API tests, web typecheck and Biome checks pass on 2026-08-30.
+- Effect: client validation no longer rejects a correctly signed cursor when the owner-managed cursor secret is later injected; no secret is provisioned and no route is activated by this documentation change.
+
+## D-043 — Fence Local Maps read joins by domain
+
+- Decision: `countMapObservations` and `listMapResults` must constrain their evidence-index joins to `domain_id = LOCAL_MAPS` in addition to tenant, cycle, dataset and observation identity. This is defense-in-depth against cross-domain registry collisions; the evidence-index uniqueness migration remains owner-gated.
+- Evidence: source-only predicates added to `apps/web/src/server/selena-local-read-api.ts` on 2026-08-30; web read/API tests, typecheck and Biome checks pass. No database query was executed against shared or disposable runtime.
+- Effect: Local Maps read projections cannot accidentally consume a same-tenant non-Maps evidence row that happens to share the other join keys; runtime RLS and tenant-scoped uniqueness still require migration proof.
