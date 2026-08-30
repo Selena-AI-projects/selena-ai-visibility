@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { maximumProviderAttempts } from "./local-execution.js";
 
 const uuid = z.string().uuid();
 const decimalUsd = z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/);
@@ -13,40 +14,52 @@ export const localScanQuoteRequestSchema = z.strictObject({
 });
 export type LocalScanQuoteRequest = z.infer<typeof localScanQuoteRequestSchema>;
 
-export const localScanQuoteResponseSchema = z.strictObject({
-	quoteId: uuid,
-	locationId: uuid,
-	configurationLockId: uuid,
-	lockVersion: z.number().int().positive(),
-	status: z.enum(["ISSUED", "BUDGET_BLOCKED"]),
-	surfaces: z.array(z.literal("LOCAL_MAPS")),
-	maps: z.strictObject({
-		points: z.number().int().positive(),
-		keywords: z.number().int().positive(),
-		repeats: z.number().int().positive(),
-		captureDepth: z.number().int().positive(),
-		tasks: z.number().int().positive(),
-		maxProviderAttempts: z.number().int().positive(),
-	}),
-	providerEnvelope: z.strictObject({
-		id: z.string().min(1),
-		endpoint: z.string().min(1),
-		version: z.string().min(1),
-		rankEvidenceSource: z.literal("MAPS_SERP_PROVIDER"),
-		externalProviderCalls: z.literal(0),
-	}),
-	priceAmount: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{2})$/),
-	currency: z.literal("USD"),
-	budget: z.strictObject({
+export const localScanQuoteResponseSchema = z
+	.strictObject({
+		quoteId: uuid,
+		locationId: uuid,
+		configurationLockId: uuid,
+		lockVersion: z.number().int().positive(),
+		status: z.enum(["ISSUED", "BUDGET_BLOCKED"]),
+		surfaces: z.array(z.literal("LOCAL_MAPS")).min(1),
+		maps: z.strictObject({
+			points: z.number().int().positive(),
+			keywords: z.number().int().positive(),
+			repeats: z.number().int().positive(),
+			captureDepth: z.number().int().positive(),
+			tasks: z.number().int().positive(),
+			maxProviderAttempts: z.number().int().positive(),
+		}),
+		providerEnvelope: z.strictObject({
+			id: z.string().min(1),
+			endpoint: z.string().min(1),
+			version: z.string().min(1),
+			rankEvidenceSource: z.literal("MAPS_SERP_PROVIDER"),
+			externalProviderCalls: z.literal(0),
+		}),
+		priceAmount: z.string().regex(/^(?:0|[1-9]\d*)(?:\.\d{2})$/),
 		currency: z.literal("USD"),
-		worstCaseCostUsd: decimalUsd,
-		surfaceCapUsd: decimalUsd,
-		monthlyCapUsd: decimalUsd,
-		priceSnapshotVersion: z.string().min(1),
-	}),
-	caveats: z.array(z.string().min(1)),
-	expiresAt: z.iso.datetime(),
-});
+		budget: z.strictObject({
+			currency: z.literal("USD"),
+			worstCaseCostUsd: decimalUsd,
+			surfaceCapUsd: decimalUsd,
+			monthlyCapUsd: decimalUsd,
+			priceSnapshotVersion: z.string().min(1),
+		}),
+		caveats: z.array(z.string().min(1)),
+		expiresAt: z.iso.datetime(),
+	})
+	.superRefine(({ maps }, issues) => {
+		const expectedTasks = maps.points * maps.keywords * maps.repeats;
+		if (maps.tasks !== expectedTasks)
+			issues.addIssue({ code: "custom", path: ["maps", "tasks"], message: "LOCAL_QUOTE_TASK_CARDINALITY_MISMATCH" });
+		if (maps.maxProviderAttempts !== maximumProviderAttempts(maps.tasks))
+			issues.addIssue({
+				code: "custom",
+				path: ["maps", "maxProviderAttempts"],
+				message: "LOCAL_QUOTE_ATTEMPT_CARDINALITY_MISMATCH",
+			});
+	});
 export type LocalScanQuoteResponse = z.infer<typeof localScanQuoteResponseSchema>;
 
 export const localScanCycleCreateRequestSchema = z.strictObject({
