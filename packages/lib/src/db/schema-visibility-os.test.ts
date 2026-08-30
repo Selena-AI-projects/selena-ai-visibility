@@ -741,7 +741,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("tgenabled <> 'O'");
 		expect(gate12).toContain('--single-transaction < "$migration"');
 		expect(gate12).toContain("sv_journal_daily_claims_project_organization_fk");
-		expect(gate12).toContain("complete numbered migration chain through 0047");
+		expect(gate12).toContain("complete numbered migration chain through 0048");
 		const gate12Through0036 = gate12.indexOf("10#$migration_number > 36");
 		const gate12RegistryFixture = gate12.indexOf('bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh"');
 		const gate12HistoricalChain = gate12.indexOf('bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh"');
@@ -750,6 +750,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const gate12Apply0045 = gate12.indexOf("0045_visibility_os_domain_and_lock_hardening.sql");
 		const gate12Apply0046 = gate12.indexOf("0046_selena_journal_daily_claims.sql");
 		const gate12Apply0047 = gate12.indexOf("0047_visibility_os_local_attempt_count_cap.sql");
+		const gate12Apply0048 = gate12.indexOf("0048_selena_api_idempotency_records.sql");
 		const gate12Marker = gate12.indexOf("sv_journal_daily_claims_project_organization_fk");
 		const gate12Seed = gate12.indexOf("INSERT INTO organization");
 		expect(gate12).toContain('if [[ "$fresh_database" == true ]]');
@@ -761,7 +762,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(gate12Apply0044).toBeLessThan(gate12Apply0045);
 		expect(gate12Apply0045).toBeLessThan(gate12Apply0046);
 		expect(gate12Apply0046).toBeLessThan(gate12Apply0047);
-		expect(gate12Apply0047).toBeLessThan(gate12Marker);
+		expect(gate12Apply0047).toBeLessThan(gate12Apply0048);
+		expect(gate12Apply0048).toBeLessThan(gate12Marker);
 		expect(gate12Marker).toBeLessThan(gate12Seed);
 	});
 
@@ -986,7 +988,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-10)).toEqual([
+		expect(journal.entries.slice(-11)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1027,6 +1029,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0047_visibility_os_local_attempt_count_cap",
 				breakpoints: true,
 			},
+			{
+				idx: 48,
+				version: "7",
+				when: 1787940010000,
+				tag: "0048_selena_api_idempotency_records",
+				breakpoints: true,
+			},
 		]);
 	});
 
@@ -1054,6 +1063,27 @@ describe("Visibility OS Outcome Layer schema", () => {
 		expect(migration).not.toContain("provider_call");
 		expect(migration).not.toContain("GRANT ");
 		expect(journal).toContain('"tag": "0047_visibility_os_local_attempt_count_cap"');
+	});
+
+	it("defines an immutable, tenant-scoped seven-day response cache for mutating API retries", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0048_selena_api_idempotency_records.sql", import.meta.url),
+			"utf8",
+		);
+		const config = getTableConfig(schema.svApiIdempotencyRecords);
+		const identity = config.indexes.find((index) => index.config.name === "sv_api_idempotency_identity_unique");
+		const expiry = config.checks.find((candidate) => candidate.name === "sv_api_idempotency_expiry_check");
+
+		expect(config.name).toBe("sv_api_idempotency_records");
+		expect(config.enableRLS).toBe(true);
+		expect(identity?.config.unique).toBe(true);
+		expect(expiry && new PgDialect().sqlToQuery(expiry.value).sql).toContain("interval '7 days'");
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_api_idempotency_records"');
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_api_idempotency_identity_unique"');
+		expect(migration).toContain("API_IDEMPOTENCY_ACTIVE_DELETE_BLOCKED");
+		expect(migration).toContain("API_IDEMPOTENCY_UPDATE_BLOCKED");
+		expect(migration).toContain("API_IDEMPOTENCY_TRUNCATE_BLOCKED");
+		expect(migration).not.toContain("GRANT ");
 	});
 
 	it("exports four RLS-enabled M6 tables and keeps observations nullable", () => {

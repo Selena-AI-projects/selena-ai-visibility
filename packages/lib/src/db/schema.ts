@@ -369,6 +369,30 @@ export const svApiKeys = pgTable("sv_api_keys", {
 	name: text("name").notNull(), keyHash: text("key_hash").notNull().unique(), permissions: text("permissions").array().notNull().default([]), expiresAt: timestamp("expires_at", { withTimezone: true }), revokedAt: timestamp("revoked_at", { withTimezone: true }), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ orgIdx: index("sv_api_keys_org_idx").on(table.organizationId), activeIdx: index("sv_api_keys_active_idx").on(table.organizationId, table.revokedAt) })).enableRLS();
 
+/** Immutable response cache for mutating Local API requests. Rows are retained
+ * for seven days so retries can replay the exact response without repeating a
+ * write; expired rows may be purged by a bounded cleanup job. */
+export const svApiIdempotencyRecords = pgTable("sv_api_idempotency_records", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	operation: text("operation").notNull(),
+	resourceId: text("resource_id").notNull(),
+	idempotencyKey: text("idempotency_key").notNull(),
+	bodyHash: text("body_hash").notNull(),
+	responseStatus: smallint("response_status").notNull(),
+	responseBody: jsonb("response_body").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+	identityUnique: uniqueIndex("sv_api_idempotency_identity_unique").on(table.organizationId, table.operation, table.resourceId, table.idempotencyKey),
+	expiresIdx: index("sv_api_idempotency_expires_idx").on(table.organizationId, table.expiresAt),
+	operationCheck: check("sv_api_idempotency_operation_check", sql`${table.operation} ~ '^[a-z][a-z0-9-]{1,63}$'`),
+	bodyHashCheck: check("sv_api_idempotency_body_hash_check", sql`${table.bodyHash} ~ '^sha256:[a-f0-9]{64}$'`),
+	keyLengthCheck: check("sv_api_idempotency_key_length_check", sql`length(${table.idempotencyKey}) BETWEEN 8 AND 128 AND ${table.idempotencyKey} = btrim(${table.idempotencyKey})`),
+	responseStatusCheck: check("sv_api_idempotency_response_status_check", sql`${table.responseStatus} BETWEEN 200 AND 299`),
+	expiryCheck: check("sv_api_idempotency_expiry_check", sql`${table.expiresAt} > ${table.createdAt} AND ${table.expiresAt} <= ${table.createdAt} + interval '7 days'`),
+})).enableRLS();
+
 export const svProjects = pgTable("sv_projects", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	organizationId: text("organization_id").notNull().references(() => organization.id),

@@ -337,6 +337,13 @@
       "when": 1787940009000,
       "tag": "0047_visibility_os_local_attempt_count_cap",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787940010000,
+      "tag": "0048_selena_api_idempotency_records",
+      "breakpoints": true
     }
   ]
 }

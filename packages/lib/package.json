@@ -38,6 +38,7 @@
 		"./run-policy": "./src/run-policy/index.ts",
 		"./usage": "./src/usage/cost.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
+		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",
 		"./selena-export": "./src/selena-export.ts",
 		"./selena-answer-analysis": "./src/selena-answer-analysis.ts",
 		"./selena-grader-report": "./src/selena-grader-report.ts",

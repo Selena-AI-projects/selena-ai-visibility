@@ -128,6 +128,7 @@ export * from "./local-api.js";
 export * from "./local-cycle-cost.js";
 export * from "./local-discovery.js";
 export * from "./local-execution.js";
+export * from "./local-idempotency.js";
 export * from "./local-locks.js";
 export * from "./local-maps-export.js";
 export * from "./local-maps-live.js";

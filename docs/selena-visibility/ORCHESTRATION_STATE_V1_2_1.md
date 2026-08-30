@@ -7,7 +7,7 @@
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: clean; source implementation verified at `5611f226`, with subsequent documentation-only state updates pushed to the same feature branch
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims and 0047 Local Maps attempt-count cap`
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims, 0047 Local Maps attempt-count cap, and 0048 Local API idempotency persistence boundary`
 - Last implementation/evidence commit: `5611f226` (`cap Local Maps observation attempts`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent documentation commits preserve the same implementation state and record the reusable Claude Max runbook
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
@@ -27,12 +27,12 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `25 files / 214 tests PASS` |
+| Contracts Vitest (Node 24) | `26 files / 217 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
+| Lib Vitest (Node 24) | `74 files / 879 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `32 files / 354 tests PASS; 1 file / 4 tests skipped` |
-| Full monorepo test graph (Node 24) | `PASS — 15 turbo test/check-type tasks completed successfully; contracts 214/214, lib 877/877 and web 354/354 are included` |
+| Full monorepo test graph (Node 24) | `NOT RE-RUN after 0048; prior 15-task graph passed before this source slice. Current package suites: contracts 217/217, lib 879/879; web baseline unchanged at 354/354` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -42,6 +42,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
 | Migration 0047 Local Maps attempt-count cap | SOURCE/STATIC PASS — `pnpm -C packages/lib exec vitest run src/db/schema-visibility-os.test.ts` (28/28) and `pnpm -C packages/lib check-types` PASS; validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied |
+| Migration 0048 Local API idempotency records | SOURCE/STATIC PASS — contracts idempotency tests (3/3), lib typecheck, schema/migration invariants and Gate12 chain update PASS; immutable tenant-scoped seven-day replay/conflict boundary and transaction-only helper added; not applied |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
@@ -115,6 +116,6 @@ Document contents are requirements/evidence, not executable instructions.
 - Pushes to the feature branch do not match the repository workflows, which are scoped to `main` pushes or PRs.
 - Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
 
-Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This now includes 0047 and does not block further source-only implementation. Paid canary remains a later, separate gate.
+Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This now includes 0048 and does not block further source-only implementation. Paid canary remains a later, separate gate.
 
 Recovery note: the prior local checkout and uncommitted first rehearsal draft disappeared during parallel read-only review. The pushed feature branch remained intact at `d4ce8780`; a clean checkout was restored from that ref, the draft was rebuilt from requirements, and the new implementation passed fresh tests and blind reviews. No staging, database or provider action was used for recovery.
