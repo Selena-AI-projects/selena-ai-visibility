@@ -206,7 +206,11 @@ const REQUEST_ID_FIELDS = ["snapshot_id", "request_id", "response_id", "id"] as 
  */
 const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
-const DEFAULT_SNAPSHOT_TIMEOUT_MS = 300_000;
+// The worker gives one commercial measurement 15 minutes. Leave enough room
+// for the trigger request, final download and persistence while allowing the
+// long-running Perplexity collector to finish beyond its observed five-minute
+// boundary.
+const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
 const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
 
@@ -332,6 +336,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 type CostFields = Pick<RunOutcome, "costUsd" | "costBasis" | "provider">;
+type InvalidOutcomeFields = CostFields & Partial<Pick<RunOutcome, "rawResponseReference">>;
 
 /**
  * §10.2: once a request has been dispatched the charge may exist whether or
@@ -351,8 +356,8 @@ function costFields(reportedCostUsd?: number | null): CostFields {
 			};
 }
 
-function invalidOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
-	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...cost };
+function invalidOutcome(permit: SelenaExecutablePermit, reason: string, fields: InvalidOutcomeFields = {}): RunOutcome {
+	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...fields };
 }
 
 function failedOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
@@ -592,7 +597,10 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				);
 				if (collected === null) {
 					await cancelSnapshot(snapshotId);
-					return invalidOutcome(permit, "SNAPSHOT_NOT_READY", costFields());
+					return invalidOutcome(permit, "SNAPSHOT_NOT_READY", {
+						...costFields(),
+						rawResponseReference: `brightdata:${snapshotId}`,
+					});
 				}
 				try {
 					answer = parseAnswer(collected);

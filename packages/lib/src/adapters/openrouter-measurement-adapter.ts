@@ -120,6 +120,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 type CostFields = Pick<RunOutcome, "costUsd" | "costBasis" | "provider">;
+type InvalidOutcomeFields = CostFields & Partial<Pick<RunOutcome, "rawResponseReference">>;
 
 /**
  * §10.2: once a request has been dispatched the charge may exist whether or
@@ -139,8 +140,8 @@ function costFields(usage?: OpenRouterUsage | null): CostFields {
 			};
 }
 
-function invalidOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
-	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...cost };
+function invalidOutcome(permit: SelenaExecutablePermit, reason: string, fields: InvalidOutcomeFields = {}): RunOutcome {
+	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...fields };
 }
 
 function failedOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
@@ -233,6 +234,10 @@ export function createOpenRouterAdapter(deps: OpenRouterAdapterDeps): SelenaMeas
 						model: deps.model,
 						messages: [{ role: "user", content: scenarioText }],
 						max_tokens: maxOutputTokens,
+						// Qwen can consume the whole output allowance as reasoning and
+						// return no final content. API View measures the answer a caller
+						// receives, so this catalog model is asked for final prose only.
+						...(deps.model === "qwen/qwen3.5-9b" ? { reasoning: { effort: "none" } } : {}),
 						// A measurement is a repeated observation of the same question:
 						// sampling would make two runs of one scenario differ for reasons
 						// that have nothing to do with what changed in the AI answer.
@@ -276,10 +281,14 @@ export function createOpenRouterAdapter(deps: OpenRouterAdapterDeps): SelenaMeas
 				return invalidOutcome(permit, "MALFORMED_RESPONSE", costFields());
 			}
 			const rawContent = data.choices?.[0]?.message?.content;
+			const responseReference = rawResponseReference(data.id, raw);
 			// The payload carries the real usage even when the answer is unusable:
 			// bill what was reported, not the estimate.
 			if (typeof rawContent !== "string" || rawContent.trim() === "")
-				return invalidOutcome(permit, "EMPTY_RESPONSE", costFields(data.usage));
+				return invalidOutcome(permit, "EMPTY_RESPONSE", {
+					...costFields(data.usage),
+					rawResponseReference: responseReference,
+				});
 			// The stored answer text must never store the credential: a response
 			// that echoes request material back would otherwise write the key
 			// into a retained row.
@@ -317,7 +326,7 @@ export function createOpenRouterAdapter(deps: OpenRouterAdapterDeps): SelenaMeas
 				dispatchKey: permit.dispatchKey,
 				status: "SUCCEEDED",
 				validity: "VALID",
-				rawResponseReference: rawResponseReference(data.id, raw),
+				rawResponseReference: responseReference,
 				// Retained on purpose: competitor and citation analysis reads the
 				// answer, and keeping it lets a metric be recomputed without buying
 				// a second measurement of a different moment. Only the answer body
