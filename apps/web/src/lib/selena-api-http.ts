@@ -26,6 +26,78 @@ export class SelenaApiHttpError extends Error {
 	}
 }
 
+const SAFE_ERROR_FALLBACK = "The request could not be completed.";
+const SAFE_DETAIL_KEYS = new Set([
+	"blocker",
+	"expectedBodyHash",
+	"operation",
+	"providerCalls",
+	"requiredScope",
+	"surface",
+]);
+const SAFE_SCOPES = new Set(["local:read", "local:write", "local:execute", "evidence:read", "provider:canary"]);
+const SAFE_SURFACES = new Set(["LOCAL_AI", "LOCAL_MAPS"]);
+
+const SAFE_MESSAGES_BY_CODE: Record<string, string> = {
+	AUTH_FORBIDDEN: "The API key cannot access this tenant.",
+	AUTH_UNAUTHORIZED: "A valid scoped API key is required.",
+	BODY_INVALID: "Request body must be a JSON object.",
+	CURSOR_INVALID: "Cursor is invalid for this resource.",
+	CURSOR_STALE: "The collection changed after this cursor was issued. Restart pagination from the first page.",
+	IDEMPOTENCY_KEY_INVALID: "Idempotency-Key must contain 8 to 128 characters without surrounding whitespace.",
+	IDEMPOTENCY_KEY_REQUIRED: "Idempotency-Key header is required.",
+	INTERNAL_ERROR: "The request could not be completed.",
+	JSON_INVALID: "Request body must be valid JSON.",
+	LIMIT_INVALID: "Limit must be an integer between 1 and 200.",
+	LOCAL_CYCLE_ID_INVALID: "cycleId must be a valid UUID.",
+	LOCAL_CYCLE_NOT_FOUND: "Local scan cycle was not found.",
+	PAGINATION_QUERY_INVALID: "Limit and cursor may be supplied at most once.",
+	PRICE_INVALID: "The commercial quote price is invalid.",
+	RESOURCE_ID_INVALID: "resourceId must be a valid UUID.",
+};
+
+function safeErrorMessage(code: string, message: string): string {
+	const normalized = message.trim();
+	if (SAFE_MESSAGES_BY_CODE[code] === normalized) return normalized;
+	if (
+		code === "SCOPE_FORBIDDEN" &&
+		/^API key lacks (?:local:read|local:write|local:execute|evidence:read|provider:canary) scope\.$/.test(normalized)
+	) {
+		return normalized;
+	}
+	if (
+		code === "OWNER_GATE_REQUIRED" &&
+		/^(?:LOCAL_[A-Z0-9_-]+ is unavailable until the target schema(?:, RLS| and tenant RLS)?(?: and approval gates)? are verified\.|(?:Admin action|Provider capabilities did not produce a durable registry response|Local setup action did not produce a durable response|Local setup action did not produce a valid durable response)\.)$/.test(
+			normalized,
+		)
+	) {
+		return normalized;
+	}
+	if (code === "PROVIDER_UNAVAILABLE" && normalized === "Provider is unavailable.") return normalized;
+	return SAFE_ERROR_FALLBACK;
+}
+
+function safeErrorDetails(details: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+	if (!details) return undefined;
+	const safe: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(details)) {
+		if (!SAFE_DETAIL_KEYS.has(key)) continue;
+		if (key === "requiredScope" && typeof value === "string" && SAFE_SCOPES.has(value)) safe[key] = value;
+		else if (key === "surface" && typeof value === "string" && SAFE_SURFACES.has(value)) safe[key] = value;
+		else if (key === "providerCalls" && typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
+			safe[key] = value;
+		else if (
+			key === "expectedBodyHash" &&
+			(value === "redacted" || (typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value)))
+		)
+			safe[key] = value;
+		else if (key === "blocker" && typeof value === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(value)) safe[key] = value;
+		else if (key === "operation" && typeof value === "string" && /^[a-z][a-z0-9-]{0,63}$/.test(value))
+			safe[key] = value;
+	}
+	return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
 export function requireSelenaApiScope(grantedScopes: readonly string[], requiredScope: LocalApiScope): LocalApiScope {
 	const required = localApiScopeSchema.parse(requiredScope);
 	if (!grantedScopes.includes(required)) {
@@ -45,12 +117,13 @@ export function selenaApiErrorResponse(status: number, input: SelenaApiErrorInpu
 }
 
 export function selenaApiHttpErrorResponse(error: SelenaApiHttpError, requestId: string): Response {
+	const details = safeErrorDetails(error.details);
 	return selenaApiErrorResponse(error.status, {
 		code: error.code,
-		message: error.message,
+		message: safeErrorMessage(error.code, error.message),
 		requestId,
 		retryable: error.retryable,
-		...(error.details ? { details: error.details } : {}),
+		...(details ? { details } : {}),
 	});
 }
 

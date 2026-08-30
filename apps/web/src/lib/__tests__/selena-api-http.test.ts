@@ -78,6 +78,51 @@ describe("Selena local API HTTP helpers", () => {
 		});
 	});
 
+	it("does not expose provider secrets or raw error bodies through helper errors", async () => {
+		const response = selenaApiHttpErrorResponse(
+			new SelenaApiHttpError(
+				502,
+				"PROVIDER_ERROR",
+				'{"authorization":"Bearer provider-secret","body":"upstream raw response"}',
+				true,
+				{
+					providerBody: "upstream raw response",
+					providerToken: "provider-secret",
+					surface: "LOCAL_MAPS",
+				},
+			),
+			"request-secret-redaction",
+		);
+		const body = await response.text();
+		expect(body).toContain('"message":"The request could not be completed."');
+		expect(body).toContain('"surface":"LOCAL_MAPS"');
+		expect(body).not.toContain("provider-secret");
+		expect(body).not.toContain("upstream raw response");
+		expect(body).not.toContain("providerBody");
+		expect(body).not.toContain("providerToken");
+	});
+
+	it("keeps only bounded diagnostic detail keys", async () => {
+		const response = selenaApiHttpErrorResponse(
+			new SelenaApiHttpError(503, "OWNER_GATE_REQUIRED", "raw internal owner-gate detail", true, {
+				providerCalls: 0,
+				blocker: "SAFE_BLOCKER",
+				operation: "preflight",
+				secret: "must-not-leak",
+			}),
+			"request-detail-redaction",
+		);
+		expect(await response.json()).toEqual({
+			error: {
+				code: "OWNER_GATE_REQUIRED",
+				message: "The request could not be completed.",
+				requestId: "request-detail-redaction",
+				retryable: true,
+				details: { providerCalls: 0, blocker: "SAFE_BLOCKER", operation: "preflight" },
+			},
+		});
+	});
+
 	it("parses required Idempotency-Key values at the 8 and 128 character boundaries", () => {
 		for (const value of ["12345678", "x".repeat(128)]) {
 			const headers = new Headers({ "Idempotency-Key": value });
