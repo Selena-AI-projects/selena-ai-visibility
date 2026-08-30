@@ -1,0 +1,7 @@
+# Central Memory — какому проекту принадлежит этот каталог.
+# Файл сам по себе ничего не разрешает: доступ даёт привязка,
+# подтверждённая владельцем (cm project bind).
+schema_version: 1
+project_id: selena-ai-visibility
+name: "Selena AI Visibility"
+project_type: software
