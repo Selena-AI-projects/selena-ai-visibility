@@ -29,7 +29,11 @@ import {
 	type SelenaPlanId,
 	visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
+import {
+	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
+	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
+} from "@/lib/selena-monthly-allowance";
 import { approveOrder, enqueueOrderRunsForOrder } from "./selena-admin-orders";
 
 // The order desk: where a confirmed brand profile becomes an order the
@@ -278,8 +282,8 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		const expectedRuns = expectedRunsFromScope(scope);
 		// The pricing page quotes a monthly allowance (300/800 answers); an
 		// order that would overrun it is refused with the numbers, not queued
-		// quietly. Usage counts the calendar month's created cycles — orders
-		// still awaiting review carry no cycle yet and are the operator's call.
+		// quietly. Stopped or failed attempts release their allowance so a
+		// recoverable execution problem cannot lock the customer out all month.
 		const allowance = monthlyAnswerAllowance(plan.planId);
 		if (allowance !== null) {
 			const monthStart = new Date();
@@ -294,6 +298,8 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 						eq(svOrders.projectId, data.projectId),
 						eq(svOrders.organizationId, context.tenantId),
 						gte(svCycles.createdAt, monthStart),
+						notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
+						notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
 					),
 				);
 			const used = Number(usage?.used ?? 0);
