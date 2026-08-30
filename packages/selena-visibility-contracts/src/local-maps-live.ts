@@ -278,6 +278,7 @@ const resultIdentity = {
 
 const successProvenanceSchema = z.strictObject({
 	evidenceKind: z.literal("MAPS_SERP_PROVIDER"),
+	checkReference: liveReferenceSchema,
 	rawResponseReference: liveReferenceSchema,
 	rawResponseSha256: sha256ReferenceSchema,
 	providerObservedAt: z.iso.datetime(),
@@ -286,6 +287,7 @@ const successProvenanceSchema = z.strictObject({
 const failureProvenanceSchema = z
 	.strictObject({
 		evidenceKind: z.literal("MAPS_SERP_PROVIDER"),
+		checkReference: liveReferenceSchema.nullable().default(null),
 		rawResponseReference: liveReferenceSchema.nullable(),
 		rawResponseSha256: sha256ReferenceSchema.nullable(),
 		providerObservedAt: z.iso.datetime().nullable(),

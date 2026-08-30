@@ -232,12 +232,24 @@ CREATE TABLE "sv_measurement_attempt_results" (
 			AND jsonb_typeof("validated_result"->'event') = 'object'
 			AND jsonb_typeof("validated_result"->'provenance') = 'object'
 			AND "validated_result"->'provenance' ?& array[
-				'evidenceKind', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'
+				'evidenceKind', 'checkReference', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'
 			]
 			AND "validated_result"->'provenance'
-				- 'evidenceKind' - 'rawResponseReference' - 'rawResponseSha256' - 'providerObservedAt'
+				- 'evidenceKind' - 'checkReference' - 'rawResponseReference' - 'rawResponseSha256' - 'providerObservedAt'
 				= '{}'::jsonb
 			AND "validated_result"#>>'{provenance,evidenceKind}' = 'MAPS_SERP_PROVIDER'
+			AND (
+				jsonb_typeof("validated_result"#>'{provenance,checkReference}') = 'string'
+				OR jsonb_typeof("validated_result"#>'{provenance,checkReference}') = 'null'
+			)
+			AND (
+				jsonb_typeof("validated_result"#>'{provenance,checkReference}') = 'null'
+				OR (
+					length("validated_result"#>>'{provenance,checkReference}') > 0
+					AND "validated_result"#>>'{provenance,checkReference}' !~ '[[:space:]]'
+					AND "validated_result"#>>'{provenance,checkReference}' !~* '^(stub-local-maps:|stub:)'
+				)
+			)
 			AND jsonb_typeof("validated_result"#>'{provenance,rawResponseReference}') IN ('string', 'null')
 			AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') IN ('string', 'null')
 			AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') IN ('string', 'null')
@@ -255,6 +267,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND "validated_result"#>>'{cost,status}' = 'KNOWN'
 					AND jsonb_typeof("validated_result"#>'{cost,amountUsd}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{cost,basis}') = 'string'
+					AND jsonb_typeof("validated_result"#>'{provenance,checkReference}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseReference}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'string')
@@ -264,6 +277,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND "validated_result"#>>'{cost,status}' = 'KNOWN'
 					AND jsonb_typeof("validated_result"#>'{cost,amountUsd}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{cost,basis}') = 'string'
+					AND jsonb_typeof("validated_result"#>'{provenance,checkReference}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseReference}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'string')
@@ -279,6 +293,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND "validated_result"#>>'{cost,status}' = 'KNOWN'
 					AND jsonb_typeof("validated_result"#>'{cost,amountUsd}') = 'string'
 					AND jsonb_typeof("validated_result"#>'{cost,basis}') = 'string'
+					AND jsonb_typeof("validated_result"#>'{provenance,checkReference}') IN ('string', 'null')
 					AND ((jsonb_typeof("validated_result"#>'{provenance,rawResponseReference}') = 'null'
 						AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'null'
 						AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'null')
@@ -291,6 +306,7 @@ CREATE TABLE "sv_measurement_attempt_results" (
 					AND "validated_result"#>>'{cost,status}' = 'UNKNOWN'
 					AND jsonb_typeof("validated_result"#>'{cost,amountUsd}') = 'null'
 					AND jsonb_typeof("validated_result"#>'{cost,basis}') = 'null'
+					AND jsonb_typeof("validated_result"#>'{provenance,checkReference}') IN ('string', 'null')
 					AND ((jsonb_typeof("validated_result"#>'{provenance,rawResponseReference}') = 'null'
 						AND jsonb_typeof("validated_result"#>'{provenance,rawResponseSha256}') = 'null'
 						AND jsonb_typeof("validated_result"#>'{provenance,providerObservedAt}') = 'null')

@@ -183,6 +183,7 @@ function rawResult(cost: unknown) {
 		evidenceEligible: true,
 		provenance: {
 			evidenceKind: "MAPS_SERP_PROVIDER",
+			checkReference: "https://maps.example/check/attempt-1",
 			rawResponseReference: "maps:response-1",
 			rawResponseSha256: `sha256:${"a".repeat(64)}`,
 			providerObservedAt: "2026-08-30T00:00:00.500Z",
@@ -233,6 +234,7 @@ describe("settleLocalMapsBudget", () => {
 			evidenceEligible: false,
 			provenance: {
 				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: null,
 				rawResponseReference: null,
 				rawResponseSha256: null,
 				providerObservedAt: null,

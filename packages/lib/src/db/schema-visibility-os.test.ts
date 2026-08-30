@@ -428,6 +428,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain('OR NEW."provider_id" IS DISTINCT FROM parent_attempt."executor_id"');
 		expect(migration).toContain('"validated_result"#>>\'{provider,id}\' = "provider_id"');
 		expect(migration).toContain('CONSTRAINT "sv_measurement_attempt_results_live_shape_check"');
+		expect(migration).toContain("'evidenceKind', 'checkReference', 'rawResponseReference'");
+		expect(migration).toContain("'{provenance,checkReference}'");
 		expect(migration).toContain("encode(sha256(convert_to(\"result_canonical\", 'UTF8')), 'hex')");
 		expect(migration).toContain('"validated_result" = "result_canonical"::jsonb');
 		expect(migration).toContain('ALTER TABLE "sv_measurement_attempt_results" ENABLE ROW LEVEL SECURITY');

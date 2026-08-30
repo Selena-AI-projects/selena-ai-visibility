@@ -140,6 +140,7 @@ function providerObservation(overrides: Record<string, unknown> = {}) {
 		evidenceEligible: true,
 		provenance: {
 			evidenceKind: "MAPS_SERP_PROVIDER",
+			checkReference: "https://maps.example/check/runner",
 			rawResponseReference: "raw/live/runner.json",
 			rawResponseSha256: `sha256:${"3".repeat(64)}`,
 			providerObservedAt: "2026-08-30T01:00:04.000Z",
@@ -435,6 +436,7 @@ describe("Local Maps live runner protocol", () => {
 		const future = providerObservation({
 			provenance: {
 				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: "https://maps.example/check/future",
 				rawResponseReference: "raw/live/future.json",
 				rawResponseSha256: `sha256:${"4".repeat(64)}`,
 				providerObservedAt: "2026-08-30T01:00:04.500Z",
@@ -451,6 +453,7 @@ describe("Local Maps live runner protocol", () => {
 		const stale = providerObservation({
 			provenance: {
 				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: "https://maps.example/check/stale",
 				rawResponseReference: "raw/live/stale.json",
 				rawResponseSha256: `sha256:${"5".repeat(64)}`,
 				providerObservedAt: "2026-08-30T01:00:03.999Z",
@@ -520,6 +523,7 @@ describe("Local Maps live runner protocol", () => {
 			evidenceEligible: false,
 			provenance: {
 				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: null,
 				rawResponseReference: null,
 				rawResponseSha256: null,
 				providerObservedAt: null,

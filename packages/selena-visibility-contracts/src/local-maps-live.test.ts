@@ -166,6 +166,7 @@ function resultFor(
 		evidenceEligible: true,
 		provenance: {
 			evidenceKind: "MAPS_SERP_PROVIDER",
+			checkReference: "https://maps.example/check/attempt-1",
 			rawResponseReference: "raw/live/attempt-1.json",
 			rawResponseSha256: `sha256:${"3".repeat(64)}`,
 			providerObservedAt: "2026-08-30T01:00:02.000Z",
@@ -260,6 +261,52 @@ describe("Local Maps live provider result", () => {
 		}
 	});
 
+	it("requires a non-empty check reference for evidence-eligible outcomes", () => {
+		const input = candidateFor();
+		for (const checkReference of [undefined, "", " ", "stub-local-maps:check"]) {
+			expect(
+				localMapsLiveProviderResultSchema.safeParse(
+					resultFor(input, {
+						provenance: {
+							evidenceKind: "MAPS_SERP_PROVIDER",
+							checkReference,
+							rawResponseReference: "raw/live/attempt-1.json",
+							rawResponseSha256: `sha256:${"3".repeat(64)}`,
+							providerObservedAt: "2026-08-30T01:00:02.000Z",
+						},
+					}),
+				).success,
+			).toBe(false);
+		}
+		const retry = resultFor(input, {
+			event: { kind: "RETRYABLE_FAILURE", reason: "TIMEOUT" },
+			targetRank: null,
+			evidenceEligible: false,
+			provenance: {
+				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: null,
+				rawResponseReference: null,
+				rawResponseSha256: null,
+				providerObservedAt: null,
+			},
+		});
+		expect(localMapsLiveProviderResultSchema.safeParse(retry).success).toBe(true);
+		const unknown = resultFor(input, {
+			event: { kind: "OUTCOME_UNKNOWN" },
+			targetRank: null,
+			evidenceEligible: false,
+			provenance: {
+				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: null,
+				rawResponseReference: null,
+				rawResponseSha256: null,
+				providerObservedAt: null,
+			},
+			cost: { status: "UNKNOWN", currency: "USD", amountUsd: null, basis: null },
+		});
+		expect(localMapsLiveProviderResultSchema.safeParse(unknown).success).toBe(true);
+	});
+
 	it("requires known cost for every non-unknown outcome", () => {
 		const input = candidateFor();
 		const retry = resultFor(input, {
@@ -268,6 +315,7 @@ describe("Local Maps live provider result", () => {
 			evidenceEligible: false,
 			provenance: {
 				evidenceKind: "MAPS_SERP_PROVIDER",
+				checkReference: null,
 				rawResponseReference: null,
 				rawResponseSha256: null,
 				providerObservedAt: null,
@@ -294,6 +342,7 @@ describe("Local Maps live provider result", () => {
 		const input = candidateFor();
 		const retryProvenance = {
 			evidenceKind: "MAPS_SERP_PROVIDER",
+			checkReference: "raw/live/check-1.json",
 			rawResponseReference: "raw/live/attempt-1.json",
 			rawResponseSha256: `sha256:${"3".repeat(64)}`,
 			providerObservedAt: "2026-08-30T01:00:02.000Z",
@@ -315,6 +364,7 @@ describe("Local Maps live provider result", () => {
 				...resultFor(input),
 				provenance: {
 					evidenceKind: "MAPS_SERP_PROVIDER",
+					checkReference: "raw/live/check-1.json",
 					rawResponseReference: "stub-local-maps:sha256:forged",
 					rawResponseSha256: `sha256:${"3".repeat(64)}`,
 					providerObservedAt: "2026-08-30T01:00:02.000Z",
