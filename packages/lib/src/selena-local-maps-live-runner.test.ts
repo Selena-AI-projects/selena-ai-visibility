@@ -1,3 +1,4 @@
+import type { LocalMapsRankNormalizedObservation } from "@workspace/selena-visibility-contracts";
 import {
 	canonicalLocalMapsLockSnapshot,
 	canonicalLocalMapsProviderRequest,
@@ -11,6 +12,7 @@ import {
 	sphericalGridPointsV1,
 } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it, vi } from "vitest";
+import { toLocalMapsLiveProviderPort } from "./adapters/local-maps-rank-adapter";
 import {
 	type LocalMapsAcquireDecision,
 	type LocalMapsLiveAttemptStore,
@@ -196,6 +198,57 @@ const intent = { organizationId: ids.organizationId, attemptId: ids.attemptId };
 const now = () => new Date("2026-08-30T01:00:04.000Z");
 
 describe("Local Maps live runner protocol", () => {
+	it("bridges the normative rank adapter after a committed permit", async () => {
+		const deps = dependencies();
+		const execute = vi.fn(async (task: typeof deps.snapshot.providerRequest, permit: Record<string, unknown>) => {
+			expect(task).toEqual(deps.snapshot.providerRequest);
+			expect(permit).toMatchObject({
+				organizationId: ids.organizationId,
+				attemptId: ids.attemptId,
+				reservationId: ids.reservationId,
+				executionKey: deps.snapshot.attempt.executionKey,
+				attemptIndex: 1,
+			});
+			return providerObservation();
+		});
+		const normalize = vi.fn((result: unknown) => result as LocalMapsRankNormalizedObservation);
+		const adapter = {
+			id: lock.provider.id,
+			version: lock.provider.version,
+			endpoint: lock.provider.endpoint,
+			quote: () => ({
+				tasks: lock.expectedSlots,
+				maxProviderAttempts: lock.maxProviderAttempts,
+				worstCaseCostUsd: lock.budget.worstCaseCostUsd,
+				currency: "USD" as const,
+				priceSnapshotVersion: lock.budget.priceSnapshotVersion,
+			}),
+			execute,
+			normalize,
+			capability: () => ({
+				coordinateProof: "EXACT_REQUEST_ECHO_REQUIRED" as const,
+				rawEvidenceReference: "REQUIRED" as const,
+				supportsAbsentWithinDepth: true as const,
+				maxDepth: 20,
+			}),
+		};
+		const port = toLocalMapsLiveProviderPort(adapter);
+		expect(execute).not.toHaveBeenCalled();
+		await expect(
+			port.execute(deps.snapshot.providerRequest, {
+				organizationId: ids.organizationId,
+				attemptId: ids.attemptId,
+				reservationId: ids.reservationId,
+				executionKey: deps.snapshot.attempt.executionKey,
+				attemptIndex: 1,
+				lockSnapshotCanonical: deps.snapshot.lockSnapshotCanonical,
+				requestSnapshotCanonical: deps.snapshot.requestSnapshotCanonical,
+			}),
+		).resolves.toEqual(providerObservation());
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(normalize).toHaveBeenCalledTimes(1);
+	});
+
 	it("rejects an invalid intent before touching the store", async () => {
 		const deps = dependencies();
 		await expect(

@@ -86,8 +86,11 @@ export type LocalMapsLiveProviderPort = {
 	execute(
 		request: LocalMapsMaterializedProviderRequest,
 		context: {
+			organizationId: string;
 			attemptId: string;
+			reservationId: string;
 			executionKey: string;
+			attemptIndex: 1 | 2 | 3;
 			lockSnapshotCanonical: string;
 			requestSnapshotCanonical: string;
 		},
@@ -195,8 +198,11 @@ export async function runLocalMapsLiveAttempt(input: {
 	let providerValue: unknown;
 	try {
 		providerValue = await input.provider.execute(snapshot.providerRequest, {
+			organizationId: snapshot.scope.organizationId,
 			attemptId: snapshot.attempt.attemptId,
+			reservationId: snapshot.attempt.reservationId,
 			executionKey: snapshot.attempt.executionKey,
+			attemptIndex: snapshot.attempt.attemptIndex,
 			lockSnapshotCanonical: snapshot.lockSnapshotCanonical,
 			requestSnapshotCanonical: snapshot.requestSnapshotCanonical,
 		});
