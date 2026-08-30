@@ -17,6 +17,7 @@ import {
 	mapsLockSlotPlanSchema,
 	mapsLockV1Schema,
 	materializeLocalMapsProviderRequest,
+	planMapsLockSlots,
 } from "@workspace/selena-visibility-contracts";
 import { and, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -130,6 +131,104 @@ export function buildLocalMapsSubmittedCandidate(input: {
 			priceSnapshotVersion: attempt.priceSnapshotVersion,
 		},
 	});
+}
+
+/**
+ * Loads the source rows needed by the pure builder while the parent attempt is
+ * already locked. This helper only reads tenant-scoped rows; callers still
+ * decide when to invoke it and must keep the surrounding transaction open.
+ */
+export async function loadLocalMapsAttemptSourceSnapshot(input: {
+	tx: Tx;
+	attempt: CandidateAttemptRow;
+}): Promise<LocalMapsAttemptSourceSnapshot> {
+	const { tx, attempt } = input;
+	const [measurementCycle] = await tx
+		.select({
+			id: schema.svMeasurementCycles.id,
+			organizationId: schema.svMeasurementCycles.organizationId,
+			domainId: schema.svMeasurementCycles.domainId,
+			configurationLockId: schema.svMeasurementCycles.configurationLockId,
+		})
+		.from(schema.svMeasurementCycles)
+		.where(
+			and(
+				eq(schema.svMeasurementCycles.id, attempt.measurementCycleId),
+				eq(schema.svMeasurementCycles.organizationId, attempt.organizationId),
+				eq(schema.svMeasurementCycles.domainId, "LOCAL_MAPS"),
+			),
+		)
+		.limit(1);
+	if (!measurementCycle) throw new Error("LOCAL_MAPS_MEASUREMENT_CYCLE_NOT_FOUND");
+	const [localCycle] = await tx
+		.select({
+			id: schema.svLocalScanCycles.id,
+			organizationId: schema.svLocalScanCycles.organizationId,
+			measurementCycleId: schema.svLocalScanCycles.measurementCycleId,
+			configurationLockId: schema.svLocalScanCycles.configurationLockId,
+			provider: schema.svLocalScanCycles.provider,
+		})
+		.from(schema.svLocalScanCycles)
+		.where(
+			and(
+				eq(schema.svLocalScanCycles.measurementCycleId, attempt.measurementCycleId),
+				eq(schema.svLocalScanCycles.organizationId, attempt.organizationId),
+				eq(schema.svLocalScanCycles.domainId, "LOCAL_MAPS"),
+				eq(schema.svLocalScanCycles.configurationLockId, measurementCycle.configurationLockId),
+			),
+		)
+		.limit(1);
+	if (!localCycle) throw new Error("LOCAL_MAPS_LOCAL_CYCLE_NOT_FOUND");
+	const [lockRow] = await tx
+		.select({ id: schema.svConfigurationLocks.id, snapshot: schema.svConfigurationLocks.snapshot })
+		.from(schema.svConfigurationLocks)
+		.where(
+			and(
+				eq(schema.svConfigurationLocks.id, measurementCycle.configurationLockId),
+				eq(schema.svConfigurationLocks.organizationId, attempt.organizationId),
+			),
+		)
+		.limit(1);
+	if (!lockRow) throw new Error("LOCAL_MAPS_CONFIGURATION_LOCK_NOT_FOUND");
+	const lock = mapsLockV1Schema.parse(lockRow.snapshot);
+	const [keywordRow] = await tx
+		.select({ id: schema.svLocalKeywords.id, text: schema.svLocalKeywords.text })
+		.from(schema.svLocalKeywords)
+		.where(
+			and(
+				eq(schema.svLocalKeywords.id, attempt.itemId),
+				eq(schema.svLocalKeywords.organizationId, attempt.organizationId),
+			),
+		)
+		.limit(1);
+	if (!keywordRow || !lock.keywordSet.keywordIds.includes(keywordRow.id))
+		throw new Error("LOCAL_MAPS_KEYWORD_SCOPE_MISMATCH");
+	const slot = planMapsLockSlots(attempt.measurementCycleId, lock).find(
+		(candidate) => candidate.baseSlotKey === attempt.baseSlotKey,
+	);
+	if (!slot) throw new Error("LOCAL_MAPS_SLOT_NOT_FOUND");
+	return {
+		attempt,
+		measurementCycle,
+		localCycle,
+		lockId: lockRow.id,
+		lock,
+		slot,
+		keyword: {
+			id: keywordRow.id,
+			text: keywordRow.text,
+			keywordSetId: lock.keywordSet.id,
+			keywordSetVersion: lock.keywordSet.version,
+		},
+	};
+}
+
+/** Convenience callback for a store dependency; still requires an outer transaction. */
+export async function buildLocalMapsSubmittedCandidateFromDatabase(input: {
+	tx: Tx;
+	attempt: CandidateAttemptRow;
+}): Promise<LocalMapsLiveSubmittedCandidate> {
+	return buildLocalMapsSubmittedCandidate({ source: await loadLocalMapsAttemptSourceSnapshot(input) });
 }
 
 export type LocalMapsAttemptStoreDependencies = {
