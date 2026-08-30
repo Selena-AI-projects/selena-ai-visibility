@@ -445,17 +445,13 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		}
 	}
 
-	async function execute(permit: SelenaExecutablePermit): Promise<RunOutcome> {
-		let scenarioText: string;
-		try {
-			scenarioText = (await deps.resolveScenarioText(permit)).trim();
-		} catch {
-			// Resolution failures are not the provider's; failing here means no
-			// request is made, so the permit is spent without spend.
-			return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
-		}
-		if (scenarioText === "") return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
-
+	/**
+	 * One full request/response cycle against the provider: build the body,
+	 * fire it, and read whatever comes back. Broken out of `execute` so it can
+	 * be attempted more than once — see the retry loop below `execute` calls
+	 * this from.
+	 */
+	async function attemptOnce(permit: SelenaExecutablePermit, scenarioText: string): Promise<RunOutcome> {
 		const controller = new AbortController();
 		// The permit is the authorization window: a call that outlives it would
 		// return an answer nothing is allowed to record any more.
@@ -600,6 +596,68 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		} finally {
 			clearTimeout(timer);
 		}
+	}
+
+	// Bright Data's collectors have been observed to answer with a 200 and a
+	// body carrying none of the recognized answer fields — EMPTY_RESPONSE
+	// (the field was present and blank) or MALFORMED_RESPONSE (no recognized
+	// field at all) — well above a level a single paid attempt should absorb.
+	// Measured against the Perplexity collector on 2026-08-29: 23 of 25 calls,
+	// even sent one at a time with no concurrent load, came back as exactly
+	// this — MALFORMED_RESPONSE, `{ timestamp, input }` and nothing else.
+	//
+	// Owner-approved, deliberate exception to "one permit, one provider call"
+	// (see apps/worker/src/index.ts, the selena-measure queue comment): a
+	// permit still authorizes exactly one *charged* answer, but getting there
+	// may cost more than one call when the provider's own reply is unusable.
+	// Scoped narrowly on purpose:
+	//   - retries ONLY on EMPTY_RESPONSE and MALFORMED_RESPONSE — the two
+	//     reasons that mean "the provider answered but gave us nothing to
+	//     read", never on TIMEOUT, TRANSPORT_ERROR, RESPONSE_TOO_LARGE,
+	//     SNAPSHOT_NOT_READY or a PROVIDER_HTTP_* status — those are a
+	//     different failure and retrying them blindly would be reckless;
+	//   - capped at three retries (four attempts total) so one bad question
+	//     cannot spend without bound;
+	//   - stops the moment an attempt produces a real answer;
+	//   - every attempt's reported cost is kept, not just the last one's, so
+	//     the ledger reflects what was actually spent chasing the answer.
+	const EMPTY_ANSWER_REASONS = new Set(["EMPTY_RESPONSE", "MALFORMED_RESPONSE"]);
+	const MAX_ATTEMPTS = 4;
+
+	async function execute(permit: SelenaExecutablePermit): Promise<RunOutcome> {
+		let scenarioText: string;
+		try {
+			scenarioText = (await deps.resolveScenarioText(permit)).trim();
+		} catch {
+			// Resolution failures are not the provider's; failing here means no
+			// request is made, so the permit is spent without spend.
+			return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
+		}
+		if (scenarioText === "") return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
+
+		// The loop always runs at least once, so this is always overwritten
+		// before use — no throwaway call needed to seed it.
+		let outcome!: RunOutcome;
+		let spentUsd = 0;
+		let sawActualCost = false;
+		for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+			outcome = await attemptOnce(permit, scenarioText);
+			if ("costUsd" in outcome && typeof outcome.costUsd === "number") {
+				spentUsd += outcome.costUsd;
+				sawActualCost = sawActualCost || outcome.costBasis === "actual";
+			}
+			const emptyAnswer = outcome.status === "INVALID" && EMPTY_ANSWER_REASONS.has(outcome.invalidReason ?? "");
+			if (!emptyAnswer) break;
+			if (attempt === MAX_ATTEMPTS) break;
+			if (permit.expiresAt.getTime() - now().getTime() <= 0) break;
+		}
+		// Fold the accumulated spend across every attempt into whichever outcome
+		// is returned, so a run that finally succeeded on attempt three still
+		// bills for the two empty attempts that came before it.
+		if (spentUsd > 0) {
+			return { ...outcome, costUsd: spentUsd, costBasis: sawActualCost ? "actual" : "estimated", provider: "brightdata" };
+		}
+		return outcome;
 	}
 
 	return {
