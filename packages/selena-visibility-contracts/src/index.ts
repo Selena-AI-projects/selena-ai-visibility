@@ -132,6 +132,7 @@ export * from "./local-locks.js";
 export * from "./local-maps-export.js";
 export * from "./local-maps-live.js";
 export * from "./local-maps-rehearsal.js";
+export * from "./local-setup.js";
 export * from "./local-write.js";
 export * from "./measurement-execution.js";
 export * from "./measurement-scope.js";

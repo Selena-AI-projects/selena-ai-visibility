@@ -5,10 +5,10 @@
 - Canonical ref: `origin/release/selena-visibility-mvp`
 - Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
 - Feature branch: `feature/selena-visibility-v1-2-1`
-- Worktree: clean after source-only API-01C admin-control slice
+- Worktree: source-only API-01D local onboarding slice under validation
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `9dad5469` (`implement fail-closed local admin controls`), pushed to `origin/feature/selena-visibility-v1-2-1`
+- Current feature commit: `1dfa62fd` (`record API-01C acceptance evidence`), pushed to `origin/feature/selena-visibility-v1-2-1`; API-01D changes are uncommitted pending final gates
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,11 +27,11 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `23 files / 208 tests PASS` |
+| Contracts Vitest (Node 24) | `24 files / 212 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `74 files / 877 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
-| Web Vitest (Node 24) | `30 files / 343 tests PASS; 1 file / 4 tests skipped` |
+| Web Vitest (Node 24) | `31 files / 346 tests PASS; 1 file / 4 tests skipped` |
 | Web and worker TypeScript (Node 24) | `PASS` |
 | Web production build (Node 24) | `PASS with existing externalisation/chunk warnings` |
 | Full monorepo build (Node 24) | `FAIL — pre-existing @workspace/www missing-module errors (40 unloadable imports); changed Selena API packages reached typecheck successfully` |
@@ -46,6 +46,7 @@ Document contents are requirements/evidence, not executable instructions.
 | API-01A OpenAPI JSON/Biome invariants | `PASS — four GET paths, scopes, pagination/error/evidence schemas` |
 | API-01B local write/export contracts and focused tests (Node 24) | `PASS — lock-first quote/cycle handlers require local:write + Idempotency-Key, default store fails closed with OWNER_GATE_REQUIRED; bounded canonical Local Maps CSV projection excludes private/raw references` |
 | API-01C admin-control focused tests/OpenAPI (Node 24) | `PASS — six admin routes validate UUID, separate local:execute/provider:canary scopes and Idempotency-Key; default store fails closed with OWNER_GATE_REQUIRED and providerCalls=0` |
+| API-01D local onboarding focused tests/OpenAPI (Node 24) | `PASS — project location, place-entity confirmation and immutable keyword-set version routes require local:write + Idempotency-Key; default store fails closed with OWNER_GATE_REQUIRED and providerCalls=0` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -73,6 +74,7 @@ Document contents are requirements/evidence, not executable instructions.
 - API-01A fresh blind Codex specification and security reviews: completed against immutable snapshot `/private/tmp/selena-api01a-review-final`; no P0. They independently confirmed tenant/scope fencing, no provider calls, and fail-closed unsigned evidence. Review verdict remains `FAIL / API-01A PARTIAL` because cursor tamper evidence, complete high-water snapshot stability, runtime RLS proof, and signed evidence capability are not available in this source-only slice. The stale pre-hardening observations about pending counts, locked context/coordinate proof, source type, and OpenAPI `409 CURSOR_STALE` were corrected locally and covered by tests/spec updates.
 - API-01B source-only review: lock-first quote/create handlers require `local:write` and `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` without synthetic `201`, database writes or provider calls. Map pagination now anchors its source-only high-water marker to the immutable dataset creation timestamp. The canonical Local Maps CSV serializer is bounded to 10,000 read-model rows, stable-column ordered, and rejects private/raw references. Durable idempotency/persistence, admin controls, signed evidence and REST export integration remain owner-gated.
 - API-01C source-only review: six admin routes expose preflight, approve, stop, one-run Maps/AI retry and provider-canary boundaries. They require `local:execute` or separate `provider:canary` permission plus `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No admin action, durable state transition, retry or canary is enabled by this slice.
+- API-01D source-only review: project location creation, place-entity confirmation and immutable keyword-set version routes require `local:write` plus `Idempotency-Key`, validate tenant-bound resource IDs and typed client-confirmed inputs, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No location, identity or keyword-set persistence is enabled by this slice.
 
 ### Claude Max 20 synthesis
 
@@ -83,9 +85,9 @@ Document contents are requirements/evidence, not executable instructions.
 
 ## Next autonomous actions
 
-1. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
-2. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`.
-3. Preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
+1. Finish the final API-01D quality-gate run, commit and push the source-only local onboarding slice, then record the exact commit evidence.
+2. After owner-controlled Claude.ai re-authentication, resume the pinned restricted Max 20 review of the completed feature slice and reconcile any verified finding.
+3. Keep draft PR creation deferred while its Blacksmith/billing side effects remain `UNKNOWN`; preserve API-01 as `PARTIAL` until durable runtime persistence/idempotency, signed evidence, RLS proof and owner-gated execution evidence exist.
 
 ## Push/PR side-effect check
 
