@@ -11,10 +11,13 @@ import {
 	expectedLocalObservations,
 	expectedReputationSnapshots,
 	expectedSearchObservations,
+	LOCAL_GRID_FORMULA_VERSION,
 	localCoverage,
 	localVoiceComparison,
 	reviewVelocityPer30Days,
 	shareOfLocalVoice,
+	sphericalGridPointsV1,
+	sphericalGridSpecV1Schema,
 	squareGridPoints,
 	VISIBILITY_SURFACES,
 	visibilityPortfolio,
@@ -153,6 +156,158 @@ describe("Visibility OS local grid", () => {
 		expect(expectedLocalObservations({ locations: 1, keywords: 2, gridPoints: 9, repeats: 2, providers: 1 })).toBe(36);
 		expect(() => assertLocalObservationCardinality(35, 36)).not.toThrow();
 		expect(() => assertLocalObservationCardinality(36, 36)).toThrow("LOCAL_CARDINALITY_BLOCKED");
+	});
+});
+
+describe("Visibility OS spherical local grid v1", () => {
+	const equatorSpec = {
+		formulaVersion: LOCAL_GRID_FORMULA_VERSION,
+		locationId: "22222222-2222-4222-8222-222222222222",
+		centerLatitude: 0,
+		centerLongitude: 0,
+		radiusMeters: 3000,
+		size: 3,
+	} as const;
+
+	it("generates the Bali 5x5 golden points in north-west row-major order", () => {
+		const grid = sphericalGridPointsV1({
+			formulaVersion: LOCAL_GRID_FORMULA_VERSION,
+			locationId: "11111111-1111-4111-8111-111111111111",
+			centerLatitude: -8.506854,
+			centerLongitude: 115.262482,
+			radiusMeters: 3000,
+			size: 5,
+		});
+
+		expect(grid.points).toHaveLength(25);
+		expect(grid.spacingMeters).toBeCloseTo(1060.6601717798212, 10);
+		expect(
+			[grid.points[0], grid.points[12], grid.points[24]].map(({ id, pointIndex, latitude, longitude }) => ({
+				id,
+				pointIndex,
+				latitude,
+				longitude,
+			})),
+		).toEqual([
+			{
+				id: "5819c9ee-d177-522a-a308-87da0e0f25dd",
+				pointIndex: 0,
+				latitude: "-8.487776",
+				longitude: "115.243193",
+			},
+			{
+				id: "db359f4d-a95f-52e6-8276-8bf417ed5c91",
+				pointIndex: 12,
+				latitude: "-8.506854",
+				longitude: "115.262482",
+			},
+			{
+				id: "82ea65fb-a189-5697-a352-4f51d8b98c40",
+				pointIndex: 24,
+				latitude: "-8.525931",
+				longitude: "115.281773",
+			},
+		]);
+		expect(grid.points[0].distanceMeters).toBeCloseTo(3000, 10);
+		expect(grid.points[12].distanceMeters).toBe(0);
+		expect(grid.points[24].distanceMeters).toBeCloseTo(3000, 10);
+	});
+
+	it("matches the equator golden grid and produces standard UUIDv5 identifiers", () => {
+		const grid = sphericalGridPointsV1(equatorSpec);
+		expect(grid.points.map(({ latitude, longitude }) => `${latitude},${longitude}`)).toEqual([
+			"0.019077,-0.019077",
+			"0.019077,0.000000",
+			"0.019077,0.019077",
+			"0.000000,-0.019077",
+			"0.000000,0.000000",
+			"0.000000,0.019077",
+			"-0.019077,-0.019077",
+			"-0.019077,0.000000",
+			"-0.019077,0.019077",
+		]);
+		expect(grid.points[0].id).toBe("ce4d6dc4-df8e-53d8-a035-59260b7e6bd0");
+		for (const point of grid.points) {
+			expect(point.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+		}
+	});
+
+	it("keeps negative longitudes stable", () => {
+		const grid = sphericalGridPointsV1({
+			...equatorSpec,
+			locationId: "33333333-3333-4333-8333-333333333333",
+			centerLatitude: 37.7749,
+			centerLongitude: -122.4194,
+		});
+		expect(
+			[grid.points[0], grid.points[4], grid.points[8]].map(({ latitude, longitude }) => [latitude, longitude]),
+		).toEqual([
+			["37.793975", "-122.443542"],
+			["37.774900", "-122.419400"],
+			["37.755820", "-122.395270"],
+		]);
+	});
+
+	it("normalizes points across the antimeridian", () => {
+		const grid = sphericalGridPointsV1({
+			...equatorSpec,
+			locationId: "44444444-4444-4444-8444-444444444444",
+			centerLongitude: 179.99,
+		});
+		expect(grid.points[2].longitude).toBe("-179.990923");
+		expect(grid.points[5].longitude).toBe("-179.990923");
+		expect(grid.points[8].longitude).toBe("-179.990923");
+	});
+
+	it("keeps rounded antimeridian coordinates inside the canonical range", () => {
+		const nearPositiveBoundary = sphericalGridPointsV1({
+			...equatorSpec,
+			locationId: "55555555-5555-4555-8555-555555555555",
+			centerLongitude: 179.9999996,
+		});
+		const positiveBoundary = sphericalGridPointsV1({
+			...equatorSpec,
+			locationId: "66666666-6666-4666-8666-666666666666",
+			centerLongitude: 180,
+		});
+		const negativeBoundary = sphericalGridPointsV1({
+			...equatorSpec,
+			locationId: "66666666-6666-4666-8666-666666666666",
+			centerLongitude: -180,
+		});
+
+		expect(nearPositiveBoundary.centerLongitude).toBe("-180.000000");
+		for (const point of nearPositiveBoundary.points) {
+			expect(Number(point.longitude)).toBeGreaterThanOrEqual(-180);
+			expect(Number(point.longitude)).toBeLessThan(180);
+		}
+		expect(positiveBoundary).toEqual(negativeBoundary);
+	});
+
+	it("rounds the actual coordinate value half up without moving a below-midpoint value", () => {
+		expect(sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 1.2345644999999998 }).centerLatitude).toBe(
+			"1.234564",
+		);
+		expect(sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 0.08275249999999999 }).centerLatitude).toBe(
+			"0.082752",
+		);
+		expect(sphericalGridPointsV1({ ...equatorSpec, centerLatitude: -1.2345645 }).centerLatitude).toBe("-1.234565");
+	});
+
+	it("repeats the same lock exactly and fails closed outside the MVP boundary", () => {
+		expect(sphericalGridPointsV1(equatorSpec)).toEqual(sphericalGridPointsV1(equatorSpec));
+		expect(sphericalGridSpecV1Schema.safeParse({ ...equatorSpec, size: 7 }).success).toBe(false);
+		expect(sphericalGridSpecV1Schema.safeParse({ ...equatorSpec, radiusMeters: 2999 }).success).toBe(false);
+		expect(sphericalGridSpecV1Schema.safeParse({ ...equatorSpec, centerLatitude: 85.000001 }).success).toBe(false);
+		expect(() => sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 85 })).toThrow(
+			"GRID_POLAR_REGION_UNSUPPORTED",
+		);
+		expect(() => sphericalGridPointsV1({ ...equatorSpec, centerLatitude: -85 })).toThrow(
+			"GRID_POLAR_REGION_UNSUPPORTED",
+		);
+		expect(() => sphericalGridPointsV1({ ...equatorSpec, centerLatitude: 85.000001 })).toThrow(
+			"GRID_POLAR_REGION_UNSUPPORTED",
+		);
 	});
 });
 
