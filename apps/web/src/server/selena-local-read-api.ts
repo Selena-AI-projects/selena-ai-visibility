@@ -27,6 +27,7 @@ import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	encodeSelenaApiCursor,
+	encodeSelenaApiCursorSigned,
 	parseSelenaApiCursor,
 	requireSelenaApiScope,
 	SelenaApiHttpError,
@@ -1202,6 +1203,8 @@ export type SelenaLocalReadRouteDependencies = {
 	api: LocalReadApi;
 	authenticate(request: Request): Promise<LocalReadRouteAuth>;
 	requestId(): string;
+	/** Optional owner-managed HMAC secret; absent keeps source-only cursors unsigned. */
+	cursorSecret?: string;
 };
 
 const defaultRouteDependencies: SelenaLocalReadRouteDependencies = {
@@ -1249,8 +1252,11 @@ function nextCursor(
 	position: LocalReadCursorPosition | null,
 	binding: { tenantId: string; cycleId: string; resource: LocalApiCursorResource },
 	snapshotVersion: string,
+	cursorSecret?: string,
 ): string | null {
-	return position ? encodeSelenaApiCursor({ version: 1, ...binding, snapshotVersion, position }) : null;
+	if (!position) return null;
+	const payload = { version: 1 as const, ...binding, snapshotVersion, position };
+	return cursorSecret ? encodeSelenaApiCursorSigned(payload, cursorSecret) : encodeSelenaApiCursor(payload);
 }
 
 function validateCycleId(cycleId: string): string {
@@ -1285,7 +1291,7 @@ export function createSelenaLocalReadRouteHandlers(
 				requireSelenaApiScope(auth.permissions, "local:read");
 				const validatedCycleId = validateCycleId(cycleId);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "map-results" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
 				const result = await dependencies.api.mapResults({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1297,7 +1303,10 @@ export function createSelenaLocalReadRouteHandlers(
 				return Response.json(
 					localApiMapResultsResponseSchema.parse({
 						...body,
-						page: { limit: query.limit, nextCursor: nextCursor(nextPosition, binding, snapshotVersion) },
+						page: {
+							limit: query.limit,
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+						},
 					}),
 				);
 			} catch (error) {
@@ -1312,7 +1321,7 @@ export function createSelenaLocalReadRouteHandlers(
 				requireSelenaApiScope(auth.permissions, "local:read");
 				const validatedCycleId = validateCycleId(cycleId);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "ai-results" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
 				const result = await dependencies.api.aiResults({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1324,7 +1333,10 @@ export function createSelenaLocalReadRouteHandlers(
 				return Response.json(
 					localApiAiResultsResponseSchema.parse({
 						...body,
-						page: { limit: query.limit, nextCursor: nextCursor(nextPosition, binding, snapshotVersion) },
+						page: {
+							limit: query.limit,
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+						},
 					}),
 				);
 			} catch (error) {
@@ -1339,7 +1351,7 @@ export function createSelenaLocalReadRouteHandlers(
 				requireSelenaApiScope(auth.permissions, "evidence:read");
 				const validatedCycleId = validateCycleId(cycleId);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "evidence" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
 				const result = await dependencies.api.evidence({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1351,7 +1363,10 @@ export function createSelenaLocalReadRouteHandlers(
 				return Response.json(
 					localApiEvidenceResponseSchema.parse({
 						...body,
-						page: { limit: query.limit, nextCursor: nextCursor(nextPosition, binding, snapshotVersion) },
+						page: {
+							limit: query.limit,
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+						},
 					}),
 				);
 			} catch (error) {

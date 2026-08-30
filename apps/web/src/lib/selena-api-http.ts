@@ -164,6 +164,7 @@ export type SelenaApiCursorQuery = {
 export function parseSelenaApiCursor(
 	searchParams: URLSearchParams,
 	binding: LocalApiCursorBinding,
+	cursorSecret?: string,
 ): SelenaApiCursorQuery {
 	if (searchParams.getAll("limit").length > 1 || searchParams.getAll("cursor").length > 1) {
 		throw new SelenaApiHttpError(400, "PAGINATION_QUERY_INVALID", "Limit and cursor may be supplied at most once.");
@@ -183,6 +184,11 @@ export function parseSelenaApiCursor(
 	const rawCursor = searchParams.get("cursor");
 	return {
 		limit,
-		cursor: rawCursor === null ? null : decodeSelenaApiCursor(rawCursor, binding),
+		cursor:
+			rawCursor === null
+				? null
+				: cursorSecret
+					? decodeSelenaApiCursorSigned(rawCursor, binding, cursorSecret)
+					: decodeSelenaApiCursor(rawCursor, binding),
 	};
 }

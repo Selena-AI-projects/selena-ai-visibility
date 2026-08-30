@@ -172,6 +172,15 @@ describe("Selena local API HTTP helpers", () => {
 		expect(parseSelenaApiCursor(new URLSearchParams({ limit: "1" }), binding)).toEqual({ limit: 1, cursor: null });
 	});
 
+	it("parses signed cursors when a route injects an owner-managed secret", () => {
+		const secret = "owner-managed-test-secret";
+		const encoded = encodeSelenaApiCursorSigned(cursorPayload, secret);
+		expect(parseSelenaApiCursor(new URLSearchParams({ cursor: encoded }), binding, secret)).toEqual({
+			limit: 50,
+			cursor: cursorPayload,
+		});
+	});
+
 	it("rejects zero, fractional, padded, negative, and over-limit page sizes", () => {
 		for (const limit of ["0", "1.5", "01", "-1", "201", "", "9007199254740992"]) {
 			expect(() => parseSelenaApiCursor(new URLSearchParams({ limit }), binding)).toThrowError(
