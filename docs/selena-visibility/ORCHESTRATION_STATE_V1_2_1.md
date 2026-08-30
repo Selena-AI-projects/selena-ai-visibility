@@ -3,12 +3,12 @@
 - State: `IN_PROGRESS`
 - Context mode: `repository_only`
 - Canonical ref: `origin/release/selena-visibility-mvp`
-- Canonical SHA: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
+- Canonical SHA: `4ce7a59a5796606631be26566475936c3d74a74b` (current `origin/release/selena-visibility-mvp` resolution)
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Current feature commit: `cde8cad6` (`sync orchestration head evidence`), pushed to `origin/feature/selena-visibility-v1-2-1`; local test graph, build, signed-cursor integration and bidirectional API-01/OpenAPI parity evidence are recorded
+- Last implementation/evidence commit: `37750f9c` (`anchor evidence cursors to full high water`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -54,6 +54,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Signed cursor route integration (Node 24) | `PASS — read-route dependencies optionally inject the HMAC secret; pagination emits and accepts signed cursors when configured, while the default source-only dependency remains unsigned` |
 | OpenAPI ↔ route-tree parity (Node 24) | `PASS — all 26 OpenAPI paths have matching /api/v1 route-tree entries, including dynamic parameter bindings and declared HTTP methods; API-01 admin capabilities is included` |
 | API-01 route ↔ OpenAPI bidirectional parity (Node 24) | `PASS — 16 Selena API-01 OpenAPI paths map to concrete route files and every declared HTTP method is implemented; no missing route or method` |
+| API-01 evidence high-water regression (Node 24) | `PASS — evidence snapshot uses an injected full-set high-water query before page slicing; regression test prevents false CURSOR_STALE on later pages` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -78,7 +79,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: earlier read-only pass completed in an isolated snapshot; no API billing.
 - Claude Code Max 20 / Opus: earlier blind audit completed at pinned commit `d1fe41f8`, auth `claude.ai` / `max`, restricted plan mode with Read/Glob/Grep only, no permission denials, no repository mutation and no API billing. A new pinned review of `3684d93c` was attempted in the same restricted mode but stopped before reading the snapshot with `401 OAuth access token has expired`; preserved session `0638efee-5ca1-4b9e-a57a-6dcc48a1a2f5`. Re-authentication is a credential gate.
-- API-01A fresh blind Codex specification and security reviews: completed against immutable snapshot `/private/tmp/selena-api01a-review-final`; no P0. They independently confirmed tenant/scope fencing, no provider calls, and fail-closed evidence. Review verdict remains `FAIL / API-01A PARTIAL` because the default source-only dependency is unsigned, complete high-water snapshot stability, runtime RLS proof and signed evidence access are not available in this slice. An injectable HMAC cursor capability and route integration now exist, but owner-managed secret provisioning/rotation and runtime proof remain absent. The stale pre-hardening observations about pending counts, locked context/coordinate proof, source type, and OpenAPI `409 CURSOR_STALE` were corrected locally and covered by tests/spec updates.
+- API-01A fresh blind Codex specification and security reviews: completed against immutable snapshot `/private/tmp/selena-api01a-review-final`; no P0. They independently confirmed tenant/scope fencing, no provider calls, and fail-closed evidence. Review verdict remains `FAIL / API-01A PARTIAL` because the default source-only dependency is unsigned, runtime RLS proof and signed evidence access are not available in this slice. Evidence pagination now obtains a full-set high-water marker before page slicing, while durable runtime snapshot consistency remains owner-gated. An injectable HMAC cursor capability and route integration now exist, but owner-managed secret provisioning/rotation and runtime proof remain absent. The stale pre-hardening observations about pending counts, locked context/coordinate proof, source type, and OpenAPI `409 CURSOR_STALE` were corrected locally and covered by tests/spec updates.
 - API-01B source-only review: lock-first quote/create handlers require `local:write` and `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` without synthetic `201`, database writes or provider calls. Map pagination now anchors its source-only high-water marker to the immutable dataset creation timestamp. The canonical Local Maps CSV serializer is bounded to 10,000 read-model rows, stable-column ordered, and rejects private/raw references. Durable idempotency/persistence, admin controls, signed evidence and REST export integration remain owner-gated.
 - API-01C source-only review: six admin routes expose preflight, approve, stop, one-run Maps/AI retry and provider-canary boundaries. They require `local:execute` or separate `provider:canary` permission plus `Idempotency-Key`, pass tenant-bound body hashes to an injected adapter, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No admin action, durable state transition, retry or canary is enabled by this slice.
 - API-01D source-only review: project location creation, place-entity confirmation and immutable keyword-set version routes require `local:write` plus `Idempotency-Key`, validate tenant-bound resource IDs and typed client-confirmed inputs, and default to `503 OWNER_GATE_REQUIRED` with zero provider calls. No location, identity or keyword-set persistence is enabled by this slice.

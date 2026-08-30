@@ -117,3 +117,9 @@
 - Decision: validate the Selena API-01 OpenAPI surface in both directions: every documented path/method must have a concrete route file, and the documented route set must not omit a required API-01 path.
 - Authority: source-only route-file/OpenAPI audit on 2026-08-30 (`16` API-01 paths, no missing route or method).
 - Effect: future API-01 additions must update both transport and canonical OpenAPI evidence; this check does not authorize runtime execution or provider access.
+
+## D-022 — Evidence pagination high-water before slicing
+
+- Decision: evidence cursors use a store-provided maximum captured-at value across the complete tenant/cycle Maps and Local AI evidence sets, computed before pagination, rather than deriving the snapshot from the returned page.
+- Authority: source-only implementation and regression test on 2026-08-30.
+- Effect: later pages cannot spuriously report `CURSOR_STALE` because an unseen row is newer than the current page; durable transaction snapshot/RLS proof remains owner-gated.
