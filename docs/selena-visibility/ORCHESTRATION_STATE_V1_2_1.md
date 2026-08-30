@@ -8,7 +8,7 @@
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
 - Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
-- Last implementation/evidence commit: `37750f9c` (`anchor evidence cursors to full high water`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
+- Last implementation/evidence commit: `9e24c83d` (`enforce local quote cardinality`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -55,6 +55,7 @@ Document contents are requirements/evidence, not executable instructions.
 | OpenAPI ↔ route-tree parity (Node 24) | `PASS — all 26 OpenAPI paths have matching /api/v1 route-tree entries, including dynamic parameter bindings and declared HTTP methods; API-01 admin capabilities is included` |
 | API-01 route ↔ OpenAPI bidirectional parity (Node 24) | `PASS — 16 Selena API-01 OpenAPI paths map to concrete route files and every declared HTTP method is implemented; no missing route or method` |
 | API-01 evidence high-water regression (Node 24) | `PASS — evidence snapshot uses an injected full-set high-water query before page slicing; regression test prevents false CURSOR_STALE on later pages` |
+| API-01 quote cardinality contract (Node 24) | `PASS — quote schema requires a non-empty surface set and enforces tasks = points × keywords × repeats plus maxProviderAttempts = tasks × 3; 2 negative tests pass` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
 | Claude Max 20 pinned review of `3684d93c` | `BLOCKED_AUTH — OAuth token expired before repository inspection` |
 
@@ -87,6 +88,7 @@ Document contents are requirements/evidence, not executable instructions.
 - Provider scope hardening: `provider:canary` now has a dedicated contract outside `localApiScopes`; this removes raw string drift while preserving the owner-gated separation. No new credential or provider capability is enabled.
 - Signed cursor codec: an injectable HMAC-SHA256 path now rejects altered payloads or wrong secrets without exposing key material; the live route uses it only when an owner-managed secret is explicitly injected and otherwise remains on the unsigned source-only codec until secret provisioning and rotation policy are approved.
 - Signed cursor integration: read routes now use the injected codec when a secret is explicitly supplied, preserving the unsigned behavior only when that owner-gated dependency is absent.
+- Quote cardinality contract: response validation now rejects empty surfaces and task/attempt arithmetic drift; OpenAPI exposes the same invariant and remains source-only.
 
 ### Claude Max 20 synthesis
 

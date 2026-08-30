@@ -123,3 +123,9 @@
 - Decision: evidence cursors use a store-provided maximum captured-at value across the complete tenant/cycle Maps and Local AI evidence sets, computed before pagination, rather than deriving the snapshot from the returned page.
 - Authority: source-only implementation and regression test on 2026-08-30.
 - Effect: later pages cannot spuriously report `CURSOR_STALE` because an unseen row is newer than the current page; durable transaction snapshot/RLS proof remains owner-gated.
+
+## D-023 — Quote cardinality invariants
+
+- Decision: validate Local Maps quote responses against a non-empty surface set and the locked arithmetic `tasks = points × keywords × repeats`, `maxProviderAttempts = tasks × 3`.
+- Authority: source-only contract/OpenAPI implementation and negative tests on 2026-08-30.
+- Effect: malformed adapter output cannot silently alter scope or retry exposure; commercial pricing snapshots and durable persistence remain owner-gated.
