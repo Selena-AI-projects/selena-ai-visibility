@@ -309,6 +309,13 @@
       "when": 1787940005000,
       "tag": "0043_visibility_os_local_domain_attempts_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787940006000,
+      "tag": "0044_visibility_os_local_live_persistence",
+      "breakpoints": true
     }
   ]
 }

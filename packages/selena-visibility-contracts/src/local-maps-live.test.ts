@@ -5,6 +5,8 @@ import {
 	assertLocalMapsLiveResultMatchesCandidate,
 	canonicalLocalMapsLockSnapshot,
 	canonicalLocalMapsProviderRequest,
+	canonicalLocalMapsProviderResult,
+	canonicalLocalMapsSubmittedCandidate,
 	LOCAL_MAPS_CANONICALIZATION_VERSION,
 	type LocalMapsLiveSubmittedCandidate,
 	localMapsLiveAttemptEvent,
@@ -174,6 +176,14 @@ function resultFor(
 }
 
 describe("Local Maps live submitted candidate", () => {
+	it("canonicalizes the complete validated candidate with the shared versioned algorithm", () => {
+		const input = candidateFor();
+		const canonical = canonicalLocalMapsSubmittedCandidate(input);
+		expect(JSON.parse(canonical)).toEqual(input);
+		expect(canonical).toContain(`"canonicalizationVersion":"${LOCAL_MAPS_CANONICALIZATION_VERSION}"`);
+		expect(canonicalLocalMapsSubmittedCandidate({ ...input, schemaVersion: 1 })).toBe(canonical);
+	});
+
 	it("binds attempts 1 through 3 to one frozen slot with distinct identities", () => {
 		const attempts = ([1, 2, 3] as const).map(candidateFor);
 		for (const input of attempts)
@@ -221,6 +231,15 @@ describe("Local Maps live submitted candidate", () => {
 });
 
 describe("Local Maps live provider result", () => {
+	it("canonicalizes the complete validated provider result with the same algorithm", () => {
+		const input = candidateFor();
+		const result = localMapsLiveProviderResultSchema.parse(resultFor(input));
+		const canonical = canonicalLocalMapsProviderResult(result);
+		expect(JSON.parse(canonical)).toEqual(result);
+		expect(canonical).toContain(`"canonicalizationVersion":"${LOCAL_MAPS_CANONICALIZATION_VERSION}"`);
+		expect(canonicalLocalMapsProviderResult({ ...result, schemaVersion: 1 })).toBe(canonical);
+	});
+
 	it("accepts live success evidence and binds identity and observation time to the candidate", () => {
 		const input = candidateFor();
 		const result = localMapsLiveProviderResultSchema.parse(resultFor(input));

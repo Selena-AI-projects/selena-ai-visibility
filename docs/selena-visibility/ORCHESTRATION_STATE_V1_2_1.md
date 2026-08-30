@@ -7,8 +7,8 @@
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: clean recovered checkout of the feature branch after an unexpected local workspace loss
 - Current phase: `Phase 0C — source-only live runner and transactional store design`
-- Current slice: `live DTO and at-most-once runner protocol complete; transactional store remains absent`
-- Parent commit for the current slice: `fcbf02bc` (`define honest local maps live contracts`)
+- Current slice: `durable row-version/token and result-persistence prerequisites complete source-only; aggregate budget/store activation remains blocked on explicit owner decisions`
+- Parent commit for the current slice: `24187119` (`add source-only local maps live runner`)
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
 
@@ -27,12 +27,13 @@ Document contents are requirements/evidence, not executable instructions.
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `21 files / 189 tests PASS` |
+| Contracts Vitest (Node 24) | `21 files / 191 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `71 files / 864 tests PASS` |
+| Lib Vitest (Node 24) | `71 files / 867 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Live runner targeted Vitest (Node 24) | `1 file / 21 tests PASS` |
 | Migration 0043 static schema/review | `PASS — not applied` |
+| Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | Shared staging, production, paid providers | `NOT RUN — owner-gated` |
@@ -49,14 +50,16 @@ Document contents are requirements/evidence, not executable instructions.
 - Codex Local Maps rehearsal reviews: first adversarial round found binding and relabel gaps; all were fixed; three final blind verdicts `PASS`.
 - Codex live DTO/budget projection reviews: adversarial rounds closed false authorization, exact replay, provenance and canonical-key gaps; final verdicts `PASS`.
 - Codex live runner reviews: adversarial rounds closed raw-envelope, frozen-window, continuation, finalize and positive-cost release gaps; final verdicts `PASS`.
+- Codex transactional store/RLS/aggregate-cap design: three parallel read-only reviews found missing row fencing, continuation digest, durable result storage and DB-enforced aggregate admission; safe source-only prerequisite boundary agreed.
+- Codex 0044 persistence reviews: three adversarial rounds closed incomplete identity, token reuse, CHECK-null, provider, chronology, disposition and cost-binding gaps; two final blind verdicts `PASS`.
 - Codex rollout-gate review: completed read-only.
 - Claude Code Max 5 / Sonnet: completed read-only in an isolated snapshot; no API billing.
 
 ## Next autonomous actions
 
-1. Commit and push the independently reviewed source-only live runner protocol.
-2. Draft the tenant-scoped transactional store and aggregate cap transaction without applying a migration or registering a provider/queue.
-3. Keep all providers, worker registration, persistence of synthetic results and feature flags disabled.
+1. Commit and push the independently reviewed source-only 0044 row-version/token/candidate/result persistence prerequisites.
+2. Present the four explicit owner decisions needed for the authoritative aggregate budget claim/finalize CAS store.
+3. Keep all migrations, providers, runtime grants, worker registration, persistence of synthetic results and feature flags disabled.
 
 ## Push/PR side-effect check
 

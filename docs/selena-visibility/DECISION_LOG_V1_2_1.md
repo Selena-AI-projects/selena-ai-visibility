@@ -57,3 +57,9 @@
 - Decision: a live adapter receives only the frozen provider request and returns raw observation fields. The runner constructs tenant/cycle/attempt identity itself and may call the adapter only after a transactional store returns one fresh committed `SUBMITTED` continuation. Ambiguous calls never retry; UNKNOWN and estimated zero retain their reservation, positive known cost must be SPENT, and actual known zero cost must be RELEASED.
 - Authority: implementation of the owner-approved duplicate-call and budget-safe defaults, independently reviewed 2026-08-30.
 - Boundary: this source-only protocol is not package-exported or worker-registered. DB atomicity, RLS, migration apply and any real provider call remain `UNKNOWN` / owner-gated.
+
+## D-012 — Durable store sequencing
+
+- Decision: durable row-version/token prerequisites and append-only validated-result storage are a source-only prerequisite slice. The row-version column is not itself a fence: the future transactional writer must require an expected version and exact token digest. Aggregate budget admission must be one authoritative database write, never a read-only `FITS` oracle, and claim/finalize/reconciliation must share one deterministic lock order.
+- Authority: implementation of D-002 and D-003, supported by three independent read-only store/RLS/lock reviews on 2026-08-30.
+- Boundary: monthly period semantics, Configuration Lock budget paths, runtime role/grants and maximum lease TTL remain unresolved owner decisions. No migration apply, grants, store registration or provider activation is implied.

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	bigint,
 	boolean,
 	check,
 	foreignKey,
@@ -72,6 +73,11 @@ export const svMeasurementAttempts = pgTable(
 		baseSlotKey: text("base_slot_key").notNull(),
 		attemptIndex: integer("attempt_index").notNull(),
 		executionKey: text("execution_key").notNull(),
+		rowVersion: bigint("row_version", { mode: "number" }).notNull().default(1),
+		submissionTokenHash: text("submission_token_hash"),
+		submittedCandidateFingerprint: text("submitted_candidate_fingerprint"),
+		submittedCandidateCanonical: text("submitted_candidate_canonical"),
+		submittedCandidate: jsonb("submitted_candidate"),
 		status: text("status").notNull().default("CLAIMED"),
 		budgetState: text("budget_state").notNull().default("RESERVED"),
 		reservedCostUsd: numeric("reserved_cost_usd", { precision: 12, scale: 6 }).notNull(),
@@ -92,6 +98,7 @@ export const svMeasurementAttempts = pgTable(
 		finalInvalidReason: text("final_invalid_reason"),
 		reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
 		reconciliationRef: text("reconciliation_ref"),
+		unknownReason: text("unknown_reason"),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 	},
@@ -109,6 +116,17 @@ export const svMeasurementAttempts = pgTable(
 		activeSlotUnique: uniqueIndex("sv_measurement_attempts_active_slot_unique")
 			.on(table.organizationId, table.baseSlotKey)
 			.where(sql`${table.status} IN ('CLAIMED', 'SUBMITTED')`),
+		submissionTokenUnique: uniqueIndex("sv_measurement_attempts_submission_token_unique")
+			.on(table.submissionTokenHash)
+			.where(sql`${table.submissionTokenHash} IS NOT NULL`),
+		resultIdentityUnique: uniqueIndex("sv_measurement_attempts_result_identity_unique").on(
+			table.id,
+			table.organizationId,
+			table.measurementCycleId,
+			table.reservationId,
+			table.executionKey,
+			table.attemptIndex,
+		),
 		measurementCycleReference: foreignKey({
 			columns: [table.measurementCycleId, table.domainId, table.organizationId],
 			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId, svMeasurementCycles.organizationId],
@@ -137,6 +155,19 @@ export const svMeasurementAttempts = pgTable(
 			.where(sql`${table.status} = 'CLAIMED'`),
 		domainCheck: check("sv_measurement_attempts_domain_check", sql`${table.domainId} IN ('LOCAL_MAPS', 'LOCAL_AI')`),
 		attemptIndexCheck: check("sv_measurement_attempts_attempt_index_check", sql`${table.attemptIndex} BETWEEN 1 AND 3`),
+		rowVersionCheck: check("sv_measurement_attempts_row_version_check", sql`${table.rowVersion} > 0`),
+		submissionTokenCheck: check(
+			"sv_measurement_attempts_submission_token_check",
+			sql`((${table.status} = 'CLAIMED' AND ${table.submissionTokenHash} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submissionTokenHash} IS NOT NULL AND ${table.submissionTokenHash} ~ '^sha256:[a-f0-9]{64}$')) IS TRUE`,
+		),
+		submittedCandidateCheck: check(
+			"sv_measurement_attempts_submitted_candidate_check",
+			sql`((${table.status} = 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.submittedCandidate} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NOT NULL AND ${table.submittedCandidateCanonical} IS NOT NULL AND ${table.submittedCandidate} IS NOT NULL AND ${table.submittedCandidateFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.submittedCandidateCanonical}, 'UTF8')), 'hex') AND ${table.submittedCandidate} = ${table.submittedCandidateCanonical}::jsonb AND jsonb_typeof(${table.submittedCandidate}) = 'object' AND ${table.submittedCandidate} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'scope', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'lock', 'slot', 'keyword', 'providerRequest', 'attempt', 'budgetReservation'] AND ${table.submittedCandidate} - 'schemaVersion' - 'kind' - 'mode' - 'canonicalizationVersion' - 'scope' - 'lockSnapshotCanonical' - 'requestSnapshotCanonical' - 'lock' - 'slot' - 'keyword' - 'providerRequest' - 'attempt' - 'budgetReservation' = '{}'::jsonb AND ${table.submittedCandidate}->>'schemaVersion' = '1' AND ${table.submittedCandidate}->>'kind' = 'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE' AND ${table.submittedCandidate}->>'mode' = 'LIVE_PROVIDER' AND ${table.submittedCandidate}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.submittedCandidate}#>>'{scope,organizationId}' = ${table.organizationId} AND ${table.submittedCandidate}#>>'{scope,measurementCycleId}' = ${table.measurementCycleId}::text AND ${table.submittedCandidate}#>>'{scope,domainId}' = 'LOCAL_MAPS' AND ${table.domainId} = 'LOCAL_MAPS' AND ${table.submittedCandidate}#>>'{attempt,attemptId}' = ${table.id}::text AND ${table.submittedCandidate}#>>'{attempt,reservationId}' = ${table.reservationId}::text AND ${table.submittedCandidate}#>>'{attempt,observationRef}' = ${table.observationRef} AND ${table.submittedCandidate}#>>'{attempt,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{attempt,executionKey}' = ${table.executionKey} AND ${table.submittedCandidate}#>>'{attempt,attemptIndex}' = ${table.attemptIndex}::text AND ${table.submittedCandidate}#>>'{attempt,statusSnapshot}' = 'SUBMITTED' AND (${table.submittedCandidate}#>>'{attempt,claimedAt}')::timestamptz = ${table.claimedAt} AND (${table.submittedCandidate}#>>'{attempt,submittedAt}')::timestamptz = ${table.submittedAt} AND (${table.submittedCandidate}#>>'{attempt,leaseExpiresAt}')::timestamptz = ${table.leaseExpiresAt} AND ${table.submittedCandidate}#>>'{slot,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{slot,pointId}' = ${table.pointId}::text AND ${table.submittedCandidate}#>>'{slot,keywordId}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{keyword,id}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{slot,repeatIndex}' = ${table.repeatIndex}::text AND ${table.submittedCandidate}#>>'{providerRequest,repeatIndex}' = ${table.repeatIndex}::text AND ${table.executorId} !~* '^(stub|noop)(-|$)' AND ${table.submittedCandidate}#>>'{providerRequest,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{lock,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{budgetReservation,currency}' = ${table.currency} AND (${table.submittedCandidate}#>>'{budgetReservation,reservedCostUsd}')::numeric(12, 6) = ${table.reservedCostUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,surfaceCapUsd}')::numeric(12, 6) = ${table.surfaceCapUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,monthlyCapUsd}')::numeric(12, 6) = ${table.monthlyCapUsd} AND ${table.submittedCandidate}#>>'{budgetReservation,priceSnapshotVersion}' = ${table.priceSnapshotVersion})) IS TRUE`,
+		),
+		unknownReasonCheck: check(
+			"sv_measurement_attempts_unknown_reason_check",
+			sql`((${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.unknownReason} IS NOT NULL AND ${table.unknownReason} IN ('COMMITTED_SNAPSHOT_INVALID', 'PROVIDER_CALL_THROWN', 'PROVIDER_RESULT_INVALID', 'FINALIZE_AMBIGUOUS', 'FINALIZE_POSTCONDITION_MISMATCH', 'ESTIMATED_ZERO_COST_UNRECONCILED', 'PROVIDER_OUTCOME_UNKNOWN')) OR (${table.status} <> 'UNKNOWN_RECONCILIATION' AND ${table.unknownReason} IS NULL)) IS TRUE`,
+		),
 		executionIdentityCheck: check(
 			"sv_measurement_attempts_execution_identity_check",
 			sql`${table.baseSlotKey} = ${table.domainId} || '|' || ${table.measurementCycleId}::text || '|' || ${table.pointId}::text || '|' || ${table.itemId}::text || '|' || ${table.executorId} || '|' || ${table.repeatIndex}::text AND ${table.executionKey} = ${table.baseSlotKey} || '|' || ${table.attemptIndex}::text`,
@@ -383,6 +414,13 @@ export const svLocalScanCycles = pgTable(
 	},
 	(table) => ({
 		measurementCycleUnique: uniqueIndex("sv_local_scan_cycles_measurement_cycle_unique").on(table.measurementCycleId),
+		resultIdentityUnique: uniqueIndex("sv_local_scan_cycles_result_identity_unique").on(
+			table.id,
+			table.organizationId,
+			table.measurementCycleId,
+			table.configurationLockId,
+			table.provider,
+		),
 		cycleMatrixUnique: uniqueIndex("sv_local_scan_cycles_id_location_grid_unique").on(
 			table.id,
 			table.locationId,
@@ -407,6 +445,100 @@ export const svLocalScanCycles = pgTable(
 		shapeCheck: check(
 			"sv_local_scan_cycles_shape_check",
 			sql`${table.repeats} > 0 AND ${table.captureDepth} >= 0 AND ${table.worstCaseCostUsd} >= 0`,
+		),
+	}),
+).enableRLS();
+
+export const svMeasurementAttemptResults = pgTable(
+	"sv_measurement_attempt_results",
+	{
+		attemptId: uuid("attempt_id").primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		measurementCycleId: uuid("measurement_cycle_id").notNull(),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		configurationLockId: uuid("configuration_lock_id").notNull(),
+		providerId: text("provider_id").notNull(),
+		reservationId: uuid("reservation_id").notNull(),
+		executionKey: text("execution_key").notNull(),
+		attemptIndex: integer("attempt_index").notNull(),
+		resultFingerprint: text("result_fingerprint").notNull(),
+		resultCanonical: text("result_canonical").notNull(),
+		validatedResult: jsonb("validated_result").notNull(),
+		disposition: jsonb("disposition").notNull(),
+		budgetIncident: text("budget_incident"),
+		requiredBudgetState: text("required_budget_state").notNull(),
+		providerTaskId: text("provider_task_id"),
+		rawResponseReference: text("raw_response_reference"),
+		rawResponseSha256: text("raw_response_sha256"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		attemptReference: foreignKey({
+			columns: [
+				table.attemptId,
+				table.organizationId,
+				table.measurementCycleId,
+				table.reservationId,
+				table.executionKey,
+				table.attemptIndex,
+			],
+			foreignColumns: [
+				svMeasurementAttempts.id,
+				svMeasurementAttempts.organizationId,
+				svMeasurementAttempts.measurementCycleId,
+				svMeasurementAttempts.reservationId,
+				svMeasurementAttempts.executionKey,
+				svMeasurementAttempts.attemptIndex,
+			],
+			name: "sv_measurement_attempt_results_attempt_identity_fk",
+		}),
+		localCycleReference: foreignKey({
+			columns: [
+				table.localCycleId,
+				table.organizationId,
+				table.measurementCycleId,
+				table.configurationLockId,
+				table.providerId,
+			],
+			foreignColumns: [
+				svLocalScanCycles.id,
+				svLocalScanCycles.organizationId,
+				svLocalScanCycles.measurementCycleId,
+				svLocalScanCycles.configurationLockId,
+				svLocalScanCycles.provider,
+			],
+			name: "sv_measurement_attempt_results_local_cycle_identity_fk",
+		}),
+		orgFingerprintUnique: uniqueIndex("sv_measurement_attempt_results_org_fingerprint_unique").on(
+			table.organizationId,
+			table.resultFingerprint,
+		),
+		orgCreatedIdx: index("sv_measurement_attempt_results_org_created_idx").on(table.organizationId, table.createdAt),
+		fingerprintCheck: check(
+			"sv_measurement_attempt_results_fingerprint_check",
+			sql`(${table.resultFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.resultCanonical}, 'UTF8')), 'hex') AND ${table.validatedResult} = ${table.resultCanonical}::jsonb) IS TRUE`,
+		),
+		identityCheck: check(
+			"sv_measurement_attempt_results_identity_check",
+			sql`(jsonb_typeof(${table.validatedResult}) = 'object' AND ${table.validatedResult} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'storageClass', 'organizationId', 'measurementCycleId', 'localCycleId', 'configurationLockId', 'attemptId', 'reservationId', 'executionKey', 'attemptIndex', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'provider', 'externalProviderCalls', 'completedAt', 'event', 'targetRank', 'evidenceEligible', 'provenance', 'cost'] AND ${table.validatedResult}->>'schemaVersion' = '1' AND ${table.validatedResult}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.validatedResult}->>'kind' = 'LOCAL_MAPS_LIVE_PROVIDER_RESULT' AND ${table.validatedResult}->>'mode' = 'LIVE_PROVIDER' AND ${table.validatedResult}->>'storageClass' = 'LIVE_ATTEMPT' AND ${table.validatedResult}->>'organizationId' = ${table.organizationId} AND ${table.validatedResult}->>'measurementCycleId' = ${table.measurementCycleId}::text AND ${table.validatedResult}->>'localCycleId' = ${table.localCycleId}::text AND ${table.validatedResult}->>'configurationLockId' = ${table.configurationLockId}::text AND ${table.validatedResult}->>'attemptId' = ${table.attemptId}::text AND ${table.validatedResult}->>'reservationId' = ${table.reservationId}::text AND ${table.validatedResult}->>'executionKey' = ${table.executionKey} AND ${table.validatedResult}->>'attemptIndex' = ${table.attemptIndex}::text AND ${table.validatedResult}#>>'{provider,id}' = ${table.providerId} AND ${table.validatedResult}->>'externalProviderCalls' = '1') IS TRUE`,
+		),
+		liveShapeCheck: check(
+			"sv_measurement_attempt_results_live_shape_check",
+			sql`(${table.validatedResult} - 'schemaVersion' - 'kind' - 'mode' - 'canonicalizationVersion' - 'storageClass' - 'organizationId' - 'measurementCycleId' - 'localCycleId' - 'configurationLockId' - 'attemptId' - 'reservationId' - 'executionKey' - 'attemptIndex' - 'lockSnapshotCanonical' - 'requestSnapshotCanonical' - 'provider' - 'externalProviderCalls' - 'completedAt' - 'event' - 'targetRank' - 'evidenceEligible' - 'provenance' - 'cost' = '{}'::jsonb AND jsonb_typeof(${table.validatedResult}->'schemaVersion') = 'number' AND jsonb_typeof(${table.validatedResult}->'kind') = 'string' AND jsonb_typeof(${table.validatedResult}->'mode') = 'string' AND jsonb_typeof(${table.validatedResult}->'canonicalizationVersion') = 'string' AND jsonb_typeof(${table.validatedResult}->'storageClass') = 'string' AND jsonb_typeof(${table.validatedResult}->'organizationId') = 'string' AND jsonb_typeof(${table.validatedResult}->'measurementCycleId') = 'string' AND jsonb_typeof(${table.validatedResult}->'localCycleId') = 'string' AND jsonb_typeof(${table.validatedResult}->'configurationLockId') = 'string' AND jsonb_typeof(${table.validatedResult}->'attemptId') = 'string' AND jsonb_typeof(${table.validatedResult}->'reservationId') = 'string' AND jsonb_typeof(${table.validatedResult}->'executionKey') = 'string' AND jsonb_typeof(${table.validatedResult}->'attemptIndex') = 'number' AND jsonb_typeof(${table.validatedResult}->'lockSnapshotCanonical') = 'string' AND length(${table.validatedResult}->>'lockSnapshotCanonical') > 0 AND jsonb_typeof(${table.validatedResult}->'requestSnapshotCanonical') = 'string' AND length(${table.validatedResult}->>'requestSnapshotCanonical') > 0 AND jsonb_typeof(${table.validatedResult}->'externalProviderCalls') = 'number' AND jsonb_typeof(${table.validatedResult}->'completedAt') = 'string' AND jsonb_typeof(${table.validatedResult}->'evidenceEligible') = 'boolean' AND jsonb_typeof(${table.validatedResult}->'provider') = 'object' AND ${table.validatedResult}->'provider' ?& array['id', 'version', 'providerTaskId'] AND ${table.validatedResult}->'provider' - 'id' - 'version' - 'providerTaskId' = '{}'::jsonb AND jsonb_typeof(${table.validatedResult}#>'{provider,id}') = 'string' AND length(${table.validatedResult}#>>'{provider,id}') > 0 AND ${table.validatedResult}#>>'{provider,id}' !~ '[[:space:]]' AND ${table.validatedResult}#>>'{provider,id}' !~* '^(stub|noop)(-|$)' AND jsonb_typeof(${table.validatedResult}#>'{provider,version}') = 'string' AND length(${table.validatedResult}#>>'{provider,version}') > 0 AND ${table.validatedResult}#>>'{provider,version}' !~ '[[:space:]]' AND jsonb_typeof(${table.validatedResult}#>'{provider,providerTaskId}') IN ('string', 'null') AND jsonb_typeof(${table.validatedResult}->'event') = 'object' AND jsonb_typeof(${table.validatedResult}->'provenance') = 'object' AND ${table.validatedResult}->'provenance' ?& array['evidenceKind', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'] AND ${table.validatedResult}->'provenance' - 'evidenceKind' - 'rawResponseReference' - 'rawResponseSha256' - 'providerObservedAt' = '{}'::jsonb AND ${table.validatedResult}#>>'{provenance,evidenceKind}' = 'MAPS_SERP_PROVIDER' AND jsonb_typeof(${table.validatedResult}->'cost') = 'object' AND ${table.validatedResult}->'cost' ?& array['status', 'currency', 'amountUsd', 'basis'] AND ${table.validatedResult}->'cost' - 'status' - 'currency' - 'amountUsd' - 'basis' = '{}'::jsonb AND ${table.validatedResult}#>>'{cost,currency}' = 'USD' AND ((${table.validatedResult}->'event' = '{"kind":"FOUND"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'number' AND mod((${table.validatedResult}->>'targetRank')::numeric, 1) = 0 AND (${table.validatedResult}->>'targetRank')::numeric BETWEEN 1 AND 20 AND ${table.validatedResult}->>'evidenceEligible' = 'true' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string') OR (${table.validatedResult}->'event' = '{"kind":"ABSENT_WITHIN_DEPTH"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'true' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string') OR ((((${table.validatedResult}#>>'{event,kind}' = 'RETRYABLE_FAILURE' AND ${table.validatedResult}->'event' - 'kind' - 'reason' = '{}'::jsonb AND ${table.validatedResult}#>>'{event,reason}' IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT', 'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE')) OR ${table.validatedResult}->'event' = '{"kind":"PROVIDER_AUTH_FAILURE"}'::jsonb) AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'false' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND ((jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'null') OR (jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string')))) OR (${table.validatedResult}->'event' = '{"kind":"OUTCOME_UNKNOWN"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'false' AND ${table.validatedResult}#>>'{cost,status}' = 'UNKNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'null' AND ((jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'null') OR (jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string'))))) IS TRUE`,
+		),
+		dispositionCheck: check(
+			"sv_measurement_attempt_results_disposition_check",
+			sql`(jsonb_typeof(${table.disposition}) = 'object' AND ${table.disposition} ?& array['attemptStatus', 'observationValidity', 'observationOutcome', 'cycleStatus', 'retryAllowed', 'finalInvalidReason'] AND ${table.disposition} - 'attemptStatus' - 'observationValidity' - 'observationOutcome' - 'cycleStatus' - 'retryAllowed' - 'finalInvalidReason' = '{}'::jsonb AND ${table.disposition}->>'attemptStatus' IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION') AND ${table.disposition}->>'observationValidity' IN ('VALID', 'INVALID', 'UNMEASURED') AND ${table.disposition}->>'observationOutcome' IN ('FOUND', 'ABSENT_WITHIN_DEPTH', 'RETRY_PENDING', 'PROVIDER_ERROR', 'PROVIDER_BLOCKED', 'PREFLIGHT_BLOCKED', 'UNKNOWN_RECONCILIATION') AND ${table.disposition}->>'cycleStatus' IN ('RUNNING', 'PARTIAL_FAILURE', 'PROVIDER_BLOCKED', 'PREFLIGHT_BLOCKED', 'STOPPED') AND jsonb_typeof(${table.disposition}->'retryAllowed') = 'boolean' AND jsonb_typeof(${table.disposition}->'finalInvalidReason') IN ('string', 'null')) IS TRUE`,
+		),
+		budgetCheck: check(
+			"sv_measurement_attempt_results_budget_check",
+			sql`(${table.requiredBudgetState} IN ('RESERVED', 'SPENT', 'RELEASED') AND (${table.budgetIncident} IS NULL OR ${table.budgetIncident} = 'REPORTED_COST_EXCEEDS_RESERVATION')) IS TRUE`,
+		),
+		provenanceCheck: check(
+			"sv_measurement_attempt_results_provenance_check",
+			sql`((${table.providerTaskId} IS NULL OR (length(${table.providerTaskId}) > 0 AND ${table.providerTaskId} !~ '[[:space:]]')) AND ((${table.rawResponseReference} IS NULL AND ${table.rawResponseSha256} IS NULL) OR (${table.rawResponseReference} IS NOT NULL AND ${table.rawResponseSha256} IS NOT NULL AND length(${table.rawResponseReference}) > 0 AND ${table.rawResponseReference} !~ '[[:space:]]' AND ${table.rawResponseReference} !~* '^(stub-local-maps:|stub:)' AND ${table.rawResponseSha256} ~ '^sha256:[a-f0-9]{64}$')) AND (${table.validatedResult}#>>'{provider,providerTaskId}') IS NOT DISTINCT FROM ${table.providerTaskId} AND (${table.validatedResult}#>>'{provenance,rawResponseReference}') IS NOT DISTINCT FROM ${table.rawResponseReference} AND (${table.validatedResult}#>>'{provenance,rawResponseSha256}') IS NOT DISTINCT FROM ${table.rawResponseSha256} AND (coalesce((${table.validatedResult}->>'evidenceEligible')::boolean, false) = false OR ${table.rawResponseReference} IS NOT NULL)) IS TRUE`,
 		),
 	}),
 ).enableRLS();

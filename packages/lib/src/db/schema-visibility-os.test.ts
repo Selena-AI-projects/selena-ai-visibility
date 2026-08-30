@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { getTableConfig, getViewConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "./schema";
 
@@ -22,6 +22,7 @@ const localTables = [
 ];
 
 const attemptTables = [schema.svMeasurementAttempts];
+const attemptResultTables = [schema.svMeasurementAttemptResults];
 
 const searchAndReputationTables = [
 	schema.svSearchQueries,
@@ -217,6 +218,11 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"base_slot_key",
 			"attempt_index",
 			"execution_key",
+			"row_version",
+			"submission_token_hash",
+			"submitted_candidate_fingerprint",
+			"submitted_candidate_canonical",
+			"submitted_candidate",
 			"status",
 			"budget_state",
 			"reserved_cost_usd",
@@ -237,12 +243,95 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"final_invalid_reason",
 			"reconciled_at",
 			"reconciliation_ref",
+			"unknown_reason",
 			"created_at",
 			"updated_at",
 		]);
 		expect(
 			getTableConfig(schema.svLocalScanCycles).columns.find((column) => column.name === "domain_id")?.default,
 		).toBe("LOCAL_MAPS");
+	});
+
+	it("exports one append-only result row per tenant-scoped attempt", () => {
+		expect(attemptResultTables.map((table) => getTableConfig(table).name)).toEqual(["sv_measurement_attempt_results"]);
+		const config = getTableConfig(schema.svMeasurementAttemptResults);
+		expect(config.enableRLS).toBe(true);
+		expect(config.columns.map((column) => column.name)).toEqual([
+			"attempt_id",
+			"organization_id",
+			"measurement_cycle_id",
+			"local_cycle_id",
+			"configuration_lock_id",
+			"provider_id",
+			"reservation_id",
+			"execution_key",
+			"attempt_index",
+			"result_fingerprint",
+			"result_canonical",
+			"validated_result",
+			"disposition",
+			"budget_incident",
+			"required_budget_state",
+			"provider_task_id",
+			"raw_response_reference",
+			"raw_response_sha256",
+			"created_at",
+		]);
+		expect(config.columns.find((column) => column.name === "attempt_id")?.primary).toBe(true);
+		expect(config.columns.find((column) => column.name === "validated_result")?.notNull).toBe(true);
+		expect(config.columns.find((column) => column.name === "result_fingerprint")?.notNull).toBe(true);
+		const localCycleReference = config.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_measurement_attempt_results_local_cycle_identity_fk")
+			?.reference();
+		expect(localCycleReference?.columns.map((column) => column.name)).toEqual([
+			"local_cycle_id",
+			"organization_id",
+			"measurement_cycle_id",
+			"configuration_lock_id",
+			"provider_id",
+		]);
+		expect(localCycleReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+			"measurement_cycle_id",
+			"configuration_lock_id",
+			"provider",
+		]);
+		const localCycleIdentity = getTableConfig(schema.svLocalScanCycles).indexes.find(
+			(index) => index.config.name === "sv_local_scan_cycles_result_identity_unique",
+		);
+		expect(localCycleIdentity?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
+			"id",
+			"organization_id",
+			"measurement_cycle_id",
+			"configuration_lock_id",
+			"provider",
+		]);
+	});
+
+	it("renders nullable persistence checks fail-closed in Drizzle", () => {
+		const dialect = new PgDialect();
+		const failClosedNames = [
+			"sv_measurement_attempts_submission_token_check",
+			"sv_measurement_attempts_submitted_candidate_check",
+			"sv_measurement_attempts_unknown_reason_check",
+			"sv_measurement_attempt_results_fingerprint_check",
+			"sv_measurement_attempt_results_identity_check",
+			"sv_measurement_attempt_results_live_shape_check",
+			"sv_measurement_attempt_results_disposition_check",
+			"sv_measurement_attempt_results_budget_check",
+			"sv_measurement_attempt_results_provenance_check",
+		];
+		let checked = 0;
+		for (const table of [schema.svMeasurementAttempts, schema.svMeasurementAttemptResults]) {
+			for (const check of getTableConfig(table).checks.filter((candidate) =>
+				failClosedNames.includes(candidate.name),
+			)) {
+				expect(dialect.sqlToQuery(check.value).sql).toMatch(/\) IS TRUE$/);
+				checked += 1;
+			}
+		}
+		expect(checked).toBe(failClosedNames.length);
 	});
 
 	it("keeps 0043 additive, dual-readable and free of provider execution side effects", () => {
@@ -290,6 +379,111 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).not.toContain("provider_call");
 		expect(migration).not.toContain("sv_local_ai_cycles");
 		expect(journal).toContain('"tag": "0043_visibility_os_local_domain_attempts_expand"');
+	});
+
+	it("keeps 0044 source-only as a row-version and durable-result prerequisite", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0044_visibility_os_local_live_persistence.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+
+		expect(migration).toContain('ADD COLUMN "row_version" bigint DEFAULT 1 NOT NULL');
+		expect(migration).toContain('CHECK ("row_version" > 0)');
+		expect(migration.indexOf('LOCK TABLE "sv_measurement_attempts" IN ACCESS EXCLUSIVE MODE')).toBeLessThan(
+			migration.indexOf('IF EXISTS (SELECT 1 FROM "sv_measurement_attempts")'),
+		);
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_0044_PREFLIGHT_REQUIRES_EMPTY_TABLE");
+		expect(migration).toContain('ADD COLUMN "submission_token_hash" text');
+		expect(migration).toContain('ADD COLUMN "submitted_candidate_fingerprint" text');
+		expect(migration).toContain('ADD COLUMN "submitted_candidate_canonical" text');
+		expect(migration).toContain('ADD COLUMN "submitted_candidate" jsonb');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_attempts_submitted_candidate_check"');
+		expect(migration).toContain("'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE'");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_SUBMITTED_CANDIDATE_IMMUTABLE");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_SUBMITTED_LOCAL_CYCLE_MISMATCH");
+		expect(migration).toContain("#>>'{attempt,observationRef}' = \"observation_ref\"");
+		expect(migration).toContain("#>>'{slot,pointId}' = \"point_id\"::text");
+		expect(migration).toContain("#>>'{budgetReservation,reservedCostUsd}'");
+		expect(migration).toContain('CREATE UNIQUE INDEX "sv_measurement_attempts_submission_token_unique"');
+		expect(migration).toContain('WHERE "submission_token_hash" IS NOT NULL');
+		expect(migration).toContain("'COMMITTED_SNAPSHOT_INVALID'");
+		expect(migration).toContain("'PROVIDER_OUTCOME_UNKNOWN'");
+		expect(migration).toContain('CREATE TABLE "sv_measurement_attempt_results"');
+		expect(migration).toContain('"attempt_id" uuid PRIMARY KEY NOT NULL');
+		expect(migration).toContain('"measurement_cycle_id" uuid NOT NULL');
+		expect(migration).toContain('"local_cycle_id" uuid NOT NULL');
+		expect(migration).toContain('"configuration_lock_id" uuid NOT NULL');
+		expect(migration).toContain('"provider_id" text NOT NULL');
+		expect(migration).toContain('"reservation_id" uuid NOT NULL');
+		expect(migration).toContain('"execution_key" text NOT NULL');
+		expect(migration).toContain('"attempt_index" integer NOT NULL');
+		expect(migration).toContain('"validated_result" jsonb NOT NULL');
+		expect(migration).toContain('"result_canonical" text NOT NULL');
+		expect(migration).toContain('"result_fingerprint" text NOT NULL');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_attempt_results_attempt_identity_fk"');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_attempt_results_local_cycle_identity_fk"');
+		expect(migration).toContain('"id", "organization_id", "measurement_cycle_id", "configuration_lock_id", "provider"');
+		expect(migration).toContain('AND "provider" = NEW."executor_id"');
+		expect(migration).toContain('OR NEW."provider_id" IS DISTINCT FROM parent_attempt."executor_id"');
+		expect(migration).toContain('"validated_result"#>>\'{provider,id}\' = "provider_id"');
+		expect(migration).toContain('CONSTRAINT "sv_measurement_attempt_results_live_shape_check"');
+		expect(migration).toContain("encode(sha256(convert_to(\"result_canonical\", 'UTF8')), 'hex')");
+		expect(migration).toContain('"validated_result" = "result_canonical"::jsonb');
+		expect(migration).toContain('ALTER TABLE "sv_measurement_attempt_results" ENABLE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_measurement_attempt_results"');
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_SUBMISSION_TOKEN_IMMUTABLE");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_UNKNOWN_REASON_IMMUTABLE");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_APPEND_ONLY");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_PRETERMINAL_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_COST_MAPPING_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_SUBMITTED_CANDIDATE_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_EXACT_DISPOSITION_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_NON_LIVE_EVENT_BLOCKED");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_COMPLETED_AT_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_OBSERVED_AT_OUTSIDE_ATTEMPT");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_PARENT_REASON_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_SPENT_PARENT_COST_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_RELEASED_PARENT_COST_MISMATCH");
+		expect(migration).toContain("MEASUREMENT_ATTEMPT_RESULT_UNKNOWN_PARENT_COST_MISMATCH");
+		expect(migration).toContain("'EMPTY_AFTER_3_ATTEMPTS'");
+		expect(migration).toContain("'PROVIDER_UNAVAILABLE'");
+		expect(migration).toContain("'RATE_LIMIT_EXHAUSTED'");
+		expect(migration).toContain("'MALFORMED_AFTER_3_ATTEMPTS'");
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_measurement_attempt_results"');
+		expect(migration).toContain("\"validated_result\"->>'schemaVersion' = '1'");
+		expect(migration).toContain("\"validated_result\"->>'canonicalizationVersion' = 'canonical-json-code-unit-v1'");
+		expect(migration).toContain("FOR UPDATE");
+		expect(migration).toContain('IF NEW."row_version" IS DISTINCT FROM OLD."row_version"');
+		expect(migration).toContain('NEW."row_version" := OLD."row_version" + 1');
+		expect(migration).toContain("!~ '[[:space:]]'");
+		expect(migration).not.toContain("'\\S");
+		for (const constraintName of [
+			"sv_measurement_attempts_submission_token_check",
+			"sv_measurement_attempts_submitted_candidate_check",
+			"sv_measurement_attempts_unknown_reason_check",
+			"sv_measurement_attempt_results_fingerprint_check",
+			"sv_measurement_attempt_results_identity_check",
+			"sv_measurement_attempt_results_live_shape_check",
+			"sv_measurement_attempt_results_disposition_check",
+			"sv_measurement_attempt_results_budget_check",
+			"sv_measurement_attempt_results_provenance_check",
+		]) {
+			const start = migration.indexOf(`CONSTRAINT "${constraintName}"`);
+			const nextAddConstraint = migration.indexOf("\n\tADD CONSTRAINT ", start + 1);
+			const nextConstraint = migration.indexOf("\n\tCONSTRAINT ", start + 1);
+			const tableEnd = migration.indexOf("\n);", start + 1);
+			const end = Math.min(
+				...([nextAddConstraint, nextConstraint, tableEnd].filter((index) => index > start) as number[]),
+			);
+			expect(start).toBeGreaterThan(-1);
+			expect(migration.slice(start, end)).toContain("IS TRUE");
+		}
+		expect(migration).not.toContain("budget_period");
+		expect(migration).not.toContain("monthly_budget");
+		expect(migration).not.toContain("GRANT ");
+		expect(migration).not.toContain("provider_call");
+		expect(journal).toContain('"tag": "0044_visibility_os_local_live_persistence"');
 	});
 });
 
@@ -456,11 +650,11 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through the local-attempt expand as one ordered numbered migration chain", () => {
+	it("registers M2 through local live persistence as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-6)).toEqual([
+		expect(journal.entries.slice(-7)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -471,6 +665,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940005000,
 				tag: "0043_visibility_os_local_domain_attempts_expand",
+				breakpoints: true,
+			},
+			{
+				idx: 44,
+				version: "7",
+				when: 1787940006000,
+				tag: "0044_visibility_os_local_live_persistence",
 				breakpoints: true,
 			},
 		]);

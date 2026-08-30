@@ -233,6 +233,10 @@ export const localMapsLiveSubmittedCandidateSchema = z
 	});
 export type LocalMapsLiveSubmittedCandidate = z.infer<typeof localMapsLiveSubmittedCandidateSchema>;
 
+export function canonicalLocalMapsSubmittedCandidate(candidate: LocalMapsLiveSubmittedCandidate): string {
+	return canonicalJson(localMapsLiveSubmittedCandidateSchema.parse(candidate));
+}
+
 export const localMapsLiveKnownCostSchema = z.strictObject({
 	status: z.literal("KNOWN"),
 	currency: z.literal("USD"),
@@ -334,6 +338,10 @@ export const localMapsLiveProviderResultSchema = z.union([
 	}),
 ]);
 export type LocalMapsLiveProviderResult = z.infer<typeof localMapsLiveProviderResultSchema>;
+
+export function canonicalLocalMapsProviderResult(result: LocalMapsLiveProviderResult): string {
+	return canonicalJson(localMapsLiveProviderResultSchema.parse(result));
+}
 
 export function assertLocalMapsLiveResultMatchesCandidate(
 	inputValue: LocalMapsLiveSubmittedCandidate,
