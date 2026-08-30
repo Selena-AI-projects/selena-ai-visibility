@@ -105,6 +105,7 @@ import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport } fro
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
 import { Route as ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport } from './routes/api/v1/selena/admin/providers/$providerId/canary'
+import { Route as ApiV1SelenaAdminProvidersProviderIdCapabilitiesRouteImport } from './routes/api/v1/selena/admin/providers/$providerId/capabilities'
 import { Route as ApiV1SelenaLocationsLocationIdLocalScanQuoteRouteImport } from './routes/api/v1/selena/locations/$locationId/local-scan/quote'
 import { Route as ApiV1SelenaPilotObservationsObservationIdReviewRouteImport } from './routes/api/v1/selena/pilot/observations/$observationId/review'
 import { Route as ApiV1SelenaPilotCyclesCycleIdTasksIndexRouteImport } from './routes/api/v1/selena/pilot/cycles/$cycleId/tasks/index'
@@ -631,6 +632,12 @@ const ApiV1SelenaAdminProvidersProviderIdCanaryRoute =
     path: '/api/v1/selena/admin/providers/$providerId/canary',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute =
+  ApiV1SelenaAdminProvidersProviderIdCapabilitiesRouteImport.update({
+    id: '/api/v1/selena/admin/providers/$providerId/capabilities',
+    path: '/api/v1/selena/admin/providers/$providerId/capabilities',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute =
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRouteImport.update({
     id: '/api/v1/selena/locations/$locationId/local-scan/quote',
@@ -758,6 +765,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
+  '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -856,6 +864,7 @@ export interface FileRoutesByTo {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
+  '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -960,6 +969,7 @@ export interface FileRoutesById {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
+  '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -1064,6 +1074,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
     | '/api/v1/selena/admin/providers/$providerId/canary'
+    | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1162,6 +1173,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
     | '/api/v1/selena/admin/providers/$providerId/canary'
+    | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1265,6 +1277,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
     | '/api/v1/selena/admin/providers/$providerId/canary'
+    | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
@@ -1331,6 +1344,7 @@ export interface RootRouteChildren {
   ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
   ApiV1SelenaAdminProvidersProviderIdCanaryRoute: typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
+  ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute: typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute: typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   ApiV1SelenaPilotObservationsObservationIdReviewRoute: typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
   ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute: typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
@@ -2011,6 +2025,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/admin/providers/$providerId/capabilities': {
+      id: '/api/v1/selena/admin/providers/$providerId/capabilities'
+      path: '/api/v1/selena/admin/providers/$providerId/capabilities'
+      fullPath: '/api/v1/selena/admin/providers/$providerId/capabilities'
+      preLoaderRoute: typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/locations/$locationId/local-scan/quote': {
       id: '/api/v1/selena/locations/$locationId/local-scan/quote'
       path: '/api/v1/selena/locations/$locationId/local-scan/quote'
@@ -2275,6 +2296,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute,
   ApiV1SelenaAdminProvidersProviderIdCanaryRoute:
     ApiV1SelenaAdminProvidersProviderIdCanaryRoute,
+  ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute:
+    ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute,
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute:
     ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute,
   ApiV1SelenaPilotObservationsObservationIdReviewRoute:
