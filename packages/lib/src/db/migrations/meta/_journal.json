@@ -330,6 +330,13 @@
       "when": 1787940008000,
       "tag": "0046_selena_journal_daily_claims",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787940009000,
+      "tag": "0047_visibility_os_local_attempt_count_cap",
+      "breakpoints": true
     }
   ]
 }

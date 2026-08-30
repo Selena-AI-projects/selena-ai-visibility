@@ -26,13 +26,14 @@ if [[ "$fresh_database" == true ]]; then
 		"$repo_root/packages/lib/src/db/migrations/0043_visibility_os_local_domain_attempts_expand.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0044_visibility_os_local_live_persistence.sql" \
 		"$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql" \
-		"$repo_root/packages/lib/src/db/migrations/0046_selena_journal_daily_claims.sql"; do
+		"$repo_root/packages/lib/src/db/migrations/0046_selena_journal_daily_claims.sql" \
+		"$repo_root/packages/lib/src/db/migrations/0047_visibility_os_local_attempt_count_cap.sql"; do
 		"${psql[@]}" --single-transaction < "$migration" >/dev/null
 	done
 fi
 
-if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_journal_daily_claims') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_journal_daily_claims'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_journal_daily_claims'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('sv_journal_daily_claims_project_organization_fk', 'sv_journal_daily_claims_lock_project_org_fk', 'sv_journal_daily_claims_utc_day_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_journal_daily_claims' AND indexname = 'sv_journal_daily_claims_unresolved_unique' AND indexdef LIKE '%WHERE%') AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_journal_daily_claims'::regclass AND tgname IN ('sv_guard_journal_daily_claim_mutation', 'sv_prevent_journal_daily_claim_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2)")" != "t" ]]; then
-	echo "Gate 12 requires the complete numbered migration chain through 0046" >&2
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_journal_daily_claims') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_journal_daily_claims'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_journal_daily_claims'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('sv_journal_daily_claims_project_organization_fk', 'sv_journal_daily_claims_lock_project_org_fk', 'sv_journal_daily_claims_utc_day_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_journal_daily_claims' AND indexname = 'sv_journal_daily_claims_unresolved_unique' AND indexdef LIKE '%WHERE%') AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_journal_daily_claims'::regclass AND tgname IN ('sv_guard_journal_daily_claim_mutation', 'sv_prevent_journal_daily_claim_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2) AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sv_local_rank_observations'::regclass AND conname = 'sv_local_rank_observations_attempt_count_cap_check' AND convalidated)")" != "t" ]]; then
+	echo "Gate 12 requires the complete numbered migration chain through 0047" >&2
 	exit 1
 fi
 

@@ -7,7 +7,7 @@
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Worktree: clean; source-only signed-cursor route integration and full local quality evidence recorded
 - Current phase: `Phase 0G — owner-gated runtime and acceptance blockers`
-- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims`
+- Completed slice: `0045 domain/Lock/ledger hardening, transactional Lock allocation and order idempotency, factual UI copy, plus 0046 fail-closed journal daily claims and 0047 Local Maps attempt-count cap`
 - Last implementation/evidence commit: `fc3e1d8c` (`enforce explicit tenant boundary on local writes`), pushed to `origin/feature/selena-visibility-v1-2-1`; subsequent ledger commits preserve the same implementation state and record bidirectional API-01/OpenAPI parity
 - Feature flags: off
 - Authorization default: unlisted actions are not authorised
@@ -41,6 +41,7 @@ Document contents are requirements/evidence, not executable instructions.
 | Migration 0044 durable persistence static schema/review | `PASS — two final blind reviews; not applied` |
 | Migration 0045 domain/Lock hardening | `SOURCE/STATIC PASS — targeted tests + two final blind reviews; not applied` |
 | Migration 0046 journal daily claim | `SOURCE/STATIC PASS — targeted tests + final blind review; not applied` |
+| Migration 0047 Local Maps attempt-count cap | `SOURCE/STATIC PASS — validated 1..3 check, legacy-overflow preflight and Gate12 chain update; not applied` |
 | Biome, changed contract/stub files | `PASS` |
 | `git diff --check` | `PASS` |
 | API-01A targeted contracts/API tests (Node 24) | `PASS — four tenant-scoped GET routes, Maps source-type provenance, manual-only Local AI mapping, locked-context/coordinate-proof, pending/ambiguous-pilot fail-closed tests` |
@@ -114,6 +115,6 @@ Document contents are requirements/evidence, not executable instructions.
 - Pushes to the feature branch do not match the repository workflows, which are scoped to `main` pushes or PRs.
 - Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
 
-Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This does not block further source-only implementation. Paid canary remains a later, separate gate.
+Current owner gate: applying migrations even to disposable PostgreSQL requires a separate explicit command under the repository rules. This now includes 0047 and does not block further source-only implementation. Paid canary remains a later, separate gate.
 
 Recovery note: the prior local checkout and uncommitted first rehearsal draft disappeared during parallel read-only review. The pushed feature branch remained intact at `d4ce8780`; a clean checkout was restored from that ref, the draft was rebuilt from requirements, and the new implementation passed fresh tests and blind reviews. No staging, database or provider action was used for recovery.

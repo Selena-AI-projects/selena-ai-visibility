@@ -30,7 +30,7 @@ These decisions are intentionally not inferred from a caller, process locale, or
 | Runtime database role and grant model | `OWNER_DECISION_REQUIRED` | Role activation changes application-wide RLS behavior and can cause an outage without transaction-local tenant plumbing |
 | Maximum live-attempt lease TTL | `OWNER_DECISION_REQUIRED` | The current 300-second examples are test data, not a proven product invariant |
 | `profileReviewLock` contract | `OWNER_DECISION_REQUIRED` | Delta names this child block but never defines its fields; owner must define it or remove it from the required Lock |
-| Rollback posture for migrations 0043–0046 | `OWNER_DECISION_REQUIRED` | Delta requires forward/replay/rollback proof, but destructive down scripts are not defined; owner must approve reversible disposable-DB scripts or an explicit forward-only exception |
+| Rollback posture for migrations 0043–0047 | `OWNER_DECISION_REQUIRED` | Delta requires forward/replay/rollback proof, but destructive down scripts are not defined; owner must approve reversible disposable-DB scripts or an explicit forward-only exception |
 | Commercial cap/retry source of truth | `OWNER_DECISION_REQUIRED` | Delta targets total provider caps of $15/$30 and up to three attempts, while the existing catalog contains $12/$28 and `one_technical_invalid`; no silent product-policy choice is allowed |
 | Legacy public grid API compatibility | `OWNER_DECISION_REQUIRED` | The package still exports the pre-Delta flat-earth `squareGridPoints`; removing or deprecating that public symbol may affect consumers even though no in-repo production caller remains |
 

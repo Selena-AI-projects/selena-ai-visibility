@@ -630,7 +630,7 @@ export const svLocalRankObservations = pgTable(
 		orgCycleIdx: index("sv_local_rank_observations_org_cycle_idx").on(table.organizationId, table.cycleId),
 		captureDepthCheck: check("sv_local_rank_observations_capture_depth_check", sql`${table.captureDepth} >= 0`),
 		repeatCheck: check("sv_local_rank_observations_repeat_check", sql`${table.repeatIndex} >= 0`),
-		attemptCheck: check("sv_local_rank_observations_attempt_check", sql`${table.attemptCount} > 0`),
+		attemptCheck: check("sv_local_rank_observations_attempt_check", sql`${table.attemptCount} BETWEEN 1 AND 3`),
 		rankCheck: check(
 			"sv_local_rank_observations_target_rank_check",
 			sql`${table.targetRank} IS NULL OR (${table.targetRank} > 0 AND ${table.targetRank} <= ${table.captureDepth})`,
