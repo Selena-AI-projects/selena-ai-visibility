@@ -257,3 +257,9 @@
 - Decision: treat the Claude Max5 run pinned to `1abec056` as non-evidence because the verifier detected a repository-status change during the run. Preserve the newly appearing untracked handoff file and do not delete, overwrite or commit it as part of this task.
 - Evidence: verifier result `BLOCKED_REPO_MUTATION`; exact status delta was `?? HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`. No Claude readiness verdict is accepted from that run.
 - Effect: the prior valid Claude review at `421da0ca` remains the latest accepted second-model evidence; a later review may be rerun only from a stable, owner-confirmed baseline.
+
+## D-045 — Store Local AI coordinate proof as distinct evidence
+
+- Decision: bind every `DECLARED_COORDINATE` observer context to a UUID `pointId`, require manual submission to supply a separate coordinate-proof asset, and persist that asset as `COORDINATE_PROOF` beside the required screenshot. A Local AI result becomes `VALID` only when both assets are usable; the public `coordinateProofReference` is the evidence asset UUID and never the private object reference.
+- Evidence: source commit `f9bc622b`; Node 24 contracts `231/231`, web unit `369/369` with four skips, lib `891/891`, contracts/lib/web typechecks, targeted Biome and web production build pass. The first concurrent lib run hit the known five-second 125-slot timeout; isolated `5/5` and the subsequent unchanged full lib run passed.
+- Effect: this supersedes only D-038's then-current transport limitation. `LOCAL-AI-PROOF-01` is source-verified end to end without adding a migration or exposing a provider/runtime path. Hosted/database state remains `UNKNOWN`, and no feature flag, credential, provider, network, staging or production action is enabled.
