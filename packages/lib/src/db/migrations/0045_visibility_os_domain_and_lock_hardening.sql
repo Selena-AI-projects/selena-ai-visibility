@@ -272,14 +272,15 @@ BEGIN
 	SET "domain_id" = 'LOCAL_MAPS'
 	WHERE "domain_id" = 'LOCAL';
 
-	ALTER TABLE "sv_cost_events"
-		ENABLE TRIGGER "sv_prevent_cost_event_mutation";
-
 	SET CONSTRAINTS
 		"sv_local_scan_cycles_measurement_domain_fk",
 		"sv_evidence_index_cycle_domain_fk",
 		"sv_cost_events_measurement_domain_fk"
 	IMMEDIATE;
+
+	-- Re-enable the append-only trigger only after deferred FK events are drained.
+	ALTER TABLE "sv_cost_events"
+		ENABLE TRIGGER "sv_prevent_cost_event_mutation";
 
 	ALTER TABLE "sv_local_scan_cycles"
 		ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk" NOT DEFERRABLE;

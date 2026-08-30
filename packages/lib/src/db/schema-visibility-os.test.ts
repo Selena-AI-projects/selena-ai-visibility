@@ -757,6 +757,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration.indexOf('ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk"')).toBeLessThan(
 			migration.indexOf('ADD CONSTRAINT "sv_configuration_locks_project_organization_fk"'),
 		);
+		expect(migration.indexOf('ENABLE TRIGGER "sv_prevent_cost_event_mutation"')).toBeGreaterThan(
+			migration.indexOf('SET CONSTRAINTS\n'),
+		);
 		expect(migration).toContain('ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk" NOT DEFERRABLE');
 		expect(migration).toContain('ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk" NOT DEFERRABLE');
 		expect(migration).toContain('ALTER CONSTRAINT "sv_cost_events_measurement_domain_fk" NOT DEFERRABLE');
