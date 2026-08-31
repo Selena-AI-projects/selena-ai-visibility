@@ -23,6 +23,8 @@ Latest Claude Max20 blind full-spec review of immutable ref `0f2dd387566f93729f7
 
 The Claude review above covered the preceding export snapshot `0f2dd387`; the later OpenAPI→route coverage hardening at `348f542b` is supported by local tests and was not independently reviewed in that Claude session.
 
+Follow-up Claude Max5 blind review of immutable ref `f6fbacc4236f13a557dc0b9f43b52326debdb66e` completed with Sonnet in restricted read-only mode (`Read`, `Glob`, `Grep` only): 43 turns, zero permission denials, no commands/tests/migrations/database/provider/network actions, and no repository mutation. Session `3b48d59d-1242-4f67-8f8d-c57d9dfc8ddd`; report SHA-256 `5a95a5a939718d074aab6382e8c6742381ab26f66440f0acbb78e720b7ec2184`. The wrapper could not use plan-mode `Write`/`ExitPlanMode`, so Claude produced the required matrix directly with the allowed read-only tools. Verdict remains `NOT READY` for commercial launch; it corroborates the owner-decision boundary and identifies missing automated CI release gates, real payment webhook, runtime DB/RLS proof, signed evidence access and heatmap/UI/browser proof. This was a first-party Claude.ai Max subscription review, not an API/provider call; local checkout status stayed unchanged.
+
 Central Memory credentials and MCP registration are not available in this task. The owner confirmed the repository binding on 2026-08-30, but credential creation remains a separate owner gate. No statement in this ledger claims Central Memory registration.
 
 ## Source set
