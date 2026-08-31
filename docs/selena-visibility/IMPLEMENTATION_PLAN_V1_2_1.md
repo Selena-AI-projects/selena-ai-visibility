@@ -10,7 +10,7 @@ is enabled by this plan.
 
 Current evidence pins:
 
-- source milestone: `348f542b`;
+- source milestone: `42664bc5`;
 - feature branch: `feature/selena-visibility-v1-2-1`;
 - latest accepted Claude Max20 review: `0f2dd387` (Opus, read-only, `NOT READY`);
 - latest orchestration ledger: this tracked file at `HEAD` (implementation-plan state `9b4e23d5`);
