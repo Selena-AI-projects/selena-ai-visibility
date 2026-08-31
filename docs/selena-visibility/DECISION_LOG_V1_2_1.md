@@ -112,11 +112,11 @@
 - Authority: route/OpenAPI parity audit and JSON validation on 2026-08-30.
 - Effect: all 27 documented paths now have route-tree coverage; no provider registry, credential or external call is enabled by the specification update.
 
-## D-021 — Bidirectional API-01 route contract check
+## D-021 — API-01 OpenAPI-to-route contract check
 
-- Decision: validate the Selena API-01 OpenAPI surface in both directions: every documented path/method must have a concrete route file, and the documented route set must not omit a required API-01 path.
-- Authority: source-only route-file/OpenAPI audit on 2026-08-30 (`17` API-01 paths, including the bounded Local Maps CSV export, with no missing route or method).
-- Effect: future API-01 additions must update both transport and canonical OpenAPI evidence; this check does not authorize runtime execution or provider access.
+- Decision: validate the Selena API-01 OpenAPI surface from the canonical document to concrete route files and exact handler method sets, while maintaining an independent manifest of the 17 required API-01 paths. Legacy/pilot route files outside that manifest remain intentionally out of scope.
+- Authority: source-only route-file/OpenAPI audit and executable parity guard on 2026-08-31 (`17` API-01 paths, including the bounded Local Maps CSV export, with no missing route, method or duplicate normalized path).
+- Effect: future API-01 additions must update both transport and canonical OpenAPI evidence plus the independent manifest; this check does not authorize runtime execution or provider access.
 
 ## D-022 — Evidence pagination high-water before slicing
 
