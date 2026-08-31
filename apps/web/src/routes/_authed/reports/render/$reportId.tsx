@@ -284,16 +284,12 @@ function ReportRenderPage() {
 
 	return (
 		<div className="max-w-[780px] mx-auto bg-white print:max-w-none text-slate-900">
-			<style
-				dangerouslySetInnerHTML={{
-					__html: `
+			<style>{`
 				@media print {
 					@page { size: letter; margin: 0.5in 0.6in; }
 					body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 				}
-			`,
-				}}
-			/>
+			`}</style>
 
 			{/* ===== PAGE 1: COVER ===== */}
 			<div className="print:h-[9.5in] print:flex print:flex-col p-10 print:p-0">
@@ -392,8 +388,8 @@ function ReportRenderPage() {
 									.map((c) => ({ name: c.name, sov: c.sov, isBrand: false })),
 							]
 								.sort((a, b) => b.sov - a.sov)
-								.map((row, i) => (
-									<tr key={`sov-${i}`} className={row.isBrand ? "bg-blue-50/30" : ""}>
+								.map((row) => (
+									<tr key={row.name} className={row.isBrand ? "bg-blue-50/30" : ""}>
 										<td className={`py-2.5 px-4 text-sm ${row.isBrand ? "font-semibold" : "text-slate-600"}`}>
 											{row.name}
 										</td>
@@ -440,8 +436,8 @@ function ReportRenderPage() {
 											.map((c) => ({ ...c, isBrand: false })),
 									]
 										.sort((a, b) => b.mentionCount - a.mentionCount)
-										.map((c, i) => (
-											<tr key={`mention-${i}`} className={c.isBrand ? "bg-blue-50/30" : ""}>
+									.map((c) => (
+										<tr key={c.name} className={c.isBrand ? "bg-blue-50/30" : ""}>
 												<td
 													className={`py-2 px-4 text-xs font-medium ${c.isBrand ? "text-slate-900" : "text-slate-700"}`}
 												>
@@ -470,7 +466,10 @@ function ReportRenderPage() {
 
 			{/* ===== CHART PAGES ===== */}
 			{chartPairs.map((pair, pageIdx) => (
-				<div key={pageIdx} className="print:break-before-page print:h-[9.5in] print:flex print:flex-col p-10 print:p-0">
+				<div
+					key={pair.map((prompt) => prompt.promptId).join("-")}
+					className="print:break-before-page print:h-[9.5in] print:flex print:flex-col p-10 print:p-0"
+				>
 					<RunningHeader brand={report.brandName} />
 
 					{pageIdx === 0 ? (

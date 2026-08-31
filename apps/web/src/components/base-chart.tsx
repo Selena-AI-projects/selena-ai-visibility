@@ -50,7 +50,8 @@ function SeriesLegend({
 	onPin: (key: string | null) => void;
 }) {
 	return (
-		<div
+		<fieldset
+			aria-label="Chart series"
 			className="flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-2"
 			onMouseLeave={() => onHover(null)}
 		>
@@ -73,7 +74,7 @@ function SeriesLegend({
 					</button>
 				);
 			})}
-		</div>
+		</fieldset>
 	);
 }
 

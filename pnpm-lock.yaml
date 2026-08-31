@@ -625,6 +625,9 @@ importers:
       dataforseo-client:
         specifier: ^2.1.2
         version: 2.1.2
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@prisma/client@5.22.0)(@types/pg@8.20.3)(@upstash/redis@1.38.1)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.22.0)
@@ -650,9 +653,6 @@ importers:
       '@types/pg':
         specifier: ^8.20.3
         version: 8.20.3
-      drizzle-kit:
-        specifier: ^0.31.10
-        version: 0.31.10
       stripe:
         specifier: ^22.4.0
         version: 22.4.0(@types/node@26.1.2)
@@ -682,6 +682,9 @@ importers:
   packages/og:
     dependencies:
       '@fontsource/geist-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/titan-one':
         specifier: ^5.3.0
         version: 5.3.0
       '@resvg/resvg-js':
@@ -1357,6 +1360,7 @@ packages:
 
   '@better-auth/cli@1.4.22':
     resolution: {integrity: sha512-7azgrNiP1zJXMLqoLgCVj3KsZeYWLHeaGMapYlLblS6yU/o5n//sn1HBasRD2z4HBy2Etz/C7V483/mYvRHI2g==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     hasBin: true
 
   '@better-auth/core@1.4.22':

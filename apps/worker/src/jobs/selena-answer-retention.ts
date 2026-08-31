@@ -7,9 +7,25 @@ export interface SelenaAnswerRetentionData {
 	source?: string;
 }
 
+export interface SelenaAnswerRetentionScheduler {
+	schedule(name: string, cron: string, data: SelenaAnswerRetentionData, options: { tz: string }): Promise<unknown>;
+	unschedule(name: string): Promise<unknown>;
+}
+
 /** Unset means off: deleting customer evidence is an owner decision. */
 export function isAnswerRetentionEnabled(value: string | undefined): boolean {
 	return value === "true";
+}
+
+export async function reconcileAnswerRetentionSchedule(
+	scheduler: SelenaAnswerRetentionScheduler,
+	enabledValue: string | undefined,
+): Promise<void> {
+	if (isAnswerRetentionEnabled(enabledValue)) {
+		await scheduler.schedule("selena-answer-retention", "30 3 * * *", { source: "scheduled" }, { tz: "UTC" });
+		return;
+	}
+	await scheduler.unschedule("selena-answer-retention");
 }
 
 /**

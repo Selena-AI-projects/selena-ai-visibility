@@ -991,12 +991,13 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"visibility_os_gate12_e2e.sh",
 			"visibility_os_0045_hardening_e2e.sh",
 			"visibility_os_0049_lifecycle_e2e.sh",
+			"visibility_os_0051_rls_schema_proof_e2e.sh",
 			"visibility_os_0052_snapshot_journal_e2e.sh",
 		].map((name) => readFileSync(new URL(`../../../../tools/${name}`, import.meta.url), "utf8"));
 
 		expect(wrapper).toContain("mode='dry-run'");
 		expect(wrapper).toContain("--run) mode='run'");
-		expect(wrapper).toContain("gate12|0045|0049|0052");
+		expect(wrapper).toContain("gate12|0045|0049|0051|0052");
 		expect(wrapper.indexOf("if [[ \"$mode\" == 'dry-run' ]]")).toBeLessThan(wrapper.indexOf("command -v docker"));
 		expect(wrapper).toMatch(/compose_project="selena-visibility-rehearsal-\$\{PPID\}-\$\$-\$\{random_suffix\}"/);
 		expect(wrapper).toContain("label=com.docker.compose.project=$compose_project");

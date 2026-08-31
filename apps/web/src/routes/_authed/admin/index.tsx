@@ -1,7 +1,7 @@
 /**
  * /admin - Admin dashboard with brand statistics and charts
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { createFileRoute, Link, useRouteContext } from "@tanstack/react-router";
 import type { ClientConfig } from "@workspace/config/types";
 import { getAppName } from "@/lib/route-head";
@@ -274,7 +274,7 @@ function AdminDashboard() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	const fetchBrandStats = async () => {
+	const fetchBrandStats = useCallback(async () => {
 		try {
 			const data = await getAdminStatsFn();
 			setBrands(data.brands as any);
@@ -287,11 +287,11 @@ function AdminDashboard() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		fetchBrandStats();
-	}, []);
+	}, [fetchBrandStats]);
 
 	if (loading) {
 		return (

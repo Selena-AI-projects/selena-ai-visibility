@@ -356,6 +356,7 @@ function PromptHistoryPage() {
 // =====================================================================
 
 function TabLoadingSkeleton({ lines = 3 }: { lines?: number }) {
+	const placeholders = Array.from({ length: lines }, (_, index) => `loading-line-${index}`);
 	return (
 		<Card>
 			<CardHeader>
@@ -364,8 +365,8 @@ function TabLoadingSkeleton({ lines = 3 }: { lines?: number }) {
 			</CardHeader>
 			<Separator />
 			<CardContent className="space-y-4 pt-6">
-				{Array.from({ length: lines }).map((_, i) => (
-					<Skeleton key={i} className="h-8 w-full" />
+				{placeholders.map((placeholder) => (
+					<Skeleton key={placeholder} className="h-8 w-full" />
 				))}
 			</CardContent>
 		</Card>
@@ -578,10 +579,11 @@ function ResponsesTab({
 		typeof rawOutput === "string" ? rawOutput : JSON.stringify(rawOutput, null, 2);
 
 	if (isLoading && runs.length === 0) {
+		const placeholders = ["first", "second", "third"];
 		return (
 			<div className="space-y-4">
-				{Array.from({ length: 3 }).map((_, i) => (
-					<Card key={i}>
+				{placeholders.map((placeholder) => (
+					<Card key={placeholder}>
 						<CardHeader className="pb-0 gap-y-0">
 							<div className="grid grid-cols-3 gap-x-4">
 								<div>
@@ -642,8 +644,8 @@ function ResponsesTab({
 							<div>
 								<span className="text-xs text-muted-foreground block mb-1.5">Web Queries</span>
 								<div className="flex flex-wrap gap-1.5">
-									{run.webQueries.map((query: string, qIndex: number) => (
-										<Badge key={qIndex} variant="outline" className="text-xs font-normal">
+									{run.webQueries.map((query: string) => (
+										<Badge key={query} variant="outline" className="text-xs font-normal">
 											{query}
 										</Badge>
 									))}
@@ -655,8 +657,8 @@ function ResponsesTab({
 							<span className="text-xs text-muted-foreground block mb-1.5">Brands Mentioned</span>
 							<div className="flex flex-wrap gap-1.5">
 								{run.brandMentioned && brandName && <Badge className="text-xs font-normal">{brandName}</Badge>}
-								{run.competitorsMentioned?.map((competitor: string, cIndex: number) => (
-									<Badge key={cIndex} variant="outline" className="text-xs font-normal">
+								{run.competitorsMentioned?.map((competitor: string) => (
+									<Badge key={competitor} variant="outline" className="text-xs font-normal">
 										{competitor}
 									</Badge>
 								))}

@@ -112,6 +112,27 @@ export function ProgressBarChart({
 				const color = getItemColor(item);
 				const isHighlighted = highlightLabel && item.label === highlightLabel;
 				const isClickable = !!item.onClick;
+				const labelClassName = cn(
+					"text-sm",
+					item.tooltip && "cursor-default",
+					isHighlighted ? "font-bold" : "font-medium",
+					truncateLabels && "truncate",
+					isClickable && "cursor-pointer hover:underline",
+				);
+				const label = item.onClick ? (
+					<button
+						type="button"
+						className={cn(
+							labelClassName,
+							"min-h-11 min-w-11 p-0 text-left focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
+						)}
+						onClick={item.onClick}
+					>
+						{item.label}
+					</button>
+				) : (
+					<span className={labelClassName}>{item.label}</span>
+				);
 
 				return (
 					<div key={item.label} className="space-y-2">
@@ -119,33 +140,11 @@ export function ProgressBarChart({
 							<div className="flex items-center gap-1 min-w-0 flex-1">
 								{item.tooltip ? (
 									<Tooltip>
-										<TooltipTrigger asChild>
-											<span
-												className={cn(
-													"text-sm cursor-default",
-													isHighlighted ? "font-bold" : "font-medium",
-													truncateLabels && "truncate",
-													isClickable && "cursor-pointer hover:underline",
-												)}
-												onClick={item.onClick}
-											>
-												{item.label}
-											</span>
-										</TooltipTrigger>
+										<TooltipTrigger asChild>{label}</TooltipTrigger>
 										<TooltipContent className="max-w-xs text-xs font-normal">{item.tooltip}</TooltipContent>
 									</Tooltip>
 								) : (
-									<span
-										className={cn(
-											"text-sm",
-											isHighlighted ? "font-bold" : "font-medium",
-											truncateLabels && "truncate",
-											isClickable && "cursor-pointer hover:underline",
-										)}
-										onClick={item.onClick}
-									>
-										{item.label}
-									</span>
+									label
 								)}
 								{item.action}
 							</div>

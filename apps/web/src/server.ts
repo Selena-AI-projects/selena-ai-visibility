@@ -39,10 +39,15 @@ const SECURITY_HEADERS: Record<string, string> = {
 };
 
 function addSecurityHeaders(response: Response): Response {
+	const headers = new Headers(response.headers);
 	for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
-		response.headers.set(key, value);
+		headers.set(key, value);
 	}
-	return response;
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 export default createServerEntry(

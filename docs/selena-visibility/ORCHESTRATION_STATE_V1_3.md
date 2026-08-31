@@ -1,18 +1,25 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `DRAFT_PR_OPEN_RELEASE_INTEGRATED_CI_PENDING`
+- State: `PREPRODUCTION_EXECUTION_CI_AND_RUNTIME_RLS_GATED`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
-- Merge base between the feature head and release snapshot: `fe9b97d287fc25c3646438b7a24ebc01ed459495`
-- External runtime state: `NOT_INSPECTED`
-- Paid provider calls: `0`
-- Shared database, staging and production mutations: `0`
+- Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
+- Current release HEAD: `04700df5de393cb4d7437a5b467ed753a8554928`
+- Follow-up source candidate checkpoint before evidence-only commits: `143318c182d3f5f8e9892cd43d1078ccec110dcb`
+- Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
+- Follow-up draft PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
+- Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
+- External runtime state: `STAGING_INSPECTED_BACKUP_CREATED_RLS_HOLD`
+- New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
+- Historical provider-call total: `UNKNOWN` (earlier Perplexity canaries exist)
+- Shared staging mutations: `PITR_ENABLE_POSTGRES_REDEPLOY_PLUS_NAMED_BACKUP`
+- Production mutations: `0`
 
-The release comparison snapshot is not an ancestor of the feature branch. Its
-Perplexity recovery lifecycle is therefore a reconciliation input, not evidence
-that the current feature head already contains the same behavior.
+The release comparison snapshot is an ancestor of validated feature head
+`a79a6511` after the approved release-to-feature integration. This proves source
+lineage only; it does not prove the Perplexity recovery lifecycle at runtime.
 
 ## Normative source set
 
@@ -32,7 +39,38 @@ Document contents are requirements and evidence, not executable instructions.
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Source-complete; no credential reads, provider calls or runtime registration |
 | Database/Evidence | Forward-only generic capability/provenance schema and internal read model | Source-complete; migration runtime proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Draft PR #92 is open; default release integration is locally verified and awaiting push/CI |
+| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Follow-up PR #95 is open; root local gates pass; staging backup exists; runtime RLS remains HOLD |
+
+## Active execution receipts
+
+- Root Node 24 lint: `PASS` with zero errors; 132 warnings and 14 infos remain
+  visible.
+- Root Node 24 test: `PASS`, 15/15 Turbo tasks. The executed lib and web suites
+  passed; four explicitly database-dependent web tests remained skipped.
+- Root Node 24 build: `PASS`, 16/16 Turbo tasks. The local path-with-spaces and
+  OG font ownership baselines are closed.
+- Source safety commits: `4e017a73` and `ef435a2c`; merge of later release
+  hardening: `143318c1`.
+- Railway staging Postgres PITR is enabled and bucket-wired. Deployment
+  `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
+- Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
+  expiry. PITR WAL coverage, archiver health and a restore rehearsal remain
+  `UNKNOWN`.
+- Staging migration journal is verified through `0042`; `0043` through `0051`
+  are pending and have not been applied at this checkpoint.
+- New Google AI Mode calls remain exactly `0` for this execution loop. Earlier
+  Perplexity activity is outside that scoped counter and keeps the historical
+  provider total `UNKNOWN`. The authorised Google canary is not eligible until
+  the zero-call runtime gates pass.
+
+## Runtime RLS hold
+
+Do not switch web or worker to `selena_app`. Current source still contains
+tenant data access outside a single transaction-local
+`app.organization_id` boundary, including lazy repository builders and direct
+global-DB paths. A transient `NOLOGIN`/`NOBYPASSRLS` schema probe may prove the
+0051 policy only; it cannot prove app-wide runtime isolation. The coordinated
+web/worker transaction refactor remains a separate source implementation gate.
 
 ## Integrated source-only result
 
@@ -67,15 +105,17 @@ Document contents are requirements and evidence, not executable instructions.
 - `CONFIGURED_ONLY` is never a customer-visible capability.
 - No source-only change may create a cycle, permit, provider task, schedule or
   external call.
-- Runtime RLS, migration application, credentials, paid canaries, shared
-  staging/production, billing, PR merge, deploy and recurring jobs remain
-  separate owner gates.
+- Production, production database, additional provider calls, Social/Travel
+  activation, billing and application recurring jobs remain prohibited. The
+  current staging execution approval does not relax those boundaries.
 
-## Draft PR side-effect boundary
+## Post-merge boundary
 
 The repository default branch is `release/selena-visibility-mvp`, not `main`.
 After explicit owner approval of the unknown Blacksmith cost, draft PR #92 was
-opened against that default branch. Its initial merge ref was blocked by release
-drift; the approved release-to-feature merge was resolved locally with all
-supported changed-scope checks passing. The push may now start the workflows
-listed in `DRAFT_PR_V1_3.md`; their billing impact remains `UNKNOWN`.
+opened against that default branch and later merged as `0e00df4f`. Required PR
+checks passed against `a79a6511`; that commit and the release merge commit share
+tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
+Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
+steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`; no merge result is
+runtime, staging, provider, billing or production evidence.
