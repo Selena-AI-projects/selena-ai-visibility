@@ -26,17 +26,37 @@ describe("cycleProgressAfterRunCompletion", () => {
 		});
 	});
 
-	it.each(["INVALID", "FAILED"] as const)("stops a Perplexity cycle after its first %s run", (runStatus) => {
-		expect(
-			cycleProgressAfterRunCompletion({
-				status: "RUNNING",
-				completedRuns: 0,
-				expectedRuns: 25,
-				systemId: "Perplexity",
-				runStatus,
-			}),
-		).toEqual({ status: "STOPPED", completedRuns: 1, cycleDone: false });
-	});
+	it.each(["INVALID", "FAILED"] as const)(
+		"stops a Perplexity cycle when a %s run reports a contract rejection",
+		(runStatus) => {
+			expect(
+				cycleProgressAfterRunCompletion({
+					status: "RUNNING",
+					completedRuns: 0,
+					expectedRuns: 25,
+					systemId: "Perplexity",
+					runStatus,
+					invalidReason: "PROVIDER_HTTP_400",
+				}),
+			).toEqual({ status: "STOPPED", completedRuns: 1, cycleDone: false });
+		},
+	);
+
+	it.each(["TIMEOUT", "SNAPSHOT_NOT_READY", "EMPTY_RESPONSE", "MALFORMED_RESPONSE", "PROVIDER_HTTP_502"])(
+		"keeps a Perplexity cycle running through an isolated %s failure",
+		(invalidReason) => {
+			expect(
+				cycleProgressAfterRunCompletion({
+					status: "RUNNING",
+					completedRuns: 0,
+					expectedRuns: 25,
+					systemId: "Perplexity",
+					runStatus: "INVALID",
+					invalidReason,
+				}),
+			).toEqual({ status: "RUNNING", completedRuns: 1, cycleDone: false });
+		},
+	);
 
 	it("keeps a successful Perplexity cycle running and does not widen the breaker to other systems", () => {
 		expect(
