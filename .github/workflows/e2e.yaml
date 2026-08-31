@@ -102,6 +102,8 @@ jobs:
           # E2E test overrides
           ADMIN_API_KEYS=test-api-key-e2e
           ONBOARDING_LLM_TARGET=stub:stub
+          SELENA_MEASUREMENT_ENABLED=true
+          SELENA_EMERGENCY_STOP=false
           SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
           PATCH
 

@@ -63,7 +63,7 @@ describe("Bright Data dataset lifecycle client", () => {
 		);
 		const client = createBrightDataDatasetClient({
 			transport: transportWith({ trigger }),
-			lifecycle: { ...lifecycle, timeoutMs: 5 },
+			lifecycle: { ...lifecycle, triggerTimeoutMs: 5 },
 		});
 
 		await expect(client.collect(preparedCanary())).rejects.toThrow("BRIGHTDATA_DATASET_TRIGGER_TIMEOUT");

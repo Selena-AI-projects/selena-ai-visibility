@@ -155,6 +155,9 @@ export type ProviderDatasetAccessRequest = Readonly<{
 	redactionPolicyApproved: boolean;
 	privacyReviewApproved?: boolean;
 	retentionReviewApproved?: boolean;
+	deletionPropagationApproved?: boolean;
+	legalHoldPolicyApproved?: boolean;
+	sourceTermsApproved?: boolean;
 	travelProductGateApproved?: boolean;
 }>;
 
@@ -462,6 +465,12 @@ export function assertProviderDatasetAccess(
 	if (!request.redactionPolicyApproved) throw new Error(`PROVIDER_DATASET_REDACTION_POLICY_REQUIRED:${source}`);
 	if (definition.domain === "SOCIAL" && (!request.privacyReviewApproved || !request.retentionReviewApproved))
 		throw new Error(`PROVIDER_DATASET_SOCIAL_POLICY_GATE_REQUIRED:${source}`);
+	if (definition.domain === "SOCIAL" && !request.deletionPropagationApproved)
+		throw new Error(`PROVIDER_DATASET_SOCIAL_DELETION_GATE_REQUIRED:${source}`);
+	if (definition.domain === "SOCIAL" && !request.legalHoldPolicyApproved)
+		throw new Error(`PROVIDER_DATASET_SOCIAL_LEGAL_HOLD_GATE_REQUIRED:${source}`);
+	if (definition.domain === "SOCIAL" && !request.sourceTermsApproved)
+		throw new Error(`PROVIDER_DATASET_SOCIAL_SOURCE_TERMS_GATE_REQUIRED:${source}`);
 	if (definition.domain === "TRAVEL" && !request.travelProductGateApproved)
 		throw new Error(`PROVIDER_DATASET_TRAVEL_GATE_REQUIRED:${source}`);
 }

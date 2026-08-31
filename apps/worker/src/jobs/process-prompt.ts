@@ -1,8 +1,6 @@
 import * as Sentry from "@sentry/node";
-import { getDeployment } from "@workspace/deployment";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
-import { upsertPromptRunAggregate } from "@workspace/lib/prompt-run-aggregates";
 import {
 	type Brand,
 	brands,
@@ -14,10 +12,14 @@ import {
 	usageEvents,
 } from "@workspace/lib/db/schema";
 import { type Entitlements, getOrgEntitlements } from "@workspace/lib/entitlements";
+import { upsertPromptRunAggregate } from "@workspace/lib/prompt-run-aggregates";
 import { getProvider, type ModelConfig, type Provider, parseScrapeTargets } from "@workspace/lib/providers";
 import { failureBackoffHours } from "@workspace/lib/run-backoff";
 import {
 	dailyRunCeiling,
+	enqueueLegacyProviderWork,
+	executeLegacyProviderTransport,
+	isLegacyProviderExecutionEnabled,
 	lastRunQueryWindowMs,
 	type PromptRunPlan,
 	resolveBrandPromptRunPlans,
@@ -79,16 +81,22 @@ async function scheduleNextRun(promptId: string, cadenceHours: number, consecuti
 	const startAfterSeconds = Math.round(delayHours * 60 * 60);
 
 	try {
-		await boss.send(
-			"process-prompt",
-			{ promptId, consecutiveFailures },
-			{
-				singletonKey: `prompt-${promptId}`,
-				singletonSeconds: startAfterSeconds, // Prevent duplicates until the next attempt is due
-				startAfter: startAfterSeconds,
-				...PROMPT_JOB_OPTIONS,
-			},
+		const result = await enqueueLegacyProviderWork(() =>
+			boss.send(
+				"process-prompt",
+				{ promptId, consecutiveFailures },
+				{
+					singletonKey: `prompt-${promptId}`,
+					singletonSeconds: startAfterSeconds, // Prevent duplicates until the next attempt is due
+					startAfter: startAfterSeconds,
+					...PROMPT_JOB_OPTIONS,
+				},
+			),
 		);
+		if (result === undefined) {
+			console.log(`Skipped next run for prompt ${promptId}: legacy provider execution is disabled`);
+			return;
+		}
 		const reason = consecutiveFailures > 0 ? ` (backing off after ${consecutiveFailures} failed cycle(s))` : "";
 		console.log(`Scheduled next run for prompt ${promptId} in ${delayHours}h${reason}`);
 	} catch (error) {
@@ -178,7 +186,10 @@ async function getLastRunsByTargetKey(promptId: string, maxIntervalHours: number
 	const map = new Map<string, Date>();
 	for (const row of rows) {
 		if (!row.provider) continue;
-		map.set(targetKey({ model: row.model, provider: row.provider, webSearch: row.webSearchEnabled }), new Date(row.lastRunAt));
+		map.set(
+			targetKey({ model: row.model, provider: row.provider, webSearch: row.webSearchEnabled }),
+			new Date(row.lastRunAt),
+		);
 	}
 	return map;
 }
@@ -359,10 +370,12 @@ async function runModelIteration({
 	const logPrefix = `[${config.model}_${runIndex}]`;
 
 	try {
-		const result = await providerImpl.run(config.model, promptValue, {
-			webSearch: config.webSearch,
-			version: config.version,
-		});
+		const result = await executeLegacyProviderTransport(() =>
+			providerImpl.run(config.model, promptValue, {
+				webSearch: config.webSearch,
+				version: config.version,
+			}),
+		);
 
 		// `webQueries` is stored exactly as the provider reported it — engines do
 		// sometimes genuinely search the prompt verbatim, and that's real data. The
@@ -514,7 +527,6 @@ async function processPrompt(
 
 		// Log failures but don't throw if some succeeded
 		console.error(`Prompt ${promptId} had ${failures.length}/${runPromises.length} failed runs: ${errorMessages}`);
-
 	}
 
 	const successCount = runPromises.length - failures.length;
@@ -545,6 +557,10 @@ async function processPrompt(
  * on a backoff when nothing did.
  */
 export async function processPromptJob(jobs: Job<ProcessPromptData>[]): Promise<void> {
+	if (!isLegacyProviderExecutionEnabled()) {
+		console.log(`[process-prompt] Skipped ${jobs.length} job(s): legacy provider execution is disabled`);
+		return;
+	}
 	const scrapeConfigs = parseScrapeTargets(process.env.SCRAPE_TARGETS);
 
 	// pg-boss v12 passes an array of jobs - process each one

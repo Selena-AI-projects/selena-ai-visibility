@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/node";
 import { getDeployment } from "@workspace/deployment";
 import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
-import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
+import { isLegacyProviderExecutionEnabled, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
 import boss from "./boss";
 import { registerHandlers } from "./handlers";
@@ -25,8 +25,13 @@ async function main() {
 
 	// Fail fast on misconfigured SCRAPE_TARGETS — surfaces unknown providers,
 	// missing API keys, and per-provider target errors before any job runs.
-	validateScrapeTargets(parseScrapeTargets(process.env.SCRAPE_TARGETS), getProvider);
-	console.log("SCRAPE_TARGETS validated");
+	const legacyProviderExecutionEnabled = isLegacyProviderExecutionEnabled();
+	if (legacyProviderExecutionEnabled) {
+		validateScrapeTargets(parseScrapeTargets(process.env.SCRAPE_TARGETS), getProvider);
+		console.log("SCRAPE_TARGETS validated");
+	} else {
+		console.log("Legacy provider execution disabled; skipped SCRAPE_TARGETS validation");
+	}
 
 	boss.on("error", (error) => {
 		console.error("pg-boss error:", error);
@@ -98,7 +103,7 @@ async function main() {
 	}
 	console.log("Queues created");
 
-	if (isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED)) {
+	if (legacyProviderExecutionEnabled && isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED)) {
 		await boss.schedule("schedule-maintenance", "*/5 * * * *", { source: "scheduled" }, { tz: "UTC" });
 		console.log("Scheduled maintenance job (every 5 minutes)");
 	} else {

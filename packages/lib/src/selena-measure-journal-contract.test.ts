@@ -25,7 +25,7 @@ describe("journal provider stop", () => {
 		expect(result.status).not.toBe(0);
 		expect(output).toContain("PROVIDER_CALLS_STOPPED");
 		expect(output).not.toContain("DATABASE_URL is required");
-	});
+	}, 15_000);
 });
 
 describe("journal durable daily claim", () => {

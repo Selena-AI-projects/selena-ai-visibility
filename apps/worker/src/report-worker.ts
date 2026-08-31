@@ -1,10 +1,12 @@
 import { getRunsPerPrompt } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
-import { type Brand, brands, reports } from "@workspace/lib/db/schema";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
+import { reports } from "@workspace/lib/db/schema";
 import { analyzeBrand } from "@workspace/lib/onboarding";
 import { getProvider, type ModelConfig, parseScrapeTargets } from "@workspace/lib/providers";
+import { executeLegacyProviderTransport, isLegacyProviderExecutionEnabled } from "@workspace/lib/run-policy";
 import { computeSystemTags, isPromptBranded } from "@workspace/lib/tag-utils";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 interface CompetitorResult {
 	name: string;
@@ -22,8 +24,6 @@ interface PromptData {
 // Report constants
 const TARGET_PROMPTS_COUNT = 70;
 const CANDIDATE_PROMPTS_COUNT = Math.ceil(TARGET_PROMPTS_COUNT * 1.2);
-const MIN_BRAND_MENTIONS = 14;
-const MAX_BRAND_MENTIONS = 28;
 
 // Whitelabel deployments preserve the legacy asymmetric per-candidate sample
 // counts used before SCRAPE_TARGETS drove dispatch. Any model outside this map
@@ -57,8 +57,23 @@ export interface ReportJobData {
 	manualPrompts?: string[];
 }
 
+interface ScopedReportJobData extends ReportJobData {
+	organizationId: string;
+}
+
+/** Resolve the tenant before report-table RLS context can exist. */
+export async function resolveReportOrganizationId(reportId: string): Promise<string> {
+	const result = await db.execute(sql`
+		SELECT organization_id
+		FROM public.sv_resolve_report_context(${reportId}::uuid)
+	`);
+	const organizationId = (result.rows[0] as { organization_id?: string } | undefined)?.organization_id;
+	if (!organizationId) throw new Error("REPORT_TENANT_CONTEXT_NOT_FOUND");
+	return organizationId;
+}
+
 export interface ReportJobContext {
-	data: ReportJobData;
+	data: ScopedReportJobData;
 	log: (message: string) => void;
 	updateProgress: (progress: number) => void | Promise<void>;
 }
@@ -69,7 +84,7 @@ interface PromptRunResult {
 		model: string;
 		version: string;
 		webSearchEnabled: boolean;
-		rawOutput: any;
+		rawOutput: unknown;
 		webQueries: string[];
 		textContent: string;
 		brandMentioned: boolean;
@@ -157,7 +172,8 @@ function selectOptimalPrompts(
 
 	// If we need more prompts or more brand mentions, add branded prompts
 	while (selectedPrompts.length < TARGET_PROMPTS_COUNT && brandedPrompts.length > 0) {
-		const prompt = brandedPrompts.shift()!;
+		const prompt = brandedPrompts.shift();
+		if (!prompt) break;
 		selectedPrompts.push(prompt.promptValue);
 		if (prompt.hasBrandMention) {
 			currentBrandMentions++;
@@ -223,10 +239,12 @@ async function runPrompt(
 ): Promise<PromptRunResult> {
 	const runOne = async (config: ModelConfig) => {
 		const providerImpl = getProvider(config.provider);
-		const result = await providerImpl.run(config.model, promptValue, {
-			webSearch: config.webSearch,
-			version: config.version,
-		});
+		const result = await executeLegacyProviderTransport(() =>
+			providerImpl.run(config.model, promptValue, {
+				webSearch: config.webSearch,
+				version: config.version,
+			}),
+		);
 		const { brandMentioned, competitorsMentioned } = analyzeMentions(
 			result.textContent,
 			brandName,
@@ -262,7 +280,12 @@ async function runPrompt(
 
 // Main report worker function
 export async function processReportJob(job: ReportJobContext) {
-	const { reportId, brandName, brandWebsite, manualPrompts } = job.data;
+	const { reportId, organizationId, brandName, brandWebsite, manualPrompts } = job.data;
+
+	if (!isLegacyProviderExecutionEnabled()) {
+		job.log(`Skipped report ${reportId}: legacy provider execution is disabled`);
+		return { success: false, reportId, reason: "LEGACY_PROVIDER_EXECUTION_DISABLED" as const };
+	}
 
 	job.log(`Processing report ID: ${reportId} for brand: ${brandName}`);
 
@@ -276,7 +299,12 @@ export async function processReportJob(job: ReportJobContext) {
 
 	try {
 		// Update report status to processing
-		await db.update(reports).set({ status: "processing", updatedAt: new Date() }).where(eq(reports.id, reportId));
+		await withOrganizationTransaction(db, organizationId, async (tx) => {
+			await tx
+				.update(reports)
+				.set({ status: "processing", updatedAt: new Date() })
+				.where(and(eq(reports.id, reportId), eq(reports.organizationId, organizationId)));
+		});
 
 		job.log(`Report ${reportId} marked as processing`);
 		job.updateProgress(5);
@@ -286,11 +314,13 @@ export async function processReportJob(job: ReportJobContext) {
 		// agnostic with native web search wired in). Manual-prompt path skips
 		// the prompt generation but still needs competitors.
 		job.log(`Analyzing brand: ${brandWebsite}`);
-		const suggestion = await analyzeBrand({
-			website: brandWebsite,
-			brandName,
-			maxPrompts: useManualPrompts ? 0 : CANDIDATE_PROMPTS_COUNT,
-		});
+		const suggestion = await executeLegacyProviderTransport(() =>
+			analyzeBrand({
+				website: brandWebsite,
+				brandName,
+				maxPrompts: useManualPrompts ? 0 : CANDIDATE_PROMPTS_COUNT,
+			}),
+		);
 		// The report renderer's CompetitorResult expects a single primary domain;
 		// analyzeBrand returns the full list now. Take the first as the canonical
 		// one for the report's UI (which doesn't display the rest anyway).
@@ -329,7 +359,7 @@ export async function processReportJob(job: ReportJobContext) {
 				model: string;
 				version: string;
 				webSearchEnabled: boolean;
-				rawOutput: any;
+				rawOutput: unknown;
 				webQueries: string[];
 				textContent: string;
 				brandMentioned: boolean;
@@ -356,6 +386,7 @@ export async function processReportJob(job: ReportJobContext) {
 						runs: result.runs,
 					};
 				} catch (error) {
+					if (!isLegacyProviderExecutionEnabled()) throw error;
 					job.log(
 						`Error testing candidate "${candidate.prompt}": ${error instanceof Error ? error.message : "Unknown error"}`,
 					);
@@ -429,15 +460,17 @@ export async function processReportJob(job: ReportJobContext) {
 		job.log(`Finalizing report with ${promptRuns.length} prompt run results`);
 
 		// Update report status to completed
-		await db
-			.update(reports)
-			.set({
-				status: "completed",
-				completedAt: new Date(),
-				updatedAt: new Date(),
-				rawOutput: JSON.stringify(reportData),
-			})
-			.where(eq(reports.id, reportId));
+		await withOrganizationTransaction(db, organizationId, async (tx) => {
+			await tx
+				.update(reports)
+				.set({
+					status: "completed",
+					completedAt: new Date(),
+					updatedAt: new Date(),
+					rawOutput: JSON.stringify(reportData),
+				})
+				.where(and(eq(reports.id, reportId), eq(reports.organizationId, organizationId)));
+		});
 
 		job.updateProgress(100);
 		job.log(`Successfully completed report ${reportId}`);
@@ -446,7 +479,12 @@ export async function processReportJob(job: ReportJobContext) {
 		job.log(`Error processing report ${reportId}: ${error instanceof Error ? error.message : "Unknown error"}`);
 
 		// Update report status to failed
-		await db.update(reports).set({ status: "failed", updatedAt: new Date() }).where(eq(reports.id, reportId));
+		await withOrganizationTransaction(db, organizationId, async (tx) => {
+			await tx
+				.update(reports)
+				.set({ status: "failed", updatedAt: new Date() })
+				.where(and(eq(reports.id, reportId), eq(reports.organizationId, organizationId)));
+		});
 
 		throw error;
 	}

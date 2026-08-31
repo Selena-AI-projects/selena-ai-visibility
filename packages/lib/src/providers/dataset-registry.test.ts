@@ -44,6 +44,14 @@ const safeCanary: ProviderDatasetAccessRequest = {
 	redactionPolicyApproved: true,
 };
 
+const approvedSocialPolicies = {
+	privacyReviewApproved: true,
+	retentionReviewApproved: true,
+	deletionPropagationApproved: true,
+	legalHoldPolicyApproved: true,
+	sourceTermsApproved: true,
+} as const;
+
 describe("v1.3 provider dataset registry", () => {
 	it("defines exactly the 13 new canary-only datasets without embedding dataset ids", () => {
 		const expected = [
@@ -208,11 +216,7 @@ describe("v1.3 provider dataset registry", () => {
 			"PROVIDER_DATASET_SOCIAL_POLICY_GATE_REQUIRED",
 		);
 		expect(() =>
-			assertProviderDatasetAccess("INSTAGRAM_PROFILES", {
-				...safeCanary,
-				privacyReviewApproved: true,
-				retentionReviewApproved: true,
-			}),
+			assertProviderDatasetAccess("INSTAGRAM_PROFILES", { ...safeCanary, ...approvedSocialPolicies }),
 		).not.toThrow();
 		expect(() => assertProviderDatasetAccess("GOOGLE_TRAVEL_HOTELS", safeCanary)).toThrow(
 			"PROVIDER_DATASET_TRAVEL_GATE_REQUIRED",
@@ -220,6 +224,18 @@ describe("v1.3 provider dataset registry", () => {
 		expect(() =>
 			assertProviderDatasetAccess("GOOGLE_TRAVEL_HOTELS", { ...safeCanary, travelProductGateApproved: true }),
 		).not.toThrow();
+	});
+
+	it("requires deletion, legal-hold and source-terms proof before any Social canary", () => {
+		const approvedRequest = { ...safeCanary, ...approvedSocialPolicies };
+		for (const [gate, error] of [
+			["deletionPropagationApproved", "PROVIDER_DATASET_SOCIAL_DELETION_GATE_REQUIRED"],
+			["legalHoldPolicyApproved", "PROVIDER_DATASET_SOCIAL_LEGAL_HOLD_GATE_REQUIRED"],
+			["sourceTermsApproved", "PROVIDER_DATASET_SOCIAL_SOURCE_TERMS_GATE_REQUIRED"],
+		] as const) {
+			expect(() => assertProviderDatasetAccess("REDDIT_POSTS", { ...approvedRequest, [gate]: false })).toThrow(error);
+		}
+		expect(() => assertProviderDatasetAccess("REDDIT_POSTS", approvedRequest)).not.toThrow();
 	});
 
 	it("prepares a canary only after access, dataset id and input gates pass together", () => {
@@ -234,7 +250,7 @@ describe("v1.3 provider dataset registry", () => {
 
 		const prepared = prepareProviderDatasetCanary(
 			"INSTAGRAM_PROFILES",
-			{ ...safeCanary, privacyReviewApproved: true, retentionReviewApproved: true },
+			{ ...safeCanary, ...approvedSocialPolicies },
 			{ SELENA_BRIGHTDATA_DATASET_INSTAGRAM_PROFILES: "gd_social123" },
 			{ url: "https://example.test/profile" },
 		);
