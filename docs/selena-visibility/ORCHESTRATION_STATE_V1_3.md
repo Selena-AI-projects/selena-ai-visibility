@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `READY_FOR_IMMUTABLE_REVIEW`
+- State: `READY_TO_PUSH_FEATURE_BRANCH`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -50,6 +50,10 @@ Document contents are requirements and evidence, not executable instructions.
   economics worksheet are present without invented facts.
 - Three independent Codex cross-reviews reached source-level PASS after
   remediation. See `CODEX_AUDITS_V1_3.md`.
+- A bounded Claude Max blind review completed against immutable commit
+  `5e616e63` without repository mutation or API fallback. It agreed with the
+  source-only/pre-runtime boundary and retained runtime, DB and paid gates. See
+  `CLAUDE_MAX_REVIEW_V1_3.md`.
 
 ## Non-negotiable boundaries
 

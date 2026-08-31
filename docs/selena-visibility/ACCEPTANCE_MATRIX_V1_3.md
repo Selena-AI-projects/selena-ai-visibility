@@ -15,8 +15,8 @@ not promote local evidence to runtime, hosted staging or production proof.
 | V13-PILOTS | AVLI and KORA packages contain evidence/UNKNOWN gates, intent ontology, report templates and unit-economics decision fields without fabricated facts | `PASS_ARTIFACT` | Repository artifact |
 | V13-TESTS | Changed surfaces pass supported targeted lint/typecheck/tests and web build; repository-wide baseline blockers are recorded separately | `PASS_CHANGED_SCOPE` | Local executed |
 | V13-CODEX | Three independent Codex reviewers cross-audit implementation against the four-source baseline | `PASS_SOURCE_ONLY` | Static independent review |
-| V13-CLAUDE | Blind read-only Claude Max review of an immutable snapshot completes without mutation or API fallback | `NOT_STARTED` | Static independent review |
-| V13-BRANCH | Small commits contain no handoff/secrets and are pushed only to the feature branch | `NOT_STARTED` | Git |
+| V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
+| V13-BRANCH | Small commits contain no handoff/secrets and are pushed only to the feature branch | `LOCAL_COMMITS_READY_TO_PUSH` | Git |
 | V13-DRAFT-PR | CI/Blacksmith cost side effects are owner-approved before creation | `OWNER_GATE` | External CI/billing |
 | V13-RUNTIME | Migration/RLS execution, provider canaries, shared staging/production and paid paths | `NOT_AUTHORIZED` | Runtime/hosted/paid |
 
