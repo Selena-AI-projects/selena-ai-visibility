@@ -11,7 +11,8 @@
 export const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://postgres:postgres@localhost:5432/elmo";
 
 // Must match ADMIN_API_KEYS in the CI-patched .env (.github/workflows/e2e.yaml)
-// and bruno/environments/local.bru.
+// and bruno/environments/local.bru. seed.ts also stores only its SHA-256 digest
+// in sv_api_keys so the report API exercises the production dual auth boundary.
 export const TEST_API_KEY = "test-api-key-e2e";
 
 export const TEST_USER = {

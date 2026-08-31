@@ -1,6 +1,8 @@
 /**
  * /api/v1/reports - External API endpoint for report generation
- * Protected by API key authentication.
+ * Protected by both the deployment admin-key gate and tenant API-key registry.
+ * The same bearer must pass both so legacy automation remains explicitly
+ * allowlisted without bypassing tenant attribution or RLS.
  *
  * POST: Create a new report and queue generation.
  * GET: List reports with pagination.
@@ -14,7 +16,7 @@ import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { ApiError, createApiHandler } from "@/lib/api/handler";
 import { sendReportJob } from "@/lib/job-scheduler";
-import { resolveApiKeyAuthContext } from "@/lib/selena-auth-context";
+import { canWrite, resolveApiKeyAuthContext } from "@/lib/selena-auth-context";
 
 const createReportBody = z.object({
 	brandName: z
@@ -31,14 +33,24 @@ const createReportBody = z.object({
 	manualPrompts: z.array(z.string()).optional(),
 });
 
+function mapReportApiError(error: unknown): ApiError | undefined {
+	if (error instanceof Error && error.message.startsWith("Unauthorized:")) {
+		return new ApiError(401, "Unauthorized", "Valid API credentials are required");
+	}
+}
+
 export const Route = createFileRoute("/api/v1/reports/")({
 	server: {
 		handlers: {
 			POST: createApiHandler({
 				body: createReportBody,
 				status: 201,
+				mapError: mapReportApiError,
 				handle: async ({ body, request }) => {
 					const auth = await resolveApiKeyAuthContext(request);
+					if (!canWrite(auth)) {
+						throw new ApiError(403, "Forbidden", "API credentials do not permit report creation");
+					}
 					const filteredPrompts = (body.manualPrompts ?? []).map((p) => p.trim()).filter((p) => p.length > 0);
 					const parsedManualPrompts = filteredPrompts.length > 0 ? filteredPrompts : undefined;
 
@@ -87,6 +99,7 @@ export const Route = createFileRoute("/api/v1/reports/")({
 			}),
 
 			GET: createApiHandler({
+				mapError: mapReportApiError,
 				handle: async ({ request }) => {
 					const auth = await resolveApiKeyAuthContext(request);
 					const { searchParams } = new URL(request.url);

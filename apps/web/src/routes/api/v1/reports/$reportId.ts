@@ -1,6 +1,7 @@
 /**
  * /api/v1/reports/:reportId - External API endpoint for report status/data
- * Protected by API key authentication.
+ * Protected by both the deployment admin-key gate and tenant API-key registry.
+ * The same bearer must pass both so report IDs never become a tenant bootstrap.
  *
  * GET: Poll report status. When completed, returns per-prompt snapshot data
  *      (mentions with top-K competitors).
@@ -16,11 +17,18 @@ import { z } from "zod";
 import { ApiError, createApiHandler } from "@/lib/api/handler";
 import { resolveApiKeyAuthContext } from "@/lib/selena-auth-context";
 
+function mapReportApiError(error: unknown): ApiError | undefined {
+	if (error instanceof Error && error.message.startsWith("Unauthorized:")) {
+		return new ApiError(401, "Unauthorized", "Valid API credentials are required");
+	}
+}
+
 export const Route = createFileRoute("/api/v1/reports/$reportId")({
 	server: {
 		handlers: {
 			GET: createApiHandler({
 				params: z.object({ reportId: z.guid("Invalid report ID format") }),
+				mapError: mapReportApiError,
 				handle: async ({ params, request }) => {
 					const { reportId } = params;
 					const auth = await resolveApiKeyAuthContext(request);
