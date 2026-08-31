@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	printf '%s\n' \
 		'Usage:' \
-		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045]' \
+		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045|0049]' \
 		'' \
 		'--dry-run is the default and does not call Docker or apply migrations.' \
 		'--run starts a unique ephemeral PostgreSQL compose project, runs one suite, and removes it.'
@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--dry-run) mode='dry-run'; shift ;;
 		--run) mode='run'; shift ;;
-		gate12|0045) suite="$1"; shift ;;
+		gate12|0045|0049) suite="$1"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'BLOCKED_SCOPE: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -40,6 +40,7 @@ fi
 case "$suite" in
 	gate12) suite_script="$repo_root/tools/visibility_os_gate12_e2e.sh" ;;
 	0045) suite_script="$repo_root/tools/visibility_os_0045_hardening_e2e.sh" ;;
+	0049) suite_script="$repo_root/tools/visibility_os_0049_lifecycle_e2e.sh" ;;
 esac
 
 if [[ "$mode" == 'dry-run' ]]; then
