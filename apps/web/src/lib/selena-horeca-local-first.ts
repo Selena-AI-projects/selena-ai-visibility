@@ -114,7 +114,7 @@ function previewModule(
 		summary: unknownSummary(HORECA_PREVIEW_MODULE_COPY[moduleId].summary.en),
 		evidenceIds: [],
 		configurationLockReference: null,
-		limitations: [HORECA_PREVIEW_MODULE_COPY[moduleId].limitation.en],
+		limitations: [],
 	};
 }
 
