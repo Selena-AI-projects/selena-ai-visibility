@@ -1,6 +1,6 @@
 # Pyramid structure - the canonical site map
 
-The single spec for how every site this repo builds is structured. `/build-website` builds to it (read this file BEFORE building the tree - it is the spec, not a suggestion), `/audit` grades against it, `code/check_site_complete.py` enforces the wiring. Three layers deep, maximum. No exceptions.
+The single spec for how every site this repo builds is structured. `/build-website` builds to it (read this file BEFORE building the tree - it is the spec, not a suggestion), `/audit` grades against it, `code/check_site_complete.py` enforces the wiring. Three layers deep, maximum. No exceptions. *(This vendored copy ships `/audit` only - `/build-website` and `code/check_site_complete.py` aren't included here; this file is used purely as the grading spec for the structure read.)*
 Next: check any URL you are about to create against the tree below before you create it.
 
 ---
@@ -27,7 +27,7 @@ The index, with every post living FLAT directly under it: `site.com/blog/how-to-
 Single pages at Layer 1. About carries the author and E-E-A-T load. Quote, or contact, is the conversion target every blog post bridges to.
 
 **/thank-you - off-tree, and mandatory.**
-Every form redirects to it (`/api/lead` → 303 → `/thank-you`), and it is the page conversion tracking fires on. Without a distinct thank-you URL, tracking falls back to click or event triggers that break silently and undercount - see `references/standard-pages.md` for the full build.
+Every form redirects to it (`/api/lead` → 303 → `/thank-you`), and it is the page conversion tracking fires on. Without a distinct thank-you URL, tracking falls back to click or event triggers that break silently and undercount - the full build for this page is in the `/build-website` skill, which is not part of this vendored copy; grade its presence/behavior against the description above.
 
 It sits OUTSIDE the pyramid on purpose, and all four of these are deliberate, not oversights: **`noindex`** (if it ranks, people land there without converting and the conversion count becomes fiction) · **excluded from `sitemap.xml`** · **not linked from the nav** · **exempt from the 3-click and orphan rules** - it is reached by submitting a form, not by browsing. The gate skips it for exactly this reason.
 

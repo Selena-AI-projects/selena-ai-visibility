@@ -12,6 +12,14 @@ Audit AND fix the entire site: $ARGUMENTS (if no URL given, ask for one). Thirte
 
 ---
 
+## Vendored copy - read this before anything else
+
+This is a modified copy of `youtube-jono/seo-blueprint-audit` (github.com/youtube-jono/seo-blueprint-audit), adapted to run standalone in this repo without the author's paid companion commands - `/blog-post`, `/service-page`, `/gbp`, `/gbp-posts`, `/keyword-research`, `/review-generator`, `/gsc`, `/context-layer`, `/seo-optimization`, `/build-website`, `/internal-linking`, `/scale-map` - none of which exist here, and without its Skool community or any affiliate/referral links. Every place one of those commands was the routing target now says so explicitly and gives inline guidance or a **MANUAL FOLLOW-UP** label instead - nothing was deleted, only re-routed to plain text. The full list of every change from upstream, line by line, is `CHANGES.md` in this skill's folder - read it before assuming this file still says what upstream says.
+
+**License note:** the upstream repository ships no LICENSE file, so it carries no explicit grant to redistribute or reuse commercially. Treat this vendored copy as an internal, non-commercial working copy inside this repository, not as cleared for redistribution, until the upstream author publishes an explicit license.
+
+---
+
 ## ⛔ THE COPY RULE - read this before you change a single word
 
 **This command does not rewrite copy. Ever.** The words on the page are the owner's - their stories, their jokes, their phrasing, their argument. An audit that "improves" them has destroyed the one thing competitors can't copy and handed back generic AI filler with a better score.
@@ -30,7 +38,7 @@ Audit AND fix the entire site: $ARGUMENTS (if no URL given, ask for one). Thirte
 - The order or structure of an argument
 - Anything at all just because it "reads better" your way
 
-**The test before every single edit: is this fixing a mechanical SEO problem, or is this me writing?** If it's the second one, stop. If a page genuinely needs new or rewritten content, that is NOT this command's job - flag it in the report and route it to `/blog-post` or `/service-page`, where the voice files are loaded and the owner approves the draft.
+**The test before every single edit: is this fixing a mechanical SEO problem, or is this me writing?** If it's the second one, stop. If a page genuinely needs new or rewritten content, that is NOT this command's job - flag it in the report as a **MANUAL FOLLOW-UP**: say what's missing, why, and what "good" would look like, then leave the writing to whatever content workflow the owner uses (their own drafting, a copywriter, a different tool). *(This vendored copy has no `/blog-post` or `/service-page` command to hand off to - see `CHANGES.md`.)*
 
 **When you must touch a sentence** (a keyword genuinely has to appear in an H2 that doesn't have it): make the smallest possible insertion into the existing sentence, keep every other word, and show me the before and after so I can veto it. Never silently reword.
 
@@ -92,6 +100,52 @@ Every layer reports two numbers next to its result: **how many items were graded
 
 ---
 
+## ⛔ THE CAPABILITY RULE - probe first, degrade loud, never fail silent
+
+**This vendored copy runs with no companion commands and, in many sessions, no paid connectors.** Before grading a single check, run the probe below and carry its results through the whole report. A missing capability is never a reason to stop, guess, or throw an error - it is a reason to mark the affected checks `UNKNOWN` / `DATA REQUIRED` and keep going. This generalizes the Semrush-specific "zero-credential first run" (step 2) and the Search-Console-specific "never gate the audit" instruction (Layer 1) to every external dependency this command can have, including this session's own network access.
+
+**Run this probe first, silently, and record the results:**
+1. **Live network access to the target site** - try fetching the homepage. If it fails with an explicit block (an egress/policy denial, not a generic timeout), that's a hard "not reachable this session" - don't retry, don't route around it, report it. Everything that needs a live fetch or crawl (Layers 5, 6, 7's paper half, 8, 9, 10, 13, the structure read, `code/check_page_similarity.py`) degrades to `UNKNOWN` for that run.
+2. **A Semrush MCP connector** - check available tools before assuming one exists. Absent → Layers 2, 3 (partially), 4, 12 (partially) degrade per their own rules below; never invent numbers to fill the gap.
+3. **Search Console exports** - supplied, or explicitly declined per step 0b. Neither is a blocker; both get recorded.
+4. **Google Business Profile pastes, or a decision that Layer 11 doesn't apply** - per step 0c and Layer 11's own skip rule.
+5. **A reachable production URL for Lighthouse** - depends on #1. No reachable URL → Layer 6 is `UNKNOWN`, never a fabricated lab score.
+6. **Interactive, authenticated access to ChatGPT, Perplexity, and Google AI Mode** - required for the Layer 7 live citation test. An autonomous agent session normally does NOT have this. Don't simulate it and don't answer from general knowledge and call it a live result - mark it `REQUIRES OWNER DATA`, a manual follow-up for a human with logged-in access to the three products, and say so plainly.
+
+**Print the results as a capability matrix, every run, right after the scope line at the top of the report** - four buckets, and every layer or sub-check goes in exactly one:
+
+| Bucket | Meaning |
+|---|---|
+| **FULLY AUTOMATED** | Runs end to end with no owner input and no paid connector, given a reachable site |
+| **PARTIALLY AUTOMATED** | Part of the layer runs standalone; the rest needs owner data or a connector to complete |
+| **REQUIRES OWNER DATA** | Blocked entirely without something only the owner can supply (an export, a paste, a login) |
+| **UNAVAILABLE WITHOUT CONNECTOR** | Blocked entirely without a specific paid tool (Semrush today) |
+
+The default mapping for this vendored copy - restate it in every report with this run's actual probe results overlaid, never assume it's static:
+
+| Layer | Bucket |
+|---|---|
+| 1. Search Console | REQUIRES OWNER DATA |
+| 2. Semrush | UNAVAILABLE WITHOUT CONNECTOR |
+| 3. Competitor benchmark | PARTIALLY AUTOMATED - indexed pages, review count/rating: automated; keywords, traffic, referring domains: UNAVAILABLE WITHOUT CONNECTOR |
+| 4. Backlinks & authority | UNAVAILABLE WITHOUT CONNECTOR |
+| 5. On-page (80 checks) | FULLY AUTOMATED, given a reachable site |
+| 6. Technical (Lighthouse) | FULLY AUTOMATED, given a reachable site |
+| 7. AI surfaces / GEO | PARTIALLY AUTOMATED - paper grade (31 checks): FULLY AUTOMATED given a reachable site; live citation test (3 checks): REQUIRES OWNER DATA, a human with AI-chat access |
+| 8. Index hygiene | FULLY AUTOMATED, given a reachable site (sharper with Layer 1 data) |
+| 9. Framework traps | FULLY AUTOMATED, given a reachable site |
+| 10. Hidden content | FULLY AUTOMATED, given a reachable site |
+| 11. Local / GBP | PARTIALLY AUTOMATED - public listing (reviews, hours, map pack): automated; categories/services/areas/products: REQUIRES OWNER DATA, or a paid scraper in prospect mode - or SKIPPED for a non-local business, stated plainly |
+| 12. Keyword reality check | PARTIALLY AUTOMATED - Search Console: REQUIRES OWNER DATA; Semrush: UNAVAILABLE WITHOUT CONNECTOR; the on-page title/H1 spot-check runs FULLY AUTOMATED off whatever ranking data exists |
+| 13. Thin & doorway content | FULLY AUTOMATED, given a reachable site (`code/check_page_similarity.py` needs no credential) |
+| Site-level: cannibalization | PARTIALLY AUTOMATED - needs Layer 1 or 2 ranking data to be more than a same-title heuristic |
+| Site-level: proof count | FULLY AUTOMATED, given a reachable site (weaker without a project-local proof inventory) |
+| Site-level: structure | FULLY AUTOMATED, given a reachable site or a supplied sitemap |
+
+**Never let a bucket other than FULLY AUTOMATED read as a failure.** UNAVAILABLE WITHOUT CONNECTOR and REQUIRES OWNER DATA are honest states, not low scores - they feed the fixable-score exclusion and the "what this audit did NOT measure" section, exactly like a waiver.
+
+---
+
 **0. Whose site is this?** If the URL isn't mine, say so up front and ask which of the two jobs this is (never guess):
 
 - **Prospect mode** - I'm pitching them. Audit only, fix nothing, and end with a one-page report I could send or walk through on a call - the starting-line summary, the top 5 problems in plain English with what each one is costing them, and what fixing it would take. No jargon, no Semrush screenshots, no fix loop. This is the pitch, not the delivery.
@@ -104,7 +158,7 @@ Every layer reports two numbers next to its result: **how many items were graded
   2. **Page gap:** pages and page TYPES they have that I don't - services, cities, comparison pages, calculators. Each one is a candidate keyword-map row.
   3. **Backlink gap:** domains linking to them and not to me - the outreach list.
   4. **Proof gap:** their review count, case studies, and the proof elements their money pages carry that mine don't.
-  Then ROUTE, ranked by impact: new map rows → `/keyword-research expand` · missing money pages → `/service-page` · missing content → `/blog-post` · outreach list → handed over. The deliverable is a ranked gap list where every line ends in a command, appended to `audit-report.md`. Fix loop never runs - there is nothing of mine to fix.
+  Then RANK the gap list by impact and label each line with what it needs done, not a command to hand off to (**this vendored copy has no `/keyword-research`, `/service-page`, or `/blog-post` command** - see `CHANGES.md`): new keyword rows → "needs keyword research and a content plan" · missing money pages → "needs a new service/landing page" · missing content → "needs a blog post or resource page" · outreach list → "hand to whoever owns outreach." The deliverable is a ranked gap list where every line ends in a plain-English next step, appended to `audit-report.md`. Fix loop never runs - there is nothing of mine to fix.
 
 The two modes compose: run gap mode on a prospect's top competitor and the output IS the pitch ammunition - "here's what [rival] has that you don't" closes harder than "your alt text is missing." Same command, two runs.
 
@@ -117,7 +171,7 @@ Prospect mode has no Search Console access and usually no Business Profile acces
 **1. Get the page list. Ask for the sitemap first.** Say: *"Paste your sitemap URL (usually yoursite.com/sitemap.xml) - or paste the list of your page URLs. If you don't have one, say so and I'll find them."* In order:
 - Sitemap pasted → use it, that's the inventory
 - Nothing pasted → fetch `sitemap.xml` myself
-- Missing, broken, or clearly incomplete → crawl from the homepage following every internal link to discover the real inventory, then **CREATE the sitemap on the spot** (static lane: populate `app/sitemap.ts` from the discovered tree; WordPress: enable/fix it via the SEO plugin through Novamira). A missing sitemap is itself a critical finding - fix it first and note it in the report.
+- Missing, broken, or clearly incomplete → crawl from the homepage following every internal link to discover the real inventory, then **CREATE the sitemap on the spot** (static lane: populate `app/sitemap.ts` from the discovered tree; WordPress: enable/fix it via the SEO plugin through whatever admin access is available - WP-CLI, REST API, a WordPress MCP server if one is connected, or the wp-admin dashboard directly). A missing sitemap is itself a critical finding - fix it first and note it in the report.
 
 Show me the page count and the list before grading anything, so I can confirm it looks right.
 
@@ -135,7 +189,7 @@ Recommend based on the count: under about 15 pages, say "everything" is fine and
 
 Re-running later with a wider scope appends to `audit-report.md` rather than replacing it, same as any other re-run.
 
-**2. Zero-credential first run.** No Semrush connected? Don't block - score what's scoreable RIGHT NOW: Lighthouse on the homepage + key pages, on-page spot checks against `references/on-page-seo.md`, the AI-access checks from `references/geo.md`, the live AI-surface test, the map pack and review comparison, robots/sitemap/HTTPS. Deliver that report card first (I see my site scored in minute five), THEN say what Semrush unlocks (the full crawl, Site Health, keyword data, and the entire backlink layer) and walk me through connecting it - free account (1 project, 100 pages/month) or the 14-day trial (https://www.semrush.com/partner/jonocatliffseo_7401436/?irclickid=UodwPVRilxyZWxsygXUph16GUkr03ZTt3xLWws0&irgwc=1&afsrc=1) for the full toolkit. The win comes before the credential.
+**2. Zero-credential first run.** No Semrush connected? Don't block - score what's scoreable RIGHT NOW: Lighthouse on the homepage + key pages, on-page spot checks against `references/on-page-seo.md`, the AI-access checks from `references/geo.md`, the live AI-surface test, the map pack and review comparison, robots/sitemap/HTTPS. Deliver that report card first (I see my site scored in minute five), THEN say what Semrush unlocks (the full crawl, Site Health, keyword data, and the entire backlink layer) and note that a free account (1 project, 100 pages/month) or a paid plan at semrush.com covers it. **No specific vendor link or referral code is embedded in this flow** - state the requirement plainly and let the owner pick their own path to it. The win comes before the credential.
 
 ---
 
@@ -158,7 +212,7 @@ Re-running later with a wider scope appends to `audit-report.md` rather than rep
 - Whether impressions are rising (Google is testing the site) while clicks are flat (the titles and metas are the bottleneck, not the rankings)
 - Whether real-user performance matches the lab score
 
-**If there is no Search Console property at all**, that is a critical finding on its own and goes near the top of the report. Route it to `/gsc`, which walks the manual setup.
+**If there is no Search Console property at all**, that is a critical finding on its own and goes near the top of the report. **This vendored copy has no `/gsc` command** - walk the owner through setup inline instead: go to `search.google.com/search-console` → Add property → Domain property (verify via a DNS TXT record) or URL-prefix property (verify via an HTML file or meta tag) → wait roughly 48 hours for data to start populating.
 
 **⛔ GSC EXPORTS ARE OPTIONAL. NEVER GATE THE AUDIT ON THEM. Score everything that can be scored with no credentials first - that self-serve win in the first five minutes is the point of this command. Then ask for exports to unlock the layers that genuinely need query data (cannibalization, indexation status, striking distance), and if they are not supplied, run without them and say exactly which checks were skipped and why. A member must never hit a credentials wall before seeing a score.**
 
@@ -180,7 +234,7 @@ Fetch the Site Audit for the domain. **The connector cannot create projects - it
 
 **"You rank for 7 keywords" is meaningless without "the three agencies you compete with rank for 400."** A number with no comparison cannot tell anyone whether the site is behind or ahead, and an audit that cannot answer that question has not audited anything.
 
-**Name the three competitors first, and say how they were picked.** In order: the competitors already recorded in `context/business.md`, the businesses holding the map pack for the money term, or the top three organic results for the primary money keyword. Say which method was used - a benchmark against the wrong three is worse than none.
+**Name the three competitors first, and say how they were picked.** In order: the competitors already recorded in a project-local `context/business.md` (usually absent in this vendored copy - skip straight to the next method and say so), the businesses holding the map pack for the money term, or the top three organic results for the primary money keyword. Say which method was used - a benchmark against the wrong three is worse than none.
 
 Pull the same six numbers for the site and for each competitor:
 - Organic keywords ranked for
@@ -293,7 +347,7 @@ Anything rendered one-at-a-time is one-at-a-time in the HTML. **Accordions and t
 
 **For a local service business this is the biggest thing a standard audit misses.** The map pack sits above the organic results, it is where local buyers actually click, and none of the twelve other layers looks at it. A site can pass every technical check in this file and still be invisible to everyone within ten miles of it.
 
-**Read `gbp-{business-slug}.md` first if it exists in the project** - it holds the categories, services, service area and attributes already decided, and grading against it beats grading against a guess. If it does not exist, note that and route to `/gbp`.
+**Read a project-local `gbp-{business-slug}.md` first if it exists** - it holds the categories, services, service area and attributes already decided, and grading against it beats grading against a guess. **This is the normal case in this vendored copy: no `/gbp` command exists to generate it.** If it does not exist, say so and grade directly against the LIVE public Business Profile listing plus the target marks in `references/gbp-setup.md` (10 categories, 50 services, 20 service areas, 20 products) - that file's own profile-generation walkthrough is available for the owner to work through by hand; it does not run automatically here.
 
 Grade all of these:
 - **Is there a Google Business Profile at all**, and is it **verified**. An unverified or nonexistent profile outranks everything else in this layer
@@ -311,7 +365,7 @@ Grade all of these:
 - **Categories: 10** - 1 primary + 9 secondary. Report `N of 10`. A primary that differs from what the map-pack rivals use is its own finding.
 - **Services: 50** (target 70 with extras, minimum 30). Report `N of 50`. Each service named without the city, matched to a `[service] [city]` keyword with volume, ranked by that volume.
 
-  **How the services table gets filled, no shortcuts (Jono, 28 Aug 2026):** every service on the profile is a money keyword until the lookup says otherwise. For each one: (1) **Volume:** search `[service] [primary city]` (city from the profile address) with Semrush keyword research, in the confirmed country database (default is US, confirm first). Try the two or three natural phrasings ("seo toronto", "seo services toronto", "seo company toronto") and keep the highest. Only when every phrasing returns zero does the row read "no keyword", and the report says which phrasings were tried. No Semrush connected: use the live SERP and Google autocomplete and mark the volume "not measured". (2) **Money keyword:** the highest-volume phrasing, written as searched. (3) **Page:** the page whose title tag or H1 contains the service (read `website-index.md`, then the sitemap, then the crawl). Only a real match counts. **Never default to /contact, the homepage or the services hub** - if no page carries the service, the cell reads "none" and that is a finding: a service sold with no page to rank for it. (4) Rows sorted by volume, highest first, the order the profile itself should use. Same lookup `references/gbp-setup.md` uses, so the audit and `/gbp` never disagree. **A table where every row says "no keyword" and points at one page means the lookup did not run. Do not ship it.**
+  **How the services table gets filled, no shortcuts (Jono, 28 Aug 2026):** every service on the profile is a money keyword until the lookup says otherwise. For each one: (1) **Volume:** search `[service] [primary city]` (city from the profile address) with Semrush keyword research, in the confirmed country database (default is US, confirm first). Try the two or three natural phrasings ("seo toronto", "seo services toronto", "seo company toronto") and keep the highest. Only when every phrasing returns zero does the row read "no keyword", and the report says which phrasings were tried. No Semrush connected: use the live SERP and Google autocomplete and mark the volume "not measured". (2) **Money keyword:** the highest-volume phrasing, written as searched. (3) **Page:** the page whose title tag or H1 contains the service (read a project-local `website-index.md` if one exists, otherwise the sitemap, then the crawl - most runs of this vendored copy won't have `website-index.md`, and that's fine, just say so and use the sitemap/crawl instead). Only a real match counts. **Never default to /contact, the homepage or the services hub** - if no page carries the service, the cell reads "none" and that is a finding: a service sold with no page to rank for it. (4) Rows sorted by volume, highest first, the order the profile itself should use. Same lookup `references/gbp-setup.md` uses, so this stays consistent with the manual GBP walkthrough in that file. **A table where every row says "no keyword" and points at one page means the lookup did not run. Do not ship it.**
 - **Service areas: 20** cities, service-area businesses only, inside a 60-minute drive. Report `N of 20`. Location businesses list one city; say so instead of scoring it.
 - **Products: 20** (target 30 with extras), every one with all six fields - name, price, description with the keyword first, category, link to the matching page, photo. Report `N of 20`, and count a product missing any field as not there.
 The Local layer's 0-100 score is the average of those four ratios, scaled down by NAP conflicts and the review gap. On the HTML report the profile rows read `Categories · mark 10 · 1 of 10`, and so on.
@@ -322,7 +376,7 @@ The Local layer's 0-100 score is the average of those four ratios, scaled down b
 - **Products** - each title carries the keyword, each tile has all six fields.
 The Business Profile contents are read from the public Maps listing (and `gbp-{slug}.md` when it exists); Semrush does not expose them.
 
-**Routing:** profile setup, categories, services, attributes and the citation campaign go to `/gbp`. Review count, recency and response rate go to `/review-generator`. Neither is fixed inside this command's loop.
+**Routing:** profile setup, categories, services, attributes and the citation campaign are a **MANUAL FOLLOW-UP** for the owner (**no `/gbp` command in this vendored copy** - `references/gbp-setup.md` is the manual walkthrough they can work through directly in the Business Profile dashboard). Review count, recency and response rate are also a manual follow-up (**no `/review-generator` command available** - ask real customers for reviews, and reply to the ones already there). Neither is fixed inside this command's loop; both are reported as recommendations.
 
 **Skip this layer only for a genuinely non-local business** - pure SaaS, ecommerce with no physical presence, a national publisher. When skipping, **say it out loud in the report**: "Local and Business Profile: skipped, this is a [type] with no local service area." A silently absent local layer on a plumber's site is the single most expensive omission this audit can make.
 
@@ -334,9 +388,9 @@ Pull what the site ACTUALLY ranks for - from the Layer 1 Search Console Performa
 - Which services have no page at all?
 - Given the referring-domain count from Layer 4, which of the target keywords are realistically reachable this year and which are not? A keyword map that ignores the link gap is a wish list.
 
-**The cheap keyword win that IS inside the loop:** for every page, take the keywords it already ranks for (Search Console first) and check whether the strongest one appears in the page's title tag and H1. A page ranking #14 for "water heater repair austin" with neither carrying the phrase gets it inserted - titles, metas, H1 tags and one natural insertion are allowed under THE COPY RULE. Report it as "ranks for it, not in the title" with the position, and fix it in the loop. Building keyword clusters and adding them to the body is writing; that is `/seo-optimization` and `/keyword-research expand`, never this command.
+**The cheap keyword win that IS inside the loop:** for every page, take the keywords it already ranks for (Search Console first) and check whether the strongest one appears in the page's title tag and H1. A page ranking #14 for "water heater repair austin" with neither carrying the phrase gets it inserted - titles, metas, H1 tags and one natural insertion are allowed under THE COPY RULE. Report it as "ranks for it, not in the title" with the position, and fix it in the loop. Building keyword clusters and adding them to the body is writing, so it's a MANUAL FOLLOW-UP (no `/seo-optimization` or `/keyword-research expand` command in this vendored copy), never this command.
 
-**Say this plainly when it's true: the technical layer is table stakes, and the missing keyword map is the real bottleneck.** A perfect Lighthouse score on three pages targeting nothing still earns nothing. Route it to `/keyword-research` and rank it ABOVE the technical findings when it's the binding constraint - never let a tidy list of technical fixes bury the fact that there's nothing to rank.
+**Say this plainly when it's true: the technical layer is table stakes, and the missing keyword map is the real bottleneck.** A perfect Lighthouse score on three pages targeting nothing still earns nothing. Flag it as a **MANUAL FOLLOW-UP** - building a real keyword-to-page map is content/strategy work (**no `/keyword-research` command in this vendored copy**) - and rank it ABOVE the technical findings when it's the binding constraint - never let a tidy list of technical fixes bury the fact that there's nothing to rank.
 
 ### Layer 13 - Thin content and doorway pages
 
@@ -356,14 +410,14 @@ For every flagged set, **name the only sentences that are actually unique.** Tha
 
 Run the same comparison on service pages that share a template and on any near-duplicate blog posts. Also flag the reverse: a city named in a title with zero mention of it in the body, which is a doorway page that has not even tried.
 
-**The routing rule for this whole layer.** Thin and doorway findings **never enter this command's fix loop.** Both are fixed by writing real content, and THE COPY RULE says this command does not write. They go in the report ranked by impact and route to `/service-page` (city and service pages) or `/blog-post`, where the voice and proof files load and the owner approves the draft. Deleting or consolidating a doorway page needs approval under THE DELETION RULE like anything else - and it is usually the wrong answer, because the page has a URL worth keeping and a content problem worth fixing.
+**The routing rule for this whole layer.** Thin and doorway findings **never enter this command's fix loop.** Both are fixed by writing real content, and THE COPY RULE says this command does not write. They go in the report ranked by impact as a **MANUAL FOLLOW-UP**: name the page(s), what's thin or cloned about them, and what real local/original material would fix it (**no `/service-page` or `/blog-post` command in this vendored copy** to draft that content) - the owner or their own content workflow drafts it, and approves it before it ships. Deleting or consolidating a doorway page needs approval under THE DELETION RULE like anything else - and it is usually the wrong answer, because the page has a URL worth keeping and a content problem worth fixing.
 
 **Rank this layer high when it fires.** A site with 40 cloned city pages does not have a technical problem, and burying that under a list of alt-text fixes is how a member spends a month on the wrong thing. When doorway pages are present, they go at the top of the report next to the keyword-map finding from Layer 12.
 
 ### Plus three site-level reads, graded once
 
-- **Cannibalization** - what each page ACTUALLY ranks for (Search Console first, Semrush second) versus what `keyword-map.md` says it should own. Overlapping pages flagged with the winner named.
-- **Proof count** - COUNT the proof touches per page: every real number, review quote, credential, guarantee, named client and original photo (each must trace to `context/proof/proof-inventory.md` - unverifiable claims count against, not for). **Target: 5+ per page.**
+- **Cannibalization** - what each page ACTUALLY ranks for (Search Console first, Semrush second) versus what a project-local `keyword-map.md` says it should own, when one exists. **Usually absent in this vendored copy** - without it, grade cannibalization purely from overlapping ranking data between pages (two+ pages ranking for the same query), and say the target-ownership map wasn't available rather than skipping the check. Overlapping pages flagged with the winner named.
+- **Proof count** - COUNT the proof touches per page: every real number, review quote, credential, guarantee, named client and original photo. Cross-check each against a project-local `context/proof/proof-inventory.md` when one exists; **when it doesn't (the normal case here)**, judge verifiability directly from the live page and public sources (does the number/quote/credential appear anywhere checkable) - unverifiable claims count against, not for. **Target: 5+ per page.**
 - **Structure** - grade the tree against `references/pyramid-structure.md`: 3 tiers max (any URL 4+ folders deep = flagged), the tier-1 set present (/services/, /blog/, /about, /contact, /quote), blog posts flat under /blog/, city pages only at tier 3, hubs for every spoke, sitemap mirrors the tree, orphans, E-E-A-T pages.
 
 ---
@@ -373,6 +427,8 @@ Run the same comparison on service pages that share a template and on any near-d
 **The audit finishes completely and reports BEFORE a single file is touched.** No "I'll fix the easy ones while I'm here." No fixing as you go. Grade everything, show me everything, then stop and wait for my yes.
 
 The report, in plain English and never in Semrush jargon:
+
+**The capability matrix for this run** - THE CAPABILITY RULE's table, restated with this run's actual probe results (which layers were FULLY AUTOMATED / PARTIALLY AUTOMATED / REQUIRES OWNER DATA / UNAVAILABLE WITHOUT CONNECTOR this time), placed right after the scope line and before the scoreboard. This is what makes every "not measured" line below legible at a glance instead of scattered.
 
 **The scoreboard as it stands today.** Every one of these lines is required, with a value or the words "not measured" plus the reason. Never blank, never dropped:
 - Semrush Site Health
@@ -413,7 +469,7 @@ I might only want the errors. I might want to see the meta rewrites before they 
 
 **4. Fix what I approved.** Only what I said yes to, in the order agreed. Work the full list, biggest category first, through my site's lane:
 - Static/Next.js: edit the code, redeploy
-- WordPress: apply fixes through Novamira per `references/wordpress-audit.md` - the #1 rule from that file: verify every fix at the RENDERED front-end HTML (the head may come from the theme, a builder, or a plugin - fix where it actually renders, and keep the stack profile updated)
+- WordPress: apply fixes through whatever access is actually available (WP-CLI, REST API, a WordPress MCP server if connected, or wp-admin directly) per `references/wordpress-audit.md` - the #1 rule from that file: verify every fix at the RENDERED front-end HTML (the head may come from the theme, a builder, or a plugin - fix where it actually renders, and keep the stack profile updated)
 - **THE COPY RULE and THE DELETION RULE hold throughout** (see the top of this file): fix the mechanical issue, never touch the writing, never remove anything. Body sentences altered should be zero; things deleted should be zero
 - Anything genuinely unfixable from here (server config only the host controls, a flag on an external domain) goes on a short WAIVED list with a one-line reason each - waived means consciously skipped, not forgotten
 
@@ -456,24 +512,26 @@ Sites over ~50 pages: loop template-level + worst offenders first, then batch th
 - **Needs your approval to remove** - anything I think should be deleted, consolidated or redirected, one line each with the reason and the cost of keeping it. Nothing on this list has been touched.
 - **What remains** - the strategy findings ranked by ranking impact, each tagged with its machine, ending with "your next 3 moves, in order."
 
-Fixes this command does NOT make itself, because they're content work, outreach, or someone else's dashboard - route them:
-- Thin proof (under 5 touches) → `/context-layer` if the inventory itself is thin, then `/seo-optimization proof`
-- **Thin pages (Layer 13)** → `/service-page` or `/blog-post` to add real information gain. Never padded to a word count
-- **Doorway / cloned city pages (Layer 13)** → `/service-page` per city, with the anti-clone rule: local jobs from proof, neighbourhoods, city-specific FAQ answers. If there is genuinely no local material for a city, say so - a marked placeholder is honest, invented local detail is what gets a site filtered
-- **Business Profile findings (Layer 11)** → `/gbp` for the profile, categories, services and citations; `/gbp-posts` for the posting cadence
-- **Review count, recency and response rate (Layer 11)** → `/review-generator`
-- **No Search Console property, or a property nobody has looked at (Layer 1)** → `/gsc`
-- **Backlink gaps and outreach targets (Layer 4)** → out of scope for this repo's commands; hand the gap list to the owner as the outreach list
-- Pages that read like AI filler → `/context-layer`, then rewrite via `/blog-post` or `/service-page`
-- Missing pages / cluster gaps → `/blog-post`, `/service-page`
-- Structure and merge/redirect plans → `/build-website`, then `/internal-linking`
-- Deeper per-page GEO work → `/seo-optimization ai-layer`
+Fixes this command does NOT make itself, because they're content work, outreach, or someone else's dashboard. **This vendored copy has no companion commands to hand these off to** (`/context-layer`, `/seo-optimization`, `/service-page`, `/blog-post`, `/gbp`, `/gbp-posts`, `/review-generator`, `/gsc`, `/build-website`, `/internal-linking` don't exist here - see `CHANGES.md`) - every one of these is a **MANUAL FOLLOW-UP**, reported with what needs to happen and why, for the owner's own content/dev/marketing process to pick up:
+- **Thin proof (under 5 touches)** → needs a real proof inventory built (numbers, credentials, named clients, original photos), then woven into the affected pages
+- **Thin pages (Layer 13)** → need real information gain added by whoever writes for the site. Never padded to a word count
+- **Doorway / cloned city pages (Layer 13)** → need a genuine per-city rewrite: real local jobs, neighbourhoods, city-specific FAQ answers. If there is genuinely no local material for a city, say so - a marked placeholder is honest, invented local detail is what gets a site filtered
+- **Business Profile findings (Layer 11)** → profile, categories, services and citations are the owner's dashboard clicks; `references/gbp-setup.md` is the manual walkthrough
+- **Review count, recency and response rate (Layer 11)** → the owner asks real customers for reviews and replies to existing ones
+- **No Search Console property, or a property nobody has looked at (Layer 1)** → walk the owner through setup inline (see Layer 1 above)
+- **Backlink gaps and outreach targets (Layer 4)** → hand the gap list to the owner as the outreach list; genuinely out of scope for any command in this repo
+- Pages that read like AI filler → need a rewrite by whoever writes for the site, grounded in real proof
+- Missing pages / cluster gaps → need new pages written and built
+- Structure and merge/redirect plans → need the site's own dev workflow to execute the move, then 301s verified
+- Deeper per-page GEO work beyond the 38 checks here → out of scope for this vendored copy
 
 ---
 
 ## The deliverable: `audit-report.md` - a checklist we work through together
 
 **The audit ends in a file, not in chat.** After the report gate above, write every approved finding to `audit-report.md` as a checklist item, then work down it one at a time. A wall of findings in chat gets read once and lost; a file survives the session, and you can stop halfway and come back tomorrow.
+
+**Path convention for this vendored copy:** upstream assumes `/audit` runs from the audited site's own repo, so `audit-report.md`/`audit-report.html` land in the project root. This repo is general-purpose and may audit domains it doesn't build, so instead write both files to `audits/<domain>/audit-report.md` and `audits/<domain>/audit-report.html` (create the folder if needed) - same filenames, same format, just namespaced so auditing more than one domain over time doesn't collide or clutter the repo root.
 
 **The file is the checklist and nothing else. No intro, no methodology, no summary at the bottom, no "next steps" section - the next step is the top unticked box.** One line at the top with the site and date. That is all the header you get.
 
@@ -538,8 +596,8 @@ Done 13 Aug. Root layout was pointing every page at the homepage.
 **The JSON, field by field:**
 - `mode`: `"owner"` (report + fix, the after columns are real) or `"prospect"` (report only - every after column renders as `?` or "not run yet", section 13 "what it costs to leave it" appears with `costs`, and `lostPerMonth` shows in the report card). Prospect mode never shows a green number that was not earned.
 - `before` / `after`, `issuesBefore` / `issuesAfter`, `passes`, `minutes`, `bodySentencesChanged`: the whole-site numbers. Before is the first crawl; after is the latest pass.
-- `layers`: exactly these five, in this order, so every report reads the same: On-page, Technical, AI readiness, Doorway pages, Local. Each has `before` and `after` on a **0-100 scale, whatever the layer's native unit is** - on-page and GEO = the pass percentage across all checks and pages; technical = the average of the four Lighthouse categories across templates; keywords = share of sold services with a page that ranks; doorway = 100 minus the average similarity of flagged sets (100 when none); local = 100 for a top-3 map-pack spot on every money term, scaled down by review gap and NAP conflicts. **The after score only moves when THIS loop moved it.** A layer whose fix lives in another command gets `"after": null` and a `pending` label instead of a score, rendered as an amber chip: Doorway pages and Local carry a `route` instead (see the structure rules at the end). Doorway pages get `"pending": "needs your yes"` until the merge and redirects are approved and shipped. Never show a green after number for work that has not shipped - the whole-site `after` and `issuesAfter` follow the same rule. The only things on this report that improve are things this loop changed.
-- `onpage` and `geo`: `{ pagesGraded, pagesInScope, groups:[ { name, checks:[ { t, b, a } ] } ] }`. The groups and check text come straight from `references/on-page-seo.md` (15 groups, 80 checks) and `references/geo.md` (8 groups, 38 checks) - same wording, same order, never invented or dropped. `b` = state before (`pass` | `fail`), `a` = state after (`pass` | `fail` | `routed` when the fix is writing and went to /service-page or /blog-post). A check that failed before and passes after gets a green FIXED tag automatically.
+- `layers`: exactly these five, in this order, so every report reads the same: On-page, Technical, AI readiness, Doorway pages, Local. Each has `before` and `after` on a **0-100 scale, whatever the layer's native unit is** - on-page and GEO = the pass percentage across all checks and pages; technical = the average of the four Lighthouse categories across templates; keywords = share of sold services with a page that ranks; doorway = 100 minus the average similarity of flagged sets (100 when none); local = 100 for a top-3 map-pack spot on every money term, scaled down by review gap and NAP conflicts. **The after score only moves when THIS loop moved it.** A layer whose fix is out of this command's scope (content work, a dashboard click) gets `"after": null` and a `pending` label instead of a score, rendered as an amber chip: Doorway pages and Local carry a `route` instead (see the structure rules at the end) - in this vendored copy `route` names the manual next step, not a slash command. Doorway pages get `"pending": "needs your yes"` until the merge and redirects are approved and shipped. Never show a green after number for work that has not shipped - the whole-site `after` and `issuesAfter` follow the same rule. The only things on this report that improve are things this loop changed.
+- `onpage` and `geo`: `{ pagesGraded, pagesInScope, groups:[ { name, checks:[ { t, b, a } ] } ] }`. The groups and check text come straight from `references/on-page-seo.md` (15 groups, 80 checks) and `references/geo.md` (8 groups, 38 checks) - same wording, same order, never invented or dropped. `b` = state before (`pass` | `fail`), `a` = state after (`pass` | `fail` | `routed` when the fix is writing and was flagged as a manual content follow-up instead of fixed here). A check that failed before and passes after gets a green FIXED tag automatically.
 - `technical`: `{ formFactor, runs, templates:[ { name, url, before:[perf,a11y,bp,seo], after:[...] } ] }`. One Lighthouse card per template, nothing else.
 - `other`: `[ { group, item, before, after } ]` - **"What else it changed"**: every fix that is not a check on a list. Index hygiene (private routes indexed, the site: vs sitemap vs Search Console counts, Disallow mistaken for noindex), links and redirects (404s, old URLs holding backlinks), files (sitemap.xml, robots.txt, llms.txt), speed and mobile (load time, image weight, tap targets), and anything else the loop touched. Group names are yours; keep them to two or three words. Before is red, after is green, both as short as a number allows.
 - `doorway`: `{ sets:[ { set, pages, similarity, unique, fix, after } ] }`. Empty `sets` renders the good answer. `unique` is the sentence that is actually different between siblings - the line that explains the problem on its own.
@@ -553,9 +611,9 @@ Done 13 Aug. Root layout was pointing every page at the homepage.
 **Less text, every time (Jono, 27 Aug 2026).** The page is scanned, not read. Section titles are two or three words. No lead paragraphs, no notes. `fixed` lines are 3 to 6 words ("41 alt texts, 19 titles, 8 links"). Fix rows: `who` is "me" or "you", `changes` is 2 to 4 words. Check text is the reference wording with the explanation after the hyphen dropped, parentheticals removed, never a rewrite. The page hides what did not change: passed-before-and-still-passes checks and done fix rows sit behind "Show all" toggles, so what the reader sees first is only what moved.
 
 **Structure rules (Jono, 28 Aug 2026):**
-- **This is an audit + fix, not an SEO plan.** No Recommendations section, no off-page section, no link plan, no outreach rows on the HTML. Section 02 "Before and after" lists only the layers this loop moves (on-page, technical, AI readiness). Doorway pages and Local are **findings**: they render as their own sections after the AI card and before the fix list, each header showing the before score and a `route` pill for the command that acts on it (Doorway `"/service-page · rewrite"`, Local `"/gbp · /review-generator"`). Keywords and Off-page are not on the HTML report at all: the keyword reality check and the backlink gap stay in `audit-report.md`.
+- **This is an audit + fix, not an SEO plan.** No Recommendations section, no off-page section, no link plan, no outreach rows on the HTML. Section 02 "Before and after" lists only the layers this loop moves (on-page, technical, AI readiness). Doorway pages and Local are **findings**: they render as their own sections after the AI card and before the fix list, each header showing the before score and a `route` pill naming the manual next step (Doorway `"manual: rewrite per city"`, Local `"manual: GBP profile + reviews"` - no slash commands exist in this vendored copy to name instead). Keywords and Off-page are not on the HTML report at all: the keyword reality check and the backlink gap stay in `audit-report.md`.
 - **The live test is NOT on the HTML report** (manual search unless the APIs are wired, and member-only material). It stays in `audit-report.md` as the dated GEO baseline. GEO groups 7 and 8 (off-site mentions, measuring citations) carry `"hidden": true` and render nowhere; the AI card shows the 31 checks the loop acts on.
-- **Doorway pages: rewrite first.** The fix is a rewrite per city with real local material (`/service-page`). Merge and 301 only the cities with genuinely nothing local, and only with approval. Each set's `fix` line says rewrite first, merge as the exception.
+- **Doorway pages: rewrite first.** The fix is a rewrite per city with real local material, done by whoever writes for the site (manual follow-up - no `/service-page` command here). Merge and 301 only the cities with genuinely nothing local, and only with approval. Each set's `fix` line says rewrite first, merge as the exception.
 - **Page by page.** `pages` is required: one entry per page in scope, `{ url, template, onpage:{ before, after, failsBefore:[], failsAfter:[], routed:[] }, geo:{ same }, perf, proof, flags:[] }`. `failsBefore` and friends are check ids in the form `onpage:<groupIndex>:<checkIndex>` / `geo:<groupIndex>:<checkIndex>`, zero-based, matching the order in the reference files. The page renders a sidebar with every URL, an "every page" table, and per-page check lists when a page is selected; site-wide it shows "failing on N pages" counts. `template` must match a name in `technical.templates`. Templates are Home, Service page, Blog post only; a city page is `"Service page"`. `flags` values: `doorway`, `cannibal`, `thin`.
 - `local` also carries `mapPackSource` (what the pack positions came from), `services:[ { name, keyword, vol, page } ]` (keyword and page may be null, they render as flags), and profile `fields` rows for `Categories · mark 10`, `Services · mark 50`, `Service areas · mark 20`, `Products · mark 20` (each valued `N of mark`) in addition to the basics. A field with `warn: true` renders amber, `flag: true` red.
 - **Waivers on the report:** `waived:[ { type, item, reason } ]` with `type` one of `platform limit` | `crawler artifact` | `owner decision`; `rawAfter` = the whole-site score with waived items counted as failures, shown next to the fixable `after`. Per page, `onpage.waived` / `geo.waived` carry the check ids that are waived; they render with a dashed dot and a WAIVED tag and count as passed in the fixable score.
