@@ -26,6 +26,39 @@ describe("cycleProgressAfterRunCompletion", () => {
 		});
 	});
 
+	it.each(["INVALID", "FAILED"] as const)("stops a Perplexity cycle after its first %s run", (runStatus) => {
+		expect(
+			cycleProgressAfterRunCompletion({
+				status: "RUNNING",
+				completedRuns: 0,
+				expectedRuns: 25,
+				systemId: "Perplexity",
+				runStatus,
+			}),
+		).toEqual({ status: "STOPPED", completedRuns: 1, cycleDone: false });
+	});
+
+	it("keeps a successful Perplexity cycle running and does not widen the breaker to other systems", () => {
+		expect(
+			cycleProgressAfterRunCompletion({
+				status: "RUNNING",
+				completedRuns: 0,
+				expectedRuns: 25,
+				systemId: "Perplexity",
+				runStatus: "SUCCEEDED",
+			}),
+		).toMatchObject({ status: "RUNNING" });
+		expect(
+			cycleProgressAfterRunCompletion({
+				status: "RUNNING",
+				completedRuns: 0,
+				expectedRuns: 25,
+				systemId: "ChatGPT",
+				runStatus: "INVALID",
+			}),
+		).toMatchObject({ status: "RUNNING" });
+	});
+
 	it.each(["ANALYZING", "QC_REQUIRED", "READY", "FAILED", "CARDINALITY_INCIDENT"] as const)(
 		"preserves the forward-only %s state",
 		(status) => {

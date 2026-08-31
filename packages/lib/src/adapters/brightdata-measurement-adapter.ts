@@ -210,7 +210,10 @@ const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 // A successful Perplexity collection on the account took almost sixteen
 // minutes. Keep its larger budget scoped to that surface so the faster
 // collectors retain their existing ceiling.
-const PERPLEXITY_SNAPSHOT_TIMEOUT_MS = 25 * 60_000;
+export const PERPLEXITY_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
+// The worker lease includes room after the provider deadline for snapshot
+// cancellation and the transaction that makes the run and cycle terminal.
+export const PERPLEXITY_QUEUE_LEASE_SECONDS = 35 * 60;
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
 const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
 
@@ -445,7 +448,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	const parseAnswer = deps.parseAnswer ?? parseBrightDataAnswer;
 	const snapshotTimeoutMs =
 		deps.snapshotTimeoutMs ??
-		(deps.system === "perplexity" ? PERPLEXITY_SNAPSHOT_TIMEOUT_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
+		(deps.system === "perplexity" ? PERPLEXITY_MEASUREMENT_DEADLINE_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
 
 	async function cancelSnapshot(snapshotId: string): Promise<void> {
@@ -549,15 +552,18 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 
 	/**
 	 * One full request/response cycle against the provider: build the body,
-	 * fire it, and read whatever comes back. Broken out of `execute` so it can
-	 * be attempted more than once — see the retry loop below `execute` calls
-	 * this from.
+	 * fire it once, and read whatever comes back within the shared deadline.
 	 */
-	async function attemptOnce(permit: SelenaExecutablePermit, scenarioText: string): Promise<RunOutcome> {
+	async function attemptOnce(
+		permit: SelenaExecutablePermit,
+		scenarioText: string,
+		overallDeadlineAt: number,
+	): Promise<RunOutcome> {
 		const controller = new AbortController();
 		// The permit is the authorization window: a call that outlives it would
 		// return an answer nothing is allowed to record any more.
-		const budgetMs = permit.expiresAt.getTime() - now().getTime();
+		const budgetMs = Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now());
+		if (budgetMs <= 0) return invalidOutcome(permit, "TIMEOUT");
 		const timeoutMs = Math.max(1, Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, budgetMs));
 		const timer = setTimeout(() => controller.abort(), timeoutMs);
 		try {
@@ -630,7 +636,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				if (snapshotId === null) return invalidOutcome(permit, "MALFORMED_RESPONSE", costFields());
 				const collected = await awaitSnapshot(
 					snapshotId,
-					Math.min(snapshotTimeoutMs, permit.expiresAt.getTime() - now().getTime()),
+					Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now()),
 				);
 				if (collected === null) {
 					await cancelSnapshot(snapshotId);
@@ -716,33 +722,9 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		}
 	}
 
-	// Bright Data's collectors have been observed to answer with a 200 and a
-	// body carrying none of the recognized answer fields — EMPTY_RESPONSE
-	// (the field was present and blank) or MALFORMED_RESPONSE (no recognized
-	// field at all) — well above a level a single paid attempt should absorb.
-	// Measured against the Perplexity collector on 2026-08-29: 23 of 25 calls,
-	// even sent one at a time with no concurrent load, came back as exactly
-	// this — MALFORMED_RESPONSE, `{ timestamp, input }` and nothing else.
-	//
-	// Owner-approved, deliberate exception to "one permit, one provider call"
-	// (see apps/worker/src/index.ts, the selena-measure queue comment): a
-	// permit still authorizes exactly one *charged* answer, but getting there
-	// may cost more than one call when the provider's own reply is unusable.
-	// Scoped narrowly on purpose:
-	//   - retries ONLY on EMPTY_RESPONSE and MALFORMED_RESPONSE — the two
-	//     reasons that mean "the provider answered but gave us nothing to
-	//     read", never on TIMEOUT, TRANSPORT_ERROR, RESPONSE_TOO_LARGE,
-	//     SNAPSHOT_NOT_READY or a PROVIDER_HTTP_* status — those are a
-	//     different failure and retrying them blindly would be reckless;
-	//   - capped at three retries (four attempts total) so one bad question
-	//     cannot spend without bound;
-	//   - stops the moment an attempt produces a real answer;
-	//   - every attempt's reported cost is kept, not just the last one's, so
-	//     the ledger reflects what was actually spent chasing the answer.
-	const EMPTY_ANSWER_REASONS = new Set(["EMPTY_RESPONSE", "MALFORMED_RESPONSE"]);
-	const MAX_ATTEMPTS = 4;
-
 	async function execute(permit: SelenaExecutablePermit): Promise<RunOutcome> {
+		const overallDeadlineAt =
+			Date.now() + Math.max(0, Math.min(snapshotTimeoutMs, permit.expiresAt.getTime() - now().getTime()));
 		let scenarioText: string;
 		try {
 			scenarioText = (await deps.resolveScenarioText(permit)).trim();
@@ -753,34 +735,9 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		}
 		if (scenarioText === "") return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
 
-		// The loop always runs at least once, so this is always overwritten
-		// before use — no throwaway call needed to seed it.
-		let outcome!: RunOutcome;
-		let spentUsd = 0;
-		let sawActualCost = false;
-		for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-			outcome = await attemptOnce(permit, scenarioText);
-			if ("costUsd" in outcome && typeof outcome.costUsd === "number") {
-				spentUsd += outcome.costUsd;
-				sawActualCost = sawActualCost || outcome.costBasis === "actual";
-			}
-			const emptyAnswer = outcome.status === "INVALID" && EMPTY_ANSWER_REASONS.has(outcome.invalidReason ?? "");
-			if (!emptyAnswer) break;
-			if (attempt === MAX_ATTEMPTS) break;
-			if (permit.expiresAt.getTime() - now().getTime() <= 0) break;
-		}
-		// Fold the accumulated spend across every attempt into whichever outcome
-		// is returned, so a run that finally succeeded on attempt three still
-		// bills for the two empty attempts that came before it.
-		if (spentUsd > 0) {
-			return {
-				...outcome,
-				costUsd: spentUsd,
-				costBasis: sawActualCost ? "actual" : "estimated",
-				provider: "brightdata",
-			};
-		}
-		return outcome;
+		// The permit is the paid-call cardinality boundary. Snapshot polling reads
+		// the receipt produced by this call; it does not dispatch another answer.
+		return attemptOnce(permit, scenarioText, overallDeadlineAt);
 	}
 
 	return {
