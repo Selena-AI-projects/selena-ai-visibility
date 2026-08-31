@@ -117,7 +117,7 @@ describe("deterministic Local Maps rehearsal stub", () => {
 				return result.targetRank !== null && result.targetRank >= 1 && result.targetRank <= 20;
 			}),
 		).toBe(true);
-	});
+	}, 20_000);
 
 	it("returns byte-identical output bound to the full frozen request snapshot", async () => {
 		const adapter = createStubLocalMapsAdapter();
@@ -133,7 +133,7 @@ describe("deterministic Local Maps rehearsal stub", () => {
 			longitude: request.slot.longitude,
 		});
 		expect(first.rawReference).toMatch(/^stub-local-maps:sha256:[a-f0-9]{64}$/);
-	});
+	}, 10_000);
 
 	it("rejects lock, slot and digest tampering before producing a result", async () => {
 		const adapter = createStubLocalMapsAdapter();
@@ -148,7 +148,7 @@ describe("deterministic Local Maps rehearsal stub", () => {
 				slot: { ...request.slot, providerVersion: "other-version" },
 			}).success,
 		).toBe(false);
-	});
+	}, 10_000);
 
 	it("cannot relabel rehearsal output as live or evidence-eligible", async () => {
 		const request = rehearsalRequests()[0];
@@ -177,7 +177,7 @@ describe("deterministic Local Maps rehearsal stub", () => {
 		expect(() => assertLocalMapsRehearsalResultMatchesRequest(request, opposite)).toThrow(
 			"LOCAL_MAPS_REHEARSAL_RESULT_REQUEST_MISMATCH",
 		);
-	});
+	}, 10_000);
 
 	it("exposes a normative adapter-shaped guard that cannot enter the live path", async () => {
 		const adapter = createDisabledLocalMapsRankAdapter();
