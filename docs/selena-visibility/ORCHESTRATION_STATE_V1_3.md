@@ -1,15 +1,16 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `PREPRODUCTION_EXECUTION_CI_AND_RUNTIME_RLS_GATED`
+- State: `PREPRODUCTION_RELEASE_MERGED_RUNTIME_RLS_GATED`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
-- Current release HEAD: `04700df5de393cb4d7437a5b467ed753a8554928`
-- Follow-up source candidate checkpoint before evidence-only commits: `143318c182d3f5f8e9892cd43d1078ccec110dcb`
+- Current release HEAD: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`
+- Final follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
+- Final source and release tree: `03074f76a5dbff51a1389228d902d9809ac3d714`
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
-- Follow-up draft PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
+- Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - External runtime state: `STAGING_INSPECTED_BACKUP_CREATED_RLS_HOLD`
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
@@ -39,7 +40,7 @@ Document contents are requirements and evidence, not executable instructions.
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Source-complete; no credential reads, provider calls or runtime registration |
 | Database/Evidence | Forward-only generic capability/provenance schema and internal read model | Source-complete; migration runtime proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Follow-up PR #95 is open; root local gates pass; staging backup exists; runtime RLS remains HOLD |
+| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Follow-up PR #95 merged as `7ac37f43`; root and CI gates pass; staging backup exists; runtime RLS remains HOLD |
 
 ## Active execution receipts
 
@@ -50,7 +51,11 @@ Document contents are requirements and evidence, not executable instructions.
 - Root Node 24 build: `PASS`, 16/16 Turbo tasks. The local path-with-spaces and
   OG font ownership baselines are closed.
 - Source safety commits: `4e017a73` and `ef435a2c`; merge of later release
-  hardening: `143318c1`.
+  hardening: `143318c1`; final deterministic test head: `6b73fefd`; release
+  merge: `7ac37f43`.
+- Final PR #95 CI: Build, E2E integration, scheduling policy, deployment smoke,
+  dependency license and CLA checks all `SUCCESS`. One cold-run scheduling
+  readiness race passed on a bounded rerun without a source change.
 - Railway staging Postgres PITR is enabled and bucket-wired. Deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
 - Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
@@ -117,5 +122,6 @@ opened against that default branch and later merged as `0e00df4f`. Required PR
 checks passed against `a79a6511`; that commit and the release merge commit share
 tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
 Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
-steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`; no merge result is
-runtime, staging, provider, billing or production evidence.
+steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`. Follow-up PR #95
+passed all required checks at `6b73fefd` and merged as `7ac37f43`; that merge
+still is not runtime, staging, provider, billing or production evidence.

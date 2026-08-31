@@ -6,7 +6,7 @@ not promote local evidence to runtime, hosted staging or production proof.
 ## Post-merge evidence anchor
 
 - Release branch: `release/selena-visibility-mvp`
-- Release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
+- Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
 - Merged PR: [#92 — feat(visibility): add source-only v1.3 acceptance package](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - PR head validated by CI: `a79a65117ecc4aa3e8f8cd2abcef7cebafd2c406`
 - Release and validated PR tree: `8b57645aea201baa38a7e71db423df51d61c9753`
@@ -26,13 +26,20 @@ which is not counted as acceptance evidence.
   [#94](https://github.com/parkourcafe/selena-ai-visibility/pull/94). The
   feature branch merged that release hardening without rebase or history
   rewrite.
-- Follow-up draft PR
-  [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95) targets
-  `release/selena-visibility-mvp`. Candidate HEAD at this evidence checkpoint is
-  `143318c182d3f5f8e9892cd43d1078ccec110dcb`.
+- Follow-up PR
+  [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95) passed all
+  required checks at final head
+  `6b73fefdee6229389855e2cbe4607424e0dd7c89` and merged into
+  `release/selena-visibility-mvp` as
+  `7ac37f436b08f0e48c97acb61dfaee8a6458760a` at
+  `2026-08-31T13:07:37Z`.
+- Final PR head and current release share tree
+  `03074f76a5dbff51a1389228d902d9809ac3d714`.
 - Source commits `4e017a73` and `ef435a2c` add fail-closed runtime guards and
   close the reproducible root lint/build errors. Merge commit `143318c1`
-  retains the later release breaker behavior and the new provider stop guard.
+  retains the later release breaker behavior and the new provider stop guard;
+  `6b73fefd` makes the provider snapshot deadline test deterministic without
+  changing runtime source.
 - No production action, provider call, Social/Travel activation, billing
   change or application recurring job occurred.
 
@@ -50,8 +57,8 @@ which is not counted as acceptance evidence.
 | V13-STABILITY | Deterministic Local Maps rehearsal passes five isolated Node 24 replays with zero transport calls, cost, persistence or evidence eligibility | `PASS_LIMITED_REPLAY` | Local executed |
 | V13-CODEX | Three independent Codex reviewers cross-audit implementation against the four-source baseline | `PASS_SOURCE_ONLY` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
-| V13-BRANCH | Small commits contain no handoff/secrets; protected handoff remains untracked; latest release hardening is merged into the feature branch | `PASS_FOLLOWUP_BRANCH` | Git |
-| V13-PR | PR #92 is merged and green; follow-up PR #95 is open against the release branch and must not merge before final green CI and no P0/P1 | `FOLLOWUP_CI_IN_PROGRESS` | GitHub/CI |
+| V13-BRANCH | Small commits contain no handoff/secrets; protected handoff remains untracked; latest release hardening and follow-up source are merged into the release branch | `PASS_FOLLOWUP_MERGED` | Git |
+| V13-PR | PR #92 and follow-up PR #95 are merged; final PR #95 head passed all required checks and independent P0/P1 review found no blocker | `PASS_FOLLOWUP_MERGED` | GitHub/CI |
 | V13-RUNTIME | Staging service IDs and a backup checkpoint are verified, but production-like domain isolation and app-wide non-owner RLS are not; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_STAGING_DOMAIN_AND_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
@@ -67,20 +74,22 @@ tree is byte-identical to release HEAD `0e00df4f`.
 | License Check | [33374448946](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33374448946) | `SUCCESS` |
 | CLA Check | [33374448953](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33374448953) | `SUCCESS` |
 
-Follow-up source candidate `143318c1` started a second bounded Blacksmith CI
-cycle for PR #95:
+Final follow-up head `6b73fefd` completed the bounded Blacksmith CI cycle for
+PR #95:
 
 | Workflow | Run | Checkpoint result |
 |---|---|---|
-| Build | [33390053531](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33390053531) | `SUCCESS` |
-| E2E Tests | [33390053558](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33390053558) | Integration and scheduling policy `SUCCESS` |
-| Deployment Smoke Tests | [33390053469](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33390053469) | `SUCCESS` |
-| License Check | [33390053550](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33390053550) | `SUCCESS` |
-| CLA Check | [33390053455](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33390053455) | `SUCCESS` |
+| Build | [33392533928](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33392533928) | `SUCCESS` |
+| E2E Tests | [33392533929](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33392533929) | Integration `SUCCESS`; scheduling policy `SUCCESS` on bounded rerun after one cold-run readiness race |
+| Deployment Smoke Tests | [33392533945](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33392533945) | `SUCCESS` |
+| License Check | [33392533932](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33392533932) | `SUCCESS` |
+| CLA Check | [33392533943](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33392533943) | `SUCCESS` |
 
-This table is a time-bounded checkpoint, not permission to merge. PR #95 must
-remain unmerged until its final head has fully green required checks and no
-P0/P1.
+The first scheduling-policy attempt reached the verifier before its named queue
+was ready; the adjacent worker log was still empty. The immediately preceding
+run passed on identical scheduling source, and the bounded rerun passed both
+local and cloud scheduling modes. No scheduling-source change was made or
+required for this merge.
 
 ## Local stability replay
 

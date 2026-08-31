@@ -1,12 +1,12 @@
 # Selena AI Visibility v1.3 — staging/runtime gate plan
 
-Status: `EXECUTION_AUTHORIZED_PARTIAL_RLS_HOLD`
+Status: `RELEASE_MERGED_RUNTIME_RLS_AND_DOMAIN_HOLD`
 
 The original anchor is release HEAD
 `0e00df4faa74990e6b696c4249cbb85acf23c693`. Current release HEAD is
-`04700df5de393cb4d7437a5b467ed753a8554928`; follow-up source checkpoint
-`143318c182d3f5f8e9892cd43d1078ccec110dcb` is in draft PR #95, whose final
-head must be resolved at deploy time. The owner has
+`7ac37f436b08f0e48c97acb61dfaee8a6458760a`; follow-up source head
+`6b73fefdee6229389855e2cbe4607424e0dd7c89` passed required CI and merged in
+PR #95. The owner has
 authorized one bounded pre-production loop. Production, application recurring
 jobs, Social/Travel activation and any provider call beyond the single named
 Google AI Mode canary remain prohibited.
@@ -14,9 +14,12 @@ Google AI Mode canary remain prohibited.
 ## Evidence anchor
 
 - PR [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92) is merged.
-- The release tree `8b57645aea201baa38a7e71db423df51d61c9753`
-  equals the tree validated by the successful PR CI runs listed in
-  `ACCEPTANCE_MATRIX_V1_3.md`.
+- PR [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95) is merged
+  as release commit `7ac37f43` after final required CI completed successfully.
+- The final PR head and current release share tree
+  `03074f76a5dbff51a1389228d902d9809ac3d714`, validated by the successful PR
+  CI runs listed in `ACCEPTANCE_MATRIX_V1_3.md`. The earlier PR #92 release
+  tree remains historical evidence only.
 - Source-only registry, Local Maps rehearsal, Social/Travel fail-closed gates,
   evidence provenance and HoReCa read models are accepted only at their stated
   evidence classes.
@@ -57,7 +60,7 @@ Approval of one boundary does not authorize any later boundary.
 
 | Gate | State | Receipt / blocker |
 |---|---|---|
-| SR-00 | `IN_PROGRESS` | Candidate `143318c1`; PR #95 CI is running. |
+| SR-00 | `PASS` | Final source head `6b73fefd`; PR #95 merged as release commit `7ac37f43`; required CI links are recorded in the acceptance matrix. |
 | SR-01 | `PASS_LOCAL` | Root lint/tests/build pass on Node 24; warnings remain registered. |
 | SR-02 | `PARTIAL_DOMAIN_BINDING_HOLD` | Exact staging project/environment/service IDs are recorded without secret values, but staging web also serves `app.selenasystems.com`; production-like domain isolation is not proven. |
 | SR-03 | `PARTIAL` | Key-name and scheduler state audit exists; sealed value correctness is not claimed. |

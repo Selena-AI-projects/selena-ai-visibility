@@ -1,12 +1,13 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `OWNER_AUTHORIZED_PREPRODUCTION_LOOP_ACTIVE`
+Status: `SOURCE_MERGED_RUNTIME_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
-Current release: `04700df5de393cb4d7437a5b467ed753a8554928`.
-Follow-up source checkpoint before evidence-only commits:
-`143318c182d3f5f8e9892cd43d1078ccec110dcb`. Deployment must resolve the final
-PR #95 release commit instead of using this checkpoint implicitly.
+Current release: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`.
+Final follow-up source head:
+`6b73fefdee6229389855e2cbe4607424e0dd7c89`. PR #95 passed all required CI and
+merged as the current release commit; this exact release is the only eligible
+candidate once the remaining runtime gates pass.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
@@ -145,7 +146,7 @@ the call. Social is not interchangeable with the recommended Google canary.
 | OD-B1 | Create `selena_app` and the separately named internal evidence role in the staging PostgreSQL instance. |
 | OD-B2 | Take/verify the staging backup checkpoint and run the one-shot pending migration chain through `0051`. |
 | OD-B3 | Change staging secret/config bindings, including runtime `DATABASE_URL`, CA, auth/encryption keys, stub/stop flags and application origins. |
-| OD-B4 | Deploy/restart the exact final PR #95 release candidate after green CI; `0e00df4f` is historical evidence and must not be redeployed as the fix candidate. |
+| OD-B4 | Deploy/restart exact release `7ac37f43` only after the remaining staging gates pass; `0e00df4f` is historical evidence and must not be redeployed as the fix candidate. |
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
