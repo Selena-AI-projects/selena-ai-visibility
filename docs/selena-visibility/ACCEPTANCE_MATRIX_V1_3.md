@@ -40,28 +40,42 @@ which is not counted as acceptance evidence.
   retains the later release breaker behavior and the new provider stop guard;
   `6b73fefd` makes the provider snapshot deadline test deterministic without
   changing runtime source.
-- No owner-triggered canary, production action, Social/Travel activation,
-  billing change or application recurring job occurred. The release merge did
+- No owner-triggered canary, production action, Social/Travel activation or
+  billing change occurred. At the bounded containment checkpoint, the selected
+  maintenance, retention and Auth0 schedule rows were absent. This does not
+  prove a historical zero across every recurring path. The release merge did
   trigger Railway Git deployment and resumed pre-existing VISITOR work; that
   separate runtime activity is recorded below.
+- Release `7ac37f43` is now a historical/rollback image only. It contains the
+  provider-stop gaps found after its automatic Railway deployment and is not an
+  eligible redeploy candidate.
+- Draft follow-up PR
+  [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is open from
+  `feature/selena-visibility-v1-2-1`. Its last pushed head is
+  `71e5b8efa2baee416ba845852f40940ff85e2349`; the additional v1.3 provider,
+  RLS/evidence and HoReCa hardening is now committed locally through source
+  head `a75a9f18`, but has not yet been pushed. Therefore PR #96's existing
+  green CI does **not** validate the current source. The deploy candidate is
+  PR #96's eventual final head (the commit containing this matrix), only after
+  push and a new fully green CI cycle.
 
 | Gate | Required evidence | Current status | Evidence class |
 |---|---|---|---|
 | V13-BASELINE | Four approved documents hashed; `0d1f21ed` relationship and release HEAD `0e00df4f` recorded; handoff excluded | `PASS_POST_MERGE` | Repository/read-only local |
 | V13-REGISTRY | Domain/surface-aware registry with 13 exact dataset definitions, versioned schemas, external attempt policy and no embedded new dataset IDs | `PASS_SOURCE_ONLY` | Source only |
 | V13-GOOGLE | Google AI Mode, SERP, Maps Place and Maps Reviews contract adapters preserve domain separation and require lifecycle captures before normalization | `PASS_SOURCE_ONLY` | Source only |
-| V13-SOCIAL | Social definitions fail closed until schema, privacy, retention and cost evidence exists; Social never contributes to AI visibility | `PASS_SOURCE_ONLY` | Source only |
+| V13-SOCIAL | Social definitions must fail closed until schema, privacy, retention, deletion propagation, legal hold, source terms and cost evidence exist; Social never contributes to AI visibility | `PASS_SOURCE_ONLY_DISABLED` | Source only |
 | V13-TRAVEL | Hotels remains canary-only and blocked from runtime/product activation until stable schema and HoReCa gate | `PASS_SOURCE_ONLY` | Source only |
-| V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references remain private; reserved schemas are not invented | `PASS_SOURCE_ONLY_RUNTIME_UNKNOWN` | Source only |
+| V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references and private hashes remain denied; reserved schemas are not invented | `PASS_SOURCE_AND_DISPOSABLE_RUNTIME_UNKNOWN` | Source plus disposable DB |
 | V13-HORECA | Local-first read model exposes independent modules, accepted-sample counts, UNKNOWN and evidence-linked actions without a composite score | `PASS_SOURCE_UI` | Source/UI only |
 | V13-PILOTS | AVLI and KORA packages contain evidence/UNKNOWN gates, intent ontology, report templates and unit-economics decision fields without fabricated facts | `PASS_ARTIFACT` | Repository artifact |
-| V13-TESTS | Node 24 root lint, tests and build pass after the follow-up; source candidate CI is green; historical root errors are retained below as resolved baselines | `PASS_LOCAL_ROOT_AND_SOURCE_CI` | Local plus PR CI |
+| V13-TESTS | Current working-tree Node 24 lint, all-workspace typecheck, uncached tests and uncached build pass; new PR #96 CI remains pending after commit/push | `PASS_LOCAL_HOLD_NEW_CI` | Local plus PR CI |
 | V13-STABILITY | Deterministic Local Maps rehearsal passes five isolated Node 24 replays with zero transport calls, cost, persistence or evidence eligibility | `PASS_LIMITED_REPLAY` | Local executed |
-| V13-CODEX | Three independent Codex reviewers cross-audit implementation against the four-source baseline | `PASS_SOURCE_ONLY` | Static independent review |
+| V13-CODEX | Independent Provider, HoReCa, DB/RLS and formal security-diff reviews cross-audit the implementation; final frozen scan has no reportable P0/P1/P2 | `PASS_SOURCE_ONLY_EXTERNAL_COST_HOLD` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
-| V13-BRANCH | Small commits contain no handoff/secrets; protected handoff remains untracked; latest release hardening and follow-up source are merged into the release branch | `PASS_FOLLOWUP_MERGED` | Git |
-| V13-PR | PR #92 and follow-up PR #95 are merged; final PR #95 head passed all required checks and independent P0/P1 review found no blocker | `PASS_FOLLOWUP_MERGED` | GitHub/CI |
-| V13-RUNTIME | Staging service IDs and a backup checkpoint are verified; release merge auto-deployed web/worker, while production-like domain isolation and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_AUTO_DEPLOY_PROVIDER_ACTIVITY_RLS_HOLD` | Runtime/hosted |
+| V13-BRANCH | Three small source commits preserve the untracked protected handoff; evidence commit and push remain pending | `PASS_LOCAL_COMMITS_PUSH_PENDING` | Git |
+| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 exists but its green runs validate only pushed head `71e5b8ef`, not the current diff | `HOLD_NEW_CI_REQUIRED` | GitHub/CI |
+| V13-RUNTIME | Staging service IDs, named backup, disposable 0051 schema RLS and an isolated PITR restore rehearsal are verified; production-like domain isolation, global provider containment and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_BACKUP_PASS_PROVIDER_AND_APP_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
 
@@ -92,6 +106,15 @@ was ready; the adjacent worker log was still empty. The immediately preceding
 run passed on identical scheduling source, and the bounded rerun passed both
 local and cloud scheduling modes. No scheduling-source change was made or
 required for this merge.
+
+Draft PR #96 last pushed head `71e5b8ef` also completed a green Blacksmith
+cycle: [Build 33397249574](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249574),
+[E2E 33397249625](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249625),
+[Smoke 33397249619](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249619),
+[License 33397249648](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249648)
+and [CLA 33397249576](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249576).
+These runs are historical evidence only until the current working tree is
+committed and a new CI cycle passes.
 
 ## Local stability replay
 
@@ -126,12 +149,28 @@ confirmed by a no-space control and by a successful build in the original path
 after the source fix. `impeccable detect` was not available as a local command,
 so no Impeccable PASS is claimed.
 
+Current local PR #96 source-stack evidence on Node `v24.18.0`: root lint
+`PASS` with zero errors, 129 warnings and 12 infos; all 16 workspace typechecks
+`PASS`; uncached root tests `15/15` Turbo tasks with lib `1012/1012`, web
+`421/421` executed and four database-dependent web tests skipped; uncached root
+build `16/16` tasks `PASS`. `npx --no-install impeccable detect` remains
+unavailable because the local npm cache contains root-owned files (`EPERM`); no
+permissions were changed and no Impeccable PASS is claimed.
+
+Final frozen Codex Security diff scan
+`c767fbb5-efb5-45ec-9296-d2e81470b5de` reviewed 73/73 items and produced zero
+reportable findings. The only deferred item is authoritative Bright Data
+provider/account hard-cap evidence and actual-cost reconciliation; this keeps
+the provider canary at `HOLD` without reopening a source P0/P1/P2.
+
 ## Shared staging evidence checkpoint
 
 Scope is Railway project `51dd0770-e622-4734-a705-ace401234bb8`, environment
 `90f3bf7f-5e53-4de3-a3f7-56052b706f24` (`staging`) and Postgres service
-`280e3b59-77c3-46e0-8c2c-75955b7f9a40`. No secret value was read or printed.
-Service identity is verified, but topology acceptance is not: the staging web
+`280e3b59-77c3-46e0-8c2c-75955b7f9a40`. A key-presence command unexpectedly
+printed raw staging values during this audit. No value is reproduced here; the
+affected credentials are treated as compromised. Service identity is verified,
+but topology acceptance is not: the staging web
 service also has the production-like `app.selenasystems.com` binding, so SR-02
 remains `HOLD` until domain ownership/blast radius is resolved.
 
@@ -165,17 +204,54 @@ remains `HOLD` until domain ownership/blast radius is resolved.
   `92f3adae-a05a-4f64-b064-f48c55001149`; creation workflow is
   `createVolumeInstanceBackup/1bcbf5f8-176f-41ac-aafd-c8e6d7884dfc` and
   `expiresAt=null`.
-- Live WAL coverage and archiver health remain `UNKNOWN`: the CLI health probes
-  returned SSH exit 10, and no restore rehearsal was performed.
+- The platform PITR health probe still reports live coverage and archiver
+  errors as SSH exit 10, so those two telemetry fields remain `UNKNOWN`.
+  Restoreability itself is now independently verified: PITR workflow
+  `createServiceFromPITR/51dd0770-e622-4734-a705-ace401234bb8/1bcbf5f8-176f-41ac-aafd-c8e6d7884dfc/gVug7V8EP2ZFqRiuYaoD9`
+  restored target `2026-08-31T13:26:46Z` into isolated staging service
+  `33032d1f-fded-47d2-bc5e-fa907e044b52`; deployment
+  `eb887613-e5b3-4740-893d-4589ca5e8c12` reached `SUCCESS`. The restored DB
+  was promoted (`pg_is_in_recovery()=false`), retained the 43-row migration
+  journal through `0042`, contained `organization`, and correctly lacked the
+  still-pending 0051 capability table. The source DB remained online with the
+  same technical receipt. The rehearsal service was deleted and its restored
+  volume was submitted for deletion; neither web nor worker was rebound.
 - Read-only migration metadata shows 43 applied journal rows, with the latest
   timestamp matching migration `0042`. Only `0043` through `0051` are pending.
-- App-wide runtime RLS is `HOLD`: the source still has direct and lazy global-DB
-  paths without one transaction-local `app.organization_id` seam. Web/worker
-  must not be switched to `selena_app`; a schema-only rollback probe cannot be
-  relabelled as runtime proof.
-- A disposable 0051 schema-probe runner was prepared, but its executed result
-  is `BLOCKED_ENV`: the configured Colima Docker socket was not running. No
-  disposable or staging SQL was applied, and no schema-probe PASS is claimed.
+- App-wide runtime RLS is `HOLD`: most tenant paths now use transaction-local
+  `app.organization_id` and the API-key bootstrap is source-complete, but
+  independent review found remaining legacy report paths and excessive role
+  grants. Manual journal publication and recurring retention paths remain
+  deliberately disabled. Web/worker must not be switched to `selena_app` until
+  the remediation, fresh disposable proof and staging browser/API/RLS gates
+  pass.
+- The disposable 0051 schema probe now passes against an isolated PostgreSQL 16
+  compose project. It verified same-tenant read/write, denied cross-tenant
+  access, kept private provenance inaccessible, rolled back the probe role and
+  fixtures, and removed the disposable container/network/volume. This is
+  `PASS_SCHEMA_ONLY`, not app-runtime RLS acceptance; no staging SQL was
+  applied.
+- The current working tree adds a master provider gate across registry,
+  scheduler, worker, legacy transport and self-rescheduling paths. Targeted
+  source tests pass, but this is not staging or CI evidence until the follow-up
+  commit and PR #96 cycle are green.
+- During the configuration-presence audit, Railway CLI `variable list`
+  unexpectedly rendered raw staging values instead of key names only. No value
+  is copied into this artifact, but the exposed auth, database, provider,
+  email, encryption and certificate material is treated as compromised.
+  Runtime acceptance now requires owner-authorized rotation and verification;
+  the production-like domain binding prevents an autonomous rotation here.
+- As immediate containment, staging worker deployment `ff17e6a2…` was stopped.
+  The legacy `measure` deployment was also stopped; Railway records its latest
+  stopped marker as `ddb451ab-61c8-41f2-a726-59331334e276`. A bounded database
+  checkpoint from `2026-08-31T14:05:00Z` through `14:11:59Z` found zero new
+  permits, runs, cost events, cost and selected active provider jobs. Web was
+  not restarted or reconfigured because it serves the production-like domain.
+  The web configuration key inventory does not contain the master emergency
+  stop key, so direct user-triggered onboarding/provider paths remain a P0
+  runtime risk on the current release even though background executors are
+  stopped. Correcting that live binding requires explicit production-impact
+  permission or an isolated replacement web service.
 - New owner-triggered `GOOGLE_AI_MODE` canary calls in this execution loop are
   `0`. Earlier Perplexity canaries and the post-deploy VISITOR ledger activity
   mean no lifetime/account-wide or general provider-call zero is claimed.

@@ -1,23 +1,29 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `PREPRODUCTION_AUTO_DEPLOY_CONTAINED_RUNTIME_HOLD`
+- State: `PREPRODUCTION_SECURITY_INCIDENT_SOURCE_REMEDIATION_HOLD`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
 - Current release HEAD: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`
-- Final follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
-- Final source and release tree: `03074f76a5dbff51a1389228d902d9809ac3d714`
+- Historical follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
+- Current feature base HEAD: `71e5b8efa2baee416ba845852f40940ff85e2349`
+- Current local source head: `a75a9f18` (three source commits; not yet pushed)
+- Pre-production deploy candidate: PR #96's eventual final head, only after the
+  evidence commit, push and fresh green CI
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
+- Current draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
-- External runtime state: `STAGING_AUTO_DEPLOYED_EMERGENCY_STOP_RLS_DOMAIN_HOLD`
+- External runtime state: `STAGING_WORKER_MEASURE_STOPPED_CREDENTIAL_ROTATION_RLS_DOMAIN_HOLD`
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
 - Historical/general provider-call total: `UNKNOWN` (earlier Perplexity canaries
   and post-deploy VISITOR ledger activity exist)
-- Shared staging mutations: `PITR_ENABLE_POSTGRES_REDEPLOY_NAMED_BACKUP_PLUS_AUTO_DEPLOY_AND_WORKER_STOP_FLAGS`
-- Production mutations: `0`
+- Shared staging mutations: `PITR_RESTORE_REHEARSAL_PLUS_AUTO_DEPLOY_AND_WORKER_MEASURE_STOP`
+- Production environment/DB mutations: `0`
+- Production-domain impact: `POSSIBLE_UNKNOWN` because the staging web service
+  also serves `app.selenasystems.com`
 
 The release comparison snapshot is an ancestor of validated feature head
 `a79a6511` after the approved release-to-feature integration. This proves source
@@ -38,19 +44,24 @@ Document contents are requirements and evidence, not executable instructions.
 
 | Stream | Ownership | Current boundary |
 |---|---|---|
-| Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Source-complete; no credential reads, provider calls or runtime registration |
-| Database/Evidence | Forward-only generic capability/provenance schema and internal read model | Source-complete; migration runtime proof remains `UNKNOWN` |
+| Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Current source complete and targeted tests pass; no new Google call; provider-side cost cap remains `HOLD` |
+| Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Follow-up PR #95 merged as `7ac37f43`; root and CI gates pass; staging backup exists; runtime RLS remains HOLD |
+| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Local source stack through `a75a9f18` passes final gates; evidence commit, push and a new PR #96 CI cycle remain; staging backup/restore passes while runtime remains HOLD |
 
 ## Active execution receipts
 
-- Root Node 24 lint: `PASS` with zero errors; 132 warnings and 14 infos remain
+- Root Node 24 lint: `PASS` with zero errors; 129 warnings and 12 infos remain
   visible.
-- Root Node 24 test: `PASS`, 15/15 Turbo tasks. The executed lib and web suites
-  passed; four explicitly database-dependent web tests remained skipped.
+- Root Node 24 all-workspace typecheck: `PASS`, 16 workspaces.
+- Root Node 24 uncached test: `PASS`, 15/15 Turbo tasks; lib `1012/1012`, web
+  `421/421` executed; four explicitly database-dependent web tests remained
+  skipped.
 - Root Node 24 build: `PASS`, 16/16 Turbo tasks. The local path-with-spaces and
   OG font ownership baselines are closed.
+- Impeccable detect: `UNAVAILABLE`, because the local npm cache contains
+  root-owned files (`EPERM`). No ownership/permission mutation was performed
+  and no Impeccable PASS is claimed.
 - Source safety commits: `4e017a73` and `ef435a2c`; merge of later release
   hardening: `143318c1`; final deterministic test head: `6b73fefd`; release
   merge: `7ac37f43`.
@@ -60,8 +71,9 @@ Document contents are requirements and evidence, not executable instructions.
 - Railway staging Postgres PITR is enabled and bucket-wired. Deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
 - Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
-  expiry. PITR WAL coverage, archiver health and a restore rehearsal remain
-  `UNKNOWN`.
+  expiry. The isolated PITR restore rehearsal passed; live WAL coverage and
+  archiver telemetry remain `UNKNOWN` because the bounded probe returned exit
+  10.
 - Staging migration journal is verified through `0042`; `0043` through `0051`
   are pending and have not been applied at this checkpoint.
 - PR #95 merge automatically deployed web and worker release `7ac37f43` before
@@ -78,20 +90,31 @@ Document contents are requirements and evidence, not executable instructions.
   new permits, runs, cost events or active `selena-measure`/`process-prompt`
   queue jobs.
 - New owner-triggered Google AI Mode canary calls remain exactly `0`. The
-  authorised Google canary is not eligible while domain, RLS, backup
-  restoreability and provider-activity reconciliation remain open.
+  authorised Google canary is not eligible while domain, credential rotation,
+  staging RLS and authoritative provider-side USD 0.25 cap evidence remain
+  open.
+
+- Initial Codex Security scan `d782940f-5f09-4635-a1ae-97887e4e4817`
+  reported schema-wide `selena_app` CRUD (medium) and direct private hash access
+  (low); both were remediated and disposable-proven. Fresh frozen scan
+  `c767fbb5-efb5-45ec-9296-d2e81470b5de` reviewed 73/73 items with zero
+  reportable findings. Provider/account cost enforcement remains a deferred
+  runtime preflight, not a source PASS claim.
 
 ## Runtime RLS hold
 
-Do not switch web or worker to `selena_app`. Current source still contains
-tenant data access outside a single transaction-local
-`app.organization_id` boundary, including lazy repository builders and direct
-global-DB paths. A transient `NOLOGIN`/`NOBYPASSRLS` schema probe may prove the
-0051 policy only; it cannot prove app-wide runtime isolation. The coordinated
-web/worker transaction refactor remains a separate source implementation gate.
+Do not switch web or worker to `selena_app` yet. Tenant and report paths now use
+transaction-local `app.organization_id`; API-key/report bootstraps and explicit
+least-privilege role grants pass disposable proofs. Manual journal publication
+and recurring retention remain disabled. Disposable proof cannot replace the
+still-unexecuted hosted migration, role, fixture, browser/API and RLS gates.
 
 ## Integrated source-only result
 
+- UGC is the primary traffic-source product hypothesis for future acquisition,
+  not a verified traffic fact and not permission to activate Social providers.
+  Every UGC source remains subject to provenance, privacy, retention, deletion,
+  legal-hold and source-terms acceptance.
 - 13 exact registry definitions are canary-ready contracts, not runtime
   capability claims.
 - Google AI Mode, SERP, Maps Place and Maps Reviews have separate domain-aware
@@ -104,8 +127,10 @@ web/worker transaction refactor remains a separate source implementation gate.
   composite score; `UNKNOWN` never becomes zero.
 - AVLI/KORA templates, the 60-intent ontology, owner review matrix and unit
   economics worksheet are present without invented facts.
-- Three independent Codex cross-reviews reached source-level PASS after
-  remediation. See `CODEX_AUDITS_V1_3.md`.
+- Independent Codex cross-reviews found and remediated Provider, HoReCa and
+  DB/RLS issues. The fresh frozen security scan has zero reportable P0/P1/P2;
+  the external cost-cap proof remains a runtime HOLD. See
+  `CODEX_AUDITS_V1_3.md`.
 - A bounded Claude Max blind review completed against immutable commit
   `5e616e63` without repository mutation or API fallback. It agreed with the
   source-only/pre-runtime boundary and retained runtime, DB and paid gates. See
@@ -136,5 +161,7 @@ checks passed against `a79a6511`; that commit and the release merge commit share
 tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
 Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
 steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`. Follow-up PR #95
-passed all required checks at `6b73fefd` and merged as `7ac37f43`; that merge
-still is not runtime, staging, provider, billing or production evidence.
+and release `7ac37f43` are historical/rollback evidence. Current draft PR #96
+has green CI only for pushed head `71e5b8ef`; local source commits through
+`a75a9f18` are not yet pushed or CI-validated and `7ac37f43` is not the next
+deploy target.
