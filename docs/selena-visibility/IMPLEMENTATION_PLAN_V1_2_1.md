@@ -12,7 +12,7 @@ Current evidence pins:
 
 - source milestone: `fa5aa9ec`;
 - feature branch: `feature/selena-visibility-v1-2-1`;
-- latest accepted Claude review: `d70452ec` (Max5/Sonnet, read-only, `NOT READY`); the deeper Max20 review remains pinned to `0f2dd387`;
+- latest accepted Claude review: `0f199770` (Max20/Opus, read-only, `NOT READY`); the earlier Max5 review remains pinned to `d70452ec` and the preceding Max20 review to `0f2dd387`;
 - latest orchestration ledger: this tracked file at `HEAD` (implementation-plan state `9b4e23d5`);
 - canonical release ref: `origin/release/selena-visibility-mvp` at `78d133f1`.
 
