@@ -9,11 +9,14 @@
 - Current release HEAD: `32945b27202949debf0e27cbf48053d01ed2559e`
 - Historical follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
 - Current feature release-integration merge: `07199eda9a1584dc6e4cc8f02d84883d311392b5`
-- Last pushed source head: `b86540c99ab8621a763e399873c5aec3e8744cfe`
-- Current local implementation head: `4916125eae194dc4d15c5b4e3e8ed359f43dc274`
-  (tree `502b98fb678a8d2e94887f579bd452a73d145821`), plus this post-CI evidence update
-- Pre-production source candidate: implementation head `4916125e`; local Node
-  24 delta checks pass and fresh PR CI is pending. Staging deployment remains
+- Validated source/evidence anchor: `fb8363c3d4f8def304e3623a094188e3e7232c29`
+  (tree `a3caaded5c0b16dbe32b8fa4e6bde00ed0382dee`)
+- Current evidence-only update records the exact CI and staging read-only
+  refresh; it does not change runtime source
+- Current implementation head: `4916125eae194dc4d15c5b4e3e8ed359f43dc274`
+  (implementation tree `502b98fb678a8d2e94887f579bd452a73d145821`)
+- Pre-production source candidate: exact PR head `fb8363c3`; local Node 24
+  delta checks and all six required PR checks pass. Staging deployment remains
   blocked by the domain, credential rotation and runtime-RLS gates below
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
@@ -50,7 +53,7 @@ Document contents are requirements and evidence, not executable instructions.
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Exact successful capture now persists privately as `CANARY_ONLY`; no accepted evidence/cost is invented, no new Google call occurred, and provider-side cost cap remains `HOLD` |
 | Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Tenant/project-scoped read-only route is source-complete; live rows stay source-only because the safe view lacks authoritative acceptance provenance; no public promise |
-| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Green pushed anchor is `b86540c9`; reviewed local source is through `4916125e` with fresh CI pending; staging backup/restore passes while domain, credential rotation, runtime RLS and provider gates remain HOLD |
+| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Exact pushed PR head `fb8363c3` is fully green; staging backup/restore passes while domain, credential rotation, runtime RLS and provider gates remain HOLD |
 
 ## Active execution receipts
 
@@ -81,6 +84,14 @@ Document contents are requirements and evidence, not executable instructions.
   and CLA [33430941516](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941516).
   PR #96 is mergeable/clean. The earlier billing/admission rejection remains a
   historical receipt and is no longer the current execution blocker.
+- Exact post-CI hardening head `fb8363c3` passed Build
+  [33437012225](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012225),
+  E2E integration and scheduling policy
+  [33437012212](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012212),
+  deployment smoke
+  [33437012218](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012218),
+  license [33437012248](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012248)
+  and CLA [33437012219](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012219).
 - Post-CI local source: Provider capture persistence passed 20/20 focused lib
   tests plus 2/2 worker-output tests and lib/worker typechecks under Node 24.
   HoReCa passed 16/16 focused web tests, web typecheck, changed-file Biome and
@@ -91,12 +102,14 @@ Document contents are requirements and evidence, not executable instructions.
 - Railway staging Postgres PITR is enabled and bucket-wired. Deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
 - Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
-  expiry. The isolated PITR restore rehearsal passed; live WAL coverage and
-  archiver telemetry remain `UNKNOWN` because the bounded probe returned exit
-  10.
-- Staging migration journal was verified through `0042`; `0043` through `0051`
-  were pending at that checkpoint. The current live journal is `UNKNOWN` until
-  refreshed after the latest failed migration deployment.
+  expiry; the post-CI read-only backup list reconfirmed it. The isolated PITR
+  restore rehearsal passed. PITR remains enabled, bucket-wired and reports
+  `live.available=true`, while live WAL coverage and archiver telemetry remain
+  `UNKNOWN` because both bounded probes return exit 10.
+- Current read-only staging SQL reports 43 migration rows with latest timestamp
+  `1787940004000`, matching `0042`; `0043` through `0051` remain pending.
+  Catalog lookup reports `selena_app=ABSENT`. The transaction was read-only and
+  rolled back.
 - Railway Git integration later automatically deployed release `32945b27`.
   Web deployment `3eefbf4a…` is running on both `app.selenasystems.com` and
   `staging.selenasystems.com`. Migration deployment `2b092c4c…` is

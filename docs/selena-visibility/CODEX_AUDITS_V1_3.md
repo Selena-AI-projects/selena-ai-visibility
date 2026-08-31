@@ -119,7 +119,8 @@ remaining P0/P1 in this slice.
 
 ## Remaining owner gates
 
-- fresh PR #96 CI for the post-CI implementation commits;
+- exact PR #96 head `fb8363c3` is fully green; no CI gate remains for this
+  source/evidence snapshot;
 - authoritative HoReCa acceptance provenance and hosted non-owner RLS proof;
 - staging domain isolation, credential rotation and sealed configuration;
 - provider/account hard-cap evidence and the single authorized Google AI Mode

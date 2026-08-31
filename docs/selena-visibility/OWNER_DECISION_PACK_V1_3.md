@@ -1,16 +1,15 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `CURRENT_SOURCE_CI_PENDING_SECURITY_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
+Status: `CI_GREEN_SECURITY_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
 Current release: `32945b27202949debf0e27cbf48053d01ed2559e`.
-Historical release `7ac37f43` remains rollback evidence only. Draft PR #96's
-last pushed green anchor is `b86540c99ab8621a763e399873c5aec3e8744cfe`.
-Current reviewed local implementation head is
-`4916125eae194dc4d15c5b4e3e8ed359f43dc274`, tree
-`502b98fb678a8d2e94887f579bd452a73d145821`; local Node 24 delta checks pass and
-fresh PR CI is pending. Source readiness does not close staging runtime gates
-or make this a production candidate.
+Historical release `7ac37f43` remains rollback evidence only. Draft PR #96
+validated source/evidence anchor is
+`fb8363c3d4f8def304e3623a094188e3e7232c29`, tree
+`a3caaded5c0b16dbe32b8fa4e6bde00ed0382dee`; local Node 24 delta checks and all
+six required PR checks pass. Source readiness does not close staging runtime
+gates or make this a production candidate.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
@@ -31,11 +30,10 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 
 ## Execution disposition
 
-- PR #96 green-anchor CI: `PASS`. Build, E2E integration, scheduling policy,
-  deployment smoke, license and CLA all succeeded on `b86540c9`. The current
-  local Provider/HoReCa source passes focused Node 24 gates but still requires a
-  fresh PR cycle after push. The earlier pre-runner billing/admission rejection
-  is historical and no longer blocks the loop.
+- PR #96 exact-head CI: `PASS`. Build, E2E integration, scheduling policy,
+  deployment smoke, license and CLA all succeeded on `fb8363c3`. The earlier
+  pre-runner billing/admission rejection is historical and no longer blocks the
+  loop.
 - `OD-A`: failed its no-value condition. Railway CLI `variable list`
   unexpectedly rendered raw staging values during a key-presence audit. Values
   are not reproduced in this pack, but affected credentials are considered
@@ -46,10 +44,13 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
   `33032d1f-fded-47d2-bc5e-fa907e044b52`, whose technical schema/journal
   receipt matched the expected pre-0051 state. The source stayed online; the
   rehearsal service was deleted and the restored volume is pending recoverable
-  deletion. Best-effort live archiver telemetry remains `UNKNOWN`.
-- Migration preflight: the last direct read-only journal checkpoint was through
-  `0042`, with `0043` through `0051` pending. The current live journal is
-  `UNKNOWN` until refreshed after the latest failed migration deployment.
+  deletion. The post-CI read-only list reconfirmed the named backup with no
+  expiry and `live.available=true`; best-effort live coverage and archiver
+  probes still return exit 10, so live WAL telemetry remains `UNKNOWN`.
+- Migration preflight refresh: read-only staging SQL reports 43 rows with latest
+  timestamp `1787940004000`, matching `0042`; `0043` through `0051` remain
+  pending. Catalog lookup reports `selena_app=ABSENT`. The transaction rolled
+  back and made no mutation.
 - `OD-B1` runtime switch and app-wide RLS acceptance: `HOLD`. Reviewed source
   and disposable proofs cover transaction-local `app.organization_id` and the
   report bootstrap, but hosted role attributes and actual non-owner same/cross-
@@ -212,7 +213,7 @@ interchangeable with the recommended Google canary.
 | OD-B1 | After OD-B2, create/update `selena_app` through the reviewed idempotent least-privilege grant script; do not use schema-wide CRUD/default grants. |
 | OD-B2 | Take/verify the staging backup checkpoint and run the one-shot pending migration chain through `0051` as owner before OD-B1. |
 | OD-B3 | Change staging secret/config bindings, including runtime `DATABASE_URL`, CA, auth/encryption keys, stub/stop flags and application origins. |
-| OD-B4 | Deploy/restart only the eventual fully green pushed head containing implementation candidate `4916125e` after recording an immutable image/build digest and satisfying the remaining staging gates; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not fix candidates. |
+| OD-B4 | Deploy/restart only exact green PR head `fb8363c3` (or a later separately validated head) after recording an immutable image/build digest and satisfying the remaining staging gates; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not fix candidates. |
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |

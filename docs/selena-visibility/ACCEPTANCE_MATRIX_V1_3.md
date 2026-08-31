@@ -54,22 +54,21 @@ which is not counted as acceptance evidence.
   release commit through merge commit `07199eda9a1584dc6e4cc8f02d84883d311392b5`
   without rebase or history rewrite.
 - Draft follow-up PR
-  [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is open from
-  `feature/selena-visibility-v1-2-1`. Its last pushed, CI-validated head is
-  `b86540c99ab8621a763e399873c5aec3e8744cfe`, tree
-  `023c7a819a4d558e010e4549dd23db6725ee60d0`. It includes the v1.3 provider,
-  RLS/evidence and HoReCa work, the release migration packaging, and the
-  tenant-authenticated report E2E correction. All six required PR checks passed
-  on this exact head.
-- Two reviewed local source commits follow that green anchor:
+  [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is open,
+  draft, clean and mergeable from `feature/selena-visibility-v1-2-1`. Its
+  exact CI-validated head is
+  `fb8363c3d4f8def304e3623a094188e3e7232c29`, tree
+  `a3caaded5c0b16dbe32b8fa4e6bde00ed0382dee`.
+- Two reviewed source commits after the earlier green anchor `b86540c9` are
+  included in that exact head:
   `bb8f123c` persists the exact validated Google AI Mode canary capture as
   private `CANARY_ONLY` evidence without creating accepted measurement or cost
   evidence, and `4916125eae194dc4d15c5b4e3e8ed359f43dc274` binds the HoReCa
   route to tenant/project-scoped safe projections while failing closed when
   authoritative acceptance provenance is absent. Current local implementation
-  tree is `502b98fb678a8d2e94887f579bd452a73d145821`. Node 24 targeted tests,
-  typechecks, changed-file Biome and the web build pass; fresh PR CI is pending
-  until these commits and this evidence update are pushed.
+  implementation tree is `502b98fb678a8d2e94887f579bd452a73d145821`.
+  Node 24 targeted tests, typechecks, changed-file Biome and the web build pass;
+  all six required PR checks also pass on exact head `fb8363c3`.
 
 | Gate | Required evidence | Current status | Evidence class |
 |---|---|---|---|
@@ -81,12 +80,12 @@ which is not counted as acceptance evidence.
 | V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references and private hashes remain denied; reserved schemas are not invented; a successful one-shot capture is persisted privately and remains in cost/acceptance HOLD | `PASS_SOURCE_AND_DISPOSABLE_RUNTIME_UNKNOWN` | Source plus disposable DB |
 | V13-HORECA | Local-first read model exposes independent modules, UNKNOWN and evidence-linked actions without a composite score; the runtime route remains source-only until an authoritative acceptance decision/timestamp can be joined | `PASS_SOURCE_UI_ACCEPTANCE_PROVENANCE_HOLD` | Source/UI only |
 | V13-PILOTS | AVLI and KORA packages contain evidence/UNKNOWN gates, intent ontology, report templates and unit-economics decision fields without fabricated facts | `PASS_ARTIFACT` | Repository artifact |
-| V13-TESTS | Registered root lint/build baselines remain resolved; current-delta Node 24 tests, typechecks, changed-file Biome and web build pass; PR #96 predecessor `b86540c9` is fully green and fresh current-source CI is pending | `PASS_LOCAL_CURRENT_DELTA_CI_PENDING` | Local plus predecessor PR CI |
+| V13-TESTS | Registered root lint/build baselines remain resolved; current-delta Node 24 tests, typechecks, changed-file Biome and web build pass; PR #96 exact head `fb8363c3` passes Build, E2E integration, scheduling policy, smoke, license and CLA | `PASS_CURRENT_HEAD_CI_GREEN` | Local plus exact PR CI |
 | V13-STABILITY | Deterministic Local Maps rehearsal passes five isolated Node 24 replays with zero transport calls, cost, persistence or evidence eligibility | `PASS_LIMITED_REPLAY` | Local executed |
 | V13-CODEX | Independent Provider and HoReCa post-CI reviews drove capture-persistence and read-model remediation; repeat reviews report no remaining P0/P1 in those slices, while runtime/cost evidence stays gated | `PASS_SOURCE_ONLY_EXTERNAL_COST_HOLD` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
-| V13-BRANCH | Last pushed head `b86540c9` is green; reviewed local implementation commits `bb8f123c` and `4916125e` await the bounded push; the untracked protected handoff remains excluded | `LOCAL_COMMITS_CI_PENDING_HANDOFF_EXCLUDED` | Git |
-| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 is mergeable/clean at green predecessor `b86540c9`; the new local source requires a fresh cycle | `DRAFT_PR_CURRENT_SOURCE_CI_PENDING` | GitHub/CI |
+| V13-BRANCH | Source and evidence are pushed through exact green head `fb8363c3`; the untracked protected handoff remains excluded | `PASS_PUSHED_HANDOFF_EXCLUDED` | Git |
+| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 is clean/mergeable and all six required checks pass on exact head `fb8363c3` | `PASS_DRAFT_PR_CI` | GitHub/CI |
 | V13-RUNTIME | Staging service IDs, named backup, disposable 0051 schema RLS and an isolated PITR restore rehearsal are verified; production-like domain isolation, global provider containment and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_BACKUP_PASS_PROVIDER_AND_APP_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
@@ -161,6 +160,17 @@ head `b86540c99ab8621a763e399873c5aec3e8744cfe` completed a fully green cycle:
 The earlier account billing/admission failure remains historical evidence; it
 is no longer the current blocker. No deployment or provider call was triggered
 by this CI cycle.
+
+Post-CI hardening head `fb8363c3d4f8def304e3623a094188e3e7232c29`
+completed a second fully green exact-head cycle:
+
+| Workflow | Run | Result |
+|---|---|---|
+| Build | [33437012225](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012225) | `SUCCESS` (`5m20s`) |
+| E2E Tests | [33437012212](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012212) | Integration `SUCCESS` (`10m39s`); scheduling policy `SUCCESS` (`2m34s`) |
+| Deployment Smoke Tests | [33437012218](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012218) | `SUCCESS` (`1m34s`) |
+| License Check | [33437012248](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012248) | `SUCCESS` (`1m15s`) |
+| CLA Check | [33437012219](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012219) | `SUCCESS` (`6s`) |
 
 ## Local stability replay
 
@@ -238,6 +248,11 @@ remains `HOLD` until domain ownership/blast radius is resolved.
   provider and billing state were not mutated. Bounded worker DNS searches for
   Bright Data, DataForSEO and Perplexity over the inspected 12-hour window
   returned no rows; this is only an observation and not proof of zero calls.
+- The post-CI read-only refresh reconfirmed the named backup
+  `92f3adae-a05a-4f64-b064-f48c55001149` with `expiresAt=null`. PITR remains
+  enabled and bucket-wired with `live.available=true`, but both live backup
+  coverage and archiver probes still return SSH exit 10; live WAL coverage is
+  therefore `UNKNOWN`, not PASS.
 
 - Merging PR #95 triggered Railway Git deployment automatically. Web deployment
   `9786b6fe-3a83-4f75-a23f-55cd903e04e9` and worker deployment
@@ -281,16 +296,16 @@ remains `HOLD` until domain ownership/blast radius is resolved.
   still-pending 0051 capability table. The source DB remained online with the
   same technical receipt. The rehearsal service was deleted and its restored
   volume was submitted for deletion; neither web nor worker was rebound.
-- At the last direct database checkpoint, read-only migration metadata showed
-  43 applied journal rows with the latest timestamp matching `0042`; `0043`
-  through `0051` were pending. The current live journal after the failed
-  `32945b27` migration deployment is `UNKNOWN` until refreshed read-only before
-  any SQL.
+- The current read-only staging refresh shows 43 applied journal rows and latest
+  timestamp `1787940004000`, which matches local journal entry `0042`; `0043`
+  through `0051` remain pending. Catalog lookup reports `selena_app=ABSENT`.
+  No SQL mutation occurred.
 - App-wide hosted runtime RLS is `HOLD`: the reviewed source closes the report
   bootstrap/tenant-context gaps and the idempotent least-privilege role proof
   passes in disposable PostgreSQL. Manual journal publication and recurring
   retention remain deliberately disabled. Web/worker must not be switched to
-  `selena_app` until the hosted role attributes, migrations and staging
+  `selena_app` until the role is created through the reviewed grant path and
+  hosted role attributes, migrations and staging
   browser/API/RLS gates pass using an actual non-owner connection.
 - The disposable 0051 schema probe now passes against an isolated PostgreSQL 16
   compose project. It verified same-tenant read/write, denied cross-tenant

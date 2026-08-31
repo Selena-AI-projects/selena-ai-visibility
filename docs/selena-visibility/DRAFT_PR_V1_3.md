@@ -1,6 +1,6 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN_DRAFT_CURRENT_SOURCE_CI_PENDING`.
+Status: `OPEN_DRAFT_EXACT_HEAD_CI_GREEN`.
 
 PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/96`
 
@@ -28,15 +28,15 @@ Base: `release/selena-visibility-mvp` (repository default branch).
 
 ### Evidence
 
-- green pushed anchor `b86540c9`: Build, E2E integration, scheduling policy,
-  deployment smoke, license and CLA all passed;
+- exact head `fb8363c3`: Build, E2E integration, scheduling policy, deployment
+  smoke, license and CLA all passed;
 - current local Provider delta under Node 24: 20/20 focused lib tests, 2/2
   worker-output tests, lib/worker typechecks and scoped Biome passed;
 - current local HoReCa delta under Node 24: 16/16 focused tests, web typecheck,
   scoped Biome and web production build passed;
 - independent Provider and HoReCa repeat reviews: no remaining P0/P1 in the
   reviewed source slices;
-- current source still requires a fresh PR #96 Blacksmith cycle after push.
+- exact-head run links are recorded in `ACCEPTANCE_MATRIX_V1_3.md` and PR #96.
 
 ### Runtime and authorization boundaries
 
