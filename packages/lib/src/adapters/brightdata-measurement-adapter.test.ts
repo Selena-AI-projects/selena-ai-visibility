@@ -126,6 +126,7 @@ describe("Bright Data measurement adapter", () => {
 					prompt: SCENARIO_TEXT,
 					country: "",
 					index: 1,
+					additional_prompt: "",
 				},
 			],
 		});
@@ -153,7 +154,6 @@ describe("Bright Data measurement adapter", () => {
 
 		const outcome = await adapterWith(fetchImpl, {
 			system: "perplexity",
-			collectionMode: "trigger",
 			snapshotPollMs: 0,
 		}).execute(permitFor({ systemId: "Perplexity" }));
 
@@ -162,7 +162,13 @@ describe("Bright Data measurement adapter", () => {
 		expect(triggerUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
 		expect(triggerUrl.searchParams.get("include_errors")).toBe("true");
 		expect(JSON.parse(String(seen[0]?.init?.body))).toEqual([
-			{ url: "https://www.perplexity.ai", prompt: SCENARIO_TEXT, country: "", index: 1 },
+			{
+				url: "https://www.perplexity.ai",
+				prompt: SCENARIO_TEXT,
+				country: "",
+				index: 1,
+				additional_prompt: "",
+			},
 		]);
 		expect(seen[1]?.url).toContain("/progress/s_perplexity");
 		expect(seen[2]?.url).toContain("/snapshot/s_perplexity");
@@ -175,24 +181,39 @@ describe("Bright Data measurement adapter", () => {
 		expect(globalFetch).not.toHaveBeenCalled();
 	});
 
-	it("uses the direct scrape path for a Perplexity answer", async () => {
-		const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+	it("keeps Perplexity on trigger when a caller requests scrape", async () => {
+		const responses = [
+			jsonResponse({ snapshot_id: "s_normalized" }),
+			jsonResponse({ status: "ready" }),
 			jsonResponse([
 				{
 					answer_text: "AVLI is recommended for Greek dining.",
 					citations: [{ url: "https://avlibali.com/", title: "AVLI" }],
 				},
 			]),
-		);
+		];
+		const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+			const response = responses.shift();
+			if (!response) throw new Error("TEST_SEQUENCE_EXHAUSTED");
+			return response;
+		});
 		const fetchImpl = fetchMock as unknown as typeof fetch;
 		const outcome = await adapterWith(fetchImpl, {
 			system: "perplexity",
+			collectionMode: "scrape",
+			snapshotPollMs: 0,
 		}).execute(permitFor({ systemId: "Perplexity" }));
 
-		expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/datasets/v3/scrape");
-		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
-			input: [{ url: "https://www.perplexity.ai", prompt: SCENARIO_TEXT, country: "", index: 1 }],
-		});
+		expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/datasets/v3/trigger");
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual([
+			{
+				url: "https://www.perplexity.ai",
+				prompt: SCENARIO_TEXT,
+				country: "",
+				index: 1,
+				additional_prompt: "",
+			},
+		]);
 		expect(outcome).toMatchObject({
 			status: "SUCCEEDED",
 			validity: "VALID",

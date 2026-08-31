@@ -96,7 +96,7 @@ export type BrightDataAdapterDeps = {
 	datasetId: string;
 	/** Which visitor surface this adapter instance measures. */
 	system: BrightDataVisitorSystem;
-	/** Perplexity uses Bright Data's bounded trigger/poll/fetch workflow. */
+	/** Perplexity is always normalized to Bright Data's bounded trigger/poll/fetch workflow. */
 	collectionMode?: "scrape" | "trigger";
 	/** How long to keep collecting an answer the collector went long on. */
 	snapshotTimeoutMs?: number;
@@ -180,7 +180,7 @@ export function buildBrightDataRequestBody(input: BrightDataRequestInput): Recor
 		};
 	}
 	return {
-		input: [{ url, prompt: input.prompt, country: "", index: 1 }],
+		input: [{ url, prompt: input.prompt, country: "", index: 1, additional_prompt: "" }],
 	};
 }
 
@@ -431,7 +431,10 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	// The collector is chosen in the query string, so the dataset id belongs to
 	// the URL rather than the body — and appending it here keeps every call for
 	// this instance pointed at the surface the instance was built for.
-	const collectionMode = deps.collectionMode ?? "scrape";
+	// This dataset rejects the synchronous scrape request shape. Keep the
+	// transport invariant inside the adapter so a caller cannot route a paid
+	// Perplexity permit back to the incompatible endpoint.
+	const collectionMode = deps.system === "perplexity" ? "trigger" : (deps.collectionMode ?? "scrape");
 	const endpoint = (() => {
 		const url = new URL(deps.endpoint.trim());
 		if (collectionMode === "trigger" && url.pathname.endsWith("/scrape")) {
