@@ -74,7 +74,7 @@ BEGIN
 	VALUES (
 		v_local_cycle_id, v_org_id, v_cycle_id, 'LOCAL_MAPS', v_lock_id,
 		v_location_id, v_grid_id, 'maps-live-provider-v1', 1, 20,
-		1, 0, '{"plannedCalls":0,"worstCaseCalls":0,"worstCaseCost":0}', 'RUNNING'
+		1, 0, '{"plannedCalls":1,"worstCaseCalls":1,"worstCaseCost":0}', 'RUNNING'
 	);
 
 	v_base_slot_key := 'LOCAL_MAPS|' || v_cycle_id::text || '|' || v_point_id::text || '|' || v_keyword_id::text || '|maps-live-provider-v1|0';
