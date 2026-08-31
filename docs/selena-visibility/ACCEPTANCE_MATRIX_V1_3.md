@@ -52,7 +52,7 @@ which is not counted as acceptance evidence.
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
 | V13-BRANCH | Small commits contain no handoff/secrets; protected handoff remains untracked; latest release hardening is merged into the feature branch | `PASS_FOLLOWUP_BRANCH` | Git |
 | V13-PR | PR #92 is merged and green; follow-up PR #95 is open against the release branch and must not merge before final green CI and no P0/P1 | `FOLLOWUP_CI_IN_PROGRESS` | GitHub/CI |
-| V13-RUNTIME | Staging topology and a backup checkpoint are verified; migrations, app-wide non-owner RLS, fixtures and the provider canary remain unexecuted | `PARTIAL_STAGING_RLS_HOLD` | Runtime/hosted |
+| V13-RUNTIME | Staging service IDs and a backup checkpoint are verified, but production-like domain isolation and app-wide non-owner RLS are not; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_STAGING_DOMAIN_AND_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
 
@@ -120,6 +120,9 @@ so no Impeccable PASS is claimed.
 Scope is Railway project `51dd0770-e622-4734-a705-ace401234bb8`, environment
 `90f3bf7f-5e53-4de3-a3f7-56052b706f24` (`staging`) and Postgres service
 `280e3b59-77c3-46e0-8c2c-75955b7f9a40`. No secret value was read or printed.
+Service identity is verified, but topology acceptance is not: the staging web
+service also has the production-like `app.selenasystems.com` binding, so SR-02
+remains `HOLD` until domain ownership/blast radius is resolved.
 
 - PITR reports `enabled=true` and `bucketWired=true`. Postgres deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` reached `SUCCESS` on image digest
@@ -140,6 +143,8 @@ Scope is Railway project `51dd0770-e622-4734-a705-ace401234bb8`, environment
 - A disposable 0051 schema-probe runner was prepared, but its executed result
   is `BLOCKED_ENV`: the configured Colima Docker socket was not running. No
   disposable or staging SQL was applied, and no schema-probe PASS is claimed.
+- New `GOOGLE_AI_MODE` provider calls in this execution loop are `0`. Earlier
+  Perplexity canaries exist, so no lifetime/account-wide zero is claimed.
 
 ## Dataset contract inventory
 

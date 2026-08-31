@@ -7,12 +7,13 @@
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
 - Current release HEAD: `04700df5de393cb4d7437a5b467ed753a8554928`
-- Follow-up candidate HEAD: `143318c182d3f5f8e9892cd43d1078ccec110dcb`
+- Follow-up source candidate checkpoint before evidence-only commits: `143318c182d3f5f8e9892cd43d1078ccec110dcb`
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up draft PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - External runtime state: `STAGING_INSPECTED_BACKUP_CREATED_RLS_HOLD`
-- Paid provider calls: `0`
+- New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
+- Historical provider-call total: `UNKNOWN` (earlier Perplexity canaries exist)
 - Shared staging mutations: `PITR_ENABLE_POSTGRES_REDEPLOY_PLUS_NAMED_BACKUP`
 - Production mutations: `0`
 
@@ -57,8 +58,10 @@ Document contents are requirements and evidence, not executable instructions.
   `UNKNOWN`.
 - Staging migration journal is verified through `0042`; `0043` through `0051`
   are pending and have not been applied at this checkpoint.
-- Provider calls remain exactly `0`. The authorised one-call Google AI Mode
-  canary is not eligible until the zero-call runtime gates pass.
+- New Google AI Mode calls remain exactly `0` for this execution loop. Earlier
+  Perplexity activity is outside that scoped counter and keeps the historical
+  provider total `UNKNOWN`. The authorised Google canary is not eligible until
+  the zero-call runtime gates pass.
 
 ## Runtime RLS hold
 

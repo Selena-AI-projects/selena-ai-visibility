@@ -4,8 +4,9 @@ Status: `EXECUTION_AUTHORIZED_PARTIAL_RLS_HOLD`
 
 The original anchor is release HEAD
 `0e00df4faa74990e6b696c4249cbb85acf23c693`. Current release HEAD is
-`04700df5de393cb4d7437a5b467ed753a8554928`; follow-up candidate
-`143318c182d3f5f8e9892cd43d1078ccec110dcb` is in draft PR #95. The owner has
+`04700df5de393cb4d7437a5b467ed753a8554928`; follow-up source checkpoint
+`143318c182d3f5f8e9892cd43d1078ccec110dcb` is in draft PR #95, whose final
+head must be resolved at deploy time. The owner has
 authorized one bounded pre-production loop. Production, application recurring
 jobs, Social/Travel activation and any provider call beyond the single named
 Google AI Mode canary remain prohibited.
@@ -37,7 +38,7 @@ Approval of one boundary does not authorize any later boundary.
 
 | Gate | Required action and evidence | Pass condition | Authorization |
 |---|---|---|---|
-| SR-00 Release lineage | Pin the candidate to `0e00df4f`; record image/build digest and configuration version without secrets | Candidate revision and source commit are immutable and traceable | Read-only local |
+| SR-00 Release lineage | Pin the final PR #95 head and, after authorized merge, its exact release merge commit; record image/build digest and configuration version without secrets | Candidate revision and source commit are immutable and traceable; `0e00df4f` is historical evidence, not the deploy target | Read-only local |
 | SR-01 Baseline disposition | Triage the registered root lint and `apps/www` local build baselines; do not relabel them as PASS | Either fixed in a reviewed follow-up or accepted as a named non-runtime exception with CI evidence | Source-only follow-up |
 | SR-02 Staging topology | Confirm web, worker, migration job and PostgreSQL belong to the intended staging environment; confirm the deployed revisions and that production is not targeted | Inventory receipt contains IDs/revisions only, no credential values; web and worker database binding is consistent | Boundary A |
 | SR-03 Safe configuration | Verify presence, not values, of required auth/encryption/database settings; require telemetry and all schedulers/fan-out disabled; require stub selectors for the zero-call phase | Configuration receipt shows fail-closed provider selection, `SCHEDULE_MAINTENANCE_ENABLED=false` and no recurring trigger | Boundary A |
@@ -58,7 +59,7 @@ Approval of one boundary does not authorize any later boundary.
 |---|---|---|
 | SR-00 | `IN_PROGRESS` | Candidate `143318c1`; PR #95 CI is running. |
 | SR-01 | `PASS_LOCAL` | Root lint/tests/build pass on Node 24; warnings remain registered. |
-| SR-02 | `PASS_READ_ONLY` | Exact staging project/environment/service topology recorded without secret values. |
+| SR-02 | `PARTIAL_DOMAIN_BINDING_HOLD` | Exact staging project/environment/service IDs are recorded without secret values, but staging web also serves `app.selenasystems.com`; production-like domain isolation is not proven. |
 | SR-03 | `PARTIAL` | Key-name and scheduler state audit exists; sealed value correctness is not claimed. |
 | SR-04 | `PARTIAL_CHECKPOINT_EXISTS` | PITR enabled/bucket-wired; Postgres deploy successful; named backup `92f3adae…` exists. WAL health, restore range and restore rehearsal remain `UNKNOWN`. |
 | SR-05 | `HOLD_APP_RUNTIME` | Read-only journal proves staging through 0042 with 0043–0051 pending. App-wide transaction-local tenant context is incomplete; no runtime role switch allowed. |
@@ -92,6 +93,7 @@ Approval of one boundary does not authorize any later boundary.
    only if Boundary C is separately approved.
 8. Explicit remaining `UNKNOWN`, `HOLD` and `BLOCKED_FACT` items.
 
-Until SR-00 through SR-08 pass, runtime readiness is `NO-GO`. Until SR-09 and
-SR-10 receive separate paid-call approval and pass, live provider activation is
-`NO-GO`. Production remains outside this plan.
+Until SR-00 through SR-08 pass, runtime readiness is `NO-GO`. The single
+paid-call authorization already exists, but SR-10 remains ineligible until
+those earlier gates pass and is `NO-GO` until its one result is accepted.
+Production remains outside this plan.

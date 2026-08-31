@@ -4,7 +4,9 @@ Status: `OWNER_AUTHORIZED_PREPRODUCTION_LOOP_ACTIVE`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
 Current release: `04700df5de393cb4d7437a5b467ed753a8554928`.
-Follow-up candidate: `143318c182d3f5f8e9892cd43d1078ccec110dcb`.
+Follow-up source checkpoint before evidence-only commits:
+`143318c182d3f5f8e9892cd43d1078ccec110dcb`. Deployment must resolve the final
+PR #95 release commit instead of using this checkpoint implicitly.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
@@ -13,14 +15,14 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 
 | Item | Proposed decision | Current status |
 |---|---|---|
-| Environment | Shared **staging only**; production excluded | `OWNER_APPROVAL_REQUIRED` |
-| Runtime role | `selena_app`, non-owner, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS` | Source exists; creation/switch not authorized |
-| Database scope | Inspect current version first; apply only pending migrations through `0051`; use transaction-local `app.organization_id` | Migration/RLS proof required |
-| Zero-call runtime | Stub selectors, maintenance disabled, measurement disabled and emergency stop engaged | `OWNER_APPROVAL_REQUIRED` for staging config/deploy |
-| First dataset canary | Recommended: `GOOGLE_AI_MODE` through Bright Data in `ISOLATED_CANARY`; UGC/Social remains behind privacy and retention approval | `OWNER_MUST_CONFIRM_SOURCE` |
-| External calls | Exactly `1`; non-recurring; no automatic, generic, empty-result or whole-dataset retry | `OWNER_APPROVAL_REQUIRED` |
-| Maximum canary cost | **USD 0.25 total** for this one canary, only when a preflight quote proves worst-case cost is at or below the cap | `OWNER_MUST_CONFIRM_CAP` |
-| Canary wall clock | Initial request `120s`; poll `10s`; absolute deadline `25m`; cancellation request `5s`; job lease, if used, at most `35m` | `OWNER_MUST_CONFIRM_LIMITS` |
+| Environment | Shared **staging only**; production excluded | `AUTHORIZED_CURRENT_LOOP`, subject to domain-binding HOLD |
+| Runtime role | `selena_app`, non-owner, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS` | Creation authorized; web/worker switch `HOLD` until app-wide GUC proof |
+| Database scope | Inspect current version first; apply only pending migrations through `0051`; use transaction-local `app.organization_id` | Authorized, but stopped at runtime-RLS condition |
+| Zero-call runtime | Stub selectors, maintenance disabled, measurement disabled and emergency stop engaged | Authorized after domain/RLS gates pass |
+| First dataset canary | `GOOGLE_AI_MODE` through Bright Data in `ISOLATED_CANARY`; UGC/Social remains behind privacy and retention approval | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
+| External calls | Exactly `1`; non-recurring; no automatic, generic, empty-result or whole-dataset retry | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
+| Maximum canary cost | **USD 0.25 total** for this one canary, only when a preflight quote proves worst-case cost is at or below the cap | `AUTHORIZED_CAP` |
+| Canary wall clock | Initial request `120s`; poll `10s`; absolute deadline `25m`; cancellation request `5s`; job lease, if used, at most `35m` | `AUTHORIZED_LIMITS` |
 | Production | No access, deploy, database, provider or scheduler action | `OUT_OF_SCOPE` |
 
 ## Execution disposition
@@ -34,11 +36,13 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 - `OD-B1` runtime switch and app-wide RLS acceptance: `HOLD`. The current app
   does not consistently set transaction-local `app.organization_id`, so binding
   web/worker to `selena_app` would be unsafe.
-- `OD-C`: authorized but not eligible. Provider calls remain exactly zero until
-  SR-00 through SR-08 pass.
+- `OD-C`: authorized but not eligible. New Google AI Mode calls remain exactly
+  zero in this loop until SR-00 through SR-08 pass. Earlier Perplexity canaries
+  mean the historical provider-call total is not zero and remains `UNKNOWN`.
 
-The USD 0.25 proposal matches the repository's default per-audit public-provider
-cap. The separate USD 5 staging-ledger ceiling is **not** spend approval. The
+The approved USD 0.25 cap matches the repository's default per-audit
+public-provider cap. The separate USD 5 staging-ledger ceiling is **not** spend
+approval. The
 13-dataset contract has no verified unit price or canary-derived timeout yet;
 missing quote or timeout evidence therefore results in `HOLD`.
 
@@ -55,7 +59,7 @@ not be pasted into chat, committed, printed in logs or included in evidence.
 | Sessions | `BETTER_AUTH_SECRET` | Staging secret; Boundary B |
 | Stored provider credentials | `ELMO_ENCRYPTION_KEY`; `ELMO_ENCRYPTION_KEY_OLD` only during an approved rotation | Staging secret; Boundary B |
 | Application origins | `APP_URL`, `VITE_APP_URL`, optional `AUTH_TRUSTED_ORIGINS` | Configuration, not credentials; Boundary B |
-| Bright Data canary | `BRIGHTDATA_API_TOKEN` plus `SELENA_BRIGHTDATA_DATASET_GOOGLE_AI` for the recommended source | Inject only after Boundary C approval |
+| Bright Data canary | `BRIGHTDATA_API_TOKEN` plus `SELENA_BRIGHTDATA_DATASET_GOOGLE_AI` for the approved source | Use only after the Boundary C eligibility gates pass |
 | Platform operator | Existing staging platform access capable of reading metadata and, separately, changing services/secrets | Read-only access is Boundary A; mutation is Boundary B |
 
 `OPENROUTER_API_KEY`, payment credentials, Social OAuth credentials and
@@ -130,24 +134,24 @@ the call. Social is not interchangeable with the recommended Google canary.
    preserve the provider receipt, open the circuit/hold, reconcile the provider
    account and cost ledger, and do not retry.
 5. Every restore, secret switch, service restart, job cancellation or rollback
-   deployment is itself an infrastructure mutation and requires owner approval
-   unless covered by the same explicit rollback authorization.
+   deployment is an infrastructure mutation. The current loop explicitly
+   covers automatic staging rollback; production rollback remains prohibited.
 
-## Exact owner approvals required
+## Owner decision IDs and current boundaries
 
-| Decision ID | Exact action requiring approval |
+| Decision ID | Authorized action or remaining boundary |
 |---|---|
 | OD-A | Read shared staging deployment metadata, bounded logs and configuration **key presence only**; never read secret values. |
 | OD-B1 | Create `selena_app` and the separately named internal evidence role in the staging PostgreSQL instance. |
 | OD-B2 | Take/verify the staging backup checkpoint and run the one-shot pending migration chain through `0051`. |
 | OD-B3 | Change staging secret/config bindings, including runtime `DATABASE_URL`, CA, auth/encryption keys, stub/stop flags and application origins. |
-| OD-B4 | Deploy/restart release `0e00df4f` web and worker services. |
+| OD-B4 | Deploy/restart the exact final PR #95 release candidate after green CI; `0e00df4f` is historical evidence and must not be redeployed as the fix candidate. |
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
 | OD-P | Any production access, production database, billing change, recurring schedule or production deploy. This remains outside the pack. |
 
-Suggested sequencing is OD-A first. OD-B1 through OD-B5 require a new explicit
-staging-mutation approval after the read-only findings are reviewed. OD-C is a
-later, independent paid-call approval. OD-P is never implied by any earlier
-decision.
+OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
+for this bounded loop, but their ordered gate conditions still apply. The
+current domain-binding and runtime-RLS findings stop OD-B1/B3/B4/B5 and OD-C;
+authorization is not a PASS. OD-P is never implied and remains prohibited.
