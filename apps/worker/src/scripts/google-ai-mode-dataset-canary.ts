@@ -8,11 +8,16 @@
  */
 
 import { db } from "@workspace/lib/db/db";
-import { reserveGoogleAiModeCanaryExecution } from "@workspace/lib/db/provider-canary-execution";
+import {
+	type GoogleAiModeCanaryCapturePersistenceReceipt,
+	persistGoogleAiModeCanaryCapture,
+	reserveGoogleAiModeCanaryExecution,
+} from "@workspace/lib/db/provider-canary-execution";
 import type { ProviderDatasetAccessRequest } from "@workspace/lib/providers/dataset-registry";
 import {
 	createBrightDataGoogleAiModeTransport,
 	GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
+	type GoogleAiModeCanaryReceipt,
 	type GoogleAiModeCostPreflightEvidence,
 	runGoogleAiModeOneShotCanary,
 } from "@workspace/lib/providers/google-ai-mode-one-shot-canary";
@@ -35,6 +40,26 @@ function costPreflightEvidence(value: string | undefined): GoogleAiModeCostPrefl
 	} catch {
 		return undefined;
 	}
+}
+
+export function redactedGoogleAiModeCanaryTerminalReceipt(
+	receipt: GoogleAiModeCanaryReceipt,
+	persistence?: GoogleAiModeCanaryCapturePersistenceReceipt,
+): Record<string, unknown> {
+	return persistence ? { ...receipt, snapshotReference: null, persistence } : { ...receipt, snapshotReference: null };
+}
+
+export function failedGoogleAiModeCanaryPersistenceReceipt(
+	receipt: GoogleAiModeCanaryReceipt,
+	reason: "CAPTURE_PERSISTENCE_INPUT_MISSING" | "CAPTURE_PERSISTENCE_FAILED",
+): Record<string, unknown> {
+	return {
+		...receipt,
+		status: "OUTCOME_UNKNOWN",
+		reason,
+		snapshotReference: null,
+		persistence: { status: "FAILED", acceptance: "HOLD" },
+	};
 }
 
 export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number> {
@@ -78,8 +103,36 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 				}
 			: undefined,
 	});
-	process.stdout.write(`${JSON.stringify(result.receipt)}\n`);
-	return result.receipt.status === "COMPLETE" ? 0 : 1;
+	if (result.receipt.status === "COMPLETE") {
+		if (!organizationId || !result.capture || !result.prepared) {
+			process.stdout.write(
+				`${JSON.stringify(
+					failedGoogleAiModeCanaryPersistenceReceipt(result.receipt, "CAPTURE_PERSISTENCE_INPUT_MISSING"),
+				)}\n`,
+			);
+			return 1;
+		}
+		try {
+			const persistence = await persistGoogleAiModeCanaryCapture(db, {
+				organizationId,
+				executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
+				prepared: result.prepared,
+				capture: result.capture,
+				receipt: result.receipt,
+			});
+			process.stdout.write(
+				`${JSON.stringify(redactedGoogleAiModeCanaryTerminalReceipt(result.receipt, persistence))}\n`,
+			);
+			return 0;
+		} catch {
+			process.stdout.write(
+				`${JSON.stringify(failedGoogleAiModeCanaryPersistenceReceipt(result.receipt, "CAPTURE_PERSISTENCE_FAILED"))}\n`,
+			);
+			return 1;
+		}
+	}
+	process.stdout.write(`${JSON.stringify(redactedGoogleAiModeCanaryTerminalReceipt(result.receipt))}\n`);
+	return 1;
 }
 
 const isDirectRun = process.argv[1]?.endsWith("/google-ai-mode-dataset-canary.ts");

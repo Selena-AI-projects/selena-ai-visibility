@@ -5,6 +5,7 @@ import {
 	createBrightDataDatasetClient,
 } from "./brightdata-dataset-client";
 import {
+	type PreparedProviderDatasetCanary,
 	type ProviderDatasetAccessRequest,
 	type ProviderDatasetEnvKey,
 	type ProviderDatasetRawCapture,
@@ -87,6 +88,8 @@ export type GoogleAiModeCanaryRunResult = Readonly<{
 	receipt: GoogleAiModeCanaryReceipt;
 	/** Private evidence for explicit persistence by the caller; never print this object. */
 	capture?: ProviderDatasetRawCapture;
+	/** Exact approved contract binding used by the lifecycle; never print this object. */
+	prepared?: PreparedProviderDatasetCanary;
 }>;
 
 type Clock = Readonly<{
@@ -317,6 +320,7 @@ export async function runGoogleAiModeOneShotCanary(
 					preflightEvidenceReference: options.costPreflight.evidenceReference,
 				}),
 				capture: result.capture,
+				prepared,
 			});
 		}
 		return Object.freeze({
