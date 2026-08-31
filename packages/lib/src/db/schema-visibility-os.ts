@@ -238,6 +238,64 @@ export const svMeasurementDatasets = pgTable(
 	}),
 ).enableRLS();
 
+export const svProviderDatasetCapabilities = pgTable(
+	"sv_provider_dataset_capabilities",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		provider: text("provider").notNull(),
+		source: text("source").notNull(),
+		surface: text("surface").notNull(),
+		domain: text("domain").notNull(),
+		entityType: text("entity_type").notNull(),
+		datasetEnvKey: text("dataset_env_key").notNull(),
+		inputSchemaVersion: text("input_schema_version").notNull(),
+		outputSchemaVersion: text("output_schema_version"),
+		accessClass: text("access_class").notNull(),
+		capabilityStatus: text("capability_status").notNull(),
+		retentionClass: text("retention_class"),
+		contractVersion: text("contract_version").notNull(),
+		version: integer("version").notNull(),
+		contractMetadata: jsonb("contract_metadata").notNull().default({}),
+		immutable: boolean("immutable").notNull().default(true),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgProviderSourceVersionUnique: uniqueIndex("sv_provider_dataset_capabilities_org_source_version_unique").on(
+			table.organizationId,
+			table.provider,
+			table.source,
+			table.version,
+		),
+		idOrganizationUnique: uniqueIndex("sv_provider_dataset_capabilities_id_org_unique").on(
+			table.id,
+			table.organizationId,
+		),
+		orgStatusIdx: index("sv_provider_dataset_capabilities_org_status_idx").on(
+			table.organizationId,
+			table.capabilityStatus,
+		),
+		shapeCheck: check(
+			"sv_provider_dataset_capabilities_shape_check",
+			sql`${table.version} > 0 AND ${table.immutable} = true AND jsonb_typeof(${table.contractMetadata}) = 'object' AND length(trim(${table.provider})) > 0 AND length(trim(${table.source})) > 0 AND length(trim(${table.surface})) > 0 AND length(trim(${table.entityType})) > 0 AND length(trim(${table.datasetEnvKey})) > 0 AND length(trim(${table.inputSchemaVersion})) > 0 AND (${table.outputSchemaVersion} IS NULL OR length(trim(${table.outputSchemaVersion})) > 0) AND length(trim(${table.accessClass})) > 0 AND (${table.retentionClass} IS NULL OR length(trim(${table.retentionClass})) > 0) AND length(trim(${table.contractVersion})) > 0`,
+		),
+		domainCheck: check(
+			"sv_provider_dataset_capabilities_domain_check",
+			sql`${table.domain} IN ('AI', 'SEARCH', 'ENTITY', 'REPUTATION', 'SOCIAL', 'TRAVEL')`,
+		),
+		statusCheck: check(
+			"sv_provider_dataset_capabilities_status_check",
+			sql`${table.capabilityStatus} IN ('CONFIGURED_ONLY', 'CANARY_ONLY', 'PILOT_ONLY', 'ALLOWED', 'BLOCKED')`,
+		),
+		accessClassCheck: check(
+			"sv_provider_dataset_capabilities_access_class_check",
+			sql`${table.accessClass} IN ('PUBLIC', 'CONNECTED', 'UPLOADED', 'DERIVED')`,
+		),
+	}),
+).enableRLS();
+
 export const svSourceSnapshots = pgTable(
 	"sv_source_snapshots",
 	{
@@ -249,6 +307,12 @@ export const svSourceSnapshots = pgTable(
 		sourceRef: text("source_ref").notNull(),
 		contentSha256: text("content_sha256").notNull(),
 		snapshot: jsonb("snapshot").notNull(),
+		capabilityId: uuid("capability_id"),
+		providerDatasetRef: text("provider_dataset_ref"),
+		environment: text("environment"),
+		rawReference: text("raw_reference"),
+		inputSchemaVersion: text("input_schema_version"),
+		outputSchemaVersion: text("output_schema_version"),
 		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
 		immutable: boolean("immutable").notNull().default(true),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -260,6 +324,20 @@ export const svSourceSnapshots = pgTable(
 		),
 		orgCapturedIdx: index("sv_source_snapshots_org_captured_idx").on(table.organizationId, table.capturedAt),
 		idOrganizationUnique: uniqueIndex("sv_source_snapshots_id_organization_unique").on(table.id, table.organizationId),
+		capabilityScopeReference: foreignKey({
+			columns: [table.capabilityId, table.organizationId],
+			foreignColumns: [svProviderDatasetCapabilities.id, svProviderDatasetCapabilities.organizationId],
+			name: "sv_source_snapshots_capability_org_fk",
+		}),
+		orgCapabilityCapturedIdx: index("sv_source_snapshots_org_capability_captured_idx").on(
+			table.organizationId,
+			table.capabilityId,
+			table.capturedAt,
+		),
+		providerCaptureMetadataCheck: check(
+			"sv_source_snapshots_provider_capture_metadata_check",
+			sql`((${table.capabilityId} IS NULL AND ${table.providerDatasetRef} IS NULL AND ${table.environment} IS NULL AND ${table.rawReference} IS NULL AND ${table.inputSchemaVersion} IS NULL AND ${table.outputSchemaVersion} IS NULL) OR (${table.capabilityId} IS NOT NULL AND length(trim(${table.providerDatasetRef})) > 0 AND length(trim(${table.environment})) > 0 AND length(trim(${table.rawReference})) > 0 AND length(trim(${table.inputSchemaVersion})) > 0 AND (${table.outputSchemaVersion} IS NULL OR length(trim(${table.outputSchemaVersion})) > 0))) IS TRUE`,
+		),
 	}),
 ).enableRLS();
 
@@ -305,6 +383,43 @@ export const svEvidenceIndex = pgTable(
 		orgCycleIdx: index("sv_evidence_index_org_cycle_idx").on(table.organizationId, table.cycleId),
 	}),
 ).enableRLS();
+
+// Internal/private provenance projection. Raw locators, provider dataset refs,
+// and content hashes must never be returned by client routes or exports.
+export const svEvidenceProvenance = pgView("sv_evidence_provenance", {
+	organizationId: text("organization_id").notNull(),
+	projectId: uuid("project_id").notNull(),
+	evidenceId: uuid("evidence_id").notNull(),
+	domainId: text("domain_id").notNull(),
+	cycleId: uuid("cycle_id").notNull(),
+	observationRef: text("observation_ref").notNull(),
+	datasetId: uuid("dataset_id").notNull(),
+	datasetKey: text("dataset_key").notNull(),
+	datasetVersion: integer("dataset_version").notNull(),
+	sourceSnapshotId: uuid("source_snapshot_id"),
+	capabilityId: uuid("capability_id"),
+	sourceType: text("source_type"),
+	sourceRef: text("source_ref"),
+	rawReference: text("raw_reference"),
+	contentSha256: text("content_sha256"),
+	environment: text("environment"),
+	providerDatasetRef: text("provider_dataset_ref"),
+	inputSchemaVersion: text("input_schema_version"),
+	outputSchemaVersion: text("output_schema_version"),
+	provider: text("provider"),
+	source: text("source"),
+	surface: text("surface"),
+	capabilityDomain: text("capability_domain"),
+	entityType: text("entity_type"),
+	accessClass: text("access_class"),
+	capabilityStatus: text("capability_status"),
+	retentionClass: text("retention_class"),
+	contractVersion: text("contract_version"),
+	capabilityInputSchemaVersion: text("capability_input_schema_version"),
+	capabilityOutputSchemaVersion: text("capability_output_schema_version"),
+	evidenceCapturedAt: timestamp("evidence_captured_at", { withTimezone: true }).notNull(),
+	sourceCapturedAt: timestamp("source_captured_at", { withTimezone: true }),
+}).existing();
 
 export const svLocalRankValidityEnum = pgEnum("sv_local_rank_validity", ["VALID", "INVALID", "UNMEASURED"]);
 

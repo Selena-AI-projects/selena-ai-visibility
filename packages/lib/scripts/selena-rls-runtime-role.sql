@@ -13,3 +13,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO selena_ap
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO selena_app;
+
+-- Raw/provider provenance is intentionally not an application-role surface.
+-- Server repositories must use an explicitly granted internal role and project
+-- only the safe read model; broad table/view grants above never expose it.
+REVOKE ALL ON sv_evidence_provenance FROM selena_app;

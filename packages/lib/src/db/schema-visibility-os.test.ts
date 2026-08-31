@@ -157,6 +157,90 @@ describe("Visibility OS measurement registry", () => {
 	});
 });
 
+describe("Visibility OS provider evidence provenance", () => {
+	it("models append-only tenant capability versions without activating Social or Travel domains", () => {
+		const table = getTableConfig(schema.svProviderDatasetCapabilities);
+		const dialect = new PgDialect();
+		expect(table.name).toBe("sv_provider_dataset_capabilities");
+		expect(table.enableRLS).toBe(true);
+		expect(
+			table.indexes.find((index) => index.config.name === "sv_provider_dataset_capabilities_org_source_version_unique")
+				?.config.unique,
+		).toBe(true);
+		expect(table.checks.map((candidate) => candidate.name)).toEqual(
+			expect.arrayContaining([
+				"sv_provider_dataset_capabilities_shape_check",
+				"sv_provider_dataset_capabilities_domain_check",
+				"sv_provider_dataset_capabilities_status_check",
+				"sv_provider_dataset_capabilities_access_class_check",
+			]),
+		);
+		const domainCheck = table.checks.find(
+			(candidate) => candidate.name === "sv_provider_dataset_capabilities_domain_check",
+		);
+		const statusCheck = table.checks.find(
+			(candidate) => candidate.name === "sv_provider_dataset_capabilities_status_check",
+		);
+		expect(domainCheck && dialect.sqlToQuery(domainCheck.value).sql).toContain("'SOCIAL', 'TRAVEL'");
+		expect(statusCheck && dialect.sqlToQuery(statusCheck.value).sql).toContain("'CANARY_ONLY'");
+	});
+
+	it("binds provider captures to a capability in the same tenant while allowing pre-discovery output schema", () => {
+		const snapshot = getTableConfig(schema.svSourceSnapshots);
+		const capabilityReference = snapshot.foreignKeys.find(
+			(candidate) => candidate.getName() === "sv_source_snapshots_capability_org_fk",
+		);
+		const metadataCheck = snapshot.checks.find(
+			(candidate) => candidate.name === "sv_source_snapshots_provider_capture_metadata_check",
+		);
+		const outputSchema = snapshot.columns.find((column) => column.name === "output_schema_version");
+		const compiledCheck = metadataCheck && new PgDialect().sqlToQuery(metadataCheck.value).sql;
+		expect(capabilityReference?.reference().columns.map((column) => column.name)).toEqual([
+			"capability_id",
+			"organization_id",
+		]);
+		expect(capabilityReference?.reference().foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+		]);
+		expect(outputSchema?.notNull).toBe(false);
+		expect(compiledCheck).toContain('"output_schema_version" IS NULL');
+	});
+
+	it("keeps the provenance view private, tenant-invoker scoped and free of normalized Social or Travel tables", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0051_visibility_os_provider_evidence_provenance.sql", import.meta.url),
+			"utf8",
+		);
+		expect(getViewConfig(schema.svEvidenceProvenance)).toMatchObject({
+			name: "sv_evidence_provenance",
+			isExisting: true,
+		});
+		expect(migration).toContain('CREATE VIEW "sv_evidence_provenance" WITH (security_invoker = true)');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_dataset_capabilities"');
+		expect(migration).toContain('ALTER TABLE "sv_provider_dataset_capabilities" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('FOREIGN KEY ("capability_id", "organization_id")');
+		expect(migration).toContain("PROVIDER_DATASET_CAPABILITY_IMMUTABLE");
+		expect(migration).toContain("PROVIDER_DATASET_CAPABILITY_VERSION_NOT_MONOTONIC");
+		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_CONTRACT_MISMATCH");
+		expect(migration).toContain("PROVIDER_DATASET_EVIDENCE_DOMAIN_MISMATCH");
+		expect(migration).toContain("PROVIDER_DATASET_EVIDENCE_SNAPSHOT_NOT_VISIBLE");
+		expect(migration).toContain("PROVIDER_DATASET_EVIDENCE_CAPABILITY_NOT_VISIBLE");
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_provider_dataset_capabilities"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_provider_dataset_capabilities"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_source_snapshots"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_evidence_index"');
+		expect(migration).toContain('REVOKE ALL ON "sv_evidence_provenance" FROM PUBLIC');
+		expect(migration).toContain("IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
+		expect(migration).toContain(`EXECUTE 'REVOKE ALL ON "sv_evidence_provenance" FROM selena_app'`);
+		expect(migration).toContain("MUST NOT flow to client routes or exports");
+		expect(migration).not.toContain('INSERT INTO "sv_provider_dataset_capabilities"');
+		expect(migration).not.toContain('CREATE TABLE "sv_social_');
+		expect(migration).not.toContain('CREATE TABLE "sv_hotel_');
+		expect(migration).not.toContain("provider_call");
+	});
+});
+
 describe("Visibility OS Local schema", () => {
 	it("exports seven RLS-enabled Local tables and keeps Ask Maps observations separate", () => {
 		expect(localTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -758,7 +842,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 			migration.indexOf('ADD CONSTRAINT "sv_configuration_locks_project_organization_fk"'),
 		);
 		expect(migration.indexOf('ENABLE TRIGGER "sv_prevent_cost_event_mutation"')).toBeGreaterThan(
-			migration.indexOf('SET CONSTRAINTS\n'),
+			migration.indexOf("SET CONSTRAINTS\n"),
 		);
 		expect(migration).toContain('ALTER CONSTRAINT "sv_local_scan_cycles_measurement_domain_fk" NOT DEFERRABLE');
 		expect(migration).toContain('ALTER CONSTRAINT "sv_evidence_index_cycle_domain_fk" NOT DEFERRABLE');
@@ -1195,7 +1279,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-13)).toEqual([
+		expect(journal.entries.slice(-14)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1255,6 +1339,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940012000,
 				tag: "0050_visibility_os_jsonb_text_operator_casts",
+				breakpoints: true,
+			},
+			{
+				idx: 51,
+				version: "7",
+				when: 1787940013000,
+				tag: "0051_visibility_os_provider_evidence_provenance",
 				breakpoints: true,
 			},
 		]);
