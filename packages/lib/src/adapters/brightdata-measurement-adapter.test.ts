@@ -16,6 +16,8 @@ import {
 	buildBrightDataRequestBody,
 	createBrightDataAdapter,
 	extractBrightDataSources,
+	PERPLEXITY_MEASUREMENT_DEADLINE_MS,
+	PERPLEXITY_QUEUE_LEASE_SECONDS,
 	parseBrightDataAnswer,
 	resolveBrightDataCost,
 } from "./brightdata-measurement-adapter";
@@ -65,17 +67,6 @@ function respondWith(response: Response | (() => Response)) {
 		// attempt. Response.clone() tees the body; cancelling one branch can
 		// otherwise wait forever for the unused branch in size/error tests.
 		return new Response(await fixed?.body, fixed ?? undefined);
-	});
-}
-
-/** A fixed sequence of responses, one per call — for tests that exercise the retry loop's attempt-by-attempt behavior, where each attempt must see a different answer. */
-function sequenceOf(...responses: Response[]) {
-	let i = 0;
-	return vi.fn(async (): Promise<Response> => {
-		if (i >= responses.length) throw new Error("TEST_SEQUENCE_EXHAUSTED: more attempts than fixtures");
-		const response = responses[i];
-		i += 1;
-		return response;
 	});
 }
 
@@ -237,6 +228,74 @@ describe("Bright Data measurement adapter", () => {
 		});
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
+	});
+
+	it("uses one overall deadline for the request and its snapshot cleanup", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const startedAt = Date.now();
+		let cancelledAt: number | null = null;
+		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.includes("/trigger"))
+				return new Promise<Response>((resolve) => {
+					setTimeout(() => resolve(jsonResponse({ snapshot_id: "s_deadline" })), 8);
+				});
+			if (url.endsWith("/cancel")) {
+				cancelledAt = Date.now();
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
+			return new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener("abort", () => {
+					const error = new Error("aborted");
+					error.name = "AbortError";
+					reject(error);
+				});
+			});
+		});
+
+		try {
+			const outcomePromise = adapterWith(fetchSpy, {
+				system: "perplexity",
+				collectionMode: "trigger",
+				snapshotTimeoutMs: 10,
+				snapshotPollMs: 0,
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(20);
+			const outcome = await outcomePromise;
+
+			expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
+			expect(cancelledAt === null ? null : cancelledAt - startedAt).toBe(10);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("does not dispatch after scenario resolution exhausts the overall deadline", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const fetchImpl = respondWith(jsonResponse(successPayload()));
+
+		try {
+			const outcomePromise = adapterWith(fetchImpl, {
+				system: "perplexity",
+				snapshotTimeoutMs: 10,
+				resolveScenarioText: () => new Promise<string>((resolve) => setTimeout(() => resolve(SCENARIO_TEXT), 11)),
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(12);
+			const outcome = await outcomePromise;
+
+			expect(fetchImpl).not.toHaveBeenCalled();
+			expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "TIMEOUT" });
+			expect(outcome.costUsd).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("keeps the queue lease beyond the Perplexity deadline and cleanup reserve", () => {
+		expect(PERPLEXITY_MEASUREMENT_DEADLINE_MS).toBe(25 * 60_000);
+		expect(PERPLEXITY_QUEUE_LEASE_SECONDS * 1_000).toBeGreaterThan(PERPLEXITY_MEASUREMENT_DEADLINE_MS + 5 * 60_000);
 	});
 
 	it("keeps polling a Perplexity snapshot beyond the observed sixteen-minute collection", async () => {
@@ -473,7 +532,7 @@ describe("Bright Data measurement adapter", () => {
 				: jsonResponse({ status: "running" }),
 		) as unknown as typeof fetch;
 
-		const outcome = await adapterWith(fetchImpl, { snapshotPollMs: 0, snapshotTimeoutMs: 0 }).execute(permitFor());
+		const outcome = await adapterWith(fetchImpl, { snapshotPollMs: 0, snapshotTimeoutMs: 1 }).execute(permitFor());
 		expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
 		// Silence from the provider must never reach the ledger as evidence.
 		expect(outcome.measurement).toBeUndefined();
@@ -788,58 +847,23 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("records a charge for an empty or malformed answer instead of a $0 ledger row", async () => {
-		// A single attempt that keeps coming back empty/malformed is retried up
-		// to MAX_ATTEMPTS times (see the retry loop above `execute`), and every
-		// attempt that reaches the provider is billed — so the charge here is
-		// four attempts' worth, not one.
-		const empty = await adapterWith(respondWith(jsonResponse(successPayload({ answer_text_markdown: "  " })))).execute(
-			permitFor(),
-		);
+		const emptyFetch = respondWith(jsonResponse(successPayload({ answer_text_markdown: "  " })));
+		const empty = await adapterWith(emptyFetch).execute(permitFor());
 		expect(empty.invalidReason).toBe("EMPTY_RESPONSE");
-		expectCostUsd(empty, expectedBrightDataCost(4));
+		expect(emptyFetch).toHaveBeenCalledTimes(1);
+		expectCostUsd(empty, expectedBrightDataCost(1));
 		expect(empty.costBasis).toBe("estimated");
 		expect(empty.provider).toBe("brightdata");
 
-		const malformed = await adapterWith(respondWith(jsonResponse({ unexpected: true }))).execute(permitFor());
+		const malformedFetch = respondWith(jsonResponse({ unexpected: true }));
+		const malformed = await adapterWith(malformedFetch).execute(permitFor());
 		expect(malformed.invalidReason).toBe("MALFORMED_RESPONSE");
-		expectCostUsd(malformed, expectedBrightDataCost(4));
+		expect(malformedFetch).toHaveBeenCalledTimes(1);
+		expectCostUsd(malformed, expectedBrightDataCost(1));
 		expect(malformed.provider).toBe("brightdata");
 	});
 
-	it("retries an empty or malformed answer and keeps a real one that follows", async () => {
-		// EMPTY_RESPONSE, then a real answer on the second attempt: the run
-		// succeeds, and the ledger carries the cost of both calls, not just
-		// the one that finally worked.
-		const fetchImpl = sequenceOf(
-			jsonResponse(successPayload({ answer_text_markdown: "   " })),
-			jsonResponse(successPayload()),
-		);
-		const outcome = await adapterWith(fetchImpl).execute(permitFor());
-
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
-		expect(outcome.status).toBe("SUCCEEDED");
-		expect(outcome.validity).toBe("VALID");
-		expectCostUsd(outcome, expectedBrightDataCost(2));
-
-		// MALFORMED_RESPONSE first, a real answer second — the other retriable
-		// reason, same recovery.
-		const fetchImpl2 = sequenceOf(jsonResponse({ unexpected: true }), jsonResponse(successPayload()));
-		const outcome2 = await adapterWith(fetchImpl2).execute(permitFor());
-		expect(fetchImpl2).toHaveBeenCalledTimes(2);
-		expect(outcome2.status).toBe("SUCCEEDED");
-	});
-
-	it("gives up after three retries and reports the last attempt's empty outcome", async () => {
-		const fetchImpl = respondWith(jsonResponse(successPayload({ answer_text_markdown: "   " })));
-		const outcome = await adapterWith(fetchImpl).execute(permitFor());
-
-		// One original attempt plus three retries — never a fifth call.
-		expect(fetchImpl).toHaveBeenCalledTimes(4);
-		expect(outcome.invalidReason).toBe("EMPTY_RESPONSE");
-		expectCostUsd(outcome, expectedBrightDataCost(4));
-	});
-
-	it("does not retry a failure that is not an empty or malformed answer", async () => {
+	it("does not retry a failed provider call", async () => {
 		// A transport error is a different problem than an unusable answer;
 		// retrying it here would be the adapter guessing at a fix instead of
 		// reporting what actually happened.

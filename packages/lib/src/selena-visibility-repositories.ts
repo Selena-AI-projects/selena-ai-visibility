@@ -58,14 +58,18 @@ export function cycleProgressAfterRunCompletion(input: {
 	status: CycleStatus;
 	completedRuns: number;
 	expectedRuns: number;
+	systemId?: string | null;
+	runStatus?: RunOutcome["status"];
 }): { status: CycleStatus; completedRuns: number; cycleDone: boolean } {
 	const completedRuns = input.completedRuns + 1;
 	const cycleDone = completedRuns >= input.expectedRuns;
 	const status = cycleStatusesPreservedOnRunCompletion.has(input.status)
 		? input.status
-		: cycleDone
-			? "QC_REQUIRED"
-			: "RUNNING";
+		: input.systemId === "Perplexity" && input.runStatus !== undefined && input.runStatus !== "SUCCEEDED"
+			? "STOPPED"
+			: cycleDone
+				? "QC_REQUIRED"
+				: "RUNNING";
 	return { status, completedRuns, cycleDone };
 }
 
@@ -957,7 +961,16 @@ export function createSelenaRepositories(db: Db) {
 					// Failed and invalid runs count as finished. A late completion may
 					// arrive after an operator stopped the cycle, so progress is
 					// forward-only and must never revive a terminal or post-run state.
-					const progress = cycleProgressAfterRunCompletion(cycle);
+					const progress = cycleProgressAfterRunCompletion({
+						...cycle,
+						systemId: run.systemId,
+						runStatus: parsed.status,
+					});
+					const circuitBroken =
+						progress.status === "STOPPED" &&
+						cycle.status !== "STOPPED" &&
+						run.systemId === "Perplexity" &&
+						parsed.status !== "SUCCEEDED";
 					await tx
 						.update(schema.svCycles)
 						.set({
@@ -980,6 +993,33 @@ export function createSelenaRepositories(db: Db) {
 									inArray(schema.svOrders.status, ["QUEUED", "RUNNING", "ANALYZING"]),
 								),
 							);
+					if (circuitBroken) {
+						await tx
+							.update(schema.svOrders)
+							.set({ status: "CANCELLED", updatedAt: new Date() })
+							.where(
+								and(
+									eq(schema.svOrders.id, cycle.orderId),
+									eq(schema.svOrders.organizationId, ctx.tenantId),
+									inArray(schema.svOrders.status, ["QUEUED", "RUNNING", "ANALYZING"]),
+								),
+							);
+						await tx.insert(schema.svIncidents).values({
+							organizationId: ctx.tenantId,
+							orderId: cycle.orderId,
+							cycleId: cycle.id,
+							kind: "PERPLEXITY_CIRCUIT_BREAKER",
+							detail: parsed.invalidReason ?? parsed.status,
+							dispatchKey: parsed.dispatchKey,
+						});
+						await recordAudit(tx, ctx, "PERPLEXITY_CIRCUIT_OPENED", "sv_cycles", cycle.id, {
+							orderId: cycle.orderId,
+							runId,
+							dispatchKey: parsed.dispatchKey,
+							status: parsed.status,
+							reason: parsed.invalidReason ?? null,
+						});
+					}
 					// Addendum §5.3 (P0-08): the normalized mention rows commit with the
 					// run they were extracted from — one row per entity the answer
 					// named, brand and competitors alike.
