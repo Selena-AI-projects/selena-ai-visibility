@@ -42,6 +42,7 @@
 		"./providers/types": "./src/providers/types.ts",
 		"./entitlements": "./src/entitlements/index.ts",
 		"./run-policy": "./src/run-policy/index.ts",
+		"./run-policy/controlled-cycle": "./src/run-policy/controlled-cycle.ts",
 		"./usage": "./src/usage/cost.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
 		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",

@@ -217,6 +217,8 @@ jobs:
       BETTER_AUTH_SECRET: scheduling-policy-ci-secret-0123456789
       APP_URL: http://localhost:3000
       DISABLE_TELEMETRY: 1
+      SELENA_MEASUREMENT_ENABLED: "true"
+      SELENA_EMERGENCY_STOP: "false"
 
     steps:
       - name: Checkout

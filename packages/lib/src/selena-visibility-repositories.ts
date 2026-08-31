@@ -22,7 +22,7 @@ import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { withOrganizationTransaction } from "./db/organization-transaction";
 import * as schema from "./db/schema";
-import { assertDirectDispatchAllowed, type ControlledCycleState } from "./run-policy";
+import { assertDirectDispatchAllowed, type ControlledCycleState } from "./run-policy/controlled-cycle";
 import { computeCitationGaps } from "./selena-citation-gap";
 import {
 	assertLockExpectedRuns,

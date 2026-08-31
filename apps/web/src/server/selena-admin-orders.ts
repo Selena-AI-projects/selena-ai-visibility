@@ -12,7 +12,7 @@ import {
 	svRunPermits,
 	svRuns,
 } from "@workspace/lib/db/schema";
-import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
+import { isMaintenanceEnabled } from "@workspace/lib/run-policy/controlled-cycle";
 import { qcDecisions } from "@workspace/lib/selena-dispatch";
 import { assertApprovable, evaluatePreflight, type PreflightEvaluation } from "@workspace/lib/selena-preflight";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
