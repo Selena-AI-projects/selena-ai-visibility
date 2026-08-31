@@ -675,6 +675,13 @@ function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeature
 					"Только статус в режиме чтения. Этот кабинет не запускает локальный скан или захват ответов AI.",
 				)}
 			</p>
+			<Link
+				to="/app/selena-horeca"
+				className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#8f5c34] underline decoration-[#b9825b] underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#8f5c34]"
+			>
+				{tr(locale, "Open the HoReCa Local-first view", "Открыть HoReCa Local-first")}
+				<IconArrowRight className="size-4" aria-hidden="true" />
+			</Link>
 
 			<div className="mt-6 grid gap-4 md:grid-cols-2">
 				<LocalVisibilitySurface
