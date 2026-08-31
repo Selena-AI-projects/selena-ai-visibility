@@ -556,6 +556,19 @@ describe("Local Maps live runner protocol", () => {
 		expect(deps.store.markSubmittedUnknown).not.toHaveBeenCalled();
 	});
 
+	it("accepts an equivalent persisted result with a different JSON key order", async () => {
+		const deps = dependencies();
+		vi.mocked(deps.store.finalizeSubmitted).mockImplementationOnce(
+			async ({ result: persistedResult, requiredBudgetState }) => ({
+				kind: "FINALIZED",
+				persistedResult: Object.fromEntries(Object.entries(persistedResult).reverse()) as typeof persistedResult,
+				persistedBudgetState: requiredBudgetState,
+			}),
+		);
+		await expect(runLocalMapsLiveAttempt({ intent, ...deps, now })).resolves.toMatchObject({ kind: "FINALIZED" });
+		expect(deps.store.markSubmittedUnknown).not.toHaveBeenCalled();
+	});
+
 	it("requires RELEASED only for a known zero-cost result", async () => {
 		const zero = providerObservation({
 			cost: { status: "KNOWN", currency: "USD", amountUsd: "0.000000", basis: "actual" },

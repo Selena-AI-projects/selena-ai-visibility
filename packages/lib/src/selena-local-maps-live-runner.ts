@@ -1,6 +1,7 @@
 import {
 	assertLocalMapsLiveResultMatchesCandidate,
 	attemptDisposition,
+	canonicalLocalMapsProviderResult,
 	type LocalMapsLiveProviderResult,
 	type LocalMapsLiveSubmittedCandidate,
 	type LocalMapsMaterializedProviderRequest,
@@ -277,7 +278,10 @@ export async function runLocalMapsLiveAttempt(input: {
 	try {
 		const persisted = localMapsLiveProviderResultSchema.parse(finalized.persistedResult);
 		const budgetStateMatches = finalized.persistedBudgetState === requiredBudgetState;
-		if (JSON.stringify(persisted) !== JSON.stringify(matched.result) || !budgetStateMatches)
+		if (
+			canonicalLocalMapsProviderResult(persisted) !== canonicalLocalMapsProviderResult(matched.result) ||
+			!budgetStateMatches
+		)
 			return { kind: "FINAL_STATE_ALREADY_PERSISTED", reason: "FINALIZE_POSTCONDITION_MISMATCH" };
 	} catch {
 		return { kind: "FINAL_STATE_ALREADY_PERSISTED", reason: "FINALIZE_POSTCONDITION_MISMATCH" };
