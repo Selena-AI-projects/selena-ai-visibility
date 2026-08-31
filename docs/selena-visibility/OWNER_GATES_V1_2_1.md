@@ -35,7 +35,8 @@ These decisions are intentionally not inferred from a caller, process locale, or
 | Canonical Maps §8.5 evidence shape | `OWNER_DECISION_REQUIRED` | Evidence is currently split across lock/attempt/observation/view layers. Define the durable contract and migration for grid/point context, language/device/OS, endpoint version, requested depth, target identity, rank group/absolute semantics, status, competitors, raw/check references and `cost_event_id` before claiming complete evidence or enabling runtime aggregation |
 | Point-aware Local AI task identity | `OWNER_DECISION_REQUIRED` | Source already exposes `localAiTaskContextIdentityKey` with `pointId`, but `sv_capture_tasks` persistence still uniques on legacy `context_hash`. Choose a versioned migration posture before supporting point-distinct equal-condition contexts: add a v2 point-aware identity column/index while preserving v1 legacy rows, or explicitly reject/backfill legacy rows under an approved policy. A planner-only key change is unsafe because it could plan more tasks than the current database unique index can persist |
 | `profileReviewLock` contract | `OWNER_DECISION_REQUIRED` | Delta names this child block but never defines its fields; owner must define it or remove it from the required Lock |
-| Rollback posture for migrations 0043–0048 | `OWNER_DECISION_REQUIRED` | Delta requires forward/replay/rollback proof, but destructive down scripts are not defined; owner must approve reversible disposable-DB scripts or an explicit forward-only exception |
+| Rollback posture for migrations 0037–0050 | `OWNER_DECISION_REQUIRED` | Delta requires forward/replay/rollback proof, but down scripts are missing for most of the chain and 0049/0050 are explicitly forward-only; owner must approve reversible disposable-DB scripts or an explicit forward-only exception |
+| Composite tenant foreign keys for legacy `sv_*` tables | `OWNER_DECISION_REQUIRED` | Several 0038–0042 relations use UUID-only parent FKs while RLS policies remain tenant-scoped; choose additive organization-scoped FKs/backfill or explicitly accept RLS-only isolation with invariant checks before runtime activation |
 | Commercial cap/retry source of truth | `OWNER_DECISION_REQUIRED` | Selena catalog defines the `$49/$79` plans and provider caps `$12/$28` with `one_technical_invalid`; Delta targets `$15/$30` and up to three attempts. The owner must select the authoritative source and resolve the policy conflict before wiring Local Maps quote/entitlement enforcement |
 | Legacy public grid API compatibility | `OWNER_DECISION_REQUIRED` | The package still exports the pre-Delta flat-earth `squareGridPoints`; removing or deprecating that public symbol may affect consumers even though no in-repo production caller remains |
 
@@ -53,10 +54,12 @@ choice still needs source tests and disposable migration proof before activation
 | `KEYWORD-B` | Introduce an immutable keyword-set-version/keyword-version relation and require the Lock to reference it | Strong relational provenance and reuse across cycles; requires new version rows, foreign keys and an approved legacy backfill policy |
 | `AI-ID-A` | Add a point-aware v2 task identity column/index while preserving the legacy `context_hash` for existing rows | Enables equal-condition tasks at distinct points without rewriting legacy rows; requires additive migration and dual-read/write compatibility |
 | `AI-ID-B` | Keep the legacy uniqueness contract and explicitly reject point-distinct equal-condition contexts until a later migration | No schema change now; product must surface a deterministic rejection and the planner must remain aligned with the legacy index |
+| `FK-A` | Add organization-scoped composite foreign keys to the legacy `sv_*` relations, with a disposable backfill/validation pass | Stronger database-level tenant integrity; requires additive migration, orphan handling and rollback posture |
+| `FK-B` | Keep UUID-only legacy FKs and require explicit RLS/invariant proofs instead of a broad FK migration | Smaller schema change; cross-tenant parent references remain prevented only by policies/runtime checks and must be accepted as an owner decision |
 
 Owner response template:
 
-`EVIDENCE-[A/B]; KEYWORD-[A/B]; AI-ID-[A/B]; approve source implementation and a new disposable rehearsal after the migration plan is drafted: YES/NO.`
+`EVIDENCE-[A/B]; KEYWORD-[A/B]; AI-ID-[A/B]; FK-[A/B]; approve source implementation and a new disposable rehearsal after the migration plan is drafted: YES/NO.`
 
 Until these are confirmed, source-only fencing/result persistence may advance, but aggregate budget claim/finalize SQL, runtime grants, worker registration and provider activation stay disabled.
 

@@ -29,6 +29,7 @@ rehearsal after the migration draft exists.
 | Local AI task identity | `AI-ID-A`: additive point-aware v2 identity while preserving legacy rows | `AI-ID-B`: reject point-distinct equal-condition contexts until a later migration | Keeps planner cardinality aligned with the persisted uniqueness contract |
 | `profileReviewLock` | Owner defines its fields and invariants | Owner removes it from the required Lock | Removes an undefined Delta contract before implementation |
 | Rollback posture | Reversible disposable down/replay scripts | Explicit forward-only exception with evidence | Determines migration acceptance and recovery proof |
+| Legacy tenant-FK posture | `FK-A`: additive organization-scoped composite FKs with backfill | `FK-B`: retain UUID-only FKs and accept explicit RLS/invariant proof | Prevents cross-tenant parent references from remaining an implicit runtime assumption |
 | Commercial cap source | Versioned owner-approved cap/retry catalog | Another explicitly documented catalog source | Prevents silent choice between Delta `$15/$30` and existing `$12/$28` values |
 
 The owner response is recorded in `OWNER_GATES_V1_2_1.md` before any selected
