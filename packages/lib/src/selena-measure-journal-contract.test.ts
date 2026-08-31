@@ -1,7 +1,32 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(new URL("../../../apps/worker/src/scripts/measure-journal.ts", import.meta.url), "utf8");
+const scriptUrl = new URL("../../../apps/worker/src/scripts/measure-journal.ts", import.meta.url);
+const scriptPath = fileURLToPath(scriptUrl);
+const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const source = readFileSync(scriptUrl, "utf8");
+
+describe("journal provider stop", () => {
+	it("refuses the direct entrypoint before credentials, database, or provider access", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				SELENA_EMERGENCY_STOP: "true",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).not.toBe(0);
+		expect(output).toContain("PROVIDER_CALLS_STOPPED");
+		expect(output).not.toContain("DATABASE_URL is required");
+	});
+});
 
 describe("journal durable daily claim", () => {
 	it("serializes allocation before provider-capable writes and fails closed on ambiguity", () => {
