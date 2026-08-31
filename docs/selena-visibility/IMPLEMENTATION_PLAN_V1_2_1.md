@@ -55,10 +55,11 @@ product choices remain explicit rather than silently defaulted.
 
 ## Phase 2 — isolated disposable PostgreSQL rehearsal
 
-This phase requires a fresh owner instruction because the previous authorized
-rehearsal stopped on a PostgreSQL 0044 operator error before the dedicated 0049
-row transition. When re-authorized, run only the unique no-pull Docker/Colima
-compose project and stop on the first error:
+The authorized isolated rehearsal has now recorded the dedicated 0049 row
+transition and active-lease negative guard. Any further disposable lifecycle,
+RLS or idempotency suite requires a fresh owner instruction. When re-authorized,
+run only the unique no-pull Docker/Colima compose project and stop on the first
+error:
 
 1. preflight collision and image-pull checks;
 2. apply the selected migrations `0037–0050` (or the explicitly approved
