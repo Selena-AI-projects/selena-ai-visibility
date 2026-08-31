@@ -125,7 +125,11 @@ jobs:
       # Start web only (with its deps db-migrate + postgres). The worker stays
       # down for now — it comes up in phase 2, after the fixture suites run.
       - name: Start web
-        run: docker compose up -d --no-build web
+        run: |
+          if ! docker compose up -d --no-build web; then
+            docker compose logs --no-color db-migrate postgres
+            exit 1
+          fi
 
       - name: Wait for web
         run: |
