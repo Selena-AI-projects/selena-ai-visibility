@@ -39,6 +39,25 @@ These decisions are intentionally not inferred from a caller, process locale, or
 | Commercial cap/retry source of truth | `OWNER_DECISION_REQUIRED` | Delta targets total provider caps of $15/$30 and up to three attempts, while the existing catalog contains $12/$28 and `one_technical_invalid`; no silent product-policy choice is allowed |
 | Legacy public grid API compatibility | `OWNER_DECISION_REQUIRED` | The package still exports the pre-Delta flat-earth `squareGridPoints`; removing or deprecating that public symbol may affect consumers even though no in-repo production caller remains |
 
+## Decision packet (no option is selected)
+
+The following bounded choices make the next implementation step explicit without
+silently changing product policy. The owner may answer with the option IDs; any
+choice still needs source tests and disposable migration proof before activation.
+
+| Decision ID | Option | Consequence to verify |
+|---|---|---|
+| `EVIDENCE-A` | Store a normalized immutable observation contract as columns plus a child competitor table; link `check_reference` and `cost_event_id` directly to the observation scope | Strong SQL querying and explicit foreign keys; requires additive columns, competitor cardinality/identity rules and a backfill/rollback posture |
+| `EVIDENCE-B` | Store one versioned immutable canonical evidence envelope (JSONB with a strict schema) and expose typed projections for the map/API views | One canonical payload and easier evolution; requires JSON schema/version checks, projection indexes and a decision on which links remain relational |
+| `KEYWORD-A` | Materialize keyword text and language into the submitted candidate/Lock snapshot, verify a digest, and never reread mutable keyword rows | Preserves existing keyword IDs/version and makes each candidate self-contained; requires an additive snapshot field and migration checks |
+| `KEYWORD-B` | Introduce an immutable keyword-set-version/keyword-version relation and require the Lock to reference it | Strong relational provenance and reuse across cycles; requires new version rows, foreign keys and an approved legacy backfill policy |
+| `AI-ID-A` | Add a point-aware v2 task identity column/index while preserving the legacy `context_hash` for existing rows | Enables equal-condition tasks at distinct points without rewriting legacy rows; requires additive migration and dual-read/write compatibility |
+| `AI-ID-B` | Keep the legacy uniqueness contract and explicitly reject point-distinct equal-condition contexts until a later migration | No schema change now; product must surface a deterministic rejection and the planner must remain aligned with the legacy index |
+
+Owner response template:
+
+`EVIDENCE-[A/B]; KEYWORD-[A/B]; AI-ID-[A/B]; approve source implementation and a new disposable rehearsal after the migration plan is drafted: YES/NO.`
+
 Until these are confirmed, source-only fencing/result persistence may advance, but aggregate budget claim/finalize SQL, runtime grants, worker registration and provider activation stay disabled.
 
 The `0046` daily journal claim uses the database UTC clock only as an operational restart identity, not as the commercial monthly billing period. One unresolved claim blocks the entire project across UTC days and question-set versions. A proven pre-provider failure is audited as `NO_SPEND`; a crash, provider failure, incomplete ledger/cycle or other ambiguous attempt remains unresolved as `CLAIMED`, `EXECUTING`, or `HOLD` and blocks all repeats, including `SELENA_JOURNAL_FORCE=1`, until an owner-authorised evidence review defines the recovery action. No automatic retry of ambiguous work is authorised.
