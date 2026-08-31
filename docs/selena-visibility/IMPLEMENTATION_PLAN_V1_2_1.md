@@ -13,7 +13,7 @@ Current evidence pins:
 - source milestone: `348f542b`;
 - feature branch: `feature/selena-visibility-v1-2-1`;
 - latest accepted Claude Max20 review: `0f2dd387` (Opus, read-only, `NOT READY`);
-- latest orchestration evidence state: `4a559909`;
+- latest orchestration ledger: this tracked file at `HEAD` (implementation-plan state `9b4e23d5`);
 - canonical release ref: `origin/release/selena-visibility-mvp` at `78d133f1`.
 
 ## Phase 0 — owner decisions before schema changes

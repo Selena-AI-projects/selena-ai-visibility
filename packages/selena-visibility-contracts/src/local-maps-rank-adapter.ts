@@ -76,6 +76,24 @@ export type LocalMapsRankNormalizedObservation = {
 export type LocalMapsRankRunnerObservation = Omit<LocalMapsRankNormalizedObservation, "coordinateProof">;
 
 /**
+ * Serializes the validated request in the contract's field order. Provider
+ * echoes are untrusted objects, so comparing their input insertion order
+ * would make an equivalent request fail the coordinate-proof check.
+ */
+function canonicalMapsRequest(input: unknown): string {
+	const request = mapsRequestLockSchema.parse(input);
+	return JSON.stringify({
+		device: request.device,
+		os: request.os,
+		language: request.language,
+		seDomain: request.seDomain,
+		zoom: request.zoom,
+		depth: request.depth,
+		searchThisArea: request.searchThisArea,
+	});
+}
+
+/**
  * Provider boundary required by Delta §4.1. Implementations are injected and
  * are not registered by this contract package. A provider call remains
  * impossible until a caller explicitly supplies this adapter to the runner.
@@ -116,7 +134,7 @@ export function assertLocalMapsRankCoordinateProofMatchesTask(
 	inputTask: LocalMapsMaterializedProviderRequest,
 	inputProof: LocalMapsRankCoordinateProof,
 ): LocalMapsRankCoordinateProof {
-	const task = inputTask;
+	const task = localMapsMaterializedProviderRequestSchema.parse(inputTask);
 	const proof = localMapsRankCoordinateProofSchema.parse(inputProof);
 	if (
 		proof.pointId !== task.point.id ||
@@ -125,7 +143,7 @@ export function assertLocalMapsRankCoordinateProofMatchesTask(
 		proof.longitude !== task.point.longitude ||
 		proof.keywordId !== task.keyword.id ||
 		proof.keywordText !== task.keyword.text ||
-		JSON.stringify(proof.request) !== JSON.stringify(task.params)
+		canonicalMapsRequest(proof.request) !== canonicalMapsRequest(task.params)
 	)
 		throw new Error("LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH");
 	return proof;

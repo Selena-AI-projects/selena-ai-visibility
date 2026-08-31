@@ -134,9 +134,27 @@ describe("LocalMapsRankAdapter contract", () => {
 			request: task.params,
 		};
 		expect(assertLocalMapsRankCoordinateProofMatchesTask(task, proof)).toEqual(proof);
+		const reorderedRequest = {
+			searchThisArea: task.params.searchThisArea,
+			depth: task.params.depth,
+			zoom: task.params.zoom,
+			seDomain: task.params.seDomain,
+			language: task.params.language,
+			os: task.params.os,
+			device: task.params.device,
+		};
+		expect(
+			assertLocalMapsRankCoordinateProofMatchesTask({ ...task, params: reorderedRequest } as never, {
+				...proof,
+				request: reorderedRequest,
+			}),
+		).toMatchObject({ pointId: task.point.id });
 		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, { ...proof, longitude: "0" })).toThrow(
 			"LOCAL_MAPS_RANK_COORDINATE_PROOF_MISMATCH",
 		);
+		expect(() =>
+			assertLocalMapsRankCoordinateProofMatchesTask({ ...task, params: { ...task.params, depth: 19 } } as never, proof),
+		).toThrow();
 		expect(() => assertLocalMapsRankCoordinateProofMatchesTask(task, undefined as never)).toThrow();
 	});
 
