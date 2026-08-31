@@ -222,7 +222,7 @@ The two DOCX source files are present at the owner-provided Downloads paths and 
 ## Push/PR side-effect check
 
 - Pushes to the feature branch do not match the repository workflows, which are scoped to `main` pushes or PRs.
-- Opening a draft PR to `main` would start Build, E2E, deployment-smoke, license and CLA workflows. Several use Blacksmith runners; billing impact is `UNKNOWN`. Draft PR creation remains deferred until a reviewable milestone and side-effect authority are resolved.
+- Opening a draft PR to `main` would start `Build`, `E2E Tests`, `Deployment Smoke Tests`, `License Check` and `CLA Check`; the first four execute on `blacksmith-*` runners and include dependency installs, builds, tests and disposable service containers. Their billing impact is `UNKNOWN` from repository evidence. `Claude Code`, provider-test and publish workflows are not PR triggers, but this does not make the PR cost-free. Draft PR creation remains deferred until the owner confirms that these CI side effects are acceptable.
 - The current feature branch has no matching PR according to a read-only GitHub API query; this is evidence of absence only, not an authorization to create one while CI/Blacksmith billing remains unresolved.
 
 Current owner gate: the explicit disposable rehearsal authorization was used for the completed Gate12/0045 runs. The stopped 0049 lifecycle attempt produced no additional database evidence. Paid canary remains a later, separate gate.
