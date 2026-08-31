@@ -1,89 +1,73 @@
-# Draft PR — Selena AI Visibility v1.3 source-only acceptance package
+# Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN_RELEASE_INTEGRATED_CI_PENDING`.
+Status: `OPEN_DRAFT_CURRENT_SOURCE_CI_PENDING`.
 
-PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/92`
+PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/96`
 
 Base: `release/selena-visibility-mvp` (repository default branch).
 
 ## Proposed title
 
-`feat(visibility): add source-only v1.3 acceptance package`
+`fix(visibility): harden v1.3 pre-production gates`
 
 ## Proposed body
 
 ### Summary
 
-- add a domain-aware registry for 13 Bright Data dataset contracts with
-  lifecycle-only captures, external attempt control and no ambient transport;
-- add separate Google AI Mode, SERP, Maps Place and Maps Reviews contract
-  adapters;
-- keep Social and Travel fail-closed behind privacy, retention, cost and
-  product gates;
-- add tenant-scoped provider capability, source snapshot and evidence
-  provenance source with append-only guards and private raw references;
-- add signed ten-minute evidence cursors and safe HoReCa evidence read models;
-- add the HoReCa Local-first read-only contract/UI plus AVLI/KORA pilot,
-  60-intent ontology, owner review and unit-economics templates;
-- record three independent Codex audits and a blind read-only Claude Max review.
+- integrate current release `32945b27` without rewriting feature history;
+- package the migration runner without a runtime Corepack/pnpm download;
+- preserve global provider-stop and Social/Travel fail-closed controls;
+- persist an exact successful Google AI Mode schema-discovery capture privately
+  as `CANARY_ONLY`, without fabricating accepted measurement or cost evidence;
+- bind HoReCa Local-first UI to session, tenant and project scoped safe
+  projections, with a project selector and normalized evidence detail;
+- keep HoReCa runtime source-only until an authoritative acceptance decision and
+  timestamp can be joined; retain UNKNOWN and no composite score;
+- preserve the AVLI/KORA source-only pilot package and protected recovery
+  handoff boundary.
 
 ### Evidence
 
-- Provider/Database/Evidence: 115 tests passed across 6 files.
-- HoReCa contract: 8 tests passed.
-- HoReCa web model/rendering: 7 tests passed.
-- `@workspace/lib`, `@workspace/selena-visibility-contracts` and
-  `@workspace/web` typechecks passed.
-- changed-file Biome check passed.
-- `@workspace/web` production build passed.
-- Impeccable deterministic UI detector returned no findings in its single run.
-- three Codex cross-reviews: source-level PASS after remediation.
-- Claude Max `max5`/Sonnet blind review: complete, read-only, no permission
-  denials, no repository mutation; agreed with the source-only/pre-runtime
-  boundary.
-- post-release-integration full test run passed all 15 Turbo tasks, including
-  976 lib, 409 web and 240 visibility-contract tests; four DB-dependent web
-  tests remained explicitly skipped;
-- config, lib, contracts, worker and web typechecks passed;
-- changed-file Biome, web build and worker build passed after conflict
-  resolution.
+- green pushed anchor `b86540c9`: Build, E2E integration, scheduling policy,
+  deployment smoke, license and CLA all passed;
+- current local Provider delta under Node 24: 20/20 focused lib tests, 2/2
+  worker-output tests, lib/worker typechecks and scoped Biome passed;
+- current local HoReCa delta under Node 24: 16/16 focused tests, web typecheck,
+  scoped Biome and web production build passed;
+- independent Provider and HoReCa repeat reviews: no remaining P0/P1 in the
+  reviewed source slices;
+- current source still requires a fresh PR #96 Blacksmith cycle after push.
 
-### Known baseline and authorization boundaries
+### Runtime and authorization boundaries
 
-- repository-wide build remains blocked in unchanged `apps/www` by 40
-  unresolved `@/lib/*` imports under the workspace path containing a space;
-  the changed web package builds independently;
-- repository-wide web lint has pre-existing findings outside this diff;
-  changed files pass targeted Biome;
-- no migration was applied and runtime RLS remains `UNKNOWN`;
-- no credentials, provider calls, paid canaries, shared staging/production,
-  billing changes, merge, deploy, production DB, recurring jobs or public
-  capability activation were performed;
-- `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and is not part
-  of the branch diff.
+- no Google AI Mode canary has been executed; provider calls in this loop: `0`;
+- no current-source deploy, migration, fixture write, database role switch or
+  billing change occurred;
+- staging web still has a production-like domain binding, affected staging
+  credentials require rotation, current migration journal is `UNKNOWN`, and
+  hosted non-owner RLS is unproven;
+- the auto-deployed staging worker was re-contained and remains stopped;
+- exactly one Bright Data `GOOGLE_AI_MODE` call may occur only after SR-00
+  through SR-09 pass, with USD 0.25 maximum, under 25 minutes, zero retries and
+  `recurring=false`;
+- production, production DB, recurring jobs, additional provider calls,
+  Social/Travel activation and higher cost are not authorized;
+- `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
 
-### Owner gates after review
+### Remaining gates
 
-- disposable PostgreSQL migration/replay/rollback and non-owner RLS proof;
-- cost-capped provider canaries and schema/capability evidence;
-- hosted staging/payment acceptance;
-- product decision on general Selena vs HoReCa navigation;
-- merge/deploy/production/recurring activation.
+- push the reviewed source and obtain a fully green exact-head PR cycle;
+- record immutable build/image and sealed-configuration references;
+- resolve production-like domain ownership and rotate affected credentials;
+- refresh backup/PITR and migration journal evidence before any staging SQL;
+- prove migrations through 0051 and `selena_app` RLS in hosted staging;
+- run zero-call browser/API fixtures before considering the single canary.
 
-## PR creation side effects
+## CI side effects
 
-Opening PR #92 to the repository default branch
-`release/selena-visibility-mvp` matches `pull_request` triggers for the
-following workflows:
-
-- `Build` — `blacksmith-4vcpu-ubuntu-2404`;
-- `E2E Tests` — `blacksmith-4vcpu-ubuntu-2404` plus a
-  `blacksmith-2vcpu-ubuntu-2404` scheduling-policy job;
-- `Deployment Smoke Tests` — `blacksmith-2vcpu-ubuntu-2404`;
-- `License Check` — `blacksmith-4vcpu-ubuntu-2404`;
-- `CLA Check` — pull-request workflow; runner billing was not established by
-  repository inspection.
-
-The billing/cost impact of Blacksmith jobs is `UNKNOWN`. The owner explicitly
-approved draft PR creation and the release-to-feature integration on 2026-08-31.
-PR merge, deploy and production activation remain separately unauthorized.
+The owner restored the Actions budget and authorized bounded feature-branch
+pushes. A push to PR #96 triggers Build, E2E integration, scheduling policy,
+deployment smoke, license and CLA checks on Blacksmith/GitHub runners. This is
+authorized for the current loop. PR merge and any deployment remain separate
+gates; merge must not occur until current-head CI is fully green and no P0/P1
+remains.

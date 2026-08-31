@@ -33,7 +33,7 @@ which is not counted as acceptance evidence.
   `release/selena-visibility-mvp` as
   `7ac37f436b08f0e48c97acb61dfaee8a6458760a` at
   `2026-08-31T13:07:37Z`.
-- Final PR head and current release share tree
+- Final PR head and historical release `7ac37f43` share tree
   `03074f76a5dbff51a1389228d902d9809ac3d714`.
 - Source commits `4e017a73` and `ef435a2c` add fail-closed runtime guards and
   close the reproducible root lint/build errors. Merge commit `143318c1`
@@ -49,16 +49,27 @@ which is not counted as acceptance evidence.
 - Release `7ac37f43` is now a historical/rollback image only. It contains the
   provider-stop gaps found after its automatic Railway deployment and is not an
   eligible redeploy candidate.
+- The release branch later advanced to
+  `32945b27202949debf0e27cbf48053d01ed2559e`. PR #96 integrated that exact
+  release commit through merge commit `07199eda9a1584dc6e4cc8f02d84883d311392b5`
+  without rebase or history rewrite.
 - Draft follow-up PR
   [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is open from
-  `feature/selena-visibility-v1-2-1`. Its current pushed head is
-  `90234ad3518977cd15eb06b6033c8335f4c3f4c5`, including the v1.3 provider,
-  RLS/evidence, HoReCa and pre-production evidence commits. A fresh CI cycle
-  was created for this head, but GitHub rejected every job before runner
-  assignment because of an account-payment or Actions spending-limit gate.
-  Therefore the current source remains unvalidated by CI. The deploy candidate
-  is PR #96's eventual final head only after the external billing gate is
-  resolved and a new fully green CI cycle completes.
+  `feature/selena-visibility-v1-2-1`. Its last pushed, CI-validated head is
+  `b86540c99ab8621a763e399873c5aec3e8744cfe`, tree
+  `023c7a819a4d558e010e4549dd23db6725ee60d0`. It includes the v1.3 provider,
+  RLS/evidence and HoReCa work, the release migration packaging, and the
+  tenant-authenticated report E2E correction. All six required PR checks passed
+  on this exact head.
+- Two reviewed local source commits follow that green anchor:
+  `bb8f123c` persists the exact validated Google AI Mode canary capture as
+  private `CANARY_ONLY` evidence without creating accepted measurement or cost
+  evidence, and `4916125eae194dc4d15c5b4e3e8ed359f43dc274` binds the HoReCa
+  route to tenant/project-scoped safe projections while failing closed when
+  authoritative acceptance provenance is absent. Current local implementation
+  tree is `502b98fb678a8d2e94887f579bd452a73d145821`. Node 24 targeted tests,
+  typechecks, changed-file Biome and the web build pass; fresh PR CI is pending
+  until these commits and this evidence update are pushed.
 
 | Gate | Required evidence | Current status | Evidence class |
 |---|---|---|---|
@@ -67,15 +78,15 @@ which is not counted as acceptance evidence.
 | V13-GOOGLE | Google AI Mode, SERP, Maps Place and Maps Reviews contract adapters preserve domain separation and require lifecycle captures before normalization | `PASS_SOURCE_ONLY` | Source only |
 | V13-SOCIAL | Social definitions must fail closed until schema, privacy, retention, deletion propagation, legal hold, source terms and cost evidence exist; Social never contributes to AI visibility | `PASS_SOURCE_ONLY_DISABLED` | Source only |
 | V13-TRAVEL | Hotels remains canary-only and blocked from runtime/product activation until stable schema and HoReCa gate | `PASS_SOURCE_ONLY` | Source only |
-| V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references and private hashes remain denied; reserved schemas are not invented | `PASS_SOURCE_AND_DISPOSABLE_RUNTIME_UNKNOWN` | Source plus disposable DB |
-| V13-HORECA | Local-first read model exposes independent modules, accepted-sample counts, UNKNOWN and evidence-linked actions without a composite score | `PASS_SOURCE_UI` | Source/UI only |
+| V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references and private hashes remain denied; reserved schemas are not invented; a successful one-shot capture is persisted privately and remains in cost/acceptance HOLD | `PASS_SOURCE_AND_DISPOSABLE_RUNTIME_UNKNOWN` | Source plus disposable DB |
+| V13-HORECA | Local-first read model exposes independent modules, UNKNOWN and evidence-linked actions without a composite score; the runtime route remains source-only until an authoritative acceptance decision/timestamp can be joined | `PASS_SOURCE_UI_ACCEPTANCE_PROVENANCE_HOLD` | Source/UI only |
 | V13-PILOTS | AVLI and KORA packages contain evidence/UNKNOWN gates, intent ontology, report templates and unit-economics decision fields without fabricated facts | `PASS_ARTIFACT` | Repository artifact |
-| V13-TESTS | Current working-tree Node 24 lint, all-workspace typecheck, uncached tests and uncached build pass; PR #96 current-head jobs were rejected before execution by GitHub billing/admission | `PASS_LOCAL_HOLD_CI_BILLING` | Local plus PR CI |
+| V13-TESTS | Registered root lint/build baselines remain resolved; current-delta Node 24 tests, typechecks, changed-file Biome and web build pass; PR #96 predecessor `b86540c9` is fully green and fresh current-source CI is pending | `PASS_LOCAL_CURRENT_DELTA_CI_PENDING` | Local plus predecessor PR CI |
 | V13-STABILITY | Deterministic Local Maps rehearsal passes five isolated Node 24 replays with zero transport calls, cost, persistence or evidence eligibility | `PASS_LIMITED_REPLAY` | Local executed |
-| V13-CODEX | Independent Provider, HoReCa, DB/RLS and formal security-diff reviews cross-audit the implementation; final frozen scan has no reportable P0/P1/P2 | `PASS_SOURCE_ONLY_EXTERNAL_COST_HOLD` | Static independent review |
+| V13-CODEX | Independent Provider and HoReCa post-CI reviews drove capture-persistence and read-model remediation; repeat reviews report no remaining P0/P1 in those slices, while runtime/cost evidence stays gated | `PASS_SOURCE_ONLY_EXTERNAL_COST_HOLD` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
-| V13-BRANCH | Three small source commits and one evidence commit are pushed through `90234ad3`; the untracked protected handoff remains excluded | `PASS_PUSHED_HANDOFF_EXCLUDED` | Git |
-| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 current-head CI did not start because of a GitHub billing/spending-limit gate | `OWNER_GATE_GITHUB_ACTIONS_BILLING` | GitHub/CI |
+| V13-BRANCH | Last pushed head `b86540c9` is green; reviewed local implementation commits `bb8f123c` and `4916125e` await the bounded push; the untracked protected handoff remains excluded | `LOCAL_COMMITS_CI_PENDING_HANDOFF_EXCLUDED` | Git |
+| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 is mergeable/clean at green predecessor `b86540c9`; the new local source requires a fresh cycle | `DRAFT_PR_CURRENT_SOURCE_CI_PENDING` | GitHub/CI |
 | V13-RUNTIME | Staging service IDs, named backup, disposable 0051 schema RLS and an isolated PITR restore rehearsal are verified; production-like domain isolation, global provider containment and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_BACKUP_PASS_PROVIDER_AND_APP_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
@@ -117,7 +128,7 @@ and [CLA 33397249576](https://github.com/parkourcafe/selena-ai-visibility/action
 These runs are historical evidence only until the current working tree is
 committed and a new CI cycle passes.
 
-PR #96 current pushed head `90234ad3` triggered a fresh cycle, but none of the
+PR #96 historical head `90234ad3` triggered a fresh cycle, but none of the
 six required jobs reached a runner or executed a step:
 
 | Workflow | Run | Result |
@@ -134,6 +145,22 @@ increased. The runs completed in two to three seconds with empty runner names,
 zero steps and no job logs. This is a verified external billing/admission hold,
 not evidence of a source failure. No rerun was requested because billing
 changes remain owner-controlled.
+
+After the owner restored the Actions budget, PR #96 integrated current release
+`32945b27` and closed the migration-image and report-auth E2E failures. Exact
+head `b86540c99ab8621a763e399873c5aec3e8744cfe` completed a fully green cycle:
+
+| Workflow | Run | Result |
+|---|---|---|
+| Build | [33430941473](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941473) | `SUCCESS` (`5m35s`) |
+| E2E Tests | [33430942597](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430942597) | Integration `SUCCESS` (`10m43s`); scheduling policy `SUCCESS` (`3m26s`) |
+| Deployment Smoke Tests | [33430941439](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941439) | `SUCCESS` (`1m34s`) |
+| License Check | [33430941540](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941540) | `SUCCESS` (`1m18s`) |
+| CLA Check | [33430941516](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941516) | `SUCCESS` (`8s`) |
+
+The earlier account billing/admission failure remains historical evidence; it
+is no longer the current blocker. No deployment or provider call was triggered
+by this CI cycle.
 
 ## Local stability replay
 
@@ -193,6 +220,25 @@ but topology acceptance is not: the staging web
 service also has the production-like `app.selenasystems.com` binding, so SR-02
 remains `HOLD` until domain ownership/blast radius is resolved.
 
+- A fresh read-only inventory after release advanced to `32945b27` found that
+  Railway Git integration had again deployed that release to staging. Web
+  deployment `3eefbf4a-f3f3-41fc-a25b-2e9c9aef2af3` was `SUCCESS` and still
+  served both `app.selenasystems.com` and `staging.selenasystems.com`. Worker
+  deployment `c50d857e-3b65-4218-80cc-fd026e0842bc` was `SUCCESS` and running;
+  bounded logs showed maintenance disabled and worker ready, but did not prove
+  the master emergency-stop or measurement values. Migration deployment
+  `2b092c4c-a885-45ed-aedc-ae9046f97666` was stopped/`CRASHED`; its bounded
+  error log showed Corepack attempting a runtime pnpm download. This is the
+  released `pnpm exec` image path, not the direct packaged-binary path already
+  green in PR #96.
+- Because SR-03 was not proven, the authorized automatic staging containment
+  stopped the newly active worker. The resulting latest worker marker is
+  `5adf69b9-4a37-4b4c-b05b-904c828d3542`, `deploymentStopped=true`. Web was not
+  changed because of the production-like domain binding. Migration, Postgres,
+  provider and billing state were not mutated. Bounded worker DNS searches for
+  Bright Data, DataForSEO and Perplexity over the inspected 12-hour window
+  returned no rows; this is only an observation and not proof of zero calls.
+
 - Merging PR #95 triggered Railway Git deployment automatically. Web deployment
   `9786b6fe-3a83-4f75-a23f-55cd903e04e9` and worker deployment
   `e781bec1-8d4f-499b-93bf-ccf45379873c` reached `SUCCESS` for release
@@ -235,15 +281,17 @@ remains `HOLD` until domain ownership/blast radius is resolved.
   still-pending 0051 capability table. The source DB remained online with the
   same technical receipt. The rehearsal service was deleted and its restored
   volume was submitted for deletion; neither web nor worker was rebound.
-- Read-only migration metadata shows 43 applied journal rows, with the latest
-  timestamp matching migration `0042`. Only `0043` through `0051` are pending.
-- App-wide runtime RLS is `HOLD`: most tenant paths now use transaction-local
-  `app.organization_id` and the API-key bootstrap is source-complete, but
-  independent review found remaining legacy report paths and excessive role
-  grants. Manual journal publication and recurring retention paths remain
-  deliberately disabled. Web/worker must not be switched to `selena_app` until
-  the remediation, fresh disposable proof and staging browser/API/RLS gates
-  pass.
+- At the last direct database checkpoint, read-only migration metadata showed
+  43 applied journal rows with the latest timestamp matching `0042`; `0043`
+  through `0051` were pending. The current live journal after the failed
+  `32945b27` migration deployment is `UNKNOWN` until refreshed read-only before
+  any SQL.
+- App-wide hosted runtime RLS is `HOLD`: the reviewed source closes the report
+  bootstrap/tenant-context gaps and the idempotent least-privilege role proof
+  passes in disposable PostgreSQL. Manual journal publication and recurring
+  retention remain deliberately disabled. Web/worker must not be switched to
+  `selena_app` until the hosted role attributes, migrations and staging
+  browser/API/RLS gates pass using an actual non-owner connection.
 - The disposable 0051 schema probe now passes against an isolated PostgreSQL 16
   compose project. It verified same-tenant read/write, denied cross-tenant
   access, kept private provenance inaccessible, rolled back the probe role and
@@ -252,8 +300,8 @@ remains `HOLD` until domain ownership/blast radius is resolved.
   applied.
 - The current working tree adds a master provider gate across registry,
   scheduler, worker, legacy transport and self-rescheduling paths. Targeted
-  source tests pass, but this is not staging or CI evidence until the follow-up
-  commit and PR #96 cycle are green.
+  source tests pass and exact-candidate PR #96 CI is green. This is still not
+  deployed staging evidence.
 - During the configuration-presence audit, Railway CLI `variable list`
   unexpectedly rendered raw staging values instead of key names only. No value
   is copied into this artifact, but the exposed auth, database, provider,

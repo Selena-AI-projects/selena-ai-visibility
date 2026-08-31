@@ -1,15 +1,16 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `GITHUB_BILLING_AND_SECURITY_ROTATION_HOLD`
+Status: `CURRENT_SOURCE_CI_PENDING_SECURITY_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
-Current release: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`, historical/rollback only.
-Draft PR #96 last pushed head:
-`90234ad3518977cd15eb06b6033c8335f4c3f4c5`. Source hardening and the prior
-evidence pack are pushed, but the fresh current-head CI jobs were rejected
-before runner assignment by a GitHub account-payment or Actions spending-limit
-gate. The only eligible future candidate is PR #96's eventual fully green head
-with zero unresolved P0/P1.
+Current release: `32945b27202949debf0e27cbf48053d01ed2559e`.
+Historical release `7ac37f43` remains rollback evidence only. Draft PR #96's
+last pushed green anchor is `b86540c99ab8621a763e399873c5aec3e8744cfe`.
+Current reviewed local implementation head is
+`4916125eae194dc4d15c5b4e3e8ed359f43dc274`, tree
+`502b98fb678a8d2e94887f579bd452a73d145821`; local Node 24 delta checks pass and
+fresh PR CI is pending. Source readiness does not close staging runtime gates
+or make this a production candidate.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
@@ -30,11 +31,11 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 
 ## Execution disposition
 
-- PR #96 current-head CI: `OWNER_GATE`. Build, E2E integration, scheduling
-  policy, deployment smoke, license and CLA all terminated before runner
-  assignment with zero executed steps. GitHub's annotations identify recent
-  account-payment failure or an Actions spending-limit requirement. The agent
-  did not request a rerun or change billing.
+- PR #96 green-anchor CI: `PASS`. Build, E2E integration, scheduling policy,
+  deployment smoke, license and CLA all succeeded on `b86540c9`. The current
+  local Provider/HoReCa source passes focused Node 24 gates but still requires a
+  fresh PR cycle after push. The earlier pre-runner billing/admission rejection
+  is historical and no longer blocks the loop.
 - `OD-A`: failed its no-value condition. Railway CLI `variable list`
   unexpectedly rendered raw staging values during a key-presence audit. Values
   are not reproduced in this pack, but affected credentials are considered
@@ -46,14 +47,25 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
   receipt matched the expected pre-0051 state. The source stayed online; the
   rehearsal service was deleted and the restored volume is pending recoverable
   deletion. Best-effort live archiver telemetry remains `UNKNOWN`.
-- Migration preflight: read-only journal is through `0042`; only `0043` through
-  `0051` are pending.
-- `OD-B1` runtime switch and app-wide RLS acceptance: `HOLD`. The current app
-  does not consistently set transaction-local `app.organization_id`, so binding
-  web/worker to `selena_app` would be unsafe.
+- Migration preflight: the last direct read-only journal checkpoint was through
+  `0042`, with `0043` through `0051` pending. The current live journal is
+  `UNKNOWN` until refreshed after the latest failed migration deployment.
+- `OD-B1` runtime switch and app-wide RLS acceptance: `HOLD`. Reviewed source
+  and disposable proofs cover transaction-local `app.organization_id` and the
+  report bootstrap, but hosted role attributes and actual non-owner same/cross-
+  tenant behavior remain unverified. Binding web/worker to `selena_app` before
+  that proof would be unsafe.
 - PR #95 merge triggered Railway Git deployment of web/worker release
   `7ac37f43` before the RLS/domain gates passed. Post-deploy journal evidence
   remained through `0042`, so pending migrations were not applied.
+- Railway Git integration later auto-deployed current release `32945b27`. Web
+  deployment `3eefbf4a…` is running and still serves both the production-like
+  and staging domains. Migration deployment `2b092c4c…` crashed while Corepack
+  attempted a runtime pnpm download. Worker deployment `c50d857e…` reached
+  ready with maintenance disabled, but the master stop and measurement values
+  could not be proven safely. The authorized rollback path stopped it; latest
+  worker marker `5adf69b9…` has `deploymentStopped=true`. No web, database,
+  provider or billing mutation was performed during this containment.
 - Read-only ledger reconciliation found zero new permits, three VISITOR run
   rows and three estimated Bright Data cost events totalling `USD 0.030000`.
   The actual number of new external calls is `UNKNOWN`; two run rows succeeded,
@@ -200,17 +212,17 @@ interchangeable with the recommended Google canary.
 | OD-B1 | After OD-B2, create/update `selena_app` through the reviewed idempotent least-privilege grant script; do not use schema-wide CRUD/default grants. |
 | OD-B2 | Take/verify the staging backup checkpoint and run the one-shot pending migration chain through `0051` as owner before OD-B1. |
 | OD-B3 | Change staging secret/config bindings, including runtime `DATABASE_URL`, CA, auth/encryption keys, stub/stop flags and application origins. |
-| OD-B4 | Deploy/restart only PR #96's final head containing this pack after fresh green CI and the remaining staging gates; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not fix candidates. |
+| OD-B4 | Deploy/restart only the eventual fully green pushed head containing implementation candidate `4916125e` after recording an immutable image/build digest and satisfying the remaining staging gates; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not fix candidates. |
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
 | OD-S | Rotate/revoke the credentials exposed by the failed staging key-presence audit, coordinate session/database/encryption migrations, and verify replacement key presence without printing values. Because the current web serves `app.selenasystems.com`, this requires separate production-impact permission. |
-| OD-CI | GitHub organization billing operator must resolve the failed payment or Actions spending-limit gate, then explicitly confirm it is safe to request one CI rerun. The agent must not modify billing. |
+| OD-CI | `COMPLETED_HISTORICAL`: Actions budget was restored and exact-candidate CI passed; no billing mutation was performed by the agent. |
 | OD-P | Any production access, production database, billing change, recurring schedule or production deploy. This remains outside the pack. |
 
 OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
 for this bounded loop, but their ordered gate conditions still apply. The
-current CI billing, credential-rotation, domain-binding, runtime-RLS and
-provider-activity findings stop OD-B1/B3/B4/B5 and OD-C; authorization is not a
-PASS. Backup restoreability itself is now proven. OD-CI, OD-S and OD-P are
-never implied and remain separately gated.
+credential-rotation, domain-binding, runtime-RLS and provider-activity findings
+stop OD-B1/B3/B4/B5 and OD-C; authorization is not a PASS. Backup
+restoreability itself is proven at the recorded checkpoint and must be refreshed
+before SQL. OD-S and OD-P remain separately gated.

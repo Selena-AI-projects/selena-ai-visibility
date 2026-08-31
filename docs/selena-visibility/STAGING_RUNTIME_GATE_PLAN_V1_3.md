@@ -1,16 +1,16 @@
 # Selena AI Visibility v1.3 — staging/runtime gate plan
 
-Status: `CI_BILLING_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
+Status: `CURRENT_SOURCE_CI_PENDING_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
 
 The original anchor is release HEAD
 `0e00df4faa74990e6b696c4249cbb85acf23c693`. Current release HEAD is
-`7ac37f436b08f0e48c97acb61dfaee8a6458760a`, retained only as historical and
-rollback evidence. Draft PR #96 current pushed head is
-`90234ad3518977cd15eb06b6033c8335f4c3f4c5`. Its fresh GitHub Actions cycle
-was rejected before runner assignment by an account-payment or Actions
-spending-limit gate, so it is not CI-validated. The next candidate is PR #96's
-eventual fully green head. The owner has authorized one bounded pre-production
-loop. Production, application recurring
+`32945b27202949debf0e27cbf48053d01ed2559e`; historical release `7ac37f43`
+remains rollback evidence only. Draft PR #96's last pushed green anchor is
+`b86540c99ab8621a763e399873c5aec3e8744cfe`. Current reviewed local
+implementation head is `4916125eae194dc4d15c5b4e3e8ed359f43dc274`, tree
+`502b98fb678a8d2e94887f579bd452a73d145821`; local Node 24 delta gates pass and
+fresh PR CI is pending. The owner has authorized one bounded pre-production loop.
+Production, application recurring
 jobs, Social/Travel activation and any provider call beyond the single named
 Google AI Mode canary remain prohibited.
 
@@ -20,9 +20,10 @@ Google AI Mode canary remain prohibited.
 - PR [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95) is merged
   as release commit `7ac37f43` after final required CI completed successfully.
 - Draft PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
-  is open and pushed through `90234ad3`. Existing green checks apply only to
-  `71e5b8ef`; the current-head cycle did not start because of the GitHub
-  billing/admission gate.
+  is open, mergeable/clean and pushed through green anchor `b86540c9`. Build, E2E
+  integration, scheduling policy, deployment smoke, license and CLA checks all
+  passed on that exact anchor. Local commits `bb8f123c` and `4916125e` require
+  a fresh cycle after push. Run links are recorded in `ACCEPTANCE_MATRIX_V1_3.md`.
 - Historical PR #95 head and release `7ac37f43` share tree
   `03074f76a5dbff51a1389228d902d9809ac3d714`, validated by the successful PR
   CI runs listed in `ACCEPTANCE_MATRIX_V1_3.md`. The earlier PR #92 release
@@ -48,7 +49,7 @@ Approval of one boundary does not authorize any later boundary.
 
 | Gate | Required action and evidence | Pass condition | Authorization |
 |---|---|---|---|
-| SR-00 Release lineage | Pin the follow-up PR #96 final head and its exact green CI; record image/build digest and configuration version without secrets | The commit containing this plan is immutable and traceable; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not deploy targets | Read-only local |
+| SR-00 Release lineage | Pin the PR #96 source candidate and its exact green CI; record image/build digest and configuration version without secrets | Current implementation candidate `4916125e` is traceable and its eventual pushed head passes CI; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not deploy targets | Read-only local |
 | SR-01 Baseline disposition | Triage the registered root lint and `apps/www` local build baselines; do not relabel them as PASS | Either fixed in a reviewed follow-up or accepted as a named non-runtime exception with CI evidence | Source-only follow-up |
 | SR-02 Staging topology | Confirm web, worker, migration job and PostgreSQL belong to the intended staging environment; confirm the deployed revisions and that production is not targeted | Inventory receipt contains IDs/revisions only, no credential values; web and worker database binding is consistent | Boundary A |
 | SR-03 Safe configuration | Verify presence, not values, of required auth/encryption/database settings; require telemetry and all schedulers/fan-out disabled; require stub selectors for the zero-call phase | Configuration receipt shows fail-closed provider selection, `SCHEDULE_MAINTENANCE_ENABLED=false` and no recurring trigger | Boundary A |
@@ -67,16 +68,16 @@ Approval of one boundary does not authorize any later boundary.
 
 | Gate | State | Receipt / blocker |
 |---|---|---|
-| SR-00 | `OWNER_GATE_GITHUB_ACTIONS_BILLING` | PR #96 is pushed through `90234ad3`. All six current-head checks terminated before runner assignment with the same account-payment or Actions spending-limit annotation. No rerun was requested. Release `7ac37f43` remains historical/rollback only. |
-| SR-01 | `PASS_LOCAL_HOLD_CI_BILLING` | Root lint, all-workspace typecheck, uncached tests and uncached build pass on Node 24. Impeccable is unavailable due local npm-cache ownership and no PASS is claimed. Fresh fully green PR #96 CI remains required after the owner resolves the external billing gate. |
-| SR-02 | `AUTO_DEPLOYED_DOMAIN_BINDING_HOLD` | Release merge auto-deployed web/worker `7ac37f43`; staging web also serves `app.selenasystems.com`, so blast-radius isolation is not proven and the deployment is not accepted. |
-| SR-03 | `P0_CREDENTIAL_ROTATION_AND_DOMAIN_HOLD` | Worker emergency stop is true, measurement/maintenance are false, and worker/legacy measure deployments are stopped; the post-stop window has zero selected permits/runs/cost events/jobs. Current source adds a global provider gate but is not deployed. A Railway key-presence command unexpectedly rendered raw staging values; affected credentials require rotation. Web was not mutated because it serves a production-like domain. |
-| SR-04 | `PASS_RESTORE_REHEARSED` | PITR enabled/bucket-wired; named backup `92f3adae…` exists. Workflow `createServiceFromPITR/…/gVug7V8EP2ZFqRiuYaoD9` restored `2026-08-31T13:26:46Z` into an isolated staging DB, which booted successfully with the expected 0042 journal/schema receipt; the source stayed online and the rehearsal service was deleted. Live archiver telemetry remains `UNKNOWN` because its best-effort SSH probe returns exit 10, but restoreability is proven. |
-| SR-05 | `PASS_SOURCE_AND_DISPOSABLE_HOLD_APP_RUNTIME` | Disposable PostgreSQL 16 proof applies through 0051 and rolls back cleanly. A second proof simulates legacy hash grants, applies the idempotent least-privilege role script twice, verifies private-column/default/sequence denials and tenant report bootstrap, then tears down. Staging remains through 0042 with 0043–0051 pending; no runtime role switch before hosted acceptance. |
-| SR-06 | `AUTO_DEPLOYED_NOT_ACCEPTED` | Web/worker deployed through Railway Git integration before SR-02/SR-05 passed. Journal remains through 0042; deployment cannot be relabelled as accepted runtime boot. |
+| SR-00 | `CURRENT_SOURCE_CI_AND_IMAGE_DIGEST_PENDING` | Current local implementation candidate is `4916125e`, tree `502b98fb`; current release `32945b27` is an ancestor through merge commit `07199eda`. Green predecessor `b86540c9` passed all six checks, but the new source has not yet been pushed or CI-validated. An immutable build/image digest plus sealed staging configuration version is also required before deploy. |
+| SR-01 | `PASS_LOCAL_CURRENT_DELTA_CI_PENDING` | The registered root lint/build baseline remains resolved. Current delta passes focused Node 24 tests, package typechecks, changed-file Biome and web build; green predecessor CI covers the larger graph, but fresh current-source CI is required. No fresh full-root lint replay is claimed. Impeccable remains unavailable and no PASS is claimed. |
+| SR-02 | `AUTO_DEPLOYED_DOMAIN_BINDING_HOLD` | Railway Git integration auto-deployed release `32945b27`. Web deployment `3eefbf4a…` is running and still serves both `app.selenasystems.com` and `staging.selenasystems.com`, so blast-radius isolation is not proven and the deployment is not accepted. |
+| SR-03 | `P0_CREDENTIAL_ROTATION_AND_DOMAIN_HOLD` | The auto-deployed worker `c50d857e…` reached ready with maintenance disabled, but safe evidence did not prove master emergency-stop or measurement values. Authorized containment stopped it; latest marker `5adf69b9…` has `deploymentStopped=true`. Legacy measure and migrate are also stopped. Current source adds a global provider gate but is not deployed. A Railway key-presence command previously rendered raw staging values; affected credentials require rotation. Web was not mutated because it serves a production-like domain. |
+| SR-04 | `PASS_RESTORE_REHEARSED_REFRESH_REQUIRED` | PITR enabled/bucket-wired and named backup `92f3adae…` were verified at the recorded checkpoint. Workflow `createServiceFromPITR/…/gVug7V8EP2ZFqRiuYaoD9` restored `2026-08-31T13:26:46Z` into an isolated staging DB with the expected 0042 journal/schema receipt; the source stayed online and the rehearsal service was deleted. Live archiver telemetry remains `UNKNOWN`, and backup/PITR metadata must be refreshed before SQL. |
+| SR-05 | `PASS_SOURCE_AND_DISPOSABLE_HOLD_APP_RUNTIME` | Disposable PostgreSQL 16 proof applies through 0051 and rolls back cleanly. A second proof simulates legacy hash grants, applies the idempotent least-privilege role script twice, verifies private-column/default/sequence denials and tenant report bootstrap, then tears down. The last direct staging checkpoint was through 0042 with 0043–0051 pending; current live journal and `selena_app` role state are `UNKNOWN` until refreshed. No runtime role switch before hosted acceptance. |
+| SR-06 | `AUTO_DEPLOYED_NOT_ACCEPTED` | Web/worker release `32945b27` deployed through Railway Git integration before SR-02/SR-05 passed. The migration job `2b092c4c…` crashed while Corepack attempted a runtime pnpm download; the worker was re-contained. Current live journal is `UNKNOWN`, and none of these deployments is accepted runtime boot. |
 | SR-07–SR-08 | `BLOCKED_BY_SR02_SR03_SR05` | Fixture and browser/API RLS acceptance remain unexecuted while domain isolation, credential rotation, global provider stop and runtime RLS are unproven. |
 | SR-09 | `AUTHORIZED_EXTERNAL_CAP_EVIDENCE_HOLD` | Bright Data / GOOGLE_AI_MODE / one call / USD 0.25 / total source deadline 24m10s / zero retries / non-recurring. Fresh sanitized provider/account hard-cap evidence at or below USD 0.25 is still required. |
-| SR-10 | `NOT_ELIGIBLE_PROVIDER_AND_ACTIVITY_HOLD` | No owner-triggered Google canary occurred. Auto-deploy coincided with three Bright Data estimated cost events totalling USD 0.03; actual external-call count is `UNKNOWN`. Current source has one-shot transport, durable once-ever reservation, master gate, 24m overall plus 10s cancellation, and zero retries. Actual provider price enforcement and post-call cost reconciliation remain `HOLD`. |
+| SR-10 | `NOT_ELIGIBLE_PROVIDER_AND_ACTIVITY_HOLD` | No owner-triggered Google canary occurred. Auto-deploy coincided with three Bright Data estimated cost events totalling USD 0.03; actual external-call count is `UNKNOWN`. Current source has one-shot transport, durable once-ever reservation, master gate, 24m overall plus 10s cancellation, zero retries, and transactional persistence of the exact successful capture as private `CANARY_ONLY` evidence. It deliberately creates no accepted measurement or cost event; authoritative provider price enforcement and post-call cost reconciliation remain `HOLD`. |
 | SR-11 | `PROHIBITED` | Social and Travel activation not authorized. |
 
 ## Provider canary invariants

@@ -64,6 +64,37 @@ Remediations driven by the review:
 - AVLI remains location-verification-required and KORA remains pre-opening;
   neither package fabricates venue facts or outcomes.
 
+## Post-CI P1 re-audits
+
+Two additional non-overlapping source reviews were performed after green PR
+anchor `b86540c9`. Their first pass found two material gaps that the earlier
+snapshot did not cover:
+
+- the Google AI Mode command discarded the exact successful private capture;
+- the HoReCa route was still a static preview and had no safe tenant/project
+  binding or evidence-detail path.
+
+Provider remediation at `bb8f123c` persists the exact validated capture inside
+the tenant transaction as immutable private `CANARY_ONLY` source evidence,
+binds it to the once-ever reservation and emits only a sanitized receipt. It
+does not create `sv_evidence_index` or `sv_cost_events`; actual cost and
+acceptance remain `UNKNOWN`/`HOLD`. The independent repeat review reports no
+remaining P0/P1 in this slice. It does not prove provider-side price
+enforcement, real RLS or hosted persistence.
+
+HoReCa remediation at `4916125e` adds the session-authenticated,
+tenant/project-scoped route and project selector over the application-safe
+projection. The assembler requires authoritative `ACCEPTED` plus `acceptedAt`,
+`LINKED` provenance and snapshot linkage, retains WEBSITE/MENU as evidence-only,
+keeps Social/Travel hidden, maps PRE_OPENING only from unanimously confirmed
+persisted entity facts and renders UNKNOWN as `Not measured`/`Not assessed`.
+Evidence detail uses an opaque `snapshot:evidence:<evidenceId>` reference and
+never returns the snapshot UUID, payload, raw locator, provider reference or
+content hash. Because the current safe view has no authoritative acceptance
+decision/timestamp, the hosted route deliberately remains source-only until an
+approved provenance join exists. The independent repeat review reports no
+remaining P0/P1 in this slice.
+
 ## Local verification evidence
 
 - Provider/Database/Evidence: 6 files, 115 tests passed.
@@ -75,19 +106,23 @@ Remediations driven by the review:
 - `@workspace/web` production build passed. Its existing Node-externalization
   and Sentry telemetry notices remain warnings, not acceptance proof for a
   hosted environment.
-- The Impeccable deterministic detector returned an empty finding list in the single allowed
-  deterministic UI pass performed before the final contract-only remediation.
-- The repository-wide build remains blocked in unchanged `apps/www`: 40
-  unresolved `@/lib/*` imports under the workspace path containing a space;
-  14 of 16 tasks completed. The changed `apps/web` build passes independently.
-- The repository-wide web lint remains blocked by pre-existing findings outside
-  this change (33 errors, 132 warnings and 14 informational findings in the
-  recorded run). Changed files pass their targeted Biome check.
+- A historical Impeccable deterministic pass returned an empty finding list
+  before the latest HoReCa integration. The binary is unavailable in the
+  current environment, so no fresh detector PASS is claimed.
+- The previously registered root build/lint baselines were fixed before green
+  anchor `b86540c9`; exact-anchor CI passed the full build/test/clean-tree graph.
+- Post-CI Provider verification under Node 24 passed 20/20 focused lib tests,
+  2/2 worker-output tests, lib/worker typechecks and scoped Biome.
+- Post-CI HoReCa verification under Node 24 passed 16/16 focused web tests,
+  web typecheck, scoped Biome and the web production build. Existing browser
+  externalization and missing Sentry-token messages remain warnings.
 
 ## Remaining owner gates
 
-- migration/RLS runtime proof;
-- credentials and 13 paid isolated canaries;
-- shared staging/production, billing, merge, deploy and recurring jobs;
-- draft PR creation because its Blacksmith-backed CI billing impact is
-  `UNKNOWN` until the owner explicitly approves it.
+- fresh PR #96 CI for the post-CI implementation commits;
+- authoritative HoReCa acceptance provenance and hosted non-owner RLS proof;
+- staging domain isolation, credential rotation and sealed configuration;
+- provider/account hard-cap evidence and the single authorized Google AI Mode
+  call; no other provider call is authorized;
+- production, production DB, billing changes, Social/Travel activation and
+  recurring jobs remain prohibited.

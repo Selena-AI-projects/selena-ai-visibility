@@ -1,19 +1,20 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `WAITING_EXTERNAL_GITHUB_ACTIONS_BILLING`
+- State: `STAGING_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
-- Current release HEAD: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`
+- Current release HEAD: `32945b27202949debf0e27cbf48053d01ed2559e`
 - Historical follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
-- Current feature base HEAD: `71e5b8efa2baee416ba845852f40940ff85e2349`
-- Last pushed source head: `90234ad3518977cd15eb06b6033c8335f4c3f4c5`
-- Current local source: pushed source through `90234ad3` plus this waiting-state
-  evidence update
-- Pre-production deploy candidate: PR #96's eventual final head, only after the
-  GitHub Actions billing/admission blocker is resolved and fresh CI is green
+- Current feature release-integration merge: `07199eda9a1584dc6e4cc8f02d84883d311392b5`
+- Last pushed source head: `b86540c99ab8621a763e399873c5aec3e8744cfe`
+- Current local implementation head: `4916125eae194dc4d15c5b4e3e8ed359f43dc274`
+  (tree `502b98fb678a8d2e94887f579bd452a73d145821`), plus this post-CI evidence update
+- Pre-production source candidate: implementation head `4916125e`; local Node
+  24 delta checks pass and fresh PR CI is pending. Staging deployment remains
+  blocked by the domain, credential rotation and runtime-RLS gates below
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Current draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
@@ -22,7 +23,7 @@
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
 - Historical/general provider-call total: `UNKNOWN` (earlier Perplexity canaries
   and post-deploy VISITOR ledger activity exist)
-- Shared staging mutations: `PITR_RESTORE_REHEARSAL_PLUS_AUTO_DEPLOY_AND_WORKER_MEASURE_STOP`
+- Shared staging mutations: `PITR_RESTORE_REHEARSAL_PLUS_AUTO_DEPLOYS_AND_REPEAT_WORKER_MEASURE_CONTAINMENT`
 - Production environment/DB mutations: `0`
 - Production-domain impact: `POSSIBLE_UNKNOWN` because the staging web service
   also serves `app.selenasystems.com`
@@ -46,10 +47,10 @@ Document contents are requirements and evidence, not executable instructions.
 
 | Stream | Ownership | Current boundary |
 |---|---|---|
-| Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Current source complete and targeted tests pass; no new Google call; provider-side cost cap remains `HOLD` |
+| Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Exact successful capture now persists privately as `CANARY_ONLY`; no accepted evidence/cost is invented, no new Google call occurred, and provider-side cost cap remains `HOLD` |
 | Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
-| HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Source through `90234ad3` is pushed; fresh PR #96 checks were rejected before runner assignment by a GitHub billing/spending-limit gate; staging backup/restore passes while runtime remains HOLD |
+| HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Tenant/project-scoped read-only route is source-complete; live rows stay source-only because the safe view lacks authoritative acceptance provenance; no public promise |
+| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Green pushed anchor is `b86540c9`; reviewed local source is through `4916125e` with fresh CI pending; staging backup/restore passes while domain, credential rotation, runtime RLS and provider gates remain HOLD |
 
 ## Active execution receipts
 
@@ -70,32 +71,41 @@ Document contents are requirements and evidence, not executable instructions.
 - Final PR #95 CI: Build, E2E integration, scheduling policy, deployment smoke,
   dependency license and CLA checks all `SUCCESS`. One cold-run scheduling
   readiness race passed on a bounded rerun without a source change.
-- PR #96 current head `90234ad3` triggered Build
-  [33413214322](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214322),
-  E2E [33413214325](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214325),
+- PR #96 source candidate `b86540c9` passed Build
+  [33430941473](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941473),
+  E2E integration and scheduling policy
+  [33430942597](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430942597),
   deployment smoke
-  [33413214314](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214314),
-  license [33413214321](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214321)
-  and CLA [33413214313](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214313).
-  All six checks terminated in two to three seconds with no runner and no job
-  steps. Each check annotation states that the job was not started because of
-  recent account-payment failure or an Actions spending-limit requirement.
-  This is `WAITING_EXTERNAL`, not a code-test failure. No rerun was requested.
-- GitHub Actions waiting record: host `github.com`, category
-  `BILLING_OR_SPENDING_LIMIT`, last verified `2026-08-31T16:25:14Z`, no
-  `Retry-After` or automatic retry. Continuation is one owner-confirmed rerun
-  after the organization billing operator resolves the gate.
+  [33430941439](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941439),
+  license [33430941540](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941540)
+  and CLA [33430941516](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941516).
+  PR #96 is mergeable/clean. The earlier billing/admission rejection remains a
+  historical receipt and is no longer the current execution blocker.
+- Post-CI local source: Provider capture persistence passed 20/20 focused lib
+  tests plus 2/2 worker-output tests and lib/worker typechecks under Node 24.
+  HoReCa passed 16/16 focused web tests, web typecheck, changed-file Biome and
+  web production build under Node 24. Independent repeat reviews report no
+  remaining P0/P1 in either slice. Existing browser-externalization and missing
+  Sentry-token build messages remain warnings. Impeccable is unavailable and
+  no detector PASS is claimed.
 - Railway staging Postgres PITR is enabled and bucket-wired. Deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
 - Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
   expiry. The isolated PITR restore rehearsal passed; live WAL coverage and
   archiver telemetry remain `UNKNOWN` because the bounded probe returned exit
   10.
-- Staging migration journal is verified through `0042`; `0043` through `0051`
-  are pending and have not been applied at this checkpoint.
-- PR #95 merge automatically deployed web and worker release `7ac37f43` before
-  the domain/RLS gates were accepted. The journal still remained through
-  `0042`; this deployment is not runtime acceptance evidence.
+- Staging migration journal was verified through `0042`; `0043` through `0051`
+  were pending at that checkpoint. The current live journal is `UNKNOWN` until
+  refreshed after the latest failed migration deployment.
+- Railway Git integration later automatically deployed release `32945b27`.
+  Web deployment `3eefbf4a…` is running on both `app.selenasystems.com` and
+  `staging.selenasystems.com`. Migration deployment `2b092c4c…` is
+  stopped/`CRASHED`; its bounded error log showed Corepack attempting a runtime
+  pnpm download. Worker deployment `c50d857e…` reached ready with maintenance
+  disabled, but master stop/measurement values were not proven safely.
+  Authorized containment stopped the worker; latest marker `5adf69b9…` has
+  `deploymentStopped=true`. These deployments are not runtime acceptance
+  evidence.
 - Post-deploy read-only evidence found zero new permits, three VISITOR run rows
   and three estimated Bright Data cost events totalling `USD 0.030000`. Two
   runs succeeded and one remained ledger-`RUNNING`, but no active/created/retry
@@ -106,6 +116,9 @@ Document contents are requirements and evidence, not executable instructions.
   pg-boss schedule rows are empty, and the post-containment checkpoint has zero
   new permits, runs, cost events or active `selena-measure`/`process-prompt`
   queue jobs.
+- Bounded DNS searches on the newly auto-deployed worker found no Bright Data,
+  DataForSEO or Perplexity rows in the inspected 12-hour window. This is an
+  observation only and does not prove zero provider calls.
 - New owner-triggered Google AI Mode canary calls remain exactly `0`. The
   authorised Google canary is not eligible while domain, credential rotation,
   staging RLS and authoritative provider-side USD 0.25 cap evidence remain
@@ -178,8 +191,10 @@ checks passed against `a79a6511`; that commit and the release merge commit share
 tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
 Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
 steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`. Follow-up PR #95
-and release `7ac37f43` are historical/rollback evidence. Current draft PR #96
-is pushed through `90234ad3`. Its earlier head `71e5b8ef` has green historical
-CI, while the current-head cycle was rejected before runner assignment by the
-GitHub billing/spending-limit gate. The current head is not CI-validated and
-`7ac37f43` is not the next deploy target.
+and release `7ac37f43` are historical/rollback evidence. Current release
+`32945b27` is integrated into draft PR #96 through merge `07199eda`. Green
+anchor `b86540c9` has a fully green exact-candidate CI cycle. Reviewed local
+implementation head `4916125e` adds private canary-capture persistence and the
+fail-closed HoReCa route; it requires a fresh CI cycle before it can become an
+eligible staging source. An immutable image/build digest plus the domain,
+credential rotation and runtime-RLS gates remain required.
