@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svAuditEvents,
 	svConfigurationLocks,
@@ -65,38 +66,44 @@ async function recordAdminAudit(
 	orderId: string,
 	details: Record<string, unknown>,
 ) {
-	await (await database()).insert(svAuditEvents).values({
-		organizationId: context.tenantId,
-		actorId: context.actorId,
-		event,
-		subjectKind: "sv_orders",
-		subjectId: orderId,
-		details,
+	await withOrganizationTransaction(await database(), context.tenantId, async (tx) => {
+		await tx.insert(svAuditEvents).values({
+			organizationId: context.tenantId,
+			actorId: context.actorId,
+			event,
+			subjectKind: "sv_orders",
+			subjectId: orderId,
+			details,
+		});
 	});
 }
 
 async function findPriorAudit(context: SelenaRepositoryContext, event: string, orderId: string, key: string) {
-	const [prior] = await (await database())
-		.select({ details: svAuditEvents.details, at: svAuditEvents.at })
-		.from(svAuditEvents)
-		.where(
-			and(
-				eq(svAuditEvents.organizationId, context.tenantId),
-				eq(svAuditEvents.event, event),
-				eq(svAuditEvents.subjectId, orderId),
-				sql`${svAuditEvents.details} ->> 'idempotencyKey' = ${key}`,
-			),
-		)
-		.limit(1);
+	const [prior] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+		tx
+			.select({ details: svAuditEvents.details, at: svAuditEvents.at })
+			.from(svAuditEvents)
+			.where(
+				and(
+					eq(svAuditEvents.organizationId, context.tenantId),
+					eq(svAuditEvents.event, event),
+					eq(svAuditEvents.subjectId, orderId),
+					sql`${svAuditEvents.details} ->> 'idempotencyKey' = ${key}`,
+				),
+			)
+			.limit(1),
+	);
 	return prior ?? null;
 }
 
 async function getOwnedOrder(context: SelenaRepositoryContext, orderId: string) {
-	const [order] = await (await database())
-		.select()
-		.from(svOrders)
-		.where(and(eq(svOrders.id, orderId), eq(svOrders.organizationId, context.tenantId)))
-		.limit(1);
+	const [order] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+		tx
+			.select()
+			.from(svOrders)
+			.where(and(eq(svOrders.id, orderId), eq(svOrders.organizationId, context.tenantId)))
+			.limit(1),
+	);
 	if (!order) throw new Error("Not found: order is outside AuthContext tenant");
 	return order;
 }
@@ -113,16 +120,69 @@ function providerBudgetRemaining(): number {
 
 async function collectPreflight(context: SelenaRepositoryContext, orderId: string): Promise<PreflightEvaluation> {
 	const order = await getOwnedOrder(context, orderId);
-	const [lock] = await (await database())
-		.select()
-		.from(svConfigurationLocks)
-		.where(and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)))
-		.limit(1);
-	const [quote] = await (await database())
-		.select({ currency: svQuotes.currency })
-		.from(svQuotes)
-		.where(and(eq(svQuotes.id, order.quoteId), eq(svQuotes.organizationId, context.tenantId)))
-		.limit(1);
+	const { lock, quote, permitCount, jobCount, payment } = await withOrganizationTransaction(
+		await database(),
+		context.tenantId,
+		async (tx) => {
+			const [[lock], [quote], cycles] = await Promise.all([
+				tx
+					.select()
+					.from(svConfigurationLocks)
+					.where(
+						and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)),
+					)
+					.limit(1),
+				tx
+					.select({ currency: svQuotes.currency })
+					.from(svQuotes)
+					.where(and(eq(svQuotes.id, order.quoteId), eq(svQuotes.organizationId, context.tenantId)))
+					.limit(1),
+				tx
+					.select({ id: svCycles.id })
+					.from(svCycles)
+					.where(and(eq(svCycles.orderId, orderId), eq(svCycles.organizationId, context.tenantId))),
+			]);
+			const cycleIds = cycles.map((cycle) => cycle.id);
+			const [permitCount, jobCount, payment] = await Promise.all([
+				cycleIds.length === 0
+					? Promise.resolve([{ count: 0 }])
+					: tx
+							.select({ count: sql<number>`count(*)::int` })
+							.from(svRunPermits)
+							.where(
+								and(
+									inArray(svRunPermits.cycleId, cycleIds),
+									eq(svRunPermits.organizationId, context.tenantId),
+									isNull(svRunPermits.consumedAt),
+								),
+							),
+				cycleIds.length === 0
+					? Promise.resolve([{ count: 0 }])
+					: tx
+							.select({ count: sql<number>`count(*)::int` })
+							.from(svRuns)
+							.where(
+								and(
+									inArray(svRuns.cycleId, cycleIds),
+									eq(svRuns.organizationId, context.tenantId),
+									isNull(svRuns.finishedAt),
+								),
+							),
+				tx
+					.select({ id: svPayments.id })
+					.from(svPayments)
+					.where(
+						and(
+							eq(svPayments.orderId, orderId),
+							eq(svPayments.organizationId, context.tenantId),
+							eq(svPayments.status, "SUCCEEDED"),
+						),
+					)
+					.limit(1),
+			]);
+			return { lock, quote, permitCount, jobCount, payment };
+		},
+	);
 	// A snapshot whose scope block is corrupt throws; for preflight that is a
 	// missing scope, reported as a blocker rather than a crashed panel.
 	let scope: ReturnType<typeof parseMeasurementScope> = null;
@@ -133,49 +193,6 @@ async function collectPreflight(context: SelenaRepositoryContext, orderId: strin
 			scope = null;
 		}
 	}
-	const cycleIds = (
-		await (await database())
-			.select({ id: svCycles.id })
-			.from(svCycles)
-			.where(and(eq(svCycles.orderId, orderId), eq(svCycles.organizationId, context.tenantId)))
-	).map((cycle) => cycle.id);
-	const [permitCount, jobCount, payment] = await Promise.all([
-		cycleIds.length === 0
-			? Promise.resolve([{ count: 0 }])
-			: (await database())
-					.select({ count: sql<number>`count(*)::int` })
-					.from(svRunPermits)
-					.where(
-						and(
-							inArray(svRunPermits.cycleId, cycleIds),
-							eq(svRunPermits.organizationId, context.tenantId),
-							isNull(svRunPermits.consumedAt),
-						),
-					),
-		cycleIds.length === 0
-			? Promise.resolve([{ count: 0 }])
-			: (await database())
-					.select({ count: sql<number>`count(*)::int` })
-					.from(svRuns)
-					.where(
-						and(
-							inArray(svRuns.cycleId, cycleIds),
-							eq(svRuns.organizationId, context.tenantId),
-							isNull(svRuns.finishedAt),
-						),
-					),
-		(await database())
-			.select({ id: svPayments.id })
-			.from(svPayments)
-			.where(
-				and(
-					eq(svPayments.orderId, orderId),
-					eq(svPayments.organizationId, context.tenantId),
-					eq(svPayments.status, "SUCCEEDED"),
-				),
-			)
-			.limit(1),
-	]);
 	return evaluatePreflight({
 		orderId,
 		orderStatus: order.status,
@@ -203,55 +220,59 @@ export const getSelenaAdminAccessFn = createServerFn({ method: "GET" }).handler(
 
 export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).handler(async () => {
 	const context = await requireAdminContext();
-	const orders = await (await database())
-		.select({
-			id: svOrders.id,
-			status: svOrders.status,
-			orderCap: svOrders.orderCap,
-			paidAt: svOrders.paidAt,
-			createdAt: svOrders.createdAt,
-			updatedAt: svOrders.updatedAt,
-			projectId: svOrders.projectId,
-			projectName: svProjects.name,
-			currency: svQuotes.currency,
-			lockVersion: svConfigurationLocks.version,
-			lockExpectedRuns: svConfigurationLocks.expectedRuns,
-			lockBudgetCap: svConfigurationLocks.budgetCap,
-		})
-		.from(svOrders)
-		.innerJoin(svProjects, eq(svOrders.projectId, svProjects.id))
-		.innerJoin(svQuotes, eq(svOrders.quoteId, svQuotes.id))
-		.innerJoin(svConfigurationLocks, eq(svOrders.lockId, svConfigurationLocks.id))
-		.where(and(eq(svOrders.organizationId, context.tenantId), inArray(svOrders.status, [...adminQueueStatuses])))
-		.orderBy(desc(svOrders.updatedAt));
+	const orders = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+		tx
+			.select({
+				id: svOrders.id,
+				status: svOrders.status,
+				orderCap: svOrders.orderCap,
+				paidAt: svOrders.paidAt,
+				createdAt: svOrders.createdAt,
+				updatedAt: svOrders.updatedAt,
+				projectId: svOrders.projectId,
+				projectName: svProjects.name,
+				currency: svQuotes.currency,
+				lockVersion: svConfigurationLocks.version,
+				lockExpectedRuns: svConfigurationLocks.expectedRuns,
+				lockBudgetCap: svConfigurationLocks.budgetCap,
+			})
+			.from(svOrders)
+			.innerJoin(svProjects, eq(svOrders.projectId, svProjects.id))
+			.innerJoin(svQuotes, eq(svOrders.quoteId, svQuotes.id))
+			.innerJoin(svConfigurationLocks, eq(svOrders.lockId, svConfigurationLocks.id))
+			.where(and(eq(svOrders.organizationId, context.tenantId), inArray(svOrders.status, [...adminQueueStatuses])))
+			.orderBy(desc(svOrders.updatedAt)),
+	);
 	return Promise.all(
 		orders.map(async (order) => {
-			const [cycles, qc] = await Promise.all([
-				(await database())
-					.select({
-						id: svCycles.id,
-						status: svCycles.status,
-						expectedRuns: svCycles.expectedRuns,
-						createdRuns: svCycles.createdRuns,
-						completedRuns: svCycles.completedRuns,
-					})
-					.from(svCycles)
-					.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
-					.orderBy(desc(svCycles.createdAt)),
-				(await database())
-					.select({
-						id: svQcRecords.id,
-						reviewer: svQcRecords.reviewer,
-						decision: svQcRecords.decision,
-						scope: svQcRecords.scope,
-						notes: svQcRecords.notes,
-						reviewedAt: svQcRecords.reviewedAt,
-					})
-					.from(svQcRecords)
-					.where(and(eq(svQcRecords.orderId, order.id), eq(svQcRecords.organizationId, context.tenantId)))
-					.orderBy(desc(svQcRecords.createdAt))
-					.limit(1),
-			]);
+			const [cycles, qc] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+				Promise.all([
+					tx
+						.select({
+							id: svCycles.id,
+							status: svCycles.status,
+							expectedRuns: svCycles.expectedRuns,
+							createdRuns: svCycles.createdRuns,
+							completedRuns: svCycles.completedRuns,
+						})
+						.from(svCycles)
+						.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
+						.orderBy(desc(svCycles.createdAt)),
+					tx
+						.select({
+							id: svQcRecords.id,
+							reviewer: svQcRecords.reviewer,
+							decision: svQcRecords.decision,
+							scope: svQcRecords.scope,
+							notes: svQcRecords.notes,
+							reviewedAt: svQcRecords.reviewedAt,
+						})
+						.from(svQcRecords)
+						.where(and(eq(svQcRecords.orderId, order.id), eq(svQcRecords.organizationId, context.tenantId)))
+						.orderBy(desc(svQcRecords.createdAt))
+						.limit(1),
+				]),
+			);
 			return { ...order, cycles, latestQc: qc[0] ?? null };
 		}),
 	);
@@ -269,11 +290,7 @@ export const getSelenaOrderPreflightFn = createServerFn({ method: "GET" })
  * button or a combined one asks for it, so both paths run this and cannot
  * drift apart on a gate.
  */
-export async function approveOrder(
-	context: SelenaRepositoryContext,
-	orderId: string,
-	idempotencyKey?: string,
-) {
+export async function approveOrder(context: SelenaRepositoryContext, orderId: string, idempotencyKey?: string) {
 	if (idempotencyKey) {
 		const prior = await findPriorAudit(context, "ORDER_APPROVED", orderId, idempotencyKey);
 		if (prior) {
@@ -393,26 +410,36 @@ export const stopSelenaOrderFn = createServerFn({ method: "POST" })
 		// cancelled one, while the cycle it owns carries the STOPPED state.
 		if (order.status === "CANCELLED")
 			return { orderId: data.orderId, status: order.status, stoppedCycles: 0, replay: true };
-		await (await database())
-			.update(svOrders)
-			.set({ status: "CANCELLED", updatedAt: new Date() })
-			.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)));
-		const stopped = await (await database())
-			.update(svCycles)
-			.set({ status: "STOPPED", updatedAt: new Date() })
-			.where(
-				and(
-					eq(svCycles.orderId, data.orderId),
-					eq(svCycles.organizationId, context.tenantId),
-					inArray(svCycles.status, ["CREATED", "APPROVED", "QUEUED", "RUNNING", "ANALYZING", "QC_REQUIRED"]),
-				),
-			)
-			.returning({ id: svCycles.id });
-		await recordAdminAudit(context, "ORDER_STOPPED", data.orderId, {
-			previousStatus: order.status,
-			stoppedCycles: stopped.length,
-			reason: data.reason ?? null,
-			idempotencyKey: data.idempotencyKey ?? null,
+		const stopped = await withOrganizationTransaction(await database(), context.tenantId, async (tx) => {
+			await tx
+				.update(svOrders)
+				.set({ status: "CANCELLED", updatedAt: new Date() })
+				.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)));
+			const stopped = await tx
+				.update(svCycles)
+				.set({ status: "STOPPED", updatedAt: new Date() })
+				.where(
+					and(
+						eq(svCycles.orderId, data.orderId),
+						eq(svCycles.organizationId, context.tenantId),
+						inArray(svCycles.status, ["CREATED", "APPROVED", "QUEUED", "RUNNING", "ANALYZING", "QC_REQUIRED"]),
+					),
+				)
+				.returning({ id: svCycles.id });
+			await tx.insert(svAuditEvents).values({
+				organizationId: context.tenantId,
+				actorId: context.actorId,
+				event: "ORDER_STOPPED",
+				subjectKind: "sv_orders",
+				subjectId: data.orderId,
+				details: {
+					previousStatus: order.status,
+					stoppedCycles: stopped.length,
+					reason: data.reason ?? null,
+					idempotencyKey: data.idempotencyKey ?? null,
+				},
+			});
+			return stopped;
 		});
 		return { orderId: data.orderId, status: "CANCELLED" as const, stoppedCycles: stopped.length, replay: false };
 	});

@@ -1,4 +1,5 @@
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svOrders, svPayments, svQuotes } from "@workspace/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
@@ -24,7 +25,7 @@ export async function recordSelenaTestPayment(
 	input: SelenaTestPaymentReplayInput,
 	options: { writesAllowed: boolean },
 ) {
-	return db.transaction(async (tx) => {
+	return withOrganizationTransaction(db, input.tenantId, async (tx) => {
 		const [order] = await tx
 			.select({
 				id: svOrders.id,

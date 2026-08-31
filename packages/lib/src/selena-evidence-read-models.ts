@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { withOrganizationTransaction } from "./db/organization-transaction";
 import * as schema from "./db/schema";
 import type { SelenaRepositoryContext } from "./selena-visibility-repositories";
 
@@ -267,45 +268,44 @@ export function createSelenaEvidenceReadRepository(
 					)
 				: null;
 			const conditions = [
-				eq(schema.svEvidenceProvenance.organizationId, ctx.tenantId),
-				eq(schema.svEvidenceProvenance.projectId, input.projectId),
+				eq(schema.svEvidenceReadModel.organizationId, ctx.tenantId),
+				eq(schema.svEvidenceReadModel.projectId, input.projectId),
 			];
-			if (input.domains?.length) conditions.push(inArray(schema.svEvidenceProvenance.domainId, input.domains));
+			if (input.domains?.length) conditions.push(inArray(schema.svEvidenceReadModel.domainId, input.domains));
 			if (cursor) {
 				const cursorCondition = or(
-					lt(schema.svEvidenceProvenance.evidenceCapturedAt, cursor.capturedAt),
+					lt(schema.svEvidenceReadModel.evidenceCapturedAt, cursor.capturedAt),
 					and(
-						eq(schema.svEvidenceProvenance.evidenceCapturedAt, cursor.capturedAt),
-						lt(schema.svEvidenceProvenance.evidenceId, cursor.evidenceId),
+						eq(schema.svEvidenceReadModel.evidenceCapturedAt, cursor.capturedAt),
+						lt(schema.svEvidenceReadModel.evidenceId, cursor.evidenceId),
 					),
 				);
 				if (cursorCondition) conditions.push(cursorCondition);
 			}
-			const rows = await db.transaction(async (tx) => {
-				await tx.execute(sql`select set_config('app.organization_id', ${ctx.tenantId}, true)`);
+			const rows = await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 				return tx
 					.select({
-						organizationId: schema.svEvidenceProvenance.organizationId,
-						projectId: schema.svEvidenceProvenance.projectId,
-						evidenceId: schema.svEvidenceProvenance.evidenceId,
-						domainId: schema.svEvidenceProvenance.domainId,
-						datasetVersion: schema.svEvidenceProvenance.datasetVersion,
-						sourceSnapshotId: schema.svEvidenceProvenance.sourceSnapshotId,
-						capabilityId: schema.svEvidenceProvenance.capabilityId,
-						sourceType: schema.svEvidenceProvenance.sourceType,
-						source: schema.svEvidenceProvenance.source,
-						surface: schema.svEvidenceProvenance.surface,
-						capabilityDomain: schema.svEvidenceProvenance.capabilityDomain,
-						capabilityStatus: schema.svEvidenceProvenance.capabilityStatus,
-						inputSchemaVersion: schema.svEvidenceProvenance.inputSchemaVersion,
-						outputSchemaVersion: schema.svEvidenceProvenance.outputSchemaVersion,
-						capabilityInputSchemaVersion: schema.svEvidenceProvenance.capabilityInputSchemaVersion,
-						capabilityOutputSchemaVersion: schema.svEvidenceProvenance.capabilityOutputSchemaVersion,
-						evidenceCapturedAt: schema.svEvidenceProvenance.evidenceCapturedAt,
+						organizationId: schema.svEvidenceReadModel.organizationId,
+						projectId: schema.svEvidenceReadModel.projectId,
+						evidenceId: schema.svEvidenceReadModel.evidenceId,
+						domainId: schema.svEvidenceReadModel.domainId,
+						datasetVersion: schema.svEvidenceReadModel.datasetVersion,
+						sourceSnapshotId: schema.svEvidenceReadModel.sourceSnapshotId,
+						capabilityId: schema.svEvidenceReadModel.capabilityId,
+						sourceType: schema.svEvidenceReadModel.sourceType,
+						source: schema.svEvidenceReadModel.source,
+						surface: schema.svEvidenceReadModel.surface,
+						capabilityDomain: schema.svEvidenceReadModel.capabilityDomain,
+						capabilityStatus: schema.svEvidenceReadModel.capabilityStatus,
+						inputSchemaVersion: schema.svEvidenceReadModel.inputSchemaVersion,
+						outputSchemaVersion: schema.svEvidenceReadModel.outputSchemaVersion,
+						capabilityInputSchemaVersion: schema.svEvidenceReadModel.capabilityInputSchemaVersion,
+						capabilityOutputSchemaVersion: schema.svEvidenceReadModel.capabilityOutputSchemaVersion,
+						evidenceCapturedAt: schema.svEvidenceReadModel.evidenceCapturedAt,
 					})
-					.from(schema.svEvidenceProvenance)
+					.from(schema.svEvidenceReadModel)
 					.where(and(...conditions))
-					.orderBy(desc(schema.svEvidenceProvenance.evidenceCapturedAt), desc(schema.svEvidenceProvenance.evidenceId))
+					.orderBy(desc(schema.svEvidenceReadModel.evidenceCapturedAt), desc(schema.svEvidenceReadModel.evidenceId))
 					.limit(limit + 1);
 			});
 			const page = rows.slice(0, limit);

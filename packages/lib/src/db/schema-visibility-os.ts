@@ -296,6 +296,33 @@ export const svProviderDatasetCapabilities = pgTable(
 	}),
 ).enableRLS();
 
+export const svProviderCanaryExecutions = pgTable(
+	"sv_provider_canary_executions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		executionIdentity: text("execution_identity").notNull(),
+		source: text("source").notNull().default("GOOGLE_AI_MODE"),
+		approvedCapUsd: numeric("approved_cap_usd", { precision: 12, scale: 6 }).notNull().default("0.250000"),
+		recurring: boolean("recurring").notNull().default(false),
+		automaticRetries: integer("automatic_retries").notNull().default(0),
+		costStatus: text("cost_status").notNull().default("UNKNOWN"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		identityUnique: uniqueIndex("sv_provider_canary_executions_identity_unique").on(
+			table.source,
+			table.executionIdentity,
+		),
+		contractCheck: check(
+			"sv_provider_canary_executions_contract_check",
+			sql`${table.source} = 'GOOGLE_AI_MODE' AND ${table.approvedCapUsd} = 0.250000 AND ${table.recurring} = false AND ${table.automaticRetries} = 0 AND ${table.costStatus} = 'UNKNOWN' AND length(${table.executionIdentity}) BETWEEN 8 AND 128 AND ${table.executionIdentity} = btrim(${table.executionIdentity})`,
+		),
+	}),
+).enableRLS();
+
 export const svSourceSnapshots = pgTable(
 	"sv_source_snapshots",
 	{
@@ -419,6 +446,28 @@ export const svEvidenceProvenance = pgView("sv_evidence_provenance", {
 	capabilityOutputSchemaVersion: text("capability_output_schema_version"),
 	evidenceCapturedAt: timestamp("evidence_captured_at", { withTimezone: true }).notNull(),
 	sourceCapturedAt: timestamp("source_captured_at", { withTimezone: true }),
+}).existing();
+
+// Application-safe projection. It intentionally excludes source locators,
+// provider references, content hashes and snapshot payloads.
+export const svEvidenceReadModel = pgView("sv_evidence_read_model", {
+	organizationId: text("organization_id").notNull(),
+	projectId: uuid("project_id").notNull(),
+	evidenceId: uuid("evidence_id").notNull(),
+	domainId: text("domain_id").notNull(),
+	datasetVersion: integer("dataset_version").notNull(),
+	sourceSnapshotId: uuid("source_snapshot_id"),
+	capabilityId: uuid("capability_id"),
+	sourceType: text("source_type"),
+	inputSchemaVersion: text("input_schema_version"),
+	outputSchemaVersion: text("output_schema_version"),
+	source: text("source"),
+	surface: text("surface"),
+	capabilityDomain: text("capability_domain"),
+	capabilityStatus: text("capability_status"),
+	capabilityInputSchemaVersion: text("capability_input_schema_version"),
+	capabilityOutputSchemaVersion: text("capability_output_schema_version"),
+	evidenceCapturedAt: timestamp("evidence_captured_at", { withTimezone: true }).notNull(),
 }).existing();
 
 export const svLocalRankValidityEnum = pgEnum("sv_local_rank_validity", ["VALID", "INVALID", "UNMEASURED"]);

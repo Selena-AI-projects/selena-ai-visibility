@@ -7,12 +7,14 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
-import { reports, type NewReport } from "@workspace/lib/db/schema";
-import { desc, count, eq } from "drizzle-orm";
-import { z } from "zod";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
+import { type NewReport, reports } from "@workspace/lib/db/schema";
 import { cleanOnboardingUrl } from "@workspace/lib/onboarding";
-import { sendReportJob } from "@/lib/job-scheduler";
+import { and, count, desc, eq } from "drizzle-orm";
+import { z } from "zod";
 import { ApiError, createApiHandler } from "@/lib/api/handler";
+import { sendReportJob } from "@/lib/job-scheduler";
+import { resolveApiKeyAuthContext } from "@/lib/selena-auth-context";
 
 const createReportBody = z.object({
 	brandName: z
@@ -35,7 +37,8 @@ export const Route = createFileRoute("/api/v1/reports/")({
 			POST: createApiHandler({
 				body: createReportBody,
 				status: 201,
-				handle: async ({ body }) => {
+				handle: async ({ body, request }) => {
+					const auth = await resolveApiKeyAuthContext(request);
 					const filteredPrompts = (body.manualPrompts ?? []).map((p) => p.trim()).filter((p) => p.length > 0);
 					const parsedManualPrompts = filteredPrompts.length > 0 ? filteredPrompts : undefined;
 
@@ -44,10 +47,13 @@ export const Route = createFileRoute("/api/v1/reports/")({
 						// Full path is kept — it's what the analysis reads — but credentials
 						// are stripped before the URL is stored or handed to any fetcher.
 						brandWebsite: cleanOnboardingUrl(body.brandWebsite),
+						organizationId: auth.tenantId,
 						status: "pending",
 					};
 
-					const result = await db.insert(reports).values(newReport).returning();
+					const result = await withOrganizationTransaction(db, auth.tenantId, (tx) =>
+						tx.insert(reports).values(newReport).returning(),
+					);
 					const createdReport = result[0];
 					if (!createdReport) {
 						throw new ApiError(500, "Internal Server Error", "Failed to create report");
@@ -61,10 +67,12 @@ export const Route = createFileRoute("/api/v1/reports/")({
 					);
 
 					if (!success) {
-						await db
-							.update(reports)
-							.set({ status: "failed", updatedAt: new Date() })
-							.where(eq(reports.id, createdReport.id));
+						await withOrganizationTransaction(db, auth.tenantId, async (tx) => {
+							await tx
+								.update(reports)
+								.set({ status: "failed", updatedAt: new Date() })
+								.where(and(eq(reports.id, createdReport.id), eq(reports.organizationId, auth.tenantId)));
+						});
 						throw new ApiError(500, "Internal Server Error", "Failed to queue report generation");
 					}
 
@@ -80,28 +88,34 @@ export const Route = createFileRoute("/api/v1/reports/")({
 
 			GET: createApiHandler({
 				handle: async ({ request }) => {
+					const auth = await resolveApiKeyAuthContext(request);
 					const { searchParams } = new URL(request.url);
-					const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-					const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") || "20")));
+					const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+					const limit = Math.max(1, Math.min(100, parseInt(searchParams.get("limit") || "20", 10)));
 					const offset = (page - 1) * limit;
 
-					const [totalCountResult] = await db.select({ count: count() }).from(reports);
-					const totalCount = totalCountResult?.count || 0;
+					const { totalCount, reportsList } = await withOrganizationTransaction(db, auth.tenantId, async (tx) => {
+						const [totalCountResult] = await tx
+							.select({ count: count() })
+							.from(reports)
+							.where(eq(reports.organizationId, auth.tenantId));
+						const reportsList = await tx
+							.select({
+								id: reports.id,
+								brandName: reports.brandName,
+								brandWebsite: reports.brandWebsite,
+								status: reports.status,
+								createdAt: reports.createdAt,
+								completedAt: reports.completedAt,
+							})
+							.from(reports)
+							.where(eq(reports.organizationId, auth.tenantId))
+							.orderBy(desc(reports.createdAt))
+							.limit(limit)
+							.offset(offset);
+						return { totalCount: totalCountResult?.count || 0, reportsList };
+					});
 					const totalPages = Math.ceil(totalCount / limit);
-
-					const reportsList = await db
-						.select({
-							id: reports.id,
-							brandName: reports.brandName,
-							brandWebsite: reports.brandWebsite,
-							status: reports.status,
-							createdAt: reports.createdAt,
-							completedAt: reports.completedAt,
-						})
-						.from(reports)
-						.orderBy(desc(reports.createdAt))
-						.limit(limit)
-						.offset(offset);
 
 					return {
 						reports: reportsList,

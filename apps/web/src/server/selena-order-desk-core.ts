@@ -1,4 +1,5 @@
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svAuditEvents,
 	svConfigurationLocks,
@@ -91,52 +92,54 @@ function readProfileCompetitors(snapshot: unknown): { name: string; domain?: str
 }
 
 export async function getSelenaOrderDesk(context: SelenaRepositoryContext) {
-	const projects = await db
-		.select({
-			id: svProjects.id,
-			name: svProjects.name,
-			category: svProjects.category,
-			country: svProjects.country,
-			region: svProjects.region,
-			languages: svProjects.languages,
-			brandName: svProjectProfiles.brandName,
-			primaryDomain: svProjectProfiles.primaryDomain,
-			profileConfirmedAt: svProjectProfiles.confirmedAt,
-			scenarioSnapshot: svProjectProfiles.scenarioSnapshot,
-		})
-		.from(svProjects)
-		.leftJoin(svProjectProfiles, eq(svProjectProfiles.projectId, svProjects.id))
-		.where(eq(svProjects.organizationId, context.tenantId))
-		.orderBy(desc(svProjects.createdAt));
+	return withOrganizationTransaction(db, context.tenantId, async (tx) => {
+		const projects = await tx
+			.select({
+				id: svProjects.id,
+				name: svProjects.name,
+				category: svProjects.category,
+				country: svProjects.country,
+				region: svProjects.region,
+				languages: svProjects.languages,
+				brandName: svProjectProfiles.brandName,
+				primaryDomain: svProjectProfiles.primaryDomain,
+				profileConfirmedAt: svProjectProfiles.confirmedAt,
+				scenarioSnapshot: svProjectProfiles.scenarioSnapshot,
+			})
+			.from(svProjects)
+			.leftJoin(svProjectProfiles, eq(svProjectProfiles.projectId, svProjects.id))
+			.where(eq(svProjects.organizationId, context.tenantId))
+			.orderBy(desc(svProjects.createdAt));
 
-	return Promise.all(
-		projects.map(async (project) => {
-			const scenarios = await db
-				.select({
-					id: svScenarios.id,
-					text: svScenarios.text,
-					language: svScenarios.language,
-					status: svScenarios.status,
-				})
-				.from(svScenarios)
-				.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
-				.where(and(eq(svPromptFamilies.projectId, project.id), eq(svScenarios.organizationId, context.tenantId)))
-				.orderBy(svScenarios.createdAt);
-			return {
-				id: project.id,
-				name: project.name,
-				category: project.category,
-				country: project.country,
-				region: project.region,
-				languages: project.languages,
-				brandName: project.brandName,
-				primaryDomain: project.primaryDomain,
-				profileConfirmedAt: project.profileConfirmedAt,
-				profileQuestions: readProfileQuestions(project.scenarioSnapshot).length,
-				scenarios,
-			};
-		}),
-	);
+		return Promise.all(
+			projects.map(async (project) => {
+				const scenarios = await tx
+					.select({
+						id: svScenarios.id,
+						text: svScenarios.text,
+						language: svScenarios.language,
+						status: svScenarios.status,
+					})
+					.from(svScenarios)
+					.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
+					.where(and(eq(svPromptFamilies.projectId, project.id), eq(svScenarios.organizationId, context.tenantId)))
+					.orderBy(svScenarios.createdAt);
+				return {
+					id: project.id,
+					name: project.name,
+					category: project.category,
+					country: project.country,
+					region: project.region,
+					languages: project.languages,
+					brandName: project.brandName,
+					primaryDomain: project.primaryDomain,
+					profileConfirmedAt: project.profileConfirmedAt,
+					profileQuestions: readProfileQuestions(project.scenarioSnapshot).length,
+					scenarios,
+				};
+			}),
+		);
+	});
 }
 
 /**
@@ -152,17 +155,19 @@ export async function prepareSelenaScenarios(context: SelenaRepositoryContext, p
 	const questions = readProfileQuestions(profile.scenarioSnapshot);
 	if (questions.length === 0) throw new Error("SELENA_PROFILE_HAS_NO_QUESTIONS");
 
-	const [existingFamily] = await db
-		.select({ id: svPromptFamilies.id })
-		.from(svPromptFamilies)
-		.where(
-			and(
-				eq(svPromptFamilies.projectId, projectId),
-				eq(svPromptFamilies.organizationId, context.tenantId),
-				eq(svPromptFamilies.source, PROFILE_FAMILY_SOURCE),
-			),
-		)
-		.limit(1);
+	const [existingFamily] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+		tx
+			.select({ id: svPromptFamilies.id })
+			.from(svPromptFamilies)
+			.where(
+				and(
+					eq(svPromptFamilies.projectId, projectId),
+					eq(svPromptFamilies.organizationId, context.tenantId),
+					eq(svPromptFamilies.source, PROFILE_FAMILY_SOURCE),
+				),
+			)
+			.limit(1),
+	);
 	const family =
 		existingFamily ??
 		(await repositories.families.create(context, {
@@ -199,24 +204,26 @@ export async function decideSelenaScenarios(
 		decision: "APPROVED" | "REJECTED" | "PROPOSED";
 	},
 ) {
-	const owned = await db
-		.select({ id: svScenarios.id })
-		.from(svScenarios)
-		.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
-		.where(
-			and(
-				inArray(svScenarios.id, data.scenarioIds),
-				eq(svScenarios.organizationId, context.tenantId),
-				eq(svPromptFamilies.projectId, data.projectId),
-			),
-		);
-	if (owned.length !== data.scenarioIds.length)
-		throw new Error("Not found: scenario is outside AuthContext tenant or project");
-	await db
-		.update(svScenarios)
-		.set({ status: data.decision, updatedAt: new Date() })
-		.where(and(inArray(svScenarios.id, data.scenarioIds), eq(svScenarios.organizationId, context.tenantId)));
-	return { updated: data.scenarioIds.length, decision: data.decision };
+	return withOrganizationTransaction(db, context.tenantId, async (tx) => {
+		const owned = await tx
+			.select({ id: svScenarios.id })
+			.from(svScenarios)
+			.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
+			.where(
+				and(
+					inArray(svScenarios.id, data.scenarioIds),
+					eq(svScenarios.organizationId, context.tenantId),
+					eq(svPromptFamilies.projectId, data.projectId),
+				),
+			);
+		if (owned.length !== data.scenarioIds.length)
+			throw new Error("Not found: scenario is outside AuthContext tenant or project");
+		await tx
+			.update(svScenarios)
+			.set({ status: data.decision, updatedAt: new Date() })
+			.where(and(inArray(svScenarios.id, data.scenarioIds), eq(svScenarios.organizationId, context.tenantId)));
+		return { updated: data.scenarioIds.length, decision: data.decision };
+	});
 }
 
 function scopeForPlan(plan: SelenaPlan, scenarioIds: string[]): MeasurementScope {
@@ -253,7 +260,7 @@ type OrderDraftInput = {
 };
 
 export async function createSelenaOrderDraft(context: SelenaRepositoryContext, data: OrderDraftInput) {
-	return db.transaction(async (tx) => {
+	return withOrganizationTransaction(db, context.tenantId, async (tx) => {
 		// The provider event key is globally unique in the ledger, so its lock is
 		// global too. It serializes both same-tenant retries and a cross-tenant
 		// collision before either path can mint immutable rows.

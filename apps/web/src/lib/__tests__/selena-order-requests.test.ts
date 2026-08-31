@@ -26,4 +26,10 @@ describe("plan request layer zero invariant", () => {
 		const updating = source.slice(source.indexOf("updateSelenaOrderRequestStatusFn"));
 		expect(updating).toContain("requireAdmin()");
 	});
+
+	it("fails closed before the cross-tenant promo cap until an atomic claim exists", () => {
+		expect(source).toContain("RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED");
+		expect(source).not.toContain("await db\n");
+		expect(source).not.toContain("count()");
+	});
 });

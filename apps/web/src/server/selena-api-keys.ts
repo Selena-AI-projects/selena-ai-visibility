@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svApiKeys } from "@workspace/lib/db/schema";
 import { localApiScopeSchema } from "@workspace/selena-visibility-contracts";
 import { and, eq, isNull } from "drizzle-orm";
@@ -32,23 +33,26 @@ export const createSelenaApiKeyFn = createServerFn({ method: "POST" })
 		const context = await resolveSessionAuthContext();
 		assertKeyAdmin(context);
 		const plaintext = `selena_${randomBytes(32).toString("base64url")}`;
-		const [key] = await db
-			.insert(svApiKeys)
-			.values({
-				organizationId: context.tenantId,
-				name: data.name,
-				keyHash: hashKey(plaintext),
-				permissions: data.permissions,
-				expiresAt: data.expiresAt,
-				createdBy: context.actorId,
-			})
-			.returning({
-				id: svApiKeys.id,
-				name: svApiKeys.name,
-				permissions: svApiKeys.permissions,
-				expiresAt: svApiKeys.expiresAt,
-				createdAt: svApiKeys.createdAt,
-			});
+		const key = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+			const [created] = await tx
+				.insert(svApiKeys)
+				.values({
+					organizationId: context.tenantId,
+					name: data.name,
+					keyHash: hashKey(plaintext),
+					permissions: data.permissions,
+					expiresAt: data.expiresAt,
+					createdBy: context.actorId,
+				})
+				.returning({
+					id: svApiKeys.id,
+					name: svApiKeys.name,
+					permissions: svApiKeys.permissions,
+					expiresAt: svApiKeys.expiresAt,
+					createdAt: svApiKeys.createdAt,
+				});
+			return created;
+		});
 		if (!key) throw new Error("Unable to create API key");
 		return { ...key, plaintext: `Only shown once: ${plaintext}` };
 	});
@@ -56,17 +60,19 @@ export const createSelenaApiKeyFn = createServerFn({ method: "POST" })
 export const listSelenaApiKeysFn = createServerFn({ method: "GET" }).handler(async () => {
 	const context = await resolveSessionAuthContext();
 	assertKeyAdmin(context);
-	return db
-		.select({
-			id: svApiKeys.id,
-			name: svApiKeys.name,
-			permissions: svApiKeys.permissions,
-			expiresAt: svApiKeys.expiresAt,
-			revokedAt: svApiKeys.revokedAt,
-			createdAt: svApiKeys.createdAt,
-		})
-		.from(svApiKeys)
-		.where(and(eq(svApiKeys.organizationId, context.tenantId), isNull(svApiKeys.revokedAt)));
+	return withOrganizationTransaction(db, context.tenantId, (tx) =>
+		tx
+			.select({
+				id: svApiKeys.id,
+				name: svApiKeys.name,
+				permissions: svApiKeys.permissions,
+				expiresAt: svApiKeys.expiresAt,
+				revokedAt: svApiKeys.revokedAt,
+				createdAt: svApiKeys.createdAt,
+			})
+			.from(svApiKeys)
+			.where(and(eq(svApiKeys.organizationId, context.tenantId), isNull(svApiKeys.revokedAt))),
+	);
 });
 
 export const revokeSelenaApiKeyFn = createServerFn({ method: "POST" })
@@ -74,13 +80,20 @@ export const revokeSelenaApiKeyFn = createServerFn({ method: "POST" })
 	.handler(async ({ data }) => {
 		const context = await resolveSessionAuthContext();
 		assertKeyAdmin(context);
-		const [key] = await db
-			.update(svApiKeys)
-			.set({ revokedAt: new Date() })
-			.where(
-				and(eq(svApiKeys.id, data.keyId), eq(svApiKeys.organizationId, context.tenantId), isNull(svApiKeys.revokedAt)),
-			)
-			.returning({ id: svApiKeys.id, revokedAt: svApiKeys.revokedAt });
+		const key = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+			const [revoked] = await tx
+				.update(svApiKeys)
+				.set({ revokedAt: new Date() })
+				.where(
+					and(
+						eq(svApiKeys.id, data.keyId),
+						eq(svApiKeys.organizationId, context.tenantId),
+						isNull(svApiKeys.revokedAt),
+					),
+				)
+				.returning({ id: svApiKeys.id, revokedAt: svApiKeys.revokedAt });
+			return revoked;
+		});
 		if (!key) throw new Error("Not found: API key is outside AuthContext tenant or already revoked");
 		return key;
 	});

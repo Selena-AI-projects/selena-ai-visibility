@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svCycles, svOrders, svPromptFamilies, svScenarios } from "@workspace/lib/db/schema";
 import { computeLedgerReport, type LedgerReport } from "@workspace/lib/selena-ledger-metrics";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
@@ -37,28 +38,32 @@ export const getSelenaMeasurementFn = createServerFn({ method: "GET" })
 		const project = await repositories.projects.get(context, data.projectId);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
 
-		const cycles = await db
-			.select({
-				id: svCycles.id,
-				status: svCycles.status,
-				expectedRuns: svCycles.expectedRuns,
-				completedRuns: svCycles.completedRuns,
-				createdAt: svCycles.createdAt,
-			})
-			.from(svCycles)
-			.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-			.where(and(eq(svOrders.projectId, data.projectId), eq(svCycles.organizationId, context.tenantId)))
-			.orderBy(desc(svCycles.createdAt))
-			.limit(12);
+		const cycles = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({
+					id: svCycles.id,
+					status: svCycles.status,
+					expectedRuns: svCycles.expectedRuns,
+					completedRuns: svCycles.completedRuns,
+					createdAt: svCycles.createdAt,
+				})
+				.from(svCycles)
+				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+				.where(and(eq(svOrders.projectId, data.projectId), eq(svCycles.organizationId, context.tenantId)))
+				.orderBy(desc(svCycles.createdAt))
+				.limit(12),
+		);
 
 		if (cycles.length === 0) return { cycles: [], latest: null };
 
 		const [scenarioRows, ledger] = await Promise.all([
-			db
-				.select({ id: svScenarios.id, intentType: svPromptFamilies.intentType })
-				.from(svScenarios)
-				.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
-				.where(and(eq(svPromptFamilies.projectId, data.projectId), eq(svScenarios.organizationId, context.tenantId))),
+			withOrganizationTransaction(db, context.tenantId, (tx) =>
+				tx
+					.select({ id: svScenarios.id, intentType: svPromptFamilies.intentType })
+					.from(svScenarios)
+					.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
+					.where(and(eq(svPromptFamilies.projectId, data.projectId), eq(svScenarios.organizationId, context.tenantId))),
+			),
 			repositories.runs.ledgerForCycle(context, cycles[0].id),
 		]);
 

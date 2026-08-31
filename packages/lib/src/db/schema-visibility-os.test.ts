@@ -158,6 +158,30 @@ describe("Visibility OS measurement registry", () => {
 });
 
 describe("Visibility OS provider evidence provenance", () => {
+	it("models a durable immutable one-shot GOOGLE_AI_MODE reservation", () => {
+		const table = getTableConfig(schema.svProviderCanaryExecutions);
+		const dialect = new PgDialect();
+		expect(table.name).toBe("sv_provider_canary_executions");
+		expect(table.enableRLS).toBe(true);
+		const identity = table.indexes.find(
+			(index) => index.config.name === "sv_provider_canary_executions_identity_unique",
+		);
+		expect(identity?.config.unique).toBe(true);
+		expect(identity?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+			"source",
+			"execution_identity",
+		]);
+		const contract = table.checks.find(
+			(candidate) => candidate.name === "sv_provider_canary_executions_contract_check",
+		);
+		const compiled = contract && dialect.sqlToQuery(contract.value).sql;
+		expect(compiled).toContain("GOOGLE_AI_MODE");
+		expect(compiled).toContain("0.250000");
+		expect(compiled).toContain('"recurring" = false');
+		expect(compiled).toContain('"automatic_retries" = 0');
+		expect(compiled).toContain("UNKNOWN");
+	});
+
 	it("models append-only tenant capability versions without activating Social or Travel domains", () => {
 		const table = getTableConfig(schema.svProviderDatasetCapabilities);
 		const dialect = new PgDialect();
@@ -233,11 +257,91 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(migration).toContain('REVOKE ALL ON "sv_evidence_provenance" FROM PUBLIC');
 		expect(migration).toContain("IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
 		expect(migration).toContain(`EXECUTE 'REVOKE ALL ON "sv_evidence_provenance" FROM selena_app'`);
+		expect(migration).toContain('CREATE FUNCTION "sv_resolve_api_key_context"(api_key_hash text)');
+		expect(migration).toContain("SECURITY DEFINER\nSET search_path = ''");
+		expect(migration).toContain('FROM "public"."sv_api_keys" AS "key"');
+		expect(migration).toContain('REVOKE ALL ON FUNCTION "sv_resolve_api_key_context"(text) FROM PUBLIC');
+		expect(migration).toContain('GRANT EXECUTE ON FUNCTION "sv_resolve_api_key_context"(text) TO selena_app');
+		expect(migration).toContain('CREATE TABLE "sv_provider_canary_executions"');
+		expect(migration).toContain('ALTER TABLE "sv_provider_canary_executions" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_canary_executions"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_provider_canary_executions"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_provider_canary_executions"');
+		expect(migration).toContain('REVOKE UPDATE, DELETE, TRUNCATE ON "sv_provider_canary_executions"');
 		expect(migration).toContain("MUST NOT flow to client routes or exports");
 		expect(migration).not.toContain('INSERT INTO "sv_provider_dataset_capabilities"');
 		expect(migration).not.toContain('CREATE TABLE "sv_social_');
 		expect(migration).not.toContain('CREATE TABLE "sv_hotel_');
 		expect(migration).not.toContain("provider_call");
+	});
+
+	it("exposes a separate security-invoker evidence projection without raw provenance", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0051_visibility_os_provider_evidence_provenance.sql", import.meta.url),
+			"utf8",
+		);
+		const view = getViewConfig(schema.svEvidenceReadModel);
+		expect(view).toMatchObject({ name: "sv_evidence_read_model", isExisting: true });
+		const columns = Object.values(view.selectedFields as Record<string, { name: string }>).map((column) => column.name);
+		expect(columns).toEqual(
+			expect.arrayContaining([
+				"organization_id",
+				"project_id",
+				"evidence_id",
+				"domain_id",
+				"dataset_version",
+				"source_snapshot_id",
+				"capability_id",
+				"source_type",
+				"evidence_captured_at",
+			]),
+		);
+		for (const forbidden of [
+			"source_ref",
+			"raw_reference",
+			"provider_dataset_ref",
+			"environment",
+			"content_sha256",
+			"snapshot",
+		])
+			expect(columns).not.toContain(forbidden);
+		expect(migration).toContain('CREATE VIEW "sv_evidence_read_model" WITH (security_invoker = true)');
+		expect(migration).toContain('REVOKE ALL ON "sv_evidence_read_model" FROM PUBLIC');
+		expect(migration).toContain('GRANT SELECT ON "sv_evidence_read_model" TO selena_app');
+		expect(migration).toContain('REVOKE SELECT ON "sv_source_snapshots" FROM selena_app');
+		expect(migration).not.toMatch(
+			/GRANT SELECT \([\s\S]*?"content_sha256"[\s\S]*?\) ON "sv_source_snapshots" TO selena_app/,
+		);
+	});
+
+	it("keeps the post-0051 runtime role bootstrap idempotent and explicitly allowlisted", () => {
+		const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
+		const proof = readFileSync(
+			new URL("../../../../tools/visibility_os_0051_rls_schema_proof.sql", import.meta.url),
+			"utf8",
+		);
+
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
+		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
+		expect(roleBootstrap).toContain("\nCOMMIT;");
+		expect(roleBootstrap).toContain("WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
+		expect(roleBootstrap).toContain("\\gexec");
+		expect(roleBootstrap).toContain("CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)");
+		expect(roleBootstrap).toContain("SECURITY DEFINER\nSET search_path = ''");
+		expect(roleBootstrap).toContain("REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC");
+		expect(roleBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES");
+		expect(roleBootstrap).not.toContain("GRANT USAGE, SELECT ON ALL SEQUENCES");
+		expect(roleBootstrap).not.toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT");
+		expect(roleBootstrap).not.toMatch(
+			/GRANT SELECT \([\s\S]*?content_sha256[\s\S]*?\) ON sv_source_snapshots TO selena_app/,
+		);
+		expect(roleBootstrap).toMatch(
+			/REVOKE SELECT \([\s\S]*?content_sha256[\s\S]*?\) ON sv_source_snapshots FROM selena_app/,
+		);
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_UPDATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_DELETE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_TRUNCATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CONTENT_HASH_VISIBLE");
 	});
 });
 

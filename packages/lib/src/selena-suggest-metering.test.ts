@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+	assertSuggestBudget,
 	isSuggestBudgetExceeded,
+	recordSuggestCost,
 	SUGGEST_ESTIMATED_COST_USD,
 	suggestBudgetUsdFromEnv,
 } from "./selena-suggest-metering";
@@ -27,5 +29,17 @@ describe("isSuggestBudgetExceeded", () => {
 		expect(isSuggestBudgetExceeded(20 - SUGGEST_ESTIMATED_COST_USD, 20)).toBe(false);
 		expect(isSuggestBudgetExceeded(20, 20)).toBe(true);
 		expect(isSuggestBudgetExceeded(0, 20)).toBe(false);
+	});
+});
+
+describe("staging suggestion hold", () => {
+	it("fails closed without querying or writing the tenant database", async () => {
+		const execute = vi.fn();
+		const db = { execute } as never;
+		await expect(assertSuggestBudget(db)).rejects.toThrow("SUGGEST_ATOMIC_RESERVATION_REQUIRED");
+		await expect(recordSuggestCost(db, { organizationId: "tenant-1", provider: "test" })).rejects.toThrow(
+			"SUGGEST_ATOMIC_RESERVATION_REQUIRED",
+		);
+		expect(execute).not.toHaveBeenCalled();
 	});
 });

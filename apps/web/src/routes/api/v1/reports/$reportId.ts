@@ -8,11 +8,13 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { reports } from "@workspace/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { z } from "zod";
 import { computeReportUnstableStats } from "@workspace/lib/report-metrics";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { ApiError, createApiHandler } from "@/lib/api/handler";
+import { resolveApiKeyAuthContext } from "@/lib/selena-auth-context";
 
 export const Route = createFileRoute("/api/v1/reports/$reportId")({
 	server: {
@@ -21,8 +23,15 @@ export const Route = createFileRoute("/api/v1/reports/$reportId")({
 				params: z.object({ reportId: z.guid("Invalid report ID format") }),
 				handle: async ({ params, request }) => {
 					const { reportId } = params;
+					const auth = await resolveApiKeyAuthContext(request);
 
-					const result = await db.select().from(reports).where(eq(reports.id, reportId)).limit(1);
+					const result = await withOrganizationTransaction(db, auth.tenantId, (tx) =>
+						tx
+							.select()
+							.from(reports)
+							.where(and(eq(reports.id, reportId), eq(reports.organizationId, auth.tenantId)))
+							.limit(1),
+					);
 					if (result.length === 0) {
 						throw new ApiError(404, "Not Found", `Report with ID '${reportId}' not found`);
 					}

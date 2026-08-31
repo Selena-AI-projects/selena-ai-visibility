@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svCycles, svOrders } from "@workspace/lib/db/schema";
-import { computeCycleDiff, type CycleDiffReport } from "@workspace/lib/selena-cycle-diff";
+import { type CycleDiffReport, computeCycleDiff } from "@workspace/lib/selena-cycle-diff";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -30,13 +31,15 @@ export const getSelenaCycleCompareFn = createServerFn({ method: "GET" })
 		const project = await repositories.projects.get(context, data.projectId);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
 
-		const cycles = await db
-			.select({ id: svCycles.id, createdAt: svCycles.createdAt })
-			.from(svCycles)
-			.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-			.where(and(eq(svOrders.projectId, data.projectId), eq(svCycles.organizationId, context.tenantId)))
-			.orderBy(desc(svCycles.createdAt))
-			.limit(2);
+		const cycles = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({ id: svCycles.id, createdAt: svCycles.createdAt })
+				.from(svCycles)
+				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+				.where(and(eq(svOrders.projectId, data.projectId), eq(svCycles.organizationId, context.tenantId)))
+				.orderBy(desc(svCycles.createdAt))
+				.limit(2),
+		);
 		if (cycles.length < 2) return { comparable: false, cyclesAvailable: cycles.length };
 
 		const [compare, base] = cycles;

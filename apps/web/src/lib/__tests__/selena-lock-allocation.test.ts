@@ -34,7 +34,7 @@ describe("configuration lock caller contract", () => {
 		const start = orderDeskSource.indexOf("export async function createSelenaOrderDraft");
 		const end = orderDeskSource.indexOf("\n/**", start);
 		const draft = orderDeskSource.slice(start, end);
-		expect(draft).toContain("return db.transaction(async (tx)");
+		expect(draft).toContain("return withOrganizationTransaction(db, context.tenantId, async (tx)");
 		expect(draft).toContain("pg_advisory_xact_lock");
 		expect(draft).toContain("selena-order-draft:test:");
 		expect(draft).toContain("SELENA_ORDER_IDEMPOTENCY_CONFLICT");

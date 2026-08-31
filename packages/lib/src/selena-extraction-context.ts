@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
+import { withOrganizationTransaction } from "./db/organization-transaction";
 import * as schema from "./db/schema";
 import type { ExtractionContext } from "./selena-answer-extraction";
 import type { SelenaExecutablePermit } from "./selena-measurement";
@@ -142,6 +143,7 @@ export function buildExtractionContext(input: {
 }
 
 type Db = NodePgDatabase<typeof schema>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * The two per-permit lookups a live adapter needs. They live here rather than
@@ -149,8 +151,8 @@ type Db = NodePgDatabase<typeof schema>;
  * resolving them is the caller's job.
  */
 export function createSelenaMeasurementResolvers(db: Db) {
-	const scenarioFor = async (permit: SelenaExecutablePermit) => {
-		const [scenario] = await db
+	const scenarioFor = async (permit: SelenaExecutablePermit, tx: Tx) => {
+		const [scenario] = await tx
 			.select({ text: schema.svScenarios.text, language: schema.svScenarios.language })
 			.from(schema.svScenarios)
 			.where(
@@ -161,8 +163,8 @@ export function createSelenaMeasurementResolvers(db: Db) {
 		return scenario;
 	};
 
-	const cycleContextFor = async (permit: SelenaExecutablePermit) => {
-		const [row] = await db
+	const cycleContextFor = async (permit: SelenaExecutablePermit, tx: Tx) => {
+		const [row] = await tx
 			.select({
 				projectId: schema.svProjects.id,
 				region: schema.svProjects.region,
@@ -179,8 +181,8 @@ export function createSelenaMeasurementResolvers(db: Db) {
 		return row;
 	};
 
-	const profileFor = async (permit: SelenaExecutablePermit, projectId: string): Promise<ExtractionProfile> => {
-		const [profile] = await db
+	const profileFor = async (permit: SelenaExecutablePermit, projectId: string, tx: Tx): Promise<ExtractionProfile> => {
+		const [profile] = await tx
 			.select({
 				brandName: schema.svProjectProfiles.brandName,
 				primaryDomain: schema.svProjectProfiles.primaryDomain,
@@ -199,15 +201,17 @@ export function createSelenaMeasurementResolvers(db: Db) {
 	};
 
 	return {
-		resolveScenarioText: async (permit: SelenaExecutablePermit): Promise<string> => (await scenarioFor(permit)).text,
-		resolveExtractionContext: async (permit: SelenaExecutablePermit): Promise<ExtractionContext> => {
-			const [scenario, cycle] = await Promise.all([scenarioFor(permit), cycleContextFor(permit)]);
-			const profile = parseLockedProfile(cycle.lockSnapshot) ?? (await profileFor(permit, cycle.projectId));
-			return buildExtractionContext({
-				profile,
-				language: scenario.language,
-				region: cycle.region ?? cycle.country,
-			});
-		},
+		resolveScenarioText: (permit: SelenaExecutablePermit): Promise<string> =>
+			withOrganizationTransaction(db, permit.organizationId, async (tx) => (await scenarioFor(permit, tx)).text),
+		resolveExtractionContext: (permit: SelenaExecutablePermit): Promise<ExtractionContext> =>
+			withOrganizationTransaction(db, permit.organizationId, async (tx) => {
+				const [scenario, cycle] = await Promise.all([scenarioFor(permit, tx), cycleContextFor(permit, tx)]);
+				const profile = parseLockedProfile(cycle.lockSnapshot) ?? (await profileFor(permit, cycle.projectId, tx));
+				return buildExtractionContext({
+					profile,
+					language: scenario.language,
+					region: cycle.region ?? cycle.country,
+				});
+			}),
 	};
 }
