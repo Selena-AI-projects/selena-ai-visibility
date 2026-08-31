@@ -53,6 +53,8 @@ export const VirtualizedPromptList = memo(function VirtualizedPromptList({
 	const promptsKey = useMemo(() => {
 		return orderedPrompts.map((p) => p.id).join(",");
 	}, [orderedPrompts]);
+	const latestPromptsKeyRef = useRef(promptsKey);
+	latestPromptsKeyRef.current = promptsKey;
 
 	// Uniform height estimate — all cards (loading, empty, full) have matching content areas
 	const estimateSize = useCallback(() => CHART_CARD_HEIGHT + CHART_GAP, []);
@@ -66,7 +68,9 @@ export const VirtualizedPromptList = memo(function VirtualizedPromptList({
 
 	// Force virtualizer to recalculate when prompts list changes (e.g., after filtering)
 	useEffect(() => {
+		const promptsKeyAtSchedule = promptsKey;
 		const timer = setTimeout(() => {
+			if (latestPromptsKeyRef.current !== promptsKeyAtSchedule) return;
 			virtualizer.measure();
 		}, 50);
 		return () => clearTimeout(timer);

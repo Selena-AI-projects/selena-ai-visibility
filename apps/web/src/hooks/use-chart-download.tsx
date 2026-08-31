@@ -16,7 +16,9 @@ export function useChartDownload(fileName: string) {
 				logging: false,
 				onclone: (clonedDoc) => {
 					const printHiddenElements = clonedDoc.querySelectorAll(".print\\:hidden");
-					printHiddenElements.forEach((el) => el.remove());
+					printHiddenElements.forEach((el) => {
+						el.remove();
+					});
 				},
 			});
 
