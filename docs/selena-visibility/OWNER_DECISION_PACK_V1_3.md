@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `SOURCE_MERGED_RUNTIME_HOLD`
+Status: `SOURCE_MERGED_AUTO_DEPLOY_CONTAINED_RUNTIME_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
 Current release: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`.
@@ -37,9 +37,23 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 - `OD-B1` runtime switch and app-wide RLS acceptance: `HOLD`. The current app
   does not consistently set transaction-local `app.organization_id`, so binding
   web/worker to `selena_app` would be unsafe.
+- PR #95 merge triggered Railway Git deployment of web/worker release
+  `7ac37f43` before the RLS/domain gates passed. Post-deploy journal evidence
+  remained through `0042`, so pending migrations were not applied.
+- Read-only ledger reconciliation found zero new permits, three VISITOR run
+  rows and three estimated Bright Data cost events totalling `USD 0.030000`.
+  The actual number of new external calls is `UNKNOWN`; two run rows succeeded,
+  one remained ledger-`RUNNING`, and no active/created/retry `selena-measure`
+  or `process-prompt` queue job remained.
+- Automatic staging containment set worker emergency stop true and
+  measurement/maintenance false. No selected recurring pg-boss schedule is
+  present; the next read-only checkpoint found zero new permits, runs, cost
+  events or active `selena-measure`/`process-prompt` queue jobs. The
+  public-domain blast radius prevents an unreviewed rollback.
 - `OD-C`: authorized but not eligible. New Google AI Mode calls remain exactly
-  zero in this loop until SR-00 through SR-08 pass. Earlier Perplexity canaries
-  mean the historical provider-call total is not zero and remains `UNKNOWN`.
+  zero in this loop until SR-00 through SR-08 pass and the post-deploy provider
+  activity is reconciled. Earlier Perplexity canaries and current VISITOR
+  ledger activity keep the historical/general provider-call total `UNKNOWN`.
 
 The approved USD 0.25 cap matches the repository's default per-audit
 public-provider cap. The separate USD 5 staging-ledger ceiling is **not** spend
@@ -154,5 +168,6 @@ the call. Social is not interchangeable with the recommended Google canary.
 
 OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
 for this bounded loop, but their ordered gate conditions still apply. The
-current domain-binding and runtime-RLS findings stop OD-B1/B3/B4/B5 and OD-C;
-authorization is not a PASS. OD-P is never implied and remains prohibited.
+current domain-binding, runtime-RLS, backup-restoreability and provider-activity
+findings stop OD-B1/B3/B4/B5 and OD-C; authorization is not a PASS. OD-P is
+never implied and remains prohibited.

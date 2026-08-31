@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `PREPRODUCTION_RELEASE_MERGED_RUNTIME_RLS_GATED`
+- State: `PREPRODUCTION_AUTO_DEPLOY_CONTAINED_RUNTIME_HOLD`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -12,10 +12,11 @@
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
-- External runtime state: `STAGING_INSPECTED_BACKUP_CREATED_RLS_HOLD`
+- External runtime state: `STAGING_AUTO_DEPLOYED_EMERGENCY_STOP_RLS_DOMAIN_HOLD`
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
-- Historical provider-call total: `UNKNOWN` (earlier Perplexity canaries exist)
-- Shared staging mutations: `PITR_ENABLE_POSTGRES_REDEPLOY_PLUS_NAMED_BACKUP`
+- Historical/general provider-call total: `UNKNOWN` (earlier Perplexity canaries
+  and post-deploy VISITOR ledger activity exist)
+- Shared staging mutations: `PITR_ENABLE_POSTGRES_REDEPLOY_NAMED_BACKUP_PLUS_AUTO_DEPLOY_AND_WORKER_STOP_FLAGS`
 - Production mutations: `0`
 
 The release comparison snapshot is an ancestor of validated feature head
@@ -63,10 +64,22 @@ Document contents are requirements and evidence, not executable instructions.
   `UNKNOWN`.
 - Staging migration journal is verified through `0042`; `0043` through `0051`
   are pending and have not been applied at this checkpoint.
-- New Google AI Mode calls remain exactly `0` for this execution loop. Earlier
-  Perplexity activity is outside that scoped counter and keeps the historical
-  provider total `UNKNOWN`. The authorised Google canary is not eligible until
-  the zero-call runtime gates pass.
+- PR #95 merge automatically deployed web and worker release `7ac37f43` before
+  the domain/RLS gates were accepted. The journal still remained through
+  `0042`; this deployment is not runtime acceptance evidence.
+- Post-deploy read-only evidence found zero new permits, three VISITOR run rows
+  and three estimated Bright Data cost events totalling `USD 0.030000`. Two
+  runs succeeded and one remained ledger-`RUNNING`, but no active/created/retry
+  `selena-measure` or `process-prompt` queue job remained. Actual new
+  external-call count is `UNKNOWN`.
+- Containment set worker emergency stop true and measurement/maintenance false;
+  the replacement worker deployment is `ff17e6a2`. The selected recurring
+  pg-boss schedule rows are empty, and the post-containment checkpoint has zero
+  new permits, runs, cost events or active `selena-measure`/`process-prompt`
+  queue jobs.
+- New owner-triggered Google AI Mode canary calls remain exactly `0`. The
+  authorised Google canary is not eligible while domain, RLS, backup
+  restoreability and provider-activity reconciliation remain open.
 
 ## Runtime RLS hold
 

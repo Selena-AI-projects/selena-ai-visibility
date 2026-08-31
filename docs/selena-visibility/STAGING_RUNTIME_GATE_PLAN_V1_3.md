@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — staging/runtime gate plan
 
-Status: `RELEASE_MERGED_RUNTIME_RLS_AND_DOMAIN_HOLD`
+Status: `AUTO_DEPLOY_CONTAINED_RUNTIME_RLS_DOMAIN_PROVIDER_HOLD`
 
 The original anchor is release HEAD
 `0e00df4faa74990e6b696c4249cbb85acf23c693`. Current release HEAD is
@@ -30,7 +30,7 @@ Google AI Mode canary remain prohibited.
 
 | Boundary | What may be done after approval | Current state |
 |---|---|---|
-| A — shared staging read-only | Inspect deployment metadata, service revisions, bounded logs and configuration key presence without reading values | `AUTHORIZED_IN_PROGRESS` |
+| A — shared staging read-only | Inspect deployment metadata, service revisions, bounded logs and configuration key presence without reading values | `AUTHORIZED_EXECUTED` |
 | B — staging mutation | Backup/PITR, deploy an immutable revision, run pending migrations through 0051, create fixture rows or restart a service | `AUTHORIZED_WITH_RLS_STOP_CONDITION` |
 | C — paid provider canary | One Bright Data `GOOGLE_AI_MODE` request, USD 0.25 maximum, 25-minute hard timeout, zero retries, `recurring=false` | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
 | D — production | Access or mutate production, attach a database, change billing, deploy or schedule work | `OUT_OF_SCOPE` |
@@ -62,13 +62,14 @@ Approval of one boundary does not authorize any later boundary.
 |---|---|---|
 | SR-00 | `PASS` | Final source head `6b73fefd`; PR #95 merged as release commit `7ac37f43`; required CI links are recorded in the acceptance matrix. |
 | SR-01 | `PASS_LOCAL` | Root lint/tests/build pass on Node 24; warnings remain registered. |
-| SR-02 | `PARTIAL_DOMAIN_BINDING_HOLD` | Exact staging project/environment/service IDs are recorded without secret values, but staging web also serves `app.selenasystems.com`; production-like domain isolation is not proven. |
-| SR-03 | `PARTIAL` | Key-name and scheduler state audit exists; sealed value correctness is not claimed. |
+| SR-02 | `AUTO_DEPLOYED_DOMAIN_BINDING_HOLD` | Release merge auto-deployed web/worker `7ac37f43`; staging web also serves `app.selenasystems.com`, so blast-radius isolation is not proven and the deployment is not accepted. |
+| SR-03 | `PARTIAL_EMERGENCY_STOP_APPLIED` | Worker emergency stop is true and measurement/maintenance are false after containment; bounded logs show maintenance disabled and no selected recurring pg-boss schedules. Other sealed value correctness is not claimed. |
 | SR-04 | `PARTIAL_CHECKPOINT_EXISTS` | PITR enabled/bucket-wired; Postgres deploy successful; named backup `92f3adae…` exists. WAL health, restore range and restore rehearsal remain `UNKNOWN`. |
 | SR-05 | `HOLD_APP_RUNTIME` | Read-only journal proves staging through 0042 with 0043–0051 pending. App-wide transaction-local tenant context is incomplete; no runtime role switch allowed. |
-| SR-06–SR-08 | `BLOCKED_BY_SR05` | Web/worker candidate, fixture and browser/API RLS acceptance must not be relabelled as complete while runtime RLS is unproven. |
+| SR-06 | `AUTO_DEPLOYED_NOT_ACCEPTED` | Web/worker deployed through Railway Git integration before SR-02/SR-05 passed. Journal remains through 0042; deployment cannot be relabelled as accepted runtime boot. |
+| SR-07–SR-08 | `BLOCKED_BY_SR02_SR05` | Fixture and browser/API RLS acceptance remain unexecuted while domain isolation and runtime RLS are unproven. |
 | SR-09 | `AUTHORIZED_FROZEN` | Bright Data / GOOGLE_AI_MODE / one call / USD 0.25 / 25m / zero retries / non-recurring. |
-| SR-10 | `NOT_ELIGIBLE` | No provider call has occurred; SR-00–SR-08 are not all green. |
+| SR-10 | `NOT_ELIGIBLE_PROVIDER_ACTIVITY_HOLD` | No owner-triggered Google canary occurred. Auto-deploy coincided with three Bright Data estimated cost events totalling USD 0.03; actual external-call count is `UNKNOWN` and must be reconciled before any canary. |
 | SR-11 | `PROHIBITED` | Social and Travel activation not authorized. |
 
 ## Provider canary invariants

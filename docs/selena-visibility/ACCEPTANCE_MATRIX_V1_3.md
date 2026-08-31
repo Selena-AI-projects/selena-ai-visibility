@@ -40,8 +40,10 @@ which is not counted as acceptance evidence.
   retains the later release breaker behavior and the new provider stop guard;
   `6b73fefd` makes the provider snapshot deadline test deterministic without
   changing runtime source.
-- No production action, provider call, Social/Travel activation, billing
-  change or application recurring job occurred.
+- No owner-triggered canary, production action, Social/Travel activation,
+  billing change or application recurring job occurred. The release merge did
+  trigger Railway Git deployment and resumed pre-existing VISITOR work; that
+  separate runtime activity is recorded below.
 
 | Gate | Required evidence | Current status | Evidence class |
 |---|---|---|---|
@@ -59,7 +61,7 @@ which is not counted as acceptance evidence.
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
 | V13-BRANCH | Small commits contain no handoff/secrets; protected handoff remains untracked; latest release hardening and follow-up source are merged into the release branch | `PASS_FOLLOWUP_MERGED` | Git |
 | V13-PR | PR #92 and follow-up PR #95 are merged; final PR #95 head passed all required checks and independent P0/P1 review found no blocker | `PASS_FOLLOWUP_MERGED` | GitHub/CI |
-| V13-RUNTIME | Staging service IDs and a backup checkpoint are verified, but production-like domain isolation and app-wide non-owner RLS are not; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_STAGING_DOMAIN_AND_RLS_HOLD` | Runtime/hosted |
+| V13-RUNTIME | Staging service IDs and a backup checkpoint are verified; release merge auto-deployed web/worker, while production-like domain isolation and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_AUTO_DEPLOY_PROVIDER_ACTIVITY_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
 
@@ -133,6 +135,28 @@ Service identity is verified, but topology acceptance is not: the staging web
 service also has the production-like `app.selenasystems.com` binding, so SR-02
 remains `HOLD` until domain ownership/blast radius is resolved.
 
+- Merging PR #95 triggered Railway Git deployment automatically. Web deployment
+  `9786b6fe-3a83-4f75-a23f-55cd903e04e9` and worker deployment
+  `e781bec1-8d4f-499b-93bf-ccf45379873c` reached `SUCCESS` for release
+  `7ac37f43`; this occurred before SR-02/SR-05 were accepted and is not runtime
+  acceptance evidence.
+- The post-deploy migration journal remained at 43 rows through `0042`; pending
+  migrations `0043`–`0051` were not applied.
+- Read-only post-deploy ledger evidence showed zero new permits, three new
+  VISITOR run rows and three Bright Data estimated cost events totalling
+  `USD 0.030000`. Two runs were `SUCCEEDED` and one remained `RUNNING` in the
+  ledger, while pg-boss had no active/created/retry `selena-measure` or
+  `process-prompt` jobs. The exact number of new external provider calls is
+  therefore `UNKNOWN`, not zero.
+- Automatic staging containment set `SELENA_EMERGENCY_STOP=true`,
+  `SELENA_MEASUREMENT_ENABLED=false` and
+  `SCHEDULE_MAINTENANCE_ENABLED=false` on worker deployment
+  `ff17e6a2-2113-4c03-87ea-453d0aaa89de`. Bounded logs confirm maintenance is
+  disabled and the worker reached ready; the pg-boss schedule table contains no
+  maintenance, answer-retention or Auth0 recurring schedule. A subsequent
+  read-only checkpoint showed zero new permits, runs, cost events or active
+  `selena-measure`/`process-prompt` queue jobs after this containment
+  deployment.
 - PITR reports `enabled=true` and `bucketWired=true`. Postgres deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` reached `SUCCESS` on image digest
   `sha256:8dbbfcb7fafacc22c01dc0c425c38793b5d0449163a3d178d3e3767d43e6f3ee`.
@@ -152,8 +176,9 @@ remains `HOLD` until domain ownership/blast radius is resolved.
 - A disposable 0051 schema-probe runner was prepared, but its executed result
   is `BLOCKED_ENV`: the configured Colima Docker socket was not running. No
   disposable or staging SQL was applied, and no schema-probe PASS is claimed.
-- New `GOOGLE_AI_MODE` provider calls in this execution loop are `0`. Earlier
-  Perplexity canaries exist, so no lifetime/account-wide zero is claimed.
+- New owner-triggered `GOOGLE_AI_MODE` canary calls in this execution loop are
+  `0`. Earlier Perplexity canaries and the post-deploy VISITOR ledger activity
+  mean no lifetime/account-wide or general provider-call zero is claimed.
 
 ## Dataset contract inventory
 
