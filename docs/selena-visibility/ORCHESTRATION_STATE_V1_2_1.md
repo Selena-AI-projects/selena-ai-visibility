@@ -50,7 +50,7 @@ The two DOCX source files are present at the owner-provided Downloads paths and 
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `35 files / 376 tests PASS; 1 file / 4 tests skipped` |
 | Web browser/storybook Vitest (Node 24) | `BLOCKED_ENV — unit project passes 376/376 with 4 skipped; browser/storybook execution could not launch because the Playwright Chromium executable is absent; no browser download was attempted` |
-| Current package rerun (Node 24, 2026-08-31 01:57) | `PASS — lib schema/contract suite 75 files / 902 tests; lib typecheck PASS. This rerun includes the 0044/0050 PostgreSQL compatibility assertions; no database or migration execution was performed.` |
+| Current package rerun (Node 24, 2026-08-31 10:56) | `PASS — web unit suite 35 files / 376 tests with 4 skipped; lib suite 75 files / 902 tests; lib typecheck and git diff --check PASS. This rerun includes the Maps coordinate-proof canonicalization tests; no database, migration, provider or CI action was performed.` |
 | Full monorepo test graph (Node 24, earlier milestone) | `PASS — bundled Node v24.19.0; root Turbo test graph completed 15/15 tasks successfully. At that milestone package suites were contracts 225/225, lib 889/889, web 362/362 (plus 4 skipped); package typechecks also passed. Current package counts are recorded above and the web browser environment is separately marked BLOCKED_ENV.` |
 | Rehearsal-stub timeout retry (Node 24) | `The first concurrent graph attempt timed out one existing 125-slot stub test at 5s; isolated rerun passed 4/4, and the immediate subsequent full graph passed 15/15. No source change was made for the transient timeout.` |
 | Web and worker TypeScript (Node 24) | `PASS` |
