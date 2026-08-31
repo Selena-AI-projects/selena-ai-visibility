@@ -1,3 +1,4 @@
+import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
 import type { PgBoss } from "pg-boss";
 
@@ -56,14 +57,14 @@ export async function getBoss(): Promise<PgBoss> {
 		// work that was authorized once.
 		await boss.createQueue("selena-measure", {
 			retryLimit: 0,
-			expireInSeconds: 60 * 30,
+			expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
 		});
 		// createQueue preserves options on an existing queue. Reconcile the
 		// measurement deadline so a web-first startup cannot leave the legacy
 		// 15-minute expiry in place.
 		await boss.updateQueue("selena-measure", {
 			retryLimit: 0,
-			expireInSeconds: 60 * 30,
+			expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
 		});
 
 		bossInstance = boss;
