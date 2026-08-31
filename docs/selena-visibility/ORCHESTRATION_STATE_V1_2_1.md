@@ -35,7 +35,7 @@ The two DOCX source files are present at the owner-provided Downloads paths and 
 
 | Check | Result |
 |---|---|
-| Contracts Vitest (Node 24) | `27 files / 231 tests PASS` |
+| Contracts Vitest (Node 24) | `27 files / 232 tests PASS` |
 | Contracts TypeScript | `PASS` |
 | Lib Vitest (Node 24) | `75 files / 898 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |

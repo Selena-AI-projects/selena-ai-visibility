@@ -7,12 +7,15 @@ import {
 	assertLocalObservationCardinality,
 	assertReputationAnalysis,
 	assertSurfaceCaptureAllowed,
+	competitorWinCoverage,
 	DEFAULT_GRID_POINT_CEILING,
 	expectedLocalObservations,
 	expectedReputationSnapshots,
 	expectedSearchObservations,
+	invalidPointRate,
 	LOCAL_GRID_FORMULA_VERSION,
 	localCoverage,
+	localDistanceRankCurve,
 	localVoiceComparison,
 	reviewVelocityPer30Days,
 	shareOfLocalVoice,
@@ -361,6 +364,64 @@ describe("Visibility OS local metrics fixture v1", () => {
 		);
 		expect(comparison[LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey]).toBeCloseTo(1 / 3);
 		expect(comparison["competitor-a"]).toBeCloseTo(2 / 9);
+	});
+
+	it("computes competitor wins, distance-rank buckets and invalid-point rate", () => {
+		const observations = [
+			{
+				validity: "VALID" as const,
+				captureDepth: 20,
+				distanceMeters: 0,
+				entries: [
+					{ rank: 1, entityKey: "competitor-a" },
+					{ rank: 4, entityKey: LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey },
+				],
+			},
+			{
+				validity: "VALID" as const,
+				captureDepth: 20,
+				distanceMeters: 1000,
+				entries: [
+					{ rank: 2, entityKey: LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey },
+					{ rank: 5, entityKey: "competitor-a" },
+				],
+			},
+			{
+				validity: "INVALID" as const,
+				captureDepth: 20,
+				distanceMeters: 2000,
+				entries: [],
+			},
+		];
+		expect(competitorWinCoverage(observations, LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey, "competitor-a")).toEqual({
+			value: 1 / 2,
+			numerator: 1,
+			denominator: 2,
+		});
+		expect(invalidPointRate(observations, 3)).toEqual({ value: 1 / 3, numerator: 1, denominator: 3 });
+		expect(
+			localDistanceRankCurve(observations, LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey, [
+				{ minMeters: 0, maxMeters: 1000 },
+				{ minMeters: 1000, maxMeters: 3000 },
+			]),
+		).toEqual([
+			{ minMeters: 0, maxMeters: 1000, coverage: { value: 1, numerator: 1, denominator: 1 }, averageRank: 4 },
+			{ minMeters: 1000, maxMeters: 3000, coverage: { value: 1, numerator: 1, denominator: 1 }, averageRank: 2 },
+		]);
+		expect(() =>
+			localDistanceRankCurve(observations, LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey, [
+				{ minMeters: 0, maxMeters: 1000 },
+				{ minMeters: 500, maxMeters: 1500 },
+			]),
+		).toThrow("LOCAL_DISTANCE_BANDS_INVALID");
+		expect(() =>
+			localDistanceRankCurve(
+				[{ ...observations[0], distanceMeters: Number.NaN }],
+				LOCAL_COVERAGE_FIXTURE_V1.targetEntityKey,
+				[{ minMeters: 0, maxMeters: 1000 }],
+			),
+		).toThrow("LOCAL_DISTANCE_OBSERVATION_INVALID");
+		expect(() => invalidPointRate(observations, 2)).toThrow("LOCAL_CARDINALITY_INVALID");
 	});
 });
 

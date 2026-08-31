@@ -489,6 +489,98 @@ export function localCoverage(observations: readonly LocalMetricObservation[], t
 	};
 }
 
+/**
+ * The share of valid points where a named competitor is ranked above the
+ * target. A target that is absent at a valid point is not a competitor win:
+ * the metric answers the explicit "competitor above target" question and
+ * keeps absence separate from a rank comparison.
+ */
+export function competitorWinCoverage(
+	observations: readonly LocalMetricObservation[],
+	targetEntityKey: string,
+	competitorEntityKey: string,
+): RatioMetric {
+	const valid = observations.filter((observation) => observation.validity === "VALID");
+	const wins = valid.filter((observation) => {
+		const target = targetRank(observation.entries, targetEntityKey);
+		if (target === null) return false;
+		const competitor = targetRank(observation.entries, competitorEntityKey);
+		return competitor !== null && competitor < target;
+	}).length;
+	return ratio(wins, valid.length);
+}
+
+export type LocalDistanceRankBand = {
+	minMeters: number;
+	maxMeters: number;
+};
+
+export type LocalDistanceMetricObservation = LocalMetricObservation & {
+	distanceMeters: number;
+};
+
+function assertDistanceBands(bands: readonly LocalDistanceRankBand[]): void {
+	let previousMax = 0;
+	for (const band of bands) {
+		if (
+			!Number.isFinite(band.minMeters) ||
+			!Number.isFinite(band.maxMeters) ||
+			band.minMeters < 0 ||
+			band.maxMeters <= band.minMeters ||
+			band.minMeters < previousMax
+		)
+			throw new Error("LOCAL_DISTANCE_BANDS_INVALID");
+		previousMax = band.maxMeters;
+	}
+}
+
+/**
+ * Return found coverage and average found rank for caller-supplied distance
+ * bands. Bands are half-open [minMeters, maxMeters), ordered and non-overlap-
+ * ping so the same point cannot contribute to two buckets.
+ */
+export function localDistanceRankCurve(
+	observations: readonly LocalDistanceMetricObservation[],
+	targetEntityKey: string,
+	bands: readonly LocalDistanceRankBand[],
+): Array<LocalDistanceRankBand & { coverage: RatioMetric; averageRank: number | null }> {
+	assertDistanceBands(bands);
+	if (
+		observations.some((observation) => !Number.isFinite(observation.distanceMeters) || observation.distanceMeters < 0)
+	)
+		throw new Error("LOCAL_DISTANCE_OBSERVATION_INVALID");
+	return bands.map((band) => {
+		const valid = observations.filter(
+			(observation) =>
+				observation.validity === "VALID" &&
+				observation.distanceMeters >= band.minMeters &&
+				observation.distanceMeters < band.maxMeters,
+		);
+		const ranks = valid
+			.map((observation) => targetRank(observation.entries, targetEntityKey))
+			.filter((rank): rank is number => rank !== null);
+		return {
+			...band,
+			coverage: ratio(ranks.length, valid.length),
+			averageRank: ranks.length === 0 ? null : ranks.reduce((sum, rank) => sum + rank, 0) / ranks.length,
+		};
+	});
+}
+
+/** Invalid observations divided by the cycle's immutable expected count. */
+export function invalidPointRate(
+	observations: readonly LocalMetricObservation[],
+	expectedObservations: number,
+): RatioMetric {
+	if (
+		!Number.isInteger(expectedObservations) ||
+		expectedObservations <= 0 ||
+		observations.length > expectedObservations
+	)
+		throw new Error("LOCAL_CARDINALITY_INVALID");
+	return ratio(observations.filter((observation) => observation.validity === "INVALID").length, expectedObservations);
+}
+
 export function shareOfLocalVoice(
 	observations: readonly LocalMetricObservation[],
 	entityKey: string,
