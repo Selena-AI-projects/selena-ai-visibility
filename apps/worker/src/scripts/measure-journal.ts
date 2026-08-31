@@ -132,7 +132,11 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 			// running past that under concurrent load, so every call in it was
 			// lost as MALFORMED_RESPONSE despite Bright Data having produced
 			// (and billed) an answer. Doubled here rather than left unbounded.
-			snapshotTimeoutMs: 10 * 60 * 1000,
+			// Perplexity is exempt: its collector has taken ~16 minutes on this
+			// account, so it keeps the adapter's surface-specific deadline —
+			// clamping it to 10 minutes here times out a produced (and billed)
+			// answer, and one non-succeeded Perplexity run stops the whole cycle.
+			...(surface === "perplexity" ? {} : { snapshotTimeoutMs: 10 * 60 * 1000 }),
 		}),
 	]),
 );
