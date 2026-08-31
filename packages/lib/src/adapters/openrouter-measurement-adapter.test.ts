@@ -8,7 +8,12 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SelenaExecutablePermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
-import { createOpenRouterAdapter, resolveOpenRouterCost } from "./openrouter-measurement-adapter";
+import {
+	apiModelIds,
+	createOpenRouterAdapter,
+	createOpenRouterFamilyAdapter,
+	resolveOpenRouterCost,
+} from "./openrouter-measurement-adapter";
 
 const API_KEY = "sk-or-v1-secret-owner-key";
 const SCENARIO_TEXT = "Which spa in Canggu is best for a deep tissue massage?";
@@ -121,6 +126,94 @@ describe("OpenRouter measurement adapter", () => {
 			provider: "openrouter",
 		});
 		expect(() => runOutcomeSchema.parse(outcome)).not.toThrow();
+	});
+
+	it("routes every API View permit to the exact catalog model it authorizes", async () => {
+		const fetchImpl = vi.fn(
+			async (): Promise<Response> =>
+				jsonResponse(
+					successPayload({
+						choices: [{ message: { content: "KORA Food Hall is the purpose-built option." } }],
+					}),
+				),
+		) as unknown as typeof fetch;
+		const adapter = createOpenRouterFamilyAdapter({
+			apiKey: API_KEY,
+			fetchImpl,
+			resolveScenarioText: () => SCENARIO_TEXT,
+			resolveExtractionContext: () => ({
+				brandTerms: ["KORA Food Hall"],
+				ownedDomains: ["korafoodhall.com"],
+				competitors: [],
+				language: "en",
+			}),
+			now,
+		});
+
+		const outcomes: RunOutcome[] = [];
+		for (const [index, model] of apiModelIds.entries()) {
+			outcomes.push(
+				await adapter.execute(
+					permitFor({
+						id: `permit-${index}`,
+						systemId: model,
+						dispatchKey: `order-1:scenario-1:${model}:0:1`,
+					}),
+				),
+			);
+		}
+
+		expect(fetchImpl).toHaveBeenCalledTimes(apiModelIds.length);
+		expect(globalFetch).not.toHaveBeenCalled();
+		const requestBodies = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map(([, init]) =>
+			JSON.parse(String((init as RequestInit | undefined)?.body)),
+		);
+		expect(requestBodies.map((body) => body.model)).toEqual([...apiModelIds]);
+		expect(requestBodies.find((body) => body.model === "qwen/qwen3.5-9b")?.reasoning).toEqual({ effort: "none" });
+		expect(requestBodies.filter((body) => body.model !== "qwen/qwen3.5-9b").every((body) => !body.reasoning)).toBe(
+			true,
+		);
+		expect(outcomes.map((outcome) => outcome.measurement?.system)).toEqual([...apiModelIds]);
+		expect(outcomes.map((outcome) => outcome.measurement?.model)).toEqual([...apiModelIds]);
+	});
+
+	it("keeps a safe reference when Qwen returns reasoning without final content", async () => {
+		const fetchImpl = respondWith(
+			jsonResponse(
+				successPayload({
+					id: "gen-qwen-empty",
+					choices: [{ message: { content: "", reasoning: "private reasoning must not be stored" } }],
+				}),
+			),
+		);
+		const outcome = await adapterWith(fetchImpl, { model: "qwen/qwen3.5-9b" }).execute(
+			permitFor({ systemId: "qwen/qwen3.5-9b" }),
+		);
+		const body = JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body));
+
+		expect(body.reasoning).toEqual({ effort: "none" });
+		expect(outcome).toMatchObject({
+			status: "INVALID",
+			validity: "INVALID",
+			invalidReason: "EMPTY_RESPONSE",
+			rawResponseReference: "openrouter:gen-qwen-empty",
+		});
+		expect(JSON.stringify(outcome)).not.toContain("private reasoning");
+	});
+
+	it("refuses a non-catalog API model before transport", async () => {
+		const fetchImpl = respondWith(jsonResponse(successPayload()));
+		const adapter = createOpenRouterFamilyAdapter({
+			apiKey: API_KEY,
+			fetchImpl,
+			resolveScenarioText: () => SCENARIO_TEXT,
+			now,
+		});
+
+		await expect(adapter.execute(permitFor({ systemId: "unsupported/model" }))).rejects.toThrow(
+			"SELENA_API_MODEL_UNKNOWN",
+		);
+		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
 	it("falls back to the local estimate when the provider reports no cost", async () => {

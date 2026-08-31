@@ -294,7 +294,29 @@ describe("Selena measurement runner", () => {
 			now,
 		});
 		expect(result).toMatchObject({ status: "completed", runId: "run-1" });
-		expect(complete).toHaveBeenCalledWith(ctx, "run-1", expect.objectContaining({ status: "SUCCEEDED" }), { now });
+		expect(complete).toHaveBeenCalledWith(ctx, "run-1", expect.objectContaining({ status: "SUCCEEDED" }), {
+			now: expect.any(Date),
+		});
+	});
+
+	it("records completion time after provider execution instead of reusing the claim time", async () => {
+		const { store, complete } = storeFor();
+		const { adapter } = spyAdapter();
+		const finishedAt = new Date("2026-08-19T10:17:00.000Z");
+
+		await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: { enabled: true, adapter: "noop" },
+			now,
+			clock: () => finishedAt,
+		});
+
+		expect(complete).toHaveBeenCalledWith(ctx, "run-1", expect.objectContaining({ status: "SUCCEEDED" }), {
+			now: finishedAt,
+		});
 	});
 
 	it("records a blocked run as failed instead of retrying a spent permit", async () => {
@@ -314,7 +336,7 @@ describe("Selena measurement runner", () => {
 			ctx,
 			"run-1",
 			expect.objectContaining({ status: "FAILED", validity: "INVALID" }),
-			{ now },
+			{ now: expect.any(Date) },
 		);
 	});
 

@@ -10,17 +10,15 @@
 #                    re-apply so a future backfill (e.g. #339 brands->org) that
 #                    breaks on existing data fails here before merge.
 #
-# Runs on every push/PR (no path filter): the job is cheap — one install, an
+# Runs on every pull request (no path filter): the job is cheap — one install, an
 # in-process boot smoke, and ~15s of migration checks — so a mode-boot or
 # migration regression is caught regardless of which files changed.
 
 name: Deployment Smoke Tests
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, release/selena-visibility-mvp]
   workflow_dispatch:
 
 permissions:
@@ -32,7 +30,7 @@ concurrency:
 
 jobs:
   smoke:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     services:

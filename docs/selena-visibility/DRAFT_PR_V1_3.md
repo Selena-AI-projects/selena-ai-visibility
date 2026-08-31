@@ -1,6 +1,10 @@
 # Draft PR — Selena AI Visibility v1.3 source-only acceptance package
 
-Status: `PREPARED_NOT_CREATED_OWNER_GATE`.
+Status: `OPEN_RELEASE_INTEGRATED_CI_PENDING`.
+
+PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/92`
+
+Base: `release/selena-visibility-mvp` (repository default branch).
 
 ## Proposed title
 
@@ -37,6 +41,12 @@ Status: `PREPARED_NOT_CREATED_OWNER_GATE`.
 - Claude Max `max5`/Sonnet blind review: complete, read-only, no permission
   denials, no repository mutation; agreed with the source-only/pre-runtime
   boundary.
+- post-release-integration full test run passed all 15 Turbo tasks, including
+  976 lib, 409 web and 240 visibility-contract tests; four DB-dependent web
+  tests remained explicitly skipped;
+- config, lib, contracts, worker and web typechecks passed;
+- changed-file Biome, web build and worker build passed after conflict
+  resolution.
 
 ### Known baseline and authorization boundaries
 
@@ -62,8 +72,9 @@ Status: `PREPARED_NOT_CREATED_OWNER_GATE`.
 
 ## PR creation side effects
 
-Opening a PR to `main`, including a draft PR, matches `pull_request` triggers
-for the following workflows:
+Opening PR #92 to the repository default branch
+`release/selena-visibility-mvp` matches `pull_request` triggers for the
+following workflows:
 
 - `Build` — `blacksmith-4vcpu-ubuntu-2404`;
 - `E2E Tests` — `blacksmith-4vcpu-ubuntu-2404` plus a
@@ -73,5 +84,6 @@ for the following workflows:
 - `CLA Check` — pull-request workflow; runner billing was not established by
   repository inspection.
 
-The billing/cost impact of Blacksmith jobs is `UNKNOWN`. Do not create the
-draft PR until the owner explicitly approves these external CI side effects.
+The billing/cost impact of Blacksmith jobs is `UNKNOWN`. The owner explicitly
+approved draft PR creation and the release-to-feature integration on 2026-08-31.
+PR merge, deploy and production activation remain separately unauthorized.

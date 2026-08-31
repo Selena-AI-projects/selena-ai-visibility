@@ -1,5 +1,5 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
-import { createOpenRouterAdapter, resolveCatalogApiModel } from "@workspace/lib/adapters/openrouter";
+import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
@@ -94,9 +94,8 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 		...ADAPTERS,
 		...(selected.has("openrouter")
 			? {
-					openrouter: createOpenRouterAdapter({
+					openrouter: createOpenRouterFamilyAdapter({
 						apiKey: process.env.OPENROUTER_API_KEY ?? "",
-						model: resolveCatalogApiModel(process.env.SELENA_OPENROUTER_MODEL),
 						fetchImpl: fetch,
 						resolveScenarioText: resolvers.resolveScenarioText,
 						resolveExtractionContext: resolvers.resolveExtractionContext,
@@ -113,6 +112,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					endpoint: process.env.SELENA_BRIGHTDATA_ENDPOINT?.trim() || BRIGHTDATA_DEFAULT_ENDPOINT,
 					datasetId: brightDataDatasetId(surface),
 					system: surface,
+					collectionMode: surface === "perplexity" ? "trigger" : "scrape",
 					fetchImpl: fetch,
 					resolveScenarioText: resolvers.resolveScenarioText,
 					resolveExtractionContext: resolvers.resolveExtractionContext,

@@ -1,16 +1,14 @@
 # License Compliance Check
 #
 # Validates that all dependencies use licenses compatible with MIT.
-# Runs on every push/PR to main and can be triggered manually.
+# Runs on pull requests to main and can be triggered manually.
 # Lightweight – only needs Node + pnpm, no Docker or databases.
 
 name: License Check
 
 on:
-  push:
-    branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, release/selena-visibility-mvp]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +21,7 @@ concurrency:
 jobs:
   license-check:
     name: Dependency License Audit
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
 
     steps:

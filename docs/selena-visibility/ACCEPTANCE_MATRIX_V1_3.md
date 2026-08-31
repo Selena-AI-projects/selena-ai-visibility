@@ -17,7 +17,7 @@ not promote local evidence to runtime, hosted staging or production proof.
 | V13-CODEX | Three independent Codex reviewers cross-audit implementation against the four-source baseline | `PASS_SOURCE_ONLY` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
 | V13-BRANCH | Small commits contain no handoff/secrets and are pushed only to the feature branch | `PASS_PUSHED` | Git |
-| V13-DRAFT-PR | PR body is prepared; CI/Blacksmith cost side effects require owner approval before creation | `PREPARED_OWNER_GATE` | External CI/billing |
+| V13-DRAFT-PR | Draft PR #92 targets the repository default release branch; owner approved unknown Blacksmith side effects and release integration | `OPEN_CI_PENDING` | External CI/billing |
 | V13-RUNTIME | Migration/RLS execution, provider canaries, shared staging/production and paid paths | `NOT_AUTHORIZED` | Runtime/hosted/paid |
 
 ## Dataset contract inventory

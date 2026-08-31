@@ -46,6 +46,36 @@ export type SelenaRepositoryContext = {
 type Db = NodePgDatabase<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type DbLike = Db | Tx;
+type CycleStatus = (typeof schema.svCycleStatusEnum.enumValues)[number];
+
+const cycleStatusesPreservedOnRunCompletion = new Set<CycleStatus>([
+	"ANALYZING",
+	"QC_REQUIRED",
+	"READY",
+	"STOPPED",
+	"FAILED",
+	"CARDINALITY_INCIDENT",
+]);
+
+export function cycleProgressAfterRunCompletion(input: {
+	status: CycleStatus;
+	completedRuns: number;
+	expectedRuns: number;
+	systemId?: string | null;
+	runStatus?: RunOutcome["status"];
+}): { status: CycleStatus; completedRuns: number; cycleDone: boolean } {
+	const completedRuns = input.completedRuns + 1;
+	const cycleDone = completedRuns >= input.expectedRuns;
+	const status = cycleStatusesPreservedOnRunCompletion.has(input.status)
+		? input.status
+		: input.systemId === "Perplexity" && input.runStatus !== undefined && input.runStatus !== "SUCCEEDED"
+			? "STOPPED"
+			: cycleDone
+				? "QC_REQUIRED"
+				: "RUNNING";
+	return { status, completedRuns, cycleDone };
+}
+
 function writable(ctx: SelenaRepositoryContext) {
 	if (ctx.role === "viewer") throw new Error("Forbidden: viewer is read-only");
 	if (ctx.authType === "api_key" && !ctx.permissions.includes("client:write"))
@@ -967,19 +997,28 @@ export function createSelenaRepositories(db: Db) {
 						.where(and(eq(schema.svCycles.id, run.cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
 						.for("update");
 					if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
-					// Failed and invalid runs count as finished: they are terminal, and
-					// a cycle that never reaches its expected count never reaches QC.
-					const completedRuns = cycle.completedRuns + 1;
-					const cycleDone = completedRuns >= cycle.expectedRuns;
+					// Failed and invalid runs count as finished. A late completion may
+					// arrive after an operator stopped the cycle, so progress is
+					// forward-only and must never revive a terminal or post-run state.
+					const progress = cycleProgressAfterRunCompletion({
+						...cycle,
+						systemId: run.systemId,
+						runStatus: parsed.status,
+					});
+					const circuitBroken =
+						progress.status === "STOPPED" &&
+						cycle.status !== "STOPPED" &&
+						run.systemId === "Perplexity" &&
+						parsed.status !== "SUCCEEDED";
 					await tx
 						.update(schema.svCycles)
 						.set({
-							completedRuns,
-							status: cycleDone ? "QC_REQUIRED" : "RUNNING",
+							completedRuns: progress.completedRuns,
+							status: progress.status,
 							updatedAt: new Date(),
 						})
 						.where(eq(schema.svCycles.id, cycle.id));
-					if (cycleDone)
+					if (progress.status === "QC_REQUIRED")
 						// Human QC is the only exit from a finished cycle; the order is
 						// moved only from states that are still mid-flight, so a
 						// cancelled or already delivered order is never revived.
@@ -993,6 +1032,33 @@ export function createSelenaRepositories(db: Db) {
 									inArray(schema.svOrders.status, ["QUEUED", "RUNNING", "ANALYZING"]),
 								),
 							);
+					if (circuitBroken) {
+						await tx
+							.update(schema.svOrders)
+							.set({ status: "CANCELLED", updatedAt: new Date() })
+							.where(
+								and(
+									eq(schema.svOrders.id, cycle.orderId),
+									eq(schema.svOrders.organizationId, ctx.tenantId),
+									inArray(schema.svOrders.status, ["QUEUED", "RUNNING", "ANALYZING"]),
+								),
+							);
+						await tx.insert(schema.svIncidents).values({
+							organizationId: ctx.tenantId,
+							orderId: cycle.orderId,
+							cycleId: cycle.id,
+							kind: "PERPLEXITY_CIRCUIT_BREAKER",
+							detail: parsed.invalidReason ?? parsed.status,
+							dispatchKey: parsed.dispatchKey,
+						});
+						await recordAudit(tx, ctx, "PERPLEXITY_CIRCUIT_OPENED", "sv_cycles", cycle.id, {
+							orderId: cycle.orderId,
+							runId,
+							dispatchKey: parsed.dispatchKey,
+							status: parsed.status,
+							reason: parsed.invalidReason ?? null,
+						});
+					}
 					// Addendum §5.3 (P0-08): the normalized mention rows commit with the
 					// run they were extracted from — one row per entity the answer
 					// named, brand and competitors alike.
@@ -1054,8 +1120,9 @@ export function createSelenaRepositories(db: Db) {
 						dispatchKey: parsed.dispatchKey,
 						status: parsed.status,
 						validity: parsed.validity,
-						completedRuns,
+						completedRuns: progress.completedRuns,
 						expectedRuns: cycle.expectedRuns,
+						cycleStatus: progress.status,
 					});
 					return completed;
 				});

@@ -14,6 +14,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { db } from "../db/db";
 import * as schema from "../db/schema";
 import { ac, adminRole, userRole } from "./permissions";
+import { resolveAuthTrustedOrigins } from "./trusted-origins";
 
 export interface CreateAuthOptions {
 	databaseHooks?: BetterAuthOptions["databaseHooks"];
@@ -59,10 +60,7 @@ export function createAuth(options?: CreateAuthOptions) {
 		process.env.NODE_ENV !== "production" ? `http://localhost:${process.env.PORT ?? "3000"}` : undefined;
 	const baseURL = localOrigin ?? appUrl;
 
-	const origins = options?.trustedOrigins ?? [];
-	if (!origins.includes(appUrl)) {
-		origins.push(appUrl);
-	}
+	const origins = resolveAuthTrustedOrigins(appUrl, options?.trustedOrigins ?? [], process.env.AUTH_TRUSTED_ORIGINS);
 	if (localOrigin && !origins.includes(localOrigin)) {
 		origins.push(localOrigin);
 	}

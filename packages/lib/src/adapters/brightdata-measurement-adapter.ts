@@ -6,6 +6,7 @@ import {
 	runOutcomeSchema,
 	type visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
+import { parseHTML } from "linkedom";
 import { type ExtractionContext, extractMeasurement } from "../selena-answer-extraction";
 import type { SelenaExecutablePermit, SelenaMeasurementAdapter, SelenaMeasurementPermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
@@ -95,6 +96,8 @@ export type BrightDataAdapterDeps = {
 	datasetId: string;
 	/** Which visitor surface this adapter instance measures. */
 	system: BrightDataVisitorSystem;
+	/** Perplexity is always normalized to Bright Data's bounded trigger/poll/fetch workflow. */
+	collectionMode?: "scrape" | "trigger";
 	/** How long to keep collecting an answer the collector went long on. */
 	snapshotTimeoutMs?: number;
 	snapshotPollMs?: number;
@@ -149,10 +152,11 @@ export function resolveBrightDataCost(reportedCostUsd?: number | null): {
 }
 
 /**
- * The request body, taken from the account's own code examples on 2026-08-25.
+ * The request body follows Bright Data's published examples for these three
+ * collectors.
  * The three collectors do not take the same input: Gemini carries an `index`
  * and a top-level `limit_per_input`, ChatGPT takes the search toggle, and
- * Perplexity takes neither.
+ * Perplexity accepts an optional tracking index.
  */
 export function buildBrightDataRequestBody(input: BrightDataRequestInput): Record<string, unknown> {
 	const url = brightDataSurfaceUrl[input.system];
@@ -175,7 +179,9 @@ export function buildBrightDataRequestBody(input: BrightDataRequestInput): Recor
 			],
 		};
 	}
-	return { input: [{ url, prompt: input.prompt, country: "" }] };
+	return {
+		input: [{ url, prompt: input.prompt, country: "", index: 1, additional_prompt: "" }],
+	};
 }
 
 const ANSWER_TEXT_FIELDS = [
@@ -200,8 +206,16 @@ const REQUEST_ID_FIELDS = ["snapshot_id", "request_id", "response_id", "id"] as 
  */
 const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
-const DEFAULT_SNAPSHOT_TIMEOUT_MS = 300_000;
+const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
+// A successful Perplexity collection on the account took almost sixteen
+// minutes. Keep its larger budget scoped to that surface so the faster
+// collectors retain their existing ceiling.
+export const PERPLEXITY_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
+// The worker lease includes room after the provider deadline for snapshot
+// cancellation and the transaction that makes the run and cycle terminal.
+export const PERPLEXITY_QUEUE_LEASE_SECONDS = 35 * 60;
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
+const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
 
 /** The handle a receipt carries, when the payload is only a receipt. */
 export function snapshotIdFrom(payload: unknown): string | null {
@@ -229,23 +243,40 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export function extractBrightDataSources(record: Record<string, unknown>): BrightDataSource[] {
 	const sources: BrightDataSource[] = [];
 	const seen = new Set<string>();
+	const addSource = (url: string, title?: string, excludeProvider = false) => {
+		if (seen.has(url)) return;
+		let parsed: URL;
+		try {
+			parsed = new URL(url);
+		} catch {
+			return;
+		}
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return;
+		const domain = parsed.hostname.replace(/^www\./, "");
+		if (excludeProvider && (domain === "perplexity.ai" || domain.endsWith(".perplexity.ai"))) return;
+		seen.add(url);
+		sources.push({ url, domain, ...(title ? { title } : {}) });
+	};
 	for (const field of SOURCE_FIELDS) {
 		const values = record[field];
 		if (!Array.isArray(values)) continue;
 		for (const item of values) {
 			const entry = asRecord(item);
 			const url = typeof item === "string" ? item : typeof entry?.url === "string" ? entry.url : null;
-			if (url === null || seen.has(url)) continue;
-			let parsed: URL;
-			try {
-				parsed = new URL(url);
-			} catch {
-				continue;
-			}
-			if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
-			seen.add(url);
+			if (url === null) continue;
 			const title = typeof entry?.title === "string" && entry.title.trim() !== "" ? entry.title.trim() : undefined;
-			sources.push({ url, domain: parsed.hostname.replace(/^www\./, ""), ...(title ? { title } : {}) });
+			addSource(url, title);
+		}
+	}
+	// Perplexity's collector can leave every structured source array empty while
+	// still returning the displayed citation anchors in its answer-only HTML.
+	// This field excludes the page shell, so external anchors here are evidence
+	// the answer displayed rather than links inferred from prose or source_html.
+	if (sources.length === 0 && typeof record.answer_section_html === "string") {
+		const { document } = parseHTML(`<html><body>${record.answer_section_html}</body></html>`);
+		for (const anchor of document.querySelectorAll("a[href]")) {
+			const href = anchor.getAttribute("href");
+			if (href) addSource(href, undefined, true);
 		}
 	}
 	return sources;
@@ -265,17 +296,29 @@ export function parseBrightDataAnswer(raw: unknown): BrightDataAnswer | null {
 	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
 	if (!record) return null;
 
-	let answerText: string | null = null;
+	let answerText = "";
+	let sawAnswerField = false;
 	for (const field of ANSWER_TEXT_FIELDS) {
 		const value = record[field];
 		if (typeof value !== "string") continue;
+		sawAnswerField = true;
 		answerText = value.trim();
 		if (answerText !== "") break;
+	}
+	if (answerText === "" && typeof record.answer_html === "string") {
+		sawAnswerField = true;
+		const { document } = parseHTML(`<html><body>${record.answer_html}</body></html>`);
+		for (const hidden of document.querySelectorAll("script, style, noscript, template")) hidden.remove();
+		answerText = document.body.innerText
+			.split("\n")
+			.map((line: string) => line.replace(/\s+/g, " ").trim())
+			.filter(Boolean)
+			.join("\n");
 	}
 	// A payload with no answer field of any known name is not an empty answer:
 	// it is a shape this parser does not understand, and the two must not be
 	// recorded as the same thing.
-	if (answerText === null) return null;
+	if (!sawAnswerField) return null;
 
 	let providerRequestId: string | undefined;
 	for (const field of REQUEST_ID_FIELDS) {
@@ -313,6 +356,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 type CostFields = Pick<RunOutcome, "costUsd" | "costBasis" | "provider">;
+type InvalidOutcomeFields = CostFields & Partial<Pick<RunOutcome, "rawResponseReference">>;
 
 /**
  * §10.2: once a request has been dispatched the charge may exist whether or
@@ -332,8 +376,8 @@ function costFields(reportedCostUsd?: number | null): CostFields {
 			};
 }
 
-function invalidOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
-	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...cost };
+function invalidOutcome(permit: SelenaExecutablePermit, reason: string, fields: InvalidOutcomeFields = {}): RunOutcome {
+	return { dispatchKey: permit.dispatchKey, status: "INVALID", validity: "INVALID", invalidReason: reason, ...fields };
 }
 
 function failedOutcome(permit: SelenaExecutablePermit, reason: string, cost: CostFields = {}): RunOutcome {
@@ -387,18 +431,45 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	// The collector is chosen in the query string, so the dataset id belongs to
 	// the URL rather than the body — and appending it here keeps every call for
 	// this instance pointed at the surface the instance was built for.
+	// This dataset rejects the synchronous scrape request shape. Keep the
+	// transport invariant inside the adapter so a caller cannot route a paid
+	// Perplexity permit back to the incompatible endpoint.
+	const collectionMode = deps.system === "perplexity" ? "trigger" : (deps.collectionMode ?? "scrape");
 	const endpoint = (() => {
 		const url = new URL(deps.endpoint.trim());
+		if (collectionMode === "trigger" && url.pathname.endsWith("/scrape")) {
+			url.pathname = `${url.pathname.slice(0, -"/scrape".length)}/trigger`;
+		}
 		url.searchParams.set("dataset_id", deps.datasetId.trim());
 		url.searchParams.set("notify", "false");
+		if (collectionMode === "trigger") url.searchParams.set("include_errors", "true");
 		return url.toString();
 	})();
 	const now = deps.now ?? (() => new Date());
 	const maxResponseBytes = deps.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
 	const buildRequestBody = deps.buildRequestBody ?? buildBrightDataRequestBody;
 	const parseAnswer = deps.parseAnswer ?? parseBrightDataAnswer;
-	const snapshotTimeoutMs = deps.snapshotTimeoutMs ?? DEFAULT_SNAPSHOT_TIMEOUT_MS;
+	const snapshotTimeoutMs =
+		deps.snapshotTimeoutMs ??
+		(deps.system === "perplexity" ? PERPLEXITY_MEASUREMENT_DEADLINE_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
+
+	async function cancelSnapshot(snapshotId: string): Promise<void> {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), SNAPSHOT_CANCEL_TIMEOUT_MS);
+		try {
+			const response = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}/cancel`, {
+				method: "POST",
+				headers: { Authorization: `Bearer ${deps.apiKey}` },
+				signal: controller.signal,
+			});
+			await response.body?.cancel().catch(() => {});
+		} catch {
+			// Cancellation is cleanup; the terminal run outcome remains the source of truth.
+		} finally {
+			clearTimeout(timer);
+		}
+	}
 
 	/**
 	 * Collects an answer the collector went long on. Bounded by both its own
@@ -414,57 +485,103 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		// testable; elapsed time has to come from the wall clock, because a
 		// fixed clock would never let the loop finish.
 		const deadline = Date.now() + budgetMs;
+		const beforeDeadline = async <T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T | null> => {
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) return null;
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), remaining);
+			try {
+				return await operation(controller.signal);
+			} catch {
+				return null;
+			} finally {
+				clearTimeout(timer);
+			}
+		};
+		const downloadSnapshot = async (signal: AbortSignal): Promise<unknown | null> => {
+			const snapshot = await deps.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, {
+				headers,
+				signal,
+			});
+			if (!snapshot.ok) {
+				await snapshot.body?.cancel().catch(() => {});
+				return null;
+			}
+			const body = await readBodyWithinLimit(snapshot, maxResponseBytes);
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(body);
+			} catch {
+				parsed = body;
+			}
+			// Bright Data can return a 200 progress envelope while the result is
+			// still being built. Do not mistake that envelope for an answer, but
+			// accept a real result even when /progress has not caught up yet.
+			const record = asRecord(Array.isArray(parsed) ? parsed[0] : parsed);
+			const status = typeof record?.status === "string" ? record.status.toLowerCase() : "";
+			if (["building", "running", "pending", "queued"].includes(status) && Object.keys(record ?? {}).length <= 3)
+				return null;
+			return parsed;
+		};
+		let pollCount = 0;
 		while (Date.now() < deadline) {
-			const progress = await deps
-				.fetchImpl(`${PROGRESS_ENDPOINT}/${encodeURIComponent(snapshotId)}`, { headers })
-				.catch(() => null);
-			const state = progress?.ok ? ((await progress.json().catch(() => null)) as { status?: string } | null) : null;
+			const state = await beforeDeadline(async (signal) => {
+				const progress = await deps.fetchImpl(`${PROGRESS_ENDPOINT}/${encodeURIComponent(snapshotId)}`, {
+					headers,
+					signal,
+				});
+				if (!progress.ok) {
+					await progress.body?.cancel().catch(() => {});
+					return null;
+				}
+				return (await progress.json()) as { status?: string };
+			});
 			if (state?.status === "ready") break;
-			if (state?.status === "failed") return null;
+			if (state?.status === "failed" || state?.status === "error" || state?.status === "cancelled") return null;
+			pollCount += 1;
+			// /progress and /snapshot are eventually consistent. A result can be
+			// downloadable while the monitor still says running, so probe the
+			// download endpoint once per minute without creating another collection.
+			if (snapshotPollMs > 0 && pollCount % 6 === 0) {
+				const earlyBody = await beforeDeadline(downloadSnapshot);
+				if (earlyBody !== null) return earlyBody;
+			}
 			const remaining = deadline - Date.now();
 			if (remaining <= 0) return null;
 			await new Promise((resolve) => setTimeout(resolve, Math.min(snapshotPollMs, remaining)));
 		}
-		const snapshot = await deps
-			.fetchImpl(`${SNAPSHOT_ENDPOINT}/${encodeURIComponent(snapshotId)}?format=json`, { headers })
-			.catch(() => null);
-		if (!snapshot?.ok) {
-			await snapshot?.body?.cancel().catch(() => {});
-			return null;
-		}
-		let body: string;
-		try {
-			body = await readBodyWithinLimit(snapshot, maxResponseBytes);
-		} catch {
-			return null;
-		}
-		try {
-			return JSON.parse(body);
-		} catch {
-			return body;
-		}
+		return beforeDeadline(downloadSnapshot);
 	}
 
-	async function execute(permit: SelenaExecutablePermit): Promise<RunOutcome> {
-		let scenarioText: string;
-		try {
-			scenarioText = (await deps.resolveScenarioText(permit)).trim();
-		} catch {
-			// Resolution failures are not the provider's; failing here means no
-			// request is made, so the permit is spent without spend.
-			return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
-		}
-		if (scenarioText === "") return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
-
+	/**
+	 * One full request/response cycle against the provider: build the body,
+	 * fire it once, and read whatever comes back within the shared deadline.
+	 */
+	async function attemptOnce(
+		permit: SelenaExecutablePermit,
+		scenarioText: string,
+		overallDeadlineAt: number,
+	): Promise<RunOutcome> {
 		const controller = new AbortController();
 		// The permit is the authorization window: a call that outlives it would
 		// return an answer nothing is allowed to record any more.
-		const budgetMs = permit.expiresAt.getTime() - now().getTime();
+		const budgetMs = Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now());
+		if (budgetMs <= 0) return invalidOutcome(permit, "TIMEOUT");
 		const timeoutMs = Math.max(1, Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, budgetMs));
 		const timer = setTimeout(() => controller.abort(), timeoutMs);
 		try {
 			let response: Response;
 			try {
+				const requestBody = buildRequestBody({ system: deps.system, prompt: scenarioText });
+				const triggerRecord = asRecord(requestBody);
+				const body =
+					collectionMode === "trigger"
+						? Array.isArray(triggerRecord?.input)
+							? triggerRecord.input
+							: Array.isArray(requestBody)
+								? requestBody
+								: [requestBody]
+						: requestBody;
 				response = await deps.fetchImpl(endpoint, {
 					method: "POST",
 					headers: {
@@ -473,7 +590,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 						Authorization: `Bearer ${deps.apiKey}`,
 						"Content-Type": "application/json",
 					},
-					body: JSON.stringify(buildRequestBody({ system: deps.system, prompt: scenarioText })),
+					body: JSON.stringify(body),
 					signal: controller.signal,
 				});
 			} catch (error) {
@@ -522,9 +639,15 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				if (snapshotId === null) return invalidOutcome(permit, "MALFORMED_RESPONSE", costFields());
 				const collected = await awaitSnapshot(
 					snapshotId,
-					Math.min(snapshotTimeoutMs, permit.expiresAt.getTime() - now().getTime()),
+					Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now()),
 				);
-				if (collected === null) return invalidOutcome(permit, "SNAPSHOT_NOT_READY", costFields());
+				if (collected === null) {
+					await cancelSnapshot(snapshotId);
+					return invalidOutcome(permit, "SNAPSHOT_NOT_READY", {
+						...costFields(),
+						rawResponseReference: `brightdata:${snapshotId}`,
+					});
+				}
 				try {
 					answer = parseAnswer(collected);
 				} catch {
@@ -600,6 +723,24 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		} finally {
 			clearTimeout(timer);
 		}
+	}
+
+	async function execute(permit: SelenaExecutablePermit): Promise<RunOutcome> {
+		const overallDeadlineAt =
+			Date.now() + Math.max(0, Math.min(snapshotTimeoutMs, permit.expiresAt.getTime() - now().getTime()));
+		let scenarioText: string;
+		try {
+			scenarioText = (await deps.resolveScenarioText(permit)).trim();
+		} catch {
+			// Resolution failures are not the provider's; failing here means no
+			// request is made, so the permit is spent without spend.
+			return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
+		}
+		if (scenarioText === "") return failedOutcome(permit, "SCENARIO_TEXT_UNAVAILABLE");
+
+		// The permit is the paid-call cardinality boundary. Snapshot polling reads
+		// the receipt produced by this call; it does not dispatch another answer.
+		return attemptOnce(permit, scenarioText, overallDeadlineAt);
 	}
 
 	return {

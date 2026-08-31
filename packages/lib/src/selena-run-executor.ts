@@ -100,6 +100,8 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	adapters: MeasurementAdapterRegistry;
 	config: SelenaMeasurementConfig;
 	cycleState?: Partial<ControlledCycleState>;
+	/** Fresh completion clock; `now` remains the deterministic claim time. */
+	clock?: () => Date;
 	now?: Date;
 }): Promise<MeasurementRunResult> {
 	// Checked before anything is read or written: while measurement is off the
@@ -109,8 +111,9 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	// name that cannot reach an approved, registered adapter must be refused
 	// while the permit is still unspent.
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
-	const now = input.now ?? new Date();
-	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, { now });
+	const claimTime = input.now ?? input.clock?.() ?? new Date();
+	const completionTime = () => input.clock?.() ?? new Date();
+	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, { now: claimTime });
 	// Chosen from the permit, not from the environment: a plan sells several
 	// systems and the surface a customer bought decides which adapter measures
 	// it.
@@ -129,8 +132,8 @@ export async function runMeasurementForPermit<Ctx>(input: {
 		...input.cycleState,
 	};
 	try {
-		const outcome = await executePermit({ permit, adapter, cycleState, config: input.config, now });
-		await input.store.complete(input.ctx, run.id, outcome, { now });
+		const outcome = await executePermit({ permit, adapter, cycleState, config: input.config, now: claimTime });
+		await input.store.complete(input.ctx, run.id, outcome, { now: completionTime() });
 		return { status: "completed", runId: run.id, outcome };
 	} catch (error) {
 		const reason = failureReason(error);
@@ -138,7 +141,7 @@ export async function runMeasurementForPermit<Ctx>(input: {
 			input.ctx,
 			run.id,
 			{ dispatchKey: permit.dispatchKey, status: "FAILED", validity: "INVALID", invalidReason: reason },
-			{ now },
+			{ now: completionTime() },
 		);
 		return { status: "failed", runId: run.id, reason };
 	}

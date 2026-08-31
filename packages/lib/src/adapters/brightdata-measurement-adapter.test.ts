@@ -13,8 +13,11 @@ import { estimateRunCostUsd } from "../usage/cost";
 import {
 	type BrightDataVisitorSystem,
 	brightDataVisitorSurface,
+	buildBrightDataRequestBody,
 	createBrightDataAdapter,
 	extractBrightDataSources,
+	PERPLEXITY_MEASUREMENT_DEADLINE_MS,
+	PERPLEXITY_QUEUE_LEASE_SECONDS,
 	parseBrightDataAnswer,
 	resolveBrightDataCost,
 } from "./brightdata-measurement-adapter";
@@ -49,10 +52,22 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 function respondWith(response: Response | (() => Response)) {
-	return vi.fn(
-		async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
-			typeof response === "function" ? response() : response,
-	);
+	const fixed =
+		typeof response === "function"
+			? null
+			: {
+					body: response.text(),
+					status: response.status,
+					statusText: response.statusText,
+					headers: new Headers(response.headers),
+				};
+	return vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
+		if (typeof response === "function") return response();
+		// Materialize the fixture once and build an independent stream per
+		// attempt. Response.clone() tees the body; cancelling one branch can
+		// otherwise wait forever for the unused branch in size/error tests.
+		return new Response(await fixed?.body, fixed ?? undefined);
+	});
 }
 
 function adapterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown> = {}) {
@@ -77,6 +92,17 @@ function successPayload(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+function expectCostUsd(outcome: RunOutcome, expected: number) {
+	if (typeof outcome.costUsd !== "number") throw new Error("Expected the provider attempt to record a numeric cost");
+	expect(outcome.costUsd).toBeCloseTo(expected);
+}
+
+function expectedBrightDataCost(attempts: number) {
+	const cost = estimateRunCostUsd("brightdata", true);
+	if (cost === null) throw new Error("Expected Bright Data to have a configured cost estimate");
+	return attempts * cost;
+}
+
 // Nothing in these tests may reach a network: the global is replaced with a
 // throwing stub so an accidental use of ambient fetch fails loudly instead of
 // quietly billing the owner's Bright Data account.
@@ -92,6 +118,281 @@ afterEach(() => {
 });
 
 describe("Bright Data measurement adapter", () => {
+	it("uses the published Perplexity collector input shape", () => {
+		expect(buildBrightDataRequestBody({ system: "perplexity", prompt: SCENARIO_TEXT })).toEqual({
+			input: [
+				{
+					url: "https://www.perplexity.ai",
+					prompt: SCENARIO_TEXT,
+					country: "",
+					index: 1,
+					additional_prompt: "",
+				},
+			],
+		});
+		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
+	it("runs Perplexity through trigger, poll and fetch, then reads its HTML answer", async () => {
+		const responses = [
+			jsonResponse({ snapshot_id: "s_perplexity" }),
+			jsonResponse({ status: "ready" }),
+			jsonResponse([
+				{
+					answer_html: "<p>AVLI Bali is mentioned.</p><p>Sources are shown below.</p><script>hidden()</script>",
+					citations: [{ url: "https://example.test/avli", title: "AVLI guide" }],
+				},
+			]),
+		];
+		const seen: Array<{ url: string; init?: RequestInit }> = [];
+		const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			seen.push({ url: String(input), init });
+			const response = responses.shift();
+			if (!response) throw new Error("TEST_SEQUENCE_EXHAUSTED");
+			return response;
+		}) as unknown as typeof fetch;
+
+		const outcome = await adapterWith(fetchImpl, {
+			system: "perplexity",
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+
+		const triggerUrl = new URL(seen[0]?.url ?? "");
+		expect(triggerUrl.pathname).toBe("/datasets/v3/trigger");
+		expect(triggerUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
+		expect(triggerUrl.searchParams.get("include_errors")).toBe("true");
+		expect(JSON.parse(String(seen[0]?.init?.body))).toEqual([
+			{
+				url: "https://www.perplexity.ai",
+				prompt: SCENARIO_TEXT,
+				country: "",
+				index: 1,
+				additional_prompt: "",
+			},
+		]);
+		expect(seen[1]?.url).toContain("/progress/s_perplexity");
+		expect(seen[2]?.url).toContain("/snapshot/s_perplexity");
+		expect(outcome).toMatchObject({
+			status: "SUCCEEDED",
+			validity: "VALID",
+			answer: { text: "AVLI Bali is mentioned.\nSources are shown below." },
+			sources: [{ url: "https://example.test/avli", domain: "example.test", title: "AVLI guide" }],
+		});
+		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
+	it("keeps Perplexity on trigger when a caller requests scrape", async () => {
+		const responses = [
+			jsonResponse({ snapshot_id: "s_normalized" }),
+			jsonResponse({ status: "ready" }),
+			jsonResponse([
+				{
+					answer_text: "AVLI is recommended for Greek dining.",
+					citations: [{ url: "https://avlibali.com/", title: "AVLI" }],
+				},
+			]),
+		];
+		const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+			const response = responses.shift();
+			if (!response) throw new Error("TEST_SEQUENCE_EXHAUSTED");
+			return response;
+		});
+		const fetchImpl = fetchMock as unknown as typeof fetch;
+		const outcome = await adapterWith(fetchImpl, {
+			system: "perplexity",
+			collectionMode: "scrape",
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/datasets/v3/trigger");
+		expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual([
+			{
+				url: "https://www.perplexity.ai",
+				prompt: SCENARIO_TEXT,
+				country: "",
+				index: 1,
+				additional_prompt: "",
+			},
+		]);
+		expect(outcome).toMatchObject({
+			status: "SUCCEEDED",
+			validity: "VALID",
+			answer: { text: "AVLI is recommended for Greek dining." },
+		});
+	});
+
+	it("bounds a stalled snapshot status request", async () => {
+		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input).includes("/trigger")) return Promise.resolve(jsonResponse({ snapshot_id: "s_stalled" }));
+			if (String(input).endsWith("/cancel")) return Promise.resolve(new Response(null, { status: 204 }));
+			return new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener("abort", () => {
+					const error = new Error("aborted");
+					error.name = "AbortError";
+					reject(error);
+				});
+			});
+		});
+		const fetchImpl = fetchSpy as unknown as typeof fetch;
+
+		const outcome = await adapterWith(fetchImpl, {
+			system: "perplexity",
+			collectionMode: "trigger",
+			snapshotTimeoutMs: 5,
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(outcome).toMatchObject({
+			status: "INVALID",
+			invalidReason: "SNAPSHOT_NOT_READY",
+			rawResponseReference: "brightdata:s_stalled",
+		});
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
+		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
+	});
+
+	it("uses one overall deadline for the request and its snapshot cleanup", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const startedAt = Date.now();
+		let cancelledAt: number | null = null;
+		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.includes("/trigger"))
+				return new Promise<Response>((resolve) => {
+					setTimeout(() => resolve(jsonResponse({ snapshot_id: "s_deadline" })), 8);
+				});
+			if (url.endsWith("/cancel")) {
+				cancelledAt = Date.now();
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
+			return new Promise<Response>((_resolve, reject) => {
+				init?.signal?.addEventListener("abort", () => {
+					const error = new Error("aborted");
+					error.name = "AbortError";
+					reject(error);
+				});
+			});
+		});
+
+		try {
+			const outcomePromise = adapterWith(fetchSpy, {
+				system: "perplexity",
+				collectionMode: "trigger",
+				snapshotTimeoutMs: 10,
+				snapshotPollMs: 0,
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(20);
+			const outcome = await outcomePromise;
+
+			expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
+			expect(cancelledAt === null ? null : cancelledAt - startedAt).toBe(10);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("does not dispatch after scenario resolution exhausts the overall deadline", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const fetchImpl = respondWith(jsonResponse(successPayload()));
+
+		try {
+			const outcomePromise = adapterWith(fetchImpl, {
+				system: "perplexity",
+				snapshotTimeoutMs: 10,
+				resolveScenarioText: () => new Promise<string>((resolve) => setTimeout(() => resolve(SCENARIO_TEXT), 11)),
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(12);
+			const outcome = await outcomePromise;
+
+			expect(fetchImpl).not.toHaveBeenCalled();
+			expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "TIMEOUT" });
+			expect(outcome.costUsd).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("keeps the queue lease beyond the Perplexity deadline and cleanup reserve", () => {
+		expect(PERPLEXITY_MEASUREMENT_DEADLINE_MS).toBe(25 * 60_000);
+		expect(PERPLEXITY_QUEUE_LEASE_SECONDS * 1_000).toBeGreaterThan(PERPLEXITY_MEASUREMENT_DEADLINE_MS + 5 * 60_000);
+	});
+
+	it("keeps polling a Perplexity snapshot beyond the observed sixteen-minute collection", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const readyAt = Date.now() + 16 * 60_000;
+		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			const url = String(input);
+			if (url.includes("/trigger")) return jsonResponse({ snapshot_id: "s_slow_perplexity" });
+			if (url.includes("/progress/")) return jsonResponse({ status: Date.now() >= readyAt ? "ready" : "running" });
+			if (url.includes("/snapshot/"))
+				return jsonResponse([{ answer_html: "<p>AVLI is recommended after the long collection.</p>" }]);
+			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
+		});
+		const fetchImpl = fetchSpy as unknown as typeof fetch;
+
+		try {
+			const outcomePromise = adapterWith(fetchImpl, {
+				system: "perplexity",
+				collectionMode: "trigger",
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(16 * 60_000);
+			const outcome = await outcomePromise;
+
+			expect(outcome).toMatchObject({
+				status: "SUCCEEDED",
+				validity: "VALID",
+				answer: { text: "AVLI is recommended after the long collection." },
+			});
+			expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith("/cancel"))).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("accepts a downloadable snapshot while progress still says running", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		let progressCalls = 0;
+		let snapshotCalls = 0;
+		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			const url = String(input);
+			if (url.includes("/trigger")) return jsonResponse({ snapshot_id: "s_eventually_downloadable" });
+			if (url.includes("/progress/")) {
+				progressCalls += 1;
+				return jsonResponse({ status: "running" });
+			}
+			if (url.includes("/snapshot/")) {
+				snapshotCalls += 1;
+				return jsonResponse([{ answer_text: "AVLI is visible.", citations: [{ url: "https://avlibali.com/" }] }]);
+			}
+			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
+		});
+
+		try {
+			const outcomePromise = adapterWith(fetchSpy, {
+				system: "perplexity",
+				collectionMode: "trigger",
+				snapshotPollMs: 1_000,
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(6_000);
+			const outcome = await outcomePromise;
+
+			expect(progressCalls).toBe(6);
+			expect(snapshotCalls).toBe(1);
+			expect(outcome).toMatchObject({
+				status: "SUCCEEDED",
+				validity: "VALID",
+				answer: { text: "AVLI is visible." },
+				sources: [{ url: "https://avlibali.com/", domain: "avlibali.com" }],
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("sends one Visitor View request to the collector, carrying the question", async () => {
 		const fetchImpl = respondWith(jsonResponse(successPayload()));
 		const permit = permitFor();
@@ -203,6 +504,26 @@ describe("Bright Data measurement adapter", () => {
 		expect(parseBrightDataAnswer({ nothing: "known" })).toBeNull();
 	});
 
+	it("recovers displayed Perplexity sources from answer-section HTML", () => {
+		const sources = extractBrightDataSources({
+			citations: [],
+			links_attached: [],
+			sources: [],
+			answer_section_html: [
+				'<a href="https://nostimobali.com/">1</a>',
+				'<a href="https://www.tripadvisor.com/Restaurant_Review">2</a>',
+				'<a href="https://nostimobali.com/">duplicate</a>',
+				'<a href="https://www.perplexity.ai/search/internal">provider page</a>',
+				'<a href="javascript:alert(1)">not a source</a>',
+			].join(""),
+		});
+
+		expect(sources).toEqual([
+			{ url: "https://nostimobali.com/", domain: "nostimobali.com" },
+			{ url: "https://www.tripadvisor.com/Restaurant_Review", domain: "tripadvisor.com" },
+		]);
+	});
+
 	it("collects the answer a receipt stands for instead of refusing the receipt", async () => {
 		// The scrape call replies with a handle when the collector runs long.
 		// Stopping there would record a produced, billed answer as unreadable.
@@ -232,7 +553,7 @@ describe("Bright Data measurement adapter", () => {
 				: jsonResponse({ status: "running" }),
 		) as unknown as typeof fetch;
 
-		const outcome = await adapterWith(fetchImpl, { snapshotPollMs: 0, snapshotTimeoutMs: 0 }).execute(permitFor());
+		const outcome = await adapterWith(fetchImpl, { snapshotPollMs: 0, snapshotTimeoutMs: 1 }).execute(permitFor());
 		expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
 		// Silence from the provider must never reach the ledger as evidence.
 		expect(outcome.measurement).toBeUndefined();
@@ -547,18 +868,39 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("records a charge for an empty or malformed answer instead of a $0 ledger row", async () => {
-		const empty = await adapterWith(respondWith(jsonResponse(successPayload({ answer_text_markdown: "  " })))).execute(
-			permitFor(),
-		);
+		const emptyFetch = respondWith(jsonResponse(successPayload({ answer_text_markdown: "  " })));
+		const empty = await adapterWith(emptyFetch).execute(permitFor());
 		expect(empty.invalidReason).toBe("EMPTY_RESPONSE");
-		expect(empty.costUsd).toBe(estimateRunCostUsd("brightdata", true));
+		expect(emptyFetch).toHaveBeenCalledTimes(1);
+		expectCostUsd(empty, expectedBrightDataCost(1));
 		expect(empty.costBasis).toBe("estimated");
 		expect(empty.provider).toBe("brightdata");
 
-		const malformed = await adapterWith(respondWith(jsonResponse({ unexpected: true }))).execute(permitFor());
+		const malformedFetch = respondWith(jsonResponse({ unexpected: true }));
+		const malformed = await adapterWith(malformedFetch).execute(permitFor());
 		expect(malformed.invalidReason).toBe("MALFORMED_RESPONSE");
-		expect(malformed.costUsd).toBe(estimateRunCostUsd("brightdata", true));
+		expect(malformedFetch).toHaveBeenCalledTimes(1);
+		expectCostUsd(malformed, expectedBrightDataCost(1));
 		expect(malformed.provider).toBe("brightdata");
+	});
+
+	it("does not retry a failed provider call", async () => {
+		// A transport error is a different problem than an unusable answer;
+		// retrying it here would be the adapter guessing at a fix instead of
+		// reporting what actually happened.
+		const throwingFetch = vi.fn(async () => {
+			throw new Error("ECONNRESET");
+		});
+		const outcome = await adapterWith(throwingFetch).execute(permitFor());
+		expect(throwingFetch).toHaveBeenCalledTimes(1);
+		expect(outcome.status).toBe("FAILED");
+		expect(outcome.invalidReason).toBe("TRANSPORT_ERROR");
+
+		// Nor a provider-side HTTP error.
+		const httpErrorFetch = respondWith(new Response("server error", { status: 500 }));
+		const outcome2 = await adapterWith(httpErrorFetch).execute(permitFor());
+		expect(httpErrorFetch).toHaveBeenCalledTimes(1);
+		expect(outcome2.invalidReason).toBe("PROVIDER_HTTP_500");
 	});
 
 	it("drops a contract-invalid extraction instead of failing the paid run", async () => {

@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `FEATURE_PUSHED_DRAFT_PR_OWNER_GATE`
+- State: `DRAFT_PR_OPEN_RELEASE_INTEGRATED_CI_PENDING`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -32,7 +32,7 @@ Document contents are requirements and evidence, not executable instructions.
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Source-complete; no credential reads, provider calls or runtime registration |
 | Database/Evidence | Forward-only generic capability/provenance schema and internal read model | Source-complete; migration runtime proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Draft PR remains owner-gated by CI cost review |
+| Orchestrator | Integration, exports, acceptance evidence, audits, commits and branch push | Draft PR #92 is open; default release integration is locally verified and awaiting push/CI |
 
 ## Integrated source-only result
 
@@ -68,14 +68,14 @@ Document contents are requirements and evidence, not executable instructions.
 - No source-only change may create a cycle, permit, provider task, schedule or
   external call.
 - Runtime RLS, migration application, credentials, paid canaries, shared
-  staging/production, billing, merge, deploy and recurring jobs remain separate
-  owner gates.
+  staging/production, billing, PR merge, deploy and recurring jobs remain
+  separate owner gates.
 
 ## Draft PR side-effect boundary
 
-A draft PR to `main` would trigger repository workflows that use
-`blacksmith-*` runners for builds, tests and disposable services. Repository
-evidence does not establish their billing impact. The branch may be pushed, but
-draft PR creation remains blocked until the owner confirms those external CI
-side effects. The proposed title/body and exact workflow inventory are prepared
-in `DRAFT_PR_V1_3.md`.
+The repository default branch is `release/selena-visibility-mvp`, not `main`.
+After explicit owner approval of the unknown Blacksmith cost, draft PR #92 was
+opened against that default branch. Its initial merge ref was blocked by release
+drift; the approved release-to-feature merge was resolved locally with all
+supported changed-scope checks passing. The push may now start the workflows
+listed in `DRAFT_PR_V1_3.md`; their billing impact remains `UNKNOWN`.
