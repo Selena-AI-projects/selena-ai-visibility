@@ -10,8 +10,8 @@ Owner authorization received on 2026-08-30:
 | Atomic commits | `APPROVED` | No amend, rebase, or history rewrite |
 | Push feature branch | `APPROVED` | `feature/selena-visibility-v1-2-1` only |
 | Draft PR | `APPROVED` | Review only; no merge |
-| Apply migrations to disposable PostgreSQL | `AWAITING_EXPLICIT_COMMAND` | Repository rules require a separate explicit migration-run instruction; source-only drafts remain approved |
-| Blind Claude Max full-spec review | `AWAITING_OWNER_INPUT` | Supply the two original DOCX specification files; no reconstructed ledger or paid API fallback may replace them |
+| Apply migrations to disposable PostgreSQL | `APPROVED — scoped rehearsal only` | Owner authorized an isolated no-pull Docker/Colima rehearsal for migrations `0037–0050`, Gate12 and 0045/0049 checks, with teardown and stop-on-error; no shared/staging/production or provider path |
+| Blind Claude Max full-spec review | `READY — owner files present` | The two original DOCX files and recorded hashes are available; the latest attempted rerun was stopped before a verdict and is not evidence; no reconstructed ledger or paid API fallback may replace them |
 | Paid provider call | `NOT_REACHED` | Requires exact provider, request count, maximum spend, and stop plan |
 | Credentials | `NOT_REACHED` | Creation, reading, rotation, or connection requires separate approval |
 | Shared staging | `NOT_REACHED` | Migration, data mutation, task enqueue, or flag enablement requires separate approval |
