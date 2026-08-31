@@ -275,6 +275,7 @@ export async function runLocalMapsLiveAttempt(input: {
 	} catch {
 		return persistUnknown(input.store, continuation, "FINALIZE_AMBIGUOUS", input.now);
 	}
+	if (finalized.kind !== "FINALIZED") return persistUnknown(input.store, continuation, "FINALIZE_AMBIGUOUS", input.now);
 	try {
 		const persisted = localMapsLiveProviderResultSchema.parse(finalized.persistedResult);
 		const budgetStateMatches = finalized.persistedBudgetState === requiredBudgetState;

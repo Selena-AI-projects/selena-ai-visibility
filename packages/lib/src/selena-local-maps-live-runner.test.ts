@@ -480,6 +480,24 @@ describe("Local Maps live runner protocol", () => {
 		expect(deps.order).toEqual(["commit-submitted", "provider", "finalize", "unknown"]);
 	});
 
+	it("fails closed when finalization returns an invalid discriminant", async () => {
+		const deps = dependencies();
+		vi.mocked(deps.store.finalizeSubmitted).mockImplementationOnce(
+			async () =>
+				({
+					kind: "CORRUPT",
+					persistedResult: {},
+					persistedBudgetState: "SPENT",
+				}) as never,
+		);
+		await expect(runLocalMapsLiveAttempt({ intent, ...deps, now })).resolves.toEqual({
+			kind: "UNKNOWN_RECONCILIATION",
+			reason: "FINALIZE_AMBIGUOUS",
+		});
+		expect(deps.provider.execute).toHaveBeenCalledTimes(1);
+		expect(deps.store.markSubmittedUnknown).toHaveBeenCalledTimes(1);
+	});
+
 	it("reports when even the reconciliation write cannot be confirmed", async () => {
 		const deps = dependencies();
 		vi.mocked(deps.provider.execute).mockRejectedValueOnce(new Error("provider failed"));
