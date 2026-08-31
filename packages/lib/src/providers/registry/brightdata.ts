@@ -14,12 +14,10 @@ const BD_DATASET_IDS: Record<string, string> = {
 	perplexity: "gd_m7dhdot1vw9a7gc1n",
 	copilot: "gd_m7di5jy6s9geokz8w",
 	gemini: "gd_mbz66arm2mf9cu856y",
-	"google-ai-mode": "gd_mcswdt6z2elth3zqr2",
 };
 
 const BD_BASE_URL: Record<string, string> = {
 	chatgpt: "https://chatgpt.com/",
-	"google-ai-mode": "https://google.com/aimode",
 	gemini: "https://gemini.google.com/",
 	copilot: "https://copilot.microsoft.com/chats",
 	perplexity: "https://www.perplexity.ai/",
@@ -177,8 +175,13 @@ export const brightdata: Provider = {
 			}
 			return null;
 		}
-		// Allow custom dataset IDs via version slug (e.g. chatgpt:brightdata:gd_abc123)
-		if (!config.version && !BD_DATASET_IDS[config.model]) {
+		if (config.model === "google-ai-mode") {
+			return "google-ai-mode:brightdata is v1.3 registry canary-only and unavailable through SCRAPE_TARGETS";
+		}
+		if (config.version) {
+			return "Custom Bright Data dataset IDs are v1.3 registry canary-only and unavailable through SCRAPE_TARGETS";
+		}
+		if (!BD_DATASET_IDS[config.model]) {
 			return `BrightData does not support model "${config.model}". Supported: ${[...Object.keys(BD_DATASET_IDS), AI_OVERVIEW_MODEL].join(", ")}`;
 		}
 		// ChatGPT has a web search toggle; all other chatbots always search
@@ -192,14 +195,16 @@ export const brightdata: Provider = {
 		if (model === AI_OVERVIEW_MODEL) {
 			return runGoogleAiOverview(prompt);
 		}
+		if (model === "google-ai-mode") {
+			throw new Error("google-ai-mode:brightdata is v1.3 registry canary-only");
+		}
+		if (options?.version) {
+			throw new Error("Custom Bright Data dataset IDs are v1.3 registry canary-only");
+		}
 
-		const datasetId = options?.version ?? BD_DATASET_IDS[model];
+		const datasetId = BD_DATASET_IDS[model];
 		if (!datasetId) {
-			throw new Error(
-				`BrightData: no dataset ID for model "${model}". ` +
-					`Either use a known model (${Object.keys(BD_DATASET_IDS).join(", ")}) ` +
-					`or pass a dataset ID as the version slug: ${model}:brightdata:gd_abc123`,
-			);
+			throw new Error(`BrightData: no legacy dataset for model "${model}"`);
 		}
 
 		const client = await createClient();

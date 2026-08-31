@@ -45,9 +45,9 @@ export const Route = createFileRoute("/api/v1/selena/locks/")({
 					const parsed = bodySchema.safeParse(await request.json());
 					if (!parsed.success)
 						return Response.json({ error: "Validation Error", message: parsed.error.message }, { status: 400 });
-					const lock = await repositories.locks.create(auth, {
+					const lock = await repositories.locks.allocate(auth, {
 						projectId: parsed.data.projectId,
-						version: parsed.data.version,
+						expectedVersion: parsed.data.version,
 						snapshot: parsed.data.snapshot,
 						engineSha: parsed.data.engineSha,
 						expectedRuns: parsed.data.expectedRuns,
@@ -56,9 +56,18 @@ export const Route = createFileRoute("/api/v1/selena/locks/")({
 					return Response.json(lock, { status: 201 });
 				} catch (error) {
 					const message = error instanceof Error ? error.message : "Request failed";
+					const status = message.startsWith("Forbidden")
+						? 403
+						: message === "SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT"
+							? 409
+							: 400;
 					return Response.json(
-						{ error: message.startsWith("Forbidden") ? "Forbidden" : "Request Failed", message },
-						{ status: message.startsWith("Forbidden") ? 403 : 400 },
+						{
+							error: status === 403 ? "Forbidden" : status === 409 ? "Conflict" : "Request Failed",
+							message,
+							...(status === 409 ? { code: message } : {}),
+						},
+						{ status },
 					);
 				}
 			},

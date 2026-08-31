@@ -3,6 +3,8 @@ import {
 	type AnyPgColumn,
 	boolean,
 	check,
+	date,
+	foreignKey,
 	index,
 	integer,
 	json,
@@ -367,13 +369,37 @@ export const svApiKeys = pgTable("sv_api_keys", {
 	name: text("name").notNull(), keyHash: text("key_hash").notNull().unique(), permissions: text("permissions").array().notNull().default([]), expiresAt: timestamp("expires_at", { withTimezone: true }), revokedAt: timestamp("revoked_at", { withTimezone: true }), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ orgIdx: index("sv_api_keys_org_idx").on(table.organizationId), activeIdx: index("sv_api_keys_active_idx").on(table.organizationId, table.revokedAt) })).enableRLS();
 
+/** Immutable response cache for mutating Local API requests. Rows are retained
+ * for seven days so retries can replay the exact response without repeating a
+ * write; expired rows may be purged by a bounded cleanup job. */
+export const svApiIdempotencyRecords = pgTable("sv_api_idempotency_records", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	operation: text("operation").notNull(),
+	resourceId: text("resource_id").notNull(),
+	idempotencyKey: text("idempotency_key").notNull(),
+	bodyHash: text("body_hash").notNull(),
+	responseStatus: smallint("response_status").notNull(),
+	responseBody: jsonb("response_body").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+}, (table) => ({
+	identityUnique: uniqueIndex("sv_api_idempotency_identity_unique").on(table.organizationId, table.operation, table.resourceId, table.idempotencyKey),
+	expiresIdx: index("sv_api_idempotency_expires_idx").on(table.organizationId, table.expiresAt),
+	operationCheck: check("sv_api_idempotency_operation_check", sql`${table.operation} ~ '^[a-z][a-z0-9-]{1,63}$'`),
+	bodyHashCheck: check("sv_api_idempotency_body_hash_check", sql`${table.bodyHash} ~ '^sha256:[a-f0-9]{64}$'`),
+	keyLengthCheck: check("sv_api_idempotency_key_length_check", sql`length(${table.idempotencyKey}) BETWEEN 8 AND 128 AND ${table.idempotencyKey} = btrim(${table.idempotencyKey})`),
+	responseStatusCheck: check("sv_api_idempotency_response_status_check", sql`${table.responseStatus} BETWEEN 200 AND 299`),
+	expiryCheck: check("sv_api_idempotency_expiry_check", sql`${table.expiresAt} > ${table.createdAt} AND ${table.expiresAt} <= ${table.createdAt} + interval '7 days'`),
+})).enableRLS();
+
 export const svProjects = pgTable("sv_projects", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	organizationId: text("organization_id").notNull().references(() => organization.id),
 	name: text("name").notNull(), category: text("category").notNull(), country: text("country").notNull(), region: text("region"),
 	languages: text("languages").array().notNull().default([]), status: svProjectStatusEnum().notNull().default("DRAFT"),
 	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-	}, (table) => ({ orgIdx: index("sv_projects_org_idx").on(table.organizationId), orgNameUnique: uniqueIndex("sv_projects_org_name_unique").on(table.organizationId, table.name) })).enableRLS();
+	}, (table) => ({ orgIdx: index("sv_projects_org_idx").on(table.organizationId), orgNameUnique: uniqueIndex("sv_projects_org_name_unique").on(table.organizationId, table.name), idOrganizationUnique: uniqueIndex("sv_projects_id_organization_unique").on(table.id, table.organizationId) })).enableRLS();
 
 export const svPromptFamilies = pgTable("sv_prompt_families", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id),
@@ -388,7 +414,12 @@ export const svScenarios = pgTable("sv_scenarios", {
 
 export const svConfigurationLocks = pgTable("sv_configuration_locks", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), version: integer("version").notNull(), snapshot: jsonb("snapshot").notNull(), engineSha: text("engine_sha").notNull(), expectedRuns: integer("expected_runs").notNull(), budgetCap: numeric("budget_cap", { precision: 12, scale: 6 }).notNull(), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ projectVersionIdx: index("sv_locks_project_version_idx").on(table.projectId, table.version) })).enableRLS();
+}, (table) => ({ projectVersionUnique: uniqueIndex("sv_locks_project_version_unique").on(table.projectId, table.version), idOrganizationUnique: uniqueIndex("sv_configuration_locks_id_organization_unique").on(table.id, table.organizationId), idProjectOrganizationUnique: uniqueIndex("sv_configuration_locks_id_project_org_unique").on(table.id, table.projectId, table.organizationId), projectOrganizationReference: foreignKey({ columns: [table.projectId, table.organizationId], foreignColumns: [svProjects.id, svProjects.organizationId], name: "sv_configuration_locks_project_organization_fk" }), versionCheck: check("sv_configuration_locks_version_check", sql`${table.version} > 0`) })).enableRLS();
+
+/** Durable fail-closed spend serialization for the manually-invoked owner journal. */
+export const svJournalDailyClaims = pgTable("sv_journal_daily_claims", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull(), configurationLockId: uuid("configuration_lock_id"), questionSetVersion: text("question_set_version").notNull(), utcDay: date("utc_day", { mode: "string" }).notNull(), attempt: integer("attempt").notNull(), status: text("status").notNull().default("CLAIMED"), claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(), completedAt: timestamp("completed_at", { withTimezone: true }), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ identityUnique: uniqueIndex("sv_journal_daily_claims_identity_unique").on(table.organizationId, table.projectId, table.questionSetVersion, table.utcDay, table.attempt), unresolvedUnique: uniqueIndex("sv_journal_daily_claims_unresolved_unique").on(table.organizationId, table.projectId).where(sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'HOLD')`), lockUnique: uniqueIndex("sv_journal_daily_claims_lock_unique").on(table.configurationLockId).where(sql`${table.configurationLockId} IS NOT NULL`), projectOrganizationReference: foreignKey({ columns: [table.projectId, table.organizationId], foreignColumns: [svProjects.id, svProjects.organizationId], name: "sv_journal_daily_claims_project_organization_fk" }), lockProjectOrganizationReference: foreignKey({ columns: [table.configurationLockId, table.projectId, table.organizationId], foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.projectId, svConfigurationLocks.organizationId], name: "sv_journal_daily_claims_lock_project_org_fk" }), attemptCheck: check("sv_journal_daily_claims_attempt_check", sql`${table.attempt} > 0`), statusCheck: check("sv_journal_daily_claims_status_check", sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD', 'COMPLETED')`), utcDayCheck: check("sv_journal_daily_claims_utc_day_check", sql`${table.utcDay} = (${table.claimedAt} AT TIME ZONE 'UTC')::date`), executionLinkCheck: check("sv_journal_daily_claims_execution_link_check", sql`${table.status} IN ('CLAIMED', 'NO_SPEND') OR ${table.configurationLockId} IS NOT NULL`), completionCheck: check("sv_journal_daily_claims_completion_check", sql`((${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD') AND ${table.completedAt} IS NULL) OR (${table.status} = 'COMPLETED' AND ${table.completedAt} IS NOT NULL AND ${table.completedAt} >= ${table.claimedAt}))`) })).enableRLS();
 
 export const svQuotes = pgTable("sv_quotes", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), lockId: uuid("lock_id").notNull().references(() => svConfigurationLocks.id), status: svQuoteStatusEnum().notNull().default("DRAFT"), priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(), currency: text("currency").notNull(), expectedRuns: integer("expected_runs").notNull(), expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -465,7 +496,7 @@ export const svIncidents = pgTable("sv_incidents", {
 // alerts read sums from here rather than trusting run rows to be complete.
 export const svCostEvents = pgTable("sv_cost_events", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").references(() => svCycles.id), measurementCycleId: uuid("measurement_cycle_id"), domainId: text("domain_id").notNull().default("AI"), runId: uuid("run_id").references(() => svRuns.id), provider: text("provider").notNull(), amountUsd: numeric("amount_usd", { precision: 12, scale: 6 }).notNull(), basis: text("basis").notNull(), kind: text("kind").notNull().default("measurement"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId), orgDomainIdx: index("sv_cost_events_org_domain_idx").on(table.organizationId, table.domainId), measurementCycleIdx: index("sv_cost_events_measurement_cycle_idx").on(table.measurementCycleId), runIdx: index("sv_cost_events_run_idx").on(table.runId), domainShapeCheck: check("sv_cost_events_domain_shape_check", sql`${table.domainId} = 'AI' OR (${table.measurementCycleId} IS NOT NULL AND ${table.cycleId} IS NULL AND ${table.runId} IS NULL)`) })).enableRLS();
+}, (table) => ({ idOrganizationCycleDomainUnique: uniqueIndex("sv_cost_events_id_org_cycle_domain_unique").on(table.id, table.organizationId, table.measurementCycleId, table.domainId), orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId), orgDomainIdx: index("sv_cost_events_org_domain_idx").on(table.organizationId, table.domainId), measurementCycleIdx: index("sv_cost_events_measurement_cycle_idx").on(table.measurementCycleId), runIdx: index("sv_cost_events_run_idx").on(table.runId), domainShapeCheck: check("sv_cost_events_domain_shape_check", sql`${table.domainId} = 'AI' OR (${table.measurementCycleId} IS NOT NULL AND ${table.cycleId} IS NULL AND ${table.runId} IS NULL)`) })).enableRLS();
 
 export const svRecommendationRunStatusEnum = pgEnum("sv_recommendation_run_status", ["RUNNING", "READY", "FAILED"]);
 export const svRecommendationRuns = pgTable("sv_recommendation_runs", {

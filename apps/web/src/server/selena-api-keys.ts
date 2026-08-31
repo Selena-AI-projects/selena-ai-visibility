@@ -2,12 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { svApiKeys } from "@workspace/lib/db/schema";
+import { localApiScopeSchema } from "@workspace/selena-visibility-contracts";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { canWrite, resolveSessionAuthContext } from "../lib/selena-auth-context";
 
+const legacyPermissionSchema = z.enum(["client:read", "client:write", "measurement:dispatch"]);
 const permissions = z
-	.array(z.enum(["client:read", "client:write", "measurement:dispatch"]))
+	.array(z.union([legacyPermissionSchema, localApiScopeSchema]))
 	.min(1)
 	.max(10);
 const createSchema = z.object({

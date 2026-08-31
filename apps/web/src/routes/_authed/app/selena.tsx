@@ -631,6 +631,14 @@ function SelenaWorkspace() {
 }
 
 function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeatureState; locale: WorkspaceLocale }) {
+	const mapsStatus = state.enabled ? "UNKNOWN" : "LOCKED";
+	// Local AI remains a manual-only, owner-gated surface. The customer cabinet
+	// has no capture controls, so it must never imply that enabling the Local
+	// Visibility flag makes an AI result available.
+	const localAiStatus = "LOCKED";
+	const statusLabel = (status: "LOCKED" | "UNKNOWN") =>
+		status === "LOCKED" ? tr(locale, "LOCKED", "ЗАКРЫТО") : tr(locale, "UNKNOWN", "НЕИЗВЕСТНО");
+
 	return (
 		<section className="selena-section" aria-labelledby="local-visibility-title">
 			<div className="flex flex-wrap items-start justify-between gap-4">
@@ -649,40 +657,118 @@ function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeature
 						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
 							{tr(
 								locale,
-								"How consistently the business appears in Google Maps local results across approved coordinates and searches.",
-								"Насколько стабильно бизнес появляется в локальной выдаче Google Maps по утверждённым координатам и запросам.",
+								"A planned Google Maps visibility view for approved coordinates and searches. Data appears only after a separately approved local scan is enabled and completed.",
+								"Запланированный обзор видимости в Google Maps по утверждённым координатам и запросам. Данные появятся только после отдельного утверждения, включения и завершения локального скана.",
 							)}
 						</p>
 					</div>
 				</div>
 				<span className="inline-flex min-h-8 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-3 text-xs font-semibold text-[#6e6258]">
-					{state.enabled ? tr(locale, "UNKNOWN", "НЕИЗВЕСТНО") : tr(locale, "Locked", "Закрыто")}
+					{statusLabel(state.enabled ? "UNKNOWN" : "LOCKED")}
 				</span>
 			</div>
 
-			{state.enabled ? (
-				<div className="mt-6 border-y border-[#e6ddd1] py-5">
-					<p className="text-sm font-medium text-[#181614]">
-						{tr(locale, "No local measurement data yet", "Данных локального замера пока нет")}
-					</p>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
-						{tr(
-							locale,
-							"Coverage remains UNKNOWN until an approved local cycle records every grid point. Opening this step does not start a scan.",
-							"Покрытие остаётся НЕИЗВЕСТНЫМ, пока утверждённый локальный цикл не запишет каждую точку сетки. Открытие этого шага не запускает сканирование.",
-						)}
-					</p>
-				</div>
-			) : (
-				<p className="mt-6 border-t border-[#e6ddd1] pt-5 text-sm leading-6 text-[#6e6258]">
-					{tr(
+			<p className="mt-5 max-w-3xl text-sm leading-6 text-[#6e6258]">
+				{tr(
+					locale,
+					"Read-only status only. This cabinet never starts a local scan or an AI capture.",
+					"Только статус в режиме чтения. Этот кабинет не запускает локальный скан или захват ответов AI.",
+				)}
+			</p>
+			<Link
+				to="/app/selena-horeca"
+				className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#8f5c34] underline decoration-[#b9825b] underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#8f5c34]"
+			>
+				{tr(locale, "Open the HoReCa Local-first view", "Открыть HoReCa Local-first")}
+				<IconArrowRight className="size-4" aria-hidden="true" />
+			</Link>
+
+			<div className="mt-6 grid gap-4 md:grid-cols-2">
+				<LocalVisibilitySurface
+					locale={locale}
+					title={tr(locale, "Local Maps", "Local Maps")}
+					icon={<IconMapPin className="size-5" aria-hidden="true" />}
+					status={mapsStatus}
+					statusLabel={statusLabel(mapsStatus)}
+					description={
+						state.enabled
+							? tr(
+									locale,
+									"Approved coordinates and searches will appear here only after a separately approved local cycle records its points.",
+									"Утверждённые координаты и запросы появятся здесь только после отдельного утверждения и записи точек локального цикла.",
+								)
+							: tr(
+									locale,
+									"This deployment has not enabled the Local Maps surface. No map scan can start while it is locked.",
+									"В этом развёртывании Local Maps не включён. Пока поверхность закрыта, сканирование карт не запустится.",
+								)
+					}
+					emptyState={
+						state.enabled
+							? tr(locale, "No local measurement data yet.", "Данных локального замера пока нет.")
+							: tr(locale, "Local Maps is unavailable here.", "Local Maps здесь недоступен.")
+					}
+				/>
+				<LocalVisibilitySurface
+					locale={locale}
+					title={tr(locale, "Local AI", "Local AI")}
+					icon={<IconSparkles className="size-5" aria-hidden="true" />}
+					status={localAiStatus}
+					statusLabel={statusLabel(localAiStatus)}
+					description={tr(
 						locale,
-						"This surface is not enabled for this deployment. No local scan can start while it is locked.",
-						"Эта поверхность не включена для текущего развёртывания. Пока шаг закрыт, локальный скан не может запуститься.",
+						"Local AI is a manual, owner-gated capture surface. It is not available as an automated customer action.",
+						"Local AI — ручная поверхность захвата под контролем владельца. Автоматическое действие для клиента недоступно.",
 					)}
-				</p>
-			)}
+					emptyState={tr(locale, "No Local AI pilot data is available.", "Данных пилота Local AI нет.")}
+				/>
+			</div>
 		</section>
+	);
+}
+
+function LocalVisibilitySurface({
+	locale,
+	title,
+	icon,
+	status,
+	statusLabel,
+	description,
+	emptyState,
+}: {
+	locale: WorkspaceLocale;
+	title: string;
+	icon: React.ReactNode;
+	status: "LOCKED" | "UNKNOWN";
+	statusLabel: string;
+	description: string;
+	emptyState: string;
+}) {
+	return (
+		<div className="flex min-h-56 flex-col rounded-xl border border-[#e6ddd1] bg-[#fbf7f1] p-5">
+			<div className="flex items-start justify-between gap-3">
+				<div className="flex items-center gap-3">
+					<div className="selena-icon-disc size-10" aria-hidden="true">
+						{icon}
+					</div>
+					<h3 className="selena-heading text-xl text-[#181614]">{title}</h3>
+				</div>
+				<span
+					className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-2.5 text-[0.6875rem] font-bold tracking-[0.08em] text-[#6e6258]"
+					data-state={status.toLowerCase()}
+				>
+					{status === "LOCKED" && <IconLock className="size-3.5" aria-hidden="true" />}
+					{statusLabel}
+				</span>
+			</div>
+			<p className="mt-4 text-sm leading-6 text-[#6e6258]">{description}</p>
+			<div className="mt-auto border-t border-[#e6ddd1] pt-4">
+				<p className="text-sm font-medium text-[#181614]">{emptyState}</p>
+				<p className="mt-1 text-xs leading-5 text-[#6e6258]">
+					{tr(locale, "Nothing is run from this panel.", "Из этой панели ничего не запускается.")}
+				</p>
+			</div>
+		</div>
 	);
 }
 

@@ -1,30 +1,58 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
-import { observerContextSchema, orderingStates } from "@workspace/selena-visibility-contracts";
+import {
+	localAiTaskContextSnapshotSchema,
+	observationEvidenceAssetsAreDistinct,
+	orderingStates,
+} from "@workspace/selena-visibility-contracts";
 import { z } from "zod";
 import { createSelenaApiHandler } from "../../../../../../lib/selena-api-handler";
 import { pilotDisabledResponse, pilotErrorResponse } from "../../../../../../lib/selena-pilot-gate";
 
 const repositories = createSelenaRepositories(db);
 
-const submissionSchema = z.object({
-	captureTaskId: z.string().uuid(),
-	idempotencyKey: z.string().min(1).max(200),
-	capturedAt: z.iso.datetime(),
-	queryText: z.string().min(1),
-	context: observerContextSchema,
-	orderingState: z.enum(orderingStates).optional(),
-	transcript: z.string().min(1),
-	// The screenshot reference stays an opaque string end to end: the server
-	// records it as evidence but never dereferences it.
-	screenshot: z.object({
-		privateObjectReference: z.string().min(1),
-		mimeType: z.string().min(1),
-		sizeBytes: z.number().int().positive(),
-		sha256: z.string().regex(/^[0-9a-f]{64}$/),
-	}),
+const evidenceAssetSchema = z.strictObject({
+	privateObjectReference: z.string().min(1),
+	mimeType: z.string().min(1),
+	sizeBytes: z.number().int().positive(),
+	sha256: z.string().regex(/^[0-9a-f]{64}$/),
 });
+
+const submissionSchema = z
+	.object({
+		captureTaskId: z.string().uuid(),
+		idempotencyKey: z.string().min(1).max(200),
+		capturedAt: z.iso.datetime(),
+		queryText: z.string().min(1),
+		context: localAiTaskContextSnapshotSchema,
+		orderingState: z.enum(orderingStates).optional(),
+		transcript: z.string().min(1),
+		// The screenshot reference stays an opaque string end to end: the server
+		// records it as evidence but never dereferences it.
+		screenshot: evidenceAssetSchema,
+		coordinateProof: evidenceAssetSchema.optional(),
+	})
+	.superRefine((submission, issues) => {
+		if (submission.context.observerGeoMode === "DECLARED_COORDINATE" && submission.coordinateProof === undefined) {
+			issues.addIssue({
+				code: "custom",
+				path: ["coordinateProof"],
+				message: "DECLARED_COORDINATE_REQUIRES_COORDINATE_PROOF",
+			});
+		}
+		if (
+			submission.context.observerGeoMode === "DECLARED_COORDINATE" &&
+			submission.coordinateProof !== undefined &&
+			!observationEvidenceAssetsAreDistinct(submission.screenshot, submission.coordinateProof)
+		) {
+			issues.addIssue({
+				code: "custom",
+				path: ["coordinateProof"],
+				message: "OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT",
+			});
+		}
+	});
 
 const submitObservation = createSelenaApiHandler(async ({ request, auth }) => {
 	const parsed = submissionSchema.safeParse(await request.json());

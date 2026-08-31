@@ -2,14 +2,17 @@ import {
 	assertCardinality,
 	assertMentionMatch,
 	assertObservationCardinality,
+	assertObservationMatchesLockedTask,
 	assertObservationSubmission,
 	contextHash,
 	expectedObservations,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextIdentityKey,
+	localAiTaskContextSnapshotSchema,
 	type ObservationReviewDecision,
 	type OrderingState,
 	observationReviewDecisions,
-	observerContextSchema,
+	observerContextFromTaskSnapshot,
 	parseMeasurementScope,
 	type RunOutcome,
 	resolveExplicitPosition,
@@ -77,6 +80,56 @@ function writable(ctx: SelenaRepositoryContext) {
 	if (ctx.role === "viewer") throw new Error("Forbidden: viewer is read-only");
 	if (ctx.authType === "api_key" && !ctx.permissions.includes("client:write"))
 		throw new Error("Forbidden: API key lacks client:write permission");
+}
+
+type ConfigurationLockAllocation = Omit<
+	typeof schema.svConfigurationLocks.$inferInsert,
+	"organizationId" | "createdBy" | "version"
+> & {
+	expectedVersion?: number;
+};
+
+export async function allocateConfigurationLockInTransaction(
+	tx: Tx,
+	ctx: SelenaRepositoryContext,
+	value: ConfigurationLockAllocation,
+) {
+	writable(ctx);
+	const [project] = await tx
+		.select({ id: schema.svProjects.id })
+		.from(schema.svProjects)
+		.where(and(eq(schema.svProjects.id, value.projectId), eq(schema.svProjects.organizationId, ctx.tenantId)))
+		.limit(1);
+	if (!project) throw new Error("Not found: project is outside AuthContext tenant");
+	await tx.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended('selena-configuration-lock:' || ${value.projectId}, 0))`,
+	);
+
+	const [latest] = await tx
+		.select({ version: sql<number>`coalesce(max(${schema.svConfigurationLocks.version}), 0)::int` })
+		.from(schema.svConfigurationLocks)
+		.where(
+			and(
+				eq(schema.svConfigurationLocks.projectId, value.projectId),
+				eq(schema.svConfigurationLocks.organizationId, ctx.tenantId),
+			),
+		);
+	const currentVersion = Number(latest?.version ?? 0);
+	if (currentVersion >= 2_147_483_647) throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_EXHAUSTED");
+	const version = currentVersion + 1;
+	if (value.expectedVersion !== undefined && value.expectedVersion !== version)
+		throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT");
+
+	const { expectedVersion: _expectedVersion, ...lockValue } = value;
+	const [lock] = await tx
+		.insert(schema.svConfigurationLocks)
+		.values({ ...lockValue, version, organizationId: ctx.tenantId, createdBy: ctx.actorId })
+		.onConflictDoNothing({
+			target: [schema.svConfigurationLocks.projectId, schema.svConfigurationLocks.version],
+		})
+		.returning();
+	if (!lock) throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT");
+	return lock;
 }
 
 export function createSelenaRepositories(db: Db) {
@@ -285,18 +338,8 @@ export function createSelenaRepositories(db: Db) {
 			},
 		},
 		locks: {
-			create: async (
-				ctx: SelenaRepositoryContext,
-				value: Omit<typeof schema.svConfigurationLocks.$inferInsert, "organizationId" | "createdBy">,
-			) => {
-				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				return (
-					await db
-						.insert(schema.svConfigurationLocks)
-						.values({ ...value, organizationId: ctx.tenantId, createdBy: ctx.actorId })
-						.returning()
-				)[0];
+			allocate: async (ctx: SelenaRepositoryContext, value: ConfigurationLockAllocation) => {
+				return db.transaction((tx) => allocateConfigurationLockInTransaction(tx, ctx, value));
 			},
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
 				db
@@ -502,9 +545,7 @@ export function createSelenaRepositories(db: Db) {
 				const [scenario] = await db
 					.select()
 					.from(schema.svScenarios)
-					.where(
-						and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)),
-					)
+					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
 					.limit(1);
 				if (!scenario) throw new Error("Not found: scenario is outside AuthContext tenant");
 				if (scenario.status !== "PROPOSED") throw new Error("SELENA_SCENARIO_NOT_REVIEWABLE");
@@ -517,9 +558,7 @@ export function createSelenaRepositories(db: Db) {
 						...(editedText === undefined ? {} : { text: editedText }),
 						updatedAt: new Date(),
 					})
-					.where(
-						and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)),
-					)
+					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
 					.returning();
 				await recordAudit(
 					db,
@@ -1447,6 +1486,12 @@ export function createSelenaRepositories(db: Db) {
 						sizeBytes: number;
 						sha256: string;
 					} | null;
+					coordinateProof?: {
+						privateObjectReference: string;
+						mimeType: string;
+						sizeBytes: number;
+						sha256: string;
+					};
 					idempotencyKey?: string;
 				},
 			) => {
@@ -1471,10 +1516,29 @@ export function createSelenaRepositories(db: Db) {
 						capturedAt: input.capturedAt,
 						transcript: input.transcript,
 						screenshotReference: input.screenshot?.privateObjectReference ?? null,
+						screenshotSha256: input.screenshot?.sha256 ?? null,
+						coordinateProofReference: input.coordinateProof?.privateObjectReference ?? null,
+						coordinateProofSha256: input.coordinateProof?.sha256 ?? null,
 					},
 					block.evidencePolicy,
 				);
-				const context = observerContextSchema.parse(input.context);
+				const submittedContextSnapshot = localAiTaskContextSnapshotSchema.parse(input.context);
+				const taskContextSnapshot = localAiTaskContextSnapshotSchema.parse(task.contextSnapshot);
+				const taskContextIdentity = localAiTaskContextIdentityKey(taskContextSnapshot);
+				if (
+					!block.observerContexts.some((candidate) => localAiTaskContextIdentityKey(candidate) === taskContextIdentity)
+				)
+					throw new Error("OBSERVATION_POINT_OUTSIDE_LOCK");
+				if (submittedContextSnapshot.pointId !== taskContextSnapshot.pointId)
+					throw new Error("OBSERVATION_POINT_MISMATCH");
+				const context = observerContextFromTaskSnapshot(submittedContextSnapshot);
+				const scenario = block.scenarios.find((candidate) => candidate.scenarioId === task.scenarioId) ?? null;
+				assertObservationMatchesLockedTask({
+					queryText: input.queryText,
+					taskQueryText: task.queryTextSnapshot,
+					scenario,
+					context,
+				});
 				if (contextHash(context) !== task.contextHash) throw new Error("OBSERVATION_CONTEXT_MISMATCH");
 				const [existing] = await db
 					.select()
@@ -1527,6 +1591,19 @@ export function createSelenaRepositories(db: Db) {
 								uploadedBy: ctx.actorId,
 								capturedAt: new Date(input.capturedAt),
 							});
+						if (input.coordinateProof)
+							await tx.insert(schema.svObservationEvidenceAssets).values({
+								organizationId: ctx.tenantId,
+								observationId: observation.id,
+								assetType: "COORDINATE_PROOF",
+								mimeType: input.coordinateProof.mimeType,
+								sizeBytes: input.coordinateProof.sizeBytes,
+								sha256: input.coordinateProof.sha256,
+								sequenceIndex: 1,
+								privateObjectReference: input.coordinateProof.privateObjectReference,
+								uploadedBy: ctx.actorId,
+								capturedAt: new Date(input.capturedAt),
+							});
 						await tx
 							.update(schema.svCaptureTasks)
 							.set({ status: "SUBMITTED_FOR_REVIEW", updatedAt: new Date() })
@@ -1553,42 +1630,100 @@ export function createSelenaRepositories(db: Db) {
 				writable(ctx);
 				if (!observationReviewDecisions.includes(input.decision))
 					throw new Error("OBSERVATION_REVIEW_DECISION_INVALID");
-				const observation = await getObservationOwned(ctx, observationId);
-				// SURFACE_UNAVAILABLE is a valid capture of an unavailable surface,
-				// not invalid evidence — metrics exclude it from denominators.
-				const validity =
-					input.decision === "ACCEPTED" || input.decision === "SURFACE_UNAVAILABLE" ? "VALID" : "INVALID";
-				const [reviewed] = await db
-					.update(schema.svLocalObservations)
-					.set({
-						reviewStatus: input.decision,
-						reviewedBy: ctx.actorId,
-						reviewedAt: new Date(),
-						validity,
-						invalidReason: validity === "INVALID" ? (input.reason ?? input.decision) : null,
-					})
-					.where(
-						and(
-							eq(schema.svLocalObservations.id, observationId),
-							eq(schema.svLocalObservations.organizationId, ctx.tenantId),
-						),
-					)
-					.returning();
-				await db
-					.update(schema.svCaptureTasks)
-					.set({ status: input.decision, updatedAt: new Date() })
-					.where(
-						and(
-							eq(schema.svCaptureTasks.id, observation.captureTaskId),
-							eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
-						),
-					);
-				await recordAudit(db, ctx, "OBSERVATION_REVIEWED", "sv_local_observations", observationId, {
-					decision: input.decision,
-					reason: input.reason ?? null,
-					idempotencyKey: input.idempotencyKey ?? null,
+				return db.transaction(async (tx) => {
+					const [observation] = await tx
+						.select()
+						.from(schema.svLocalObservations)
+						.where(
+							and(
+								eq(schema.svLocalObservations.id, observationId),
+								eq(schema.svLocalObservations.organizationId, ctx.tenantId),
+							),
+						)
+						.for("update")
+						.limit(1);
+					if (!observation) throw new Error("Not found: observation is outside AuthContext tenant");
+
+					const [task] = await tx
+						.select()
+						.from(schema.svCaptureTasks)
+						.where(
+							and(
+								eq(schema.svCaptureTasks.id, observation.captureTaskId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+							),
+						)
+						.for("update")
+						.limit(1);
+					if (!task) throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+
+					if (input.idempotencyKey) {
+						const [priorReview] = await tx
+							.select({ details: schema.svAuditEvents.details })
+							.from(schema.svAuditEvents)
+							.where(
+								and(
+									eq(schema.svAuditEvents.organizationId, ctx.tenantId),
+									eq(schema.svAuditEvents.event, "OBSERVATION_REVIEWED"),
+									eq(schema.svAuditEvents.subjectId, observationId),
+									sql`${schema.svAuditEvents.details} ->> 'idempotencyKey' = ${input.idempotencyKey}`,
+								),
+							)
+							.limit(1);
+						if (priorReview) {
+							const details = priorReview.details as Record<string, unknown>;
+							if (details.decision !== input.decision || (details.reason ?? null) !== (input.reason ?? null))
+								throw new Error("OBSERVATION_REVIEW_IDEMPOTENCY_CONFLICT");
+							if (observation.reviewStatus !== input.decision || task.status !== input.decision)
+								throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+							return observation;
+						}
+					}
+
+					if (observation.reviewStatus !== "SUBMITTED_FOR_REVIEW") throw new Error("OBSERVATION_ALREADY_REVIEWED");
+					if (task.status !== "SUBMITTED_FOR_REVIEW") throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+
+					// SURFACE_UNAVAILABLE is a valid capture of an unavailable surface,
+					// not invalid evidence — metrics exclude it from denominators.
+					const validity =
+						input.decision === "ACCEPTED" || input.decision === "SURFACE_UNAVAILABLE" ? "VALID" : "INVALID";
+					const [reviewed] = await tx
+						.update(schema.svLocalObservations)
+						.set({
+							reviewStatus: input.decision,
+							reviewedBy: ctx.actorId,
+							reviewedAt: new Date(),
+							validity,
+							invalidReason: validity === "INVALID" ? (input.reason ?? input.decision) : null,
+						})
+						.where(
+							and(
+								eq(schema.svLocalObservations.id, observationId),
+								eq(schema.svLocalObservations.organizationId, ctx.tenantId),
+								eq(schema.svLocalObservations.reviewStatus, "SUBMITTED_FOR_REVIEW"),
+							),
+						)
+						.returning();
+					if (!reviewed) throw new Error("OBSERVATION_REVIEW_CONFLICT");
+					const [reviewedTask] = await tx
+						.update(schema.svCaptureTasks)
+						.set({ status: input.decision, updatedAt: new Date() })
+						.where(
+							and(
+								eq(schema.svCaptureTasks.id, observation.captureTaskId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+								eq(schema.svCaptureTasks.status, "SUBMITTED_FOR_REVIEW"),
+							),
+						)
+						.returning({ id: schema.svCaptureTasks.id });
+					if (!reviewedTask) throw new Error("OBSERVATION_REVIEW_STATE_MISMATCH");
+					await recordAudit(tx, ctx, "OBSERVATION_REVIEWED", "sv_local_observations", observationId, {
+						decision: input.decision,
+						reason: input.reason ?? null,
+						idempotencyKey: input.idempotencyKey ?? null,
+					});
+					return reviewed;
 				});
-				return reviewed;
 			},
 		},
 		mentions: {

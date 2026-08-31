@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	type LocalAiDiscoveryLockBlock,
 	assertObservationCardinality,
-	contextHash,
+	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextHash,
 } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it } from "vitest";
 import { observationContentSha256, planCaptureTasks } from "./selena-manual-pilot";
@@ -71,15 +71,23 @@ describe("Selena manual pilot capture-task planning", () => {
 	it("keys every task uniquely so a duplicate cannot be planned", () => {
 		const tasks = planCaptureTasks(lockBlock);
 		expect(new Set(tasks.map((task) => task.dedupeKey)).size).toBe(tasks.length);
-		expect(
-			new Set(tasks.map((task) => `${task.scenarioId}:${task.contextHash}:${task.repeatIndex}`)).size,
-		).toBe(tasks.length);
+		expect(new Set(tasks.map((task) => `${task.scenarioId}:${task.contextHash}:${task.repeatIndex}`)).size).toBe(
+			tasks.length,
+		);
+	});
+
+	it("rejects duplicate dedupe keys before returning the task plan", () => {
+		const duplicateContextBlock = {
+			...lockBlock,
+			observerContexts: [context("Moscow"), context("Moscow")],
+		};
+		expect(() => planCaptureTasks(duplicateContextBlock)).toThrow("CAPTURE_TASK_DEDUPE_KEY_DUPLICATE");
 	});
 
 	it("snapshots the scenario query and the context behind its hash", () => {
 		const tasks = planCaptureTasks(lockBlock);
 		for (const task of tasks) {
-			expect(task.contextHash).toBe(contextHash(task.contextSnapshot));
+			expect(task.contextHash).toBe(localAiTaskContextHash(task.contextSnapshot));
 			const scenario = lockBlock.scenarios.find((candidate) => candidate.scenarioId === task.scenarioId);
 			expect(task.queryTextSnapshot).toBe(scenario?.queryText);
 			expect(task.targetEntityIdsSnapshot).toEqual(scenario?.targetEntityIds);
@@ -110,7 +118,16 @@ describe("RC7 zero provider surface invariant", () => {
 	];
 	// The manual pilot must be incapable of provider execution: no queue
 	// client, no scheduler, no usage/cost accounting, no HTTP call.
-	const forbidden = ["boss", "job-scheduler", "usage_events", "usageEvents", "fetch(", "cost.ts", "http://", "https://"];
+	const forbidden = [
+		"boss",
+		"job-scheduler",
+		"usage_events",
+		"usageEvents",
+		"fetch(",
+		"cost.ts",
+		"http://",
+		"https://",
+	];
 
 	it("keeps the manual pilot modules free of provider-execution code", () => {
 		for (const source of sources) {

@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-	LOCAL_AI_DISCOVERY_POLICY,
-	type LocalAiDiscoveryLockBlock,
-	type ObserverContext,
-	type PilotObservation,
 	assertCaptureMethodAllowed,
 	assertClientResultsAllowed,
 	assertLocalDiscoveryEnabled,
 	assertManualPilotAllowed,
 	assertMentionMatch,
 	assertObservationCardinality,
+	assertObservationMatchesLockedTask,
 	assertObservationSubmission,
 	contextHash,
 	entityInclusionRate,
@@ -19,10 +16,18 @@ import {
 	familyEntityIds,
 	familyPresenceRate,
 	isCountableMention,
+	LOCAL_AI_DISCOVERY_POLICY,
+	type LocalAiDiscoveryLockBlock,
 	localAiDiscoveryLockBlockSchema,
+	localAiTaskContextHash,
+	localAiTaskContextIdentityKey,
+	localAiTaskContextSnapshotSchema,
 	localDiscoveryConfigFromEnv,
+	type ObserverContext,
+	observationEvidenceAssetsAreDistinct,
 	observationSubmissionViolations,
 	observerContextSchema,
+	type PilotObservation,
 	repeatStability,
 	resolveExplicitPosition,
 	visibleSourceRate,
@@ -92,6 +97,7 @@ const koraId = "11111111-1111-4111-8111-111111111111";
 const twoMoonsId = "22222222-2222-4222-8222-222222222222";
 const scenarioSpaId = "33333333-3333-4333-8333-333333333333";
 const scenarioFoodId = "44444444-4444-4444-8444-444444444444";
+const pointId = "55555555-5555-4555-8555-555555555555";
 
 const moscowContext: ObserverContext = {
 	observerCountryCode: "RU",
@@ -172,8 +178,30 @@ describe("RC7 observer context and context hash", () => {
 
 	it("hashes conditions, not the capture moment", () => {
 		expect(contextHash({ ...moscowContext, capturedAt: "2026-08-18T22:15:00.000Z" })).toBe(hash);
+		expect(localAiTaskContextHash({ ...moscowContext, pointId })).toBe(hash);
+		expect(localAiTaskContextIdentityKey({ ...moscowContext, pointId })).not.toBe(
+			localAiTaskContextIdentityKey({ ...moscowContext, pointId: scenarioFoodId }),
+		);
 		expect(contextHash(moscowContext)).toMatch(/^[0-9a-f]{64}$/);
 		expect(contextHash({ ...moscowContext, observerLocality: "Kazan" })).not.toBe(hash);
+	});
+
+	it("requires paired coordinates and coordinates for DECLARED_COORDINATE mode", () => {
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerLatitude: 55.75 }).success).toBe(false);
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerLongitude: 37.62 }).success).toBe(false);
+		expect(observerContextSchema.safeParse({ ...moscowContext, observerGeoMode: "DECLARED_COORDINATE" }).success).toBe(
+			false,
+		);
+		const coordinateContext = {
+			...moscowContext,
+			observerGeoMode: "DECLARED_COORDINATE",
+			observerLatitude: 55.75,
+			observerLongitude: 37.62,
+		} as const;
+		expect(observerContextSchema.safeParse(coordinateContext).success).toBe(true);
+		expect(localAiTaskContextSnapshotSchema.safeParse(coordinateContext).success).toBe(false);
+		expect(localAiTaskContextSnapshotSchema.safeParse({ ...coordinateContext, pointId }).success).toBe(true);
+		expect(localAiTaskContextHash({ ...coordinateContext, pointId })).toBe(contextHash(coordinateContext));
 	});
 });
 
@@ -245,6 +273,105 @@ describe("RC7 observation submission evidence policy", () => {
 		expect(() =>
 			assertObservationSubmission({ ...submission, screenshotReference: undefined }, lockBlock.evidencePolicy),
 		).toThrow("OBSERVATION_MISSING_SCREENSHOT");
+	});
+
+	it("requires a separate coordinate-proof asset for pin-level captures", () => {
+		const coordinateContext = {
+			...moscowContext,
+			observerGeoMode: "DECLARED_COORDINATE" as const,
+			observerLatitude: 55.75,
+			observerLongitude: 37.62,
+			pointId,
+		};
+		expect(
+			observationSubmissionViolations({ ...submission, context: coordinateContext }, lockBlock.evidencePolicy),
+		).toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
+		expect(
+			observationSubmissionViolations(
+				{
+					...submission,
+					context: coordinateContext,
+					screenshotSha256: "a".repeat(64),
+					coordinateProofReference: "proof/coordinate-1.png",
+					coordinateProofSha256: "b".repeat(64),
+				},
+				lockBlock.evidencePolicy,
+			),
+		).not.toContain("OBSERVATION_MISSING_COORDINATE_PROOF");
+		expect(
+			observationEvidenceAssetsAreDistinct(
+				{ privateObjectReference: "evidence/screen.png", sha256: "a".repeat(64) },
+				{ privateObjectReference: "evidence/proof.png", sha256: "b".repeat(64) },
+			),
+		).toBe(true);
+		for (const coordinateProof of [
+			{ privateObjectReference: "evidence/obs-1/screen-1.png", sha256: "b".repeat(64) },
+			{ privateObjectReference: "evidence/proof.png", sha256: "a".repeat(64) },
+			{ privateObjectReference: "evidence/proof.png", sha256: `sha256:${"a".repeat(64)}` },
+		]) {
+			expect(
+				observationSubmissionViolations(
+					{
+						...submission,
+						context: coordinateContext,
+						screenshotSha256: "a".repeat(64),
+						coordinateProofReference: coordinateProof.privateObjectReference,
+						coordinateProofSha256: coordinateProof.sha256,
+					},
+					lockBlock.evidencePolicy,
+				),
+			).toContain("OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT");
+		}
+	});
+});
+
+describe("RC7 locked observation identity", () => {
+	const scenario = lockBlock.scenarios[0];
+
+	it("requires the submitted query to match the immutable task and scenario", () => {
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: moscowContext,
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: "другой запрос",
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_QUERY_MISMATCH");
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: "подменённый запрос",
+				scenario,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_TASK_QUERY_MISMATCH");
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario: null,
+				context: moscowContext,
+			}),
+		).toThrow("OBSERVATION_SCENARIO_MISSING");
+	});
+
+	it("requires the observer query language to match the locked scenario", () => {
+		expect(() =>
+			assertObservationMatchesLockedTask({
+				queryText: scenario.queryText,
+				taskQueryText: scenario.queryText,
+				scenario,
+				context: { ...moscowContext, queryLanguage: "en" },
+			}),
+		).toThrow("OBSERVATION_LANGUAGE_MISMATCH");
 	});
 });
 

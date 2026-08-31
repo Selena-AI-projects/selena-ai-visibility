@@ -6,23 +6,24 @@
  *
  * What it is for: proving that runs, normalized mention rows and cost-ledger
  * rows are written together and that the ledger reads them, before any of it
- * is trusted with a paid cycle. Nothing it writes is an observation — the
- * model is `stub`, every charge is zero, and the whole seeded organization is
- * deleted again at the end.
+ * is trusted with a paid cycle. Nothing it writes is an observation — the model
+ * is `stub` and every charge is zero. On append-only schemas the random local
+ * fixture is retained and its organization id is printed; immutable evidence
+ * is never deleted to make a rehearsal look clean.
  *
  * Usage:
  *   DATABASE_URL=postgres://... pnpm -C packages/lib exec tsx scripts/selena-stub-cycle.ts
  */
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createStubMeasurementAdapter } from "../src/adapters/stub-measurement-adapter";
 import { db } from "../src/db/db";
 import * as schema from "../src/db/schema";
 import { expireAnswerTexts } from "../src/selena-answer-retention";
-import { assertSuggestBudget, recordSuggestCost } from "../src/selena-suggest-metering";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "../src/selena-extraction-context";
 import { computeLedgerReport, type LedgerScenarioKind } from "../src/selena-ledger-metrics";
 import { runMeasurementForPermit } from "../src/selena-run-executor";
+import { assertSuggestBudget, recordSuggestCost } from "../src/selena-suggest-metering";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "../src/selena-visibility-repositories";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -56,15 +57,37 @@ function check(condition: boolean, message: string): void {
 }
 
 /**
- * Set SELENA_STUB_KEEP=1 to leave the rehearsal's rows in place — the only
- * reason to want them is to look at what a cycle actually produces, and the
- * organization it printed is what to delete afterwards.
+ * Set SELENA_STUB_KEEP=1 to retain rows even on a legacy mutable schema. An
+ * append-only schema always retains the random fixture regardless of this
+ * setting, because cost events and configuration locks are evidence.
  */
 const KEEP = process.env.SELENA_STUB_KEEP === "1";
 
+async function appendOnlyGuardsPresent(): Promise<boolean> {
+	const result = await db.execute(sql`
+		SELECT
+			EXISTS (
+				SELECT 1 FROM pg_trigger
+				WHERE tgname = 'sv_prevent_configuration_lock_mutation' AND NOT tgisinternal
+			) AS "locks_append_only",
+			EXISTS (
+				SELECT 1 FROM pg_trigger
+				WHERE tgname = 'sv_prevent_cost_event_mutation' AND NOT tgisinternal
+			) AS "costs_append_only"
+	`);
+	const row = result.rows[0] as { locks_append_only?: boolean; costs_append_only?: boolean } | undefined;
+	return row?.locks_append_only === true || row?.costs_append_only === true;
+}
+
 async function cleanup(): Promise<void> {
 	if (KEEP) {
-		console.log(`\nKept for inspection: organization ${ORG}`);
+		console.log(`\nFixture retained by SELENA_STUB_KEEP: organization ${ORG}`);
+		return;
+	}
+	if (await appendOnlyGuardsPresent()) {
+		console.log(
+			`\nFixture retained: append-only cost/lock guards are active. Local organization for inspection: ${ORG}`,
+		);
 		return;
 	}
 	// Child-first, so every foreign key still resolves while the rows go.
@@ -119,9 +142,8 @@ async function rehearsePilotOverflow(
 		capturedAt: "2026-08-21T02:00:00.000Z",
 	};
 	const entityId = randomUUID();
-	const lock = await repositories.locks.create(ctx, {
+	const lock = await repositories.locks.allocate(ctx, {
 		projectId,
-		version: 2,
 		snapshot: {
 			localAiDiscovery: {
 				schemaVersion: 1,
@@ -268,8 +290,10 @@ async function main(): Promise<void> {
 			decision: "APPROVED",
 			text: "Where is the best coffee in Canggu?",
 		});
-		check(approved.status === "APPROVED" && approved.text === "Where is the best coffee in Canggu?",
-			"review approved the question with its edited text");
+		check(
+			approved.status === "APPROVED" && approved.text === "Where is the best coffee in Canggu?",
+			"review approved the question with its edited text",
+		);
 		let reReviewRefused = false;
 		try {
 			await repositories.scenarios.review(ctx, proposed.id, { decision: "REJECTED" });
@@ -282,8 +306,7 @@ async function main(): Promise<void> {
 			.from(schema.svAuditEvents)
 			.where(and(eq(schema.svAuditEvents.organizationId, ORG), eq(schema.svAuditEvents.event, "SCENARIO_APPROVED")));
 		check(
-			reviewAudit.length === 1 &&
-				(reviewAudit[0]?.details as { textEdited?: boolean })?.textEdited === true,
+			reviewAudit.length === 1 && (reviewAudit[0]?.details as { textEdited?: boolean })?.textEdited === true,
 			"the approval left one audit row recording the text edit",
 		);
 	}
@@ -314,9 +337,8 @@ async function main(): Promise<void> {
 		{ systemId: "perplexity", channel: "VISITOR" as const },
 	];
 	const expectedRuns = scenarios.length * systems.length * REPEATS;
-	const lock = await repositories.locks.create(ctx, {
+	const lock = await repositories.locks.allocate(ctx, {
 		projectId: project.id,
-		version: 1,
 		snapshot: {
 			measurementScope: { scenarios, systems, repeats: REPEATS },
 			// Same block the order desk freezes: the rehearsal must exercise the
@@ -427,7 +449,11 @@ async function main(): Promise<void> {
 	// CABINET_MODEL §4a: the answer text is stored with the run, and expiry
 	// removes only the text — findings, citations and the reference outlive it.
 	const storedRuns = await db.select().from(schema.svRuns).where(eq(schema.svRuns.organizationId, ORG));
-	const payloadOf = (run: (typeof storedRuns)[number]) => run.canonicalPayload as Record<string, any>;
+	type StoredPayload = {
+		answer?: { text?: unknown; textDeletedAt?: unknown };
+		measurement?: unknown;
+	};
+	const payloadOf = (run: (typeof storedRuns)[number]) => run.canonicalPayload as StoredPayload;
 	check(
 		storedRuns.every((run) => typeof payloadOf(run).answer?.text === "string" && payloadOf(run).answer.text !== ""),
 		"every completed run retained its answer text",
@@ -456,10 +482,7 @@ async function main(): Promise<void> {
 		.where(and(eq(schema.svAuditEvents.organizationId, ORG), eq(schema.svAuditEvents.event, "ANSWER_TEXT_EXPIRED")));
 	check(retentionAudit.length === expectedRuns, "every deletion left an audit row");
 	const mentionsAfterExpiry = await repositories.runs.ledgerForCycle(ctx, dispatch.cycleId);
-	check(
-		mentionsAfterExpiry.mentions.length === mentions.length,
-		"mention rows are untouched by answer-text expiry",
-	);
+	check(mentionsAfterExpiry.mentions.length === mentions.length, "mention rows are untouched by answer-text expiry");
 
 	const [cycle] = await db
 		.select()
@@ -555,10 +578,17 @@ async function main(): Promise<void> {
 }
 
 main()
-	.then(cleanup, async (error) => {
+	.catch((error) => {
 		console.error(error);
 		failures += 1;
-		await cleanup();
+	})
+	.then(async () => {
+		try {
+			await cleanup();
+		} catch (error) {
+			console.error("Fixture cleanup failed:", error);
+			failures += 1;
+		}
 	})
 	.finally(() => {
 		console.log(failures === 0 ? "\nRehearsal passed" : `\nRehearsal failed: ${failures} check(s)`);

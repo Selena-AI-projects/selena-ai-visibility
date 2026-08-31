@@ -60,22 +60,44 @@ export const observerDeviceClasses = ["MOBILE_IOS", "MOBILE_ANDROID", "DESKTOP",
 export const observerAccountStates = ["SIGNED_OUT", "SIGNED_IN", "UNKNOWN"] as const;
 export const observerPersonalizationStates = ["ON", "OFF", "UNKNOWN"] as const;
 
-export const observerContextSchema = z.strictObject({
-	observerCountryCode: z.string().trim().min(2).max(2),
-	observerAdminArea: z.string().trim().min(1).max(160).optional(),
-	observerLocality: z.string().trim().min(1).max(160).optional(),
-	observerGeoMode: z.enum(observerGeoModes),
-	observerLatitude: z.number().min(-90).max(90).optional(),
-	observerLongitude: z.number().min(-180).max(180).optional(),
-	appLocale: z.string().trim().min(2).max(35),
-	queryLanguage: z.string().trim().min(2).max(35),
-	deviceClass: z.enum(observerDeviceClasses),
-	accountState: z.enum(observerAccountStates),
-	personalizationState: z.enum(observerPersonalizationStates),
-	timezone: z.string().trim().min(1).max(64),
-	capturedAt: z.iso.datetime(),
-});
+export const observerContextSchema = z
+	.strictObject({
+		observerCountryCode: z.string().trim().min(2).max(2),
+		observerAdminArea: z.string().trim().min(1).max(160).optional(),
+		observerLocality: z.string().trim().min(1).max(160).optional(),
+		observerGeoMode: z.enum(observerGeoModes),
+		observerLatitude: z.number().min(-90).max(90).optional(),
+		observerLongitude: z.number().min(-180).max(180).optional(),
+		appLocale: z.string().trim().min(2).max(35),
+		queryLanguage: z.string().trim().min(2).max(35),
+		deviceClass: z.enum(observerDeviceClasses),
+		accountState: z.enum(observerAccountStates),
+		personalizationState: z.enum(observerPersonalizationStates),
+		timezone: z.string().trim().min(1).max(64),
+		capturedAt: z.iso.datetime(),
+	})
+	.superRefine((context, issues) => {
+		const hasLatitude = context.observerLatitude !== undefined;
+		const hasLongitude = context.observerLongitude !== undefined;
+		if (hasLatitude !== hasLongitude)
+			issues.addIssue({ code: "custom", message: "OBSERVER_COORDINATES_MUST_BE_PAIRED" });
+		if (context.observerGeoMode === "DECLARED_COORDINATE" && (!hasLatitude || !hasLongitude))
+			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_COORDINATES" });
+	});
 export type ObserverContext = z.infer<typeof observerContextSchema>;
+
+export const localAiTaskContextSnapshotSchema = observerContextSchema
+	.safeExtend({ pointId: z.string().uuid().optional() })
+	.superRefine((context, issues) => {
+		if (context.observerGeoMode === "DECLARED_COORDINATE" && context.pointId === undefined)
+			issues.addIssue({ code: "custom", message: "DECLARED_COORDINATE_REQUIRES_POINT_ID" });
+	});
+export type LocalAiTaskContextSnapshot = z.infer<typeof localAiTaskContextSnapshotSchema>;
+
+export function observerContextFromTaskSnapshot(snapshot: unknown): ObserverContext {
+	const { pointId: _pointId, ...context } = localAiTaskContextSnapshotSchema.parse(snapshot);
+	return observerContextSchema.parse(context);
+}
 
 // The hash identifies the observation *conditions*, not the moment — two
 // captures under identical conditions at different times must collide, so
@@ -88,6 +110,17 @@ export function contextHash(context: ObserverContext): string {
 		if (value !== undefined) canonical[key] = value;
 	}
 	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+export function localAiTaskContextHash(snapshot: unknown): string {
+	return contextHash(observerContextFromTaskSnapshot(snapshot));
+}
+
+// pointId is intentionally excluded from the backward-compatible condition
+// hash, so Lock membership must compare this stronger identity instead.
+export function localAiTaskContextIdentityKey(snapshot: unknown): string {
+	const parsed = localAiTaskContextSnapshotSchema.parse(snapshot);
+	return `${localAiTaskContextHash(parsed)}:${parsed.pointId ?? ""}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +175,7 @@ export const localAiDiscoveryLockBlockSchema = z
 		entityRelationships: z.array(lockEntityRelationshipSchema),
 		businessLocations: z.array(lockBusinessLocationSchema),
 		scenarios: z.array(lockScenarioSchema),
-		observerContexts: z.array(observerContextSchema),
+		observerContexts: z.array(localAiTaskContextSnapshotSchema),
 		repeats: z.number().int().min(0),
 		expectedObservations: z.number().int().min(0),
 		evidencePolicy: evidencePolicySchema,
@@ -221,7 +254,33 @@ export type ObservationSubmissionInput = {
 	capturedAt?: string | Date | null;
 	transcript?: string | null;
 	screenshotReference?: string | null;
+	screenshotSha256?: string | null;
+	coordinateProofReference?: string | null;
+	coordinateProofSha256?: string | null;
 };
+
+export type ObservationEvidenceAssetIdentity = {
+	privateObjectReference: string;
+	sha256: string;
+};
+
+export function observationEvidenceAssetsAreDistinct(
+	screenshot: ObservationEvidenceAssetIdentity,
+	coordinateProof: ObservationEvidenceAssetIdentity,
+): boolean {
+	const screenshotSha256 = screenshot.sha256
+		.trim()
+		.toLowerCase()
+		.replace(/^sha256:/, "");
+	const coordinateProofSha256 = coordinateProof.sha256
+		.trim()
+		.toLowerCase()
+		.replace(/^sha256:/, "");
+	return (
+		screenshot.privateObjectReference.trim() !== coordinateProof.privateObjectReference.trim() &&
+		screenshotSha256 !== coordinateProofSha256
+	);
+}
 
 const hasValidTimestamp = (value: string | Date | null | undefined): boolean =>
 	value != null && Number.isFinite(new Date(value).getTime());
@@ -232,19 +291,61 @@ export function observationSubmissionViolations(
 ): string[] {
 	const violations: string[] = [];
 	if (policy.queryRequired && !submission.queryText?.trim()) violations.push("OBSERVATION_MISSING_QUERY_TEXT");
-	if (policy.contextRequired && !observerContextSchema.safeParse(submission.context).success)
-		violations.push("OBSERVATION_MISSING_CONTEXT");
+	const parsedContext = localAiTaskContextSnapshotSchema.safeParse(submission.context);
+	if (policy.contextRequired && !parsedContext.success) violations.push("OBSERVATION_MISSING_CONTEXT");
 	if (policy.timestampRequired && !hasValidTimestamp(submission.capturedAt))
 		violations.push("OBSERVATION_MISSING_CAPTURED_AT");
 	if (policy.transcriptRequired && !submission.transcript?.trim()) violations.push("OBSERVATION_MISSING_TRANSCRIPT");
 	if (policy.screenshotRequired && !submission.screenshotReference?.trim())
 		violations.push("OBSERVATION_MISSING_SCREENSHOT");
+	if (
+		parsedContext.success &&
+		parsedContext.data.observerGeoMode === "DECLARED_COORDINATE" &&
+		!submission.coordinateProofReference?.trim()
+	)
+		violations.push("OBSERVATION_MISSING_COORDINATE_PROOF");
+	if (
+		parsedContext.success &&
+		parsedContext.data.observerGeoMode === "DECLARED_COORDINATE" &&
+		submission.screenshotReference?.trim() &&
+		submission.screenshotSha256?.trim() &&
+		submission.coordinateProofReference?.trim() &&
+		submission.coordinateProofSha256?.trim() &&
+		!observationEvidenceAssetsAreDistinct(
+			{
+				privateObjectReference: submission.screenshotReference,
+				sha256: submission.screenshotSha256,
+			},
+			{
+				privateObjectReference: submission.coordinateProofReference,
+				sha256: submission.coordinateProofSha256,
+			},
+		)
+	)
+		violations.push("OBSERVATION_EVIDENCE_ASSETS_NOT_DISTINCT");
 	return violations;
 }
 
 export function assertObservationSubmission(submission: ObservationSubmissionInput, policy: EvidencePolicy): void {
 	const violations = observationSubmissionViolations(submission, policy);
 	if (violations.length > 0) throw new Error(violations.join(", "));
+}
+
+/**
+ * A manual capture is valid only for the immutable task/scenario query that
+ * was sold in the lock. The UI-provided query is evidence metadata, not an
+ * authority that may replace the task snapshot.
+ */
+export function assertObservationMatchesLockedTask(input: {
+	queryText: string;
+	taskQueryText: string;
+	scenario: Pick<LocalAiDiscoveryLockBlock["scenarios"][number], "queryText" | "language"> | null;
+	context: ObserverContext;
+}): void {
+	if (input.scenario === null) throw new Error("OBSERVATION_SCENARIO_MISSING");
+	if (input.taskQueryText !== input.scenario.queryText) throw new Error("OBSERVATION_TASK_QUERY_MISMATCH");
+	if (input.queryText !== input.taskQueryText) throw new Error("OBSERVATION_QUERY_MISMATCH");
+	if (input.context.queryLanguage !== input.scenario.language) throw new Error("OBSERVATION_LANGUAGE_MISMATCH");
 }
 
 // ---------------------------------------------------------------------------

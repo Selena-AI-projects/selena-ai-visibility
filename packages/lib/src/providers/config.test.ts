@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parseScrapeTargets, validateScrapeTargets } from "./config";
 import { brightdata } from "./registry/brightdata";
-import { oxylabs } from "./registry/oxylabs";
 import { cloro } from "./registry/cloro";
 import { dataforseo } from "./registry/dataforseo";
 import { olostep } from "./registry/olostep";
+import { oxylabs } from "./registry/oxylabs";
 import type { ModelConfig } from "./types";
 
 describe("parseScrapeTargets", () => {
@@ -210,10 +210,17 @@ describe("provider validateTarget", () => {
 			expect(brightdata.validateTarget!(config("chatgpt", "brightdata", false))).toBeNull();
 		});
 
-		it("accepts other models with :online", () => {
-			for (const model of ["perplexity", "copilot", "gemini", "google-ai-mode"]) {
+		it("accepts legacy models with :online", () => {
+			for (const model of ["perplexity", "copilot", "gemini"]) {
 				expect(brightdata.validateTarget!(config(model, "brightdata", true))).toBeNull();
 			}
+		});
+
+		it("keeps the Bright Data Google AI Mode dataset out of legacy runtime dispatch", () => {
+			expect(brightdata.validateTarget!(config("google-ai-mode", "brightdata", true))).toMatch(/canary-only/);
+			expect(brightdata.validateTarget!(config("google-ai-mode", "brightdata", true, "gd_custom123"))).toMatch(
+				/canary-only/,
+			);
 		});
 
 		it("rejects non-chatgpt models without :online", () => {
@@ -225,8 +232,15 @@ describe("provider validateTarget", () => {
 			expect(brightdata.validateTarget!(config("unknown", "brightdata", true))).toMatch(/does not support/);
 		});
 
-		it("accepts unknown models with custom dataset ID", () => {
-			expect(brightdata.validateTarget!(config("unknown", "brightdata", true, "gd_custom123"))).toBeNull();
+		it("rejects custom dataset IDs from legacy runtime dispatch", () => {
+			expect(brightdata.validateTarget!(config("unknown", "brightdata", true, "gd_custom123"))).toMatch(/canary-only/);
+			expect(brightdata.validateTarget!(config("chatgpt", "brightdata", true, "gd_custom123"))).toMatch(/canary-only/);
+		});
+
+		it("rejects direct custom dataset dispatch before credentials or transport", async () => {
+			await expect(brightdata.run("chatgpt", "fixture", { version: "gd_custom123", webSearch: true })).rejects.toThrow(
+				"canary-only",
+			);
 		});
 	});
 

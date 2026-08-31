@@ -122,10 +122,21 @@ export * from "./anonymous-suggest.js";
 export * from "./catalog.js";
 export * from "./evidence-loop.js";
 export * from "./free-auto-dispatch.js";
+export * from "./horeca-read-model.js";
+export * from "./local-api.js";
 // The matrix renderer and the micro-slice fixture stay out of the product
 // surface: one generates a document, the other is test data.
 export * from "./local-cycle-cost.js";
 export * from "./local-discovery.js";
+export * from "./local-execution.js";
+export * from "./local-idempotency.js";
+export * from "./local-locks.js";
+export * from "./local-maps-export.js";
+export * from "./local-maps-live.js";
+export * from "./local-maps-rank-adapter.js";
+export * from "./local-maps-rehearsal.js";
+export * from "./local-setup.js";
+export * from "./local-write.js";
 export * from "./measurement-execution.js";
 export * from "./measurement-scope.js";
 export * from "./outcome-layer.js";

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+	bigint,
 	boolean,
 	check,
 	foreignKey,
@@ -15,7 +16,7 @@ import {
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
-import { svBusinessLocations, svConfigurationLocks, svEntities, svProjects } from "./schema";
+import { svBusinessLocations, svConfigurationLocks, svCostEvents, svEntities, svProjects } from "./schema";
 import { organization } from "./schema-auth";
 
 export const svMeasurementDomains = pgTable("sv_measurement_domains", {
@@ -45,7 +46,167 @@ export const svMeasurementCycles = pgTable(
 	(table) => ({
 		domainCycleUnique: uniqueIndex("sv_measurement_cycles_domain_cycle_unique").on(table.domainId, table.domainCycleId),
 		idDomainUnique: uniqueIndex("sv_measurement_cycles_id_domain_unique").on(table.id, table.domainId),
+		idDomainOrganizationUnique: uniqueIndex("sv_measurement_cycles_id_domain_org_unique").on(
+			table.id,
+			table.domainId,
+			table.organizationId,
+		),
+		idDomainOrganizationLockUnique: uniqueIndex("sv_measurement_cycles_id_domain_org_lock_unique").on(
+			table.id,
+			table.domainId,
+			table.organizationId,
+			table.configurationLockId,
+		),
+		configurationLockScopeReference: foreignKey({
+			columns: [table.configurationLockId, table.organizationId],
+			foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.organizationId],
+			name: "sv_measurement_cycles_configuration_lock_scope_fk",
+		}),
 		orgDomainIdx: index("sv_measurement_cycles_org_domain_idx").on(table.organizationId, table.domainId),
+	}),
+).enableRLS();
+
+export const svMeasurementAttempts = pgTable(
+	"sv_measurement_attempts",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		reservationId: uuid("reservation_id").defaultRandom().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		measurementCycleId: uuid("measurement_cycle_id").notNull(),
+		domainId: text("domain_id").notNull(),
+		observationRef: text("observation_ref").notNull(),
+		pointId: uuid("point_id").notNull(),
+		itemId: uuid("item_id").notNull(),
+		executorId: text("executor_id").notNull(),
+		repeatIndex: integer("repeat_index").notNull(),
+		baseSlotKey: text("base_slot_key").notNull(),
+		attemptIndex: integer("attempt_index").notNull(),
+		executionKey: text("execution_key").notNull(),
+		rowVersion: bigint("row_version", { mode: "number" }).notNull().default(1),
+		submissionTokenHash: text("submission_token_hash"),
+		submittedCandidateFingerprint: text("submitted_candidate_fingerprint"),
+		submittedCandidateCanonical: text("submitted_candidate_canonical"),
+		submittedCandidate: jsonb("submitted_candidate"),
+		status: text("status").notNull().default("CLAIMED"),
+		budgetState: text("budget_state").notNull().default("RESERVED"),
+		reservedCostUsd: numeric("reserved_cost_usd", { precision: 12, scale: 6 }).notNull(),
+		currency: text("currency").notNull().default("USD"),
+		surfaceCapUsd: numeric("surface_cap_usd", { precision: 12, scale: 6 }).notNull(),
+		monthlyCapUsd: numeric("monthly_cap_usd", { precision: 12, scale: 6 }).notNull(),
+		priceSnapshotVersion: text("price_snapshot_version").notNull(),
+		spentCostUsd: numeric("spent_cost_usd", { precision: 12, scale: 6 }).notNull().default("0"),
+		releasedCostUsd: numeric("released_cost_usd", { precision: 12, scale: 6 }).notNull().default("0"),
+		claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(),
+		leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
+		submittedAt: timestamp("submitted_at", { withTimezone: true }),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+		providerTaskId: text("provider_task_id"),
+		rawRef: text("raw_ref"),
+		costEventId: uuid("cost_event_id"),
+		retryReason: text("retry_reason"),
+		finalInvalidReason: text("final_invalid_reason"),
+		reconciledAt: timestamp("reconciled_at", { withTimezone: true }),
+		reconciliationRef: text("reconciliation_ref"),
+		unknownReason: text("unknown_reason"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		reservationUnique: uniqueIndex("sv_measurement_attempts_reservation_unique").on(table.reservationId),
+		executionUnique: uniqueIndex("sv_measurement_attempts_execution_unique").on(
+			table.organizationId,
+			table.executionKey,
+		),
+		slotAttemptUnique: uniqueIndex("sv_measurement_attempts_slot_attempt_unique").on(
+			table.organizationId,
+			table.baseSlotKey,
+			table.attemptIndex,
+		),
+		activeSlotUnique: uniqueIndex("sv_measurement_attempts_active_slot_unique")
+			.on(table.organizationId, table.baseSlotKey)
+			.where(sql`${table.status} IN ('CLAIMED', 'SUBMITTED')`),
+		submissionTokenUnique: uniqueIndex("sv_measurement_attempts_submission_token_unique")
+			.on(table.submissionTokenHash)
+			.where(sql`${table.submissionTokenHash} IS NOT NULL`),
+		resultIdentityUnique: uniqueIndex("sv_measurement_attempts_result_identity_unique").on(
+			table.id,
+			table.organizationId,
+			table.measurementCycleId,
+			table.reservationId,
+			table.executionKey,
+			table.attemptIndex,
+		),
+		measurementCycleReference: foreignKey({
+			columns: [table.measurementCycleId, table.domainId, table.organizationId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId, svMeasurementCycles.organizationId],
+			name: "sv_measurement_attempts_cycle_domain_org_fk",
+		}),
+		costEventReference: foreignKey({
+			columns: [table.costEventId, table.organizationId, table.measurementCycleId, table.domainId],
+			foreignColumns: [
+				svCostEvents.id,
+				svCostEvents.organizationId,
+				svCostEvents.measurementCycleId,
+				svCostEvents.domainId,
+			],
+			name: "sv_measurement_attempts_cost_event_scope_fk",
+		}),
+		costEventUnique: uniqueIndex("sv_measurement_attempts_cost_event_unique")
+			.on(table.costEventId)
+			.where(sql`${table.costEventId} IS NOT NULL`),
+		orgCycleStatusIdx: index("sv_measurement_attempts_org_cycle_status_idx").on(
+			table.organizationId,
+			table.measurementCycleId,
+			table.status,
+		),
+		expiredClaimIdx: index("sv_measurement_attempts_expired_claim_idx")
+			.on(table.organizationId, table.leaseExpiresAt)
+			.where(sql`${table.status} = 'CLAIMED'`),
+		domainCheck: check("sv_measurement_attempts_domain_check", sql`${table.domainId} IN ('LOCAL_MAPS', 'LOCAL_AI')`),
+		attemptIndexCheck: check("sv_measurement_attempts_attempt_index_check", sql`${table.attemptIndex} BETWEEN 1 AND 3`),
+		rowVersionCheck: check("sv_measurement_attempts_row_version_check", sql`${table.rowVersion} > 0`),
+		submissionTokenCheck: check(
+			"sv_measurement_attempts_submission_token_check",
+			sql`((${table.status} = 'CLAIMED' AND ${table.submissionTokenHash} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submissionTokenHash} IS NOT NULL AND ${table.submissionTokenHash} ~ '^sha256:[a-f0-9]{64}$')) IS TRUE`,
+		),
+		submittedCandidateCheck: check(
+			"sv_measurement_attempts_submitted_candidate_check",
+			sql`((${table.status} = 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.submittedCandidate} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NOT NULL AND ${table.submittedCandidateCanonical} IS NOT NULL AND ${table.submittedCandidate} IS NOT NULL AND ${table.submittedCandidateFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.submittedCandidateCanonical}, 'UTF8')), 'hex') AND ${table.submittedCandidate} = ${table.submittedCandidateCanonical}::jsonb AND jsonb_typeof(${table.submittedCandidate}) = 'object' AND ${table.submittedCandidate} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'scope', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'lock', 'slot', 'keyword', 'providerRequest', 'attempt', 'budgetReservation'] AND ${table.submittedCandidate} - 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text - 'scope'::text - 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text - 'lock'::text - 'slot'::text - 'keyword'::text - 'providerRequest'::text - 'attempt'::text - 'budgetReservation'::text = '{}'::jsonb AND ${table.submittedCandidate}->>'schemaVersion' = '1' AND ${table.submittedCandidate}->>'kind' = 'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE' AND ${table.submittedCandidate}->>'mode' = 'LIVE_PROVIDER' AND ${table.submittedCandidate}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.submittedCandidate}#>>'{scope,organizationId}' = ${table.organizationId} AND ${table.submittedCandidate}#>>'{scope,measurementCycleId}' = ${table.measurementCycleId}::text AND ${table.submittedCandidate}#>>'{scope,domainId}' = 'LOCAL_MAPS' AND ${table.domainId} = 'LOCAL_MAPS' AND ${table.submittedCandidate}#>>'{attempt,attemptId}' = ${table.id}::text AND ${table.submittedCandidate}#>>'{attempt,reservationId}' = ${table.reservationId}::text AND ${table.submittedCandidate}#>>'{attempt,observationRef}' = ${table.observationRef} AND ${table.submittedCandidate}#>>'{attempt,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{attempt,executionKey}' = ${table.executionKey} AND ${table.submittedCandidate}#>>'{attempt,attemptIndex}' = ${table.attemptIndex}::text AND ${table.submittedCandidate}#>>'{attempt,statusSnapshot}' = 'SUBMITTED' AND (${table.submittedCandidate}#>>'{attempt,claimedAt}')::timestamptz = ${table.claimedAt} AND (${table.submittedCandidate}#>>'{attempt,submittedAt}')::timestamptz = ${table.submittedAt} AND (${table.submittedCandidate}#>>'{attempt,leaseExpiresAt}')::timestamptz = ${table.leaseExpiresAt} AND ${table.submittedCandidate}#>>'{slot,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{slot,pointId}' = ${table.pointId}::text AND ${table.submittedCandidate}#>>'{slot,keywordId}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{keyword,id}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{slot,repeatIndex}' = ${table.repeatIndex}::text AND ${table.submittedCandidate}#>>'{providerRequest,repeatIndex}' = ${table.repeatIndex}::text AND ${table.executorId} !~* '^(stub|noop)(-|$)' AND ${table.submittedCandidate}#>>'{providerRequest,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{lock,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{budgetReservation,currency}' = ${table.currency} AND (${table.submittedCandidate}#>>'{budgetReservation,reservedCostUsd}')::numeric(12, 6) = ${table.reservedCostUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,surfaceCapUsd}')::numeric(12, 6) = ${table.surfaceCapUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,monthlyCapUsd}')::numeric(12, 6) = ${table.monthlyCapUsd} AND ${table.submittedCandidate}#>>'{budgetReservation,priceSnapshotVersion}' = ${table.priceSnapshotVersion})) IS TRUE`,
+		),
+		unknownReasonCheck: check(
+			"sv_measurement_attempts_unknown_reason_check",
+			sql`((${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.unknownReason} IS NOT NULL AND ${table.unknownReason} IN ('COMMITTED_SNAPSHOT_INVALID', 'PROVIDER_CALL_THROWN', 'PROVIDER_RESULT_INVALID', 'FINALIZE_AMBIGUOUS', 'FINALIZE_POSTCONDITION_MISMATCH', 'ESTIMATED_ZERO_COST_UNRECONCILED', 'PROVIDER_OUTCOME_UNKNOWN')) OR (${table.status} <> 'UNKNOWN_RECONCILIATION' AND ${table.unknownReason} IS NULL)) IS TRUE`,
+		),
+		executionIdentityCheck: check(
+			"sv_measurement_attempts_execution_identity_check",
+			sql`${table.baseSlotKey} = ${table.domainId} || '|' || ${table.measurementCycleId}::text || '|' || ${table.pointId}::text || '|' || ${table.itemId}::text || '|' || ${table.executorId} || '|' || ${table.repeatIndex}::text AND ${table.executionKey} = ${table.baseSlotKey} || '|' || ${table.attemptIndex}::text`,
+		),
+		inputShapeCheck: check(
+			"sv_measurement_attempts_input_shape_check",
+			sql`${table.repeatIndex} >= 0 AND length(${table.observationRef}) > 0 AND ${table.observationRef} !~ '[[:space:]]' AND length(${table.executorId}) > 0 AND ${table.executorId} !~ '[[:space:]]' AND position('|' IN ${table.executorId}) = 0 AND length(${table.priceSnapshotVersion}) > 0 AND ${table.priceSnapshotVersion} !~ '[[:space:]]' AND ${table.leaseExpiresAt} > ${table.claimedAt}`,
+		),
+		statusCheck: check(
+			"sv_measurement_attempts_status_check",
+			sql`${table.status} IN ('CLAIMED', 'SUBMITTED', 'SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION')`,
+		),
+		stateShapeCheck: check(
+			"sv_measurement_attempts_state_shape_check",
+			sql`(${table.status} = 'CLAIMED' AND ${table.submittedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} = 'SUBMITTED' AND ${table.submittedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION') AND ${table.submittedAt} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} >= ${table.submittedAt})`,
+		),
+		reasonShapeCheck: check(
+			"sv_measurement_attempts_reason_shape_check",
+			sql`(${table.retryReason} IS NULL OR ${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT', 'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE')) AND (${table.finalInvalidReason} IS NULL OR ${table.finalInvalidReason} IN ('EMPTY_AFTER_3_ATTEMPTS', 'PROVIDER_UNAVAILABLE', 'RATE_LIMIT_EXHAUSTED', 'MALFORMED_AFTER_3_ATTEMPTS')) AND ((${table.status} = 'RETRYABLE_FAILURE' AND ${table.attemptIndex} < 3 AND ${table.retryReason} IS NOT NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.attemptIndex} = 3 AND ((${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE') AND ${table.finalInvalidReason} = 'EMPTY_AFTER_3_ATTEMPTS') OR (${table.retryReason} IN ('TIMEOUT', 'PROVIDER_5XX') AND ${table.finalInvalidReason} = 'PROVIDER_UNAVAILABLE') OR (${table.retryReason} = 'RATE_LIMITED' AND ${table.finalInvalidReason} = 'RATE_LIMIT_EXHAUSTED') OR (${table.retryReason} = 'MALFORMED_RESPONSE' AND ${table.finalInvalidReason} = 'MALFORMED_AFTER_3_ATTEMPTS'))) OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} NOT IN ('RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL))`,
+		),
+		reconciliationCheck: check(
+			"sv_measurement_attempts_reconciliation_check",
+			sql`(${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.budgetState} = 'RESERVED' AND ${table.reconciledAt} IS NULL AND ${table.reconciliationRef} IS NULL) OR (${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.budgetState} IN ('SPENT', 'RELEASED') AND ${table.reconciledAt} IS NOT NULL AND ${table.reconciledAt} >= ${table.completedAt} AND ${table.reconciliationRef} ~ '[^[:space:]]') OR (${table.status} <> 'UNKNOWN_RECONCILIATION' AND ${table.reconciledAt} IS NULL AND ${table.reconciliationRef} IS NULL)`,
+		),
+		budgetCheck: check(
+			"sv_measurement_attempts_budget_check",
+			sql`${table.currency} = 'USD' AND ${table.reservedCostUsd} >= 0 AND ${table.reservedCostUsd} <= ${table.surfaceCapUsd} AND ${table.reservedCostUsd} <= ${table.monthlyCapUsd} AND ${table.surfaceCapUsd} >= 0 AND ${table.monthlyCapUsd} >= 0 AND ${table.spentCostUsd} >= 0 AND ${table.releasedCostUsd} >= 0 AND (((${table.status} IN ('CLAIMED', 'SUBMITTED') OR ${table.status} = 'UNKNOWN_RECONCILIATION') AND ${table.budgetState} = 'RESERVED') OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.budgetState} IN ('SPENT', 'RELEASED')) OR (${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.budgetState} IN ('SPENT', 'RELEASED') AND ${table.reconciledAt} IS NOT NULL)) AND ((${table.budgetState} = 'RESERVED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = 0 AND ${table.costEventId} IS NULL) OR (${table.budgetState} = 'SPENT' AND ${table.releasedCostUsd} = greatest(${table.reservedCostUsd} - ${table.spentCostUsd}, 0) AND ${table.costEventId} IS NOT NULL) OR (${table.budgetState} = 'RELEASED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = ${table.reservedCostUsd} AND ${table.costEventId} IS NULL))`,
+		),
 	}),
 ).enableRLS();
 
@@ -77,6 +238,64 @@ export const svMeasurementDatasets = pgTable(
 	}),
 ).enableRLS();
 
+export const svProviderDatasetCapabilities = pgTable(
+	"sv_provider_dataset_capabilities",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		provider: text("provider").notNull(),
+		source: text("source").notNull(),
+		surface: text("surface").notNull(),
+		domain: text("domain").notNull(),
+		entityType: text("entity_type").notNull(),
+		datasetEnvKey: text("dataset_env_key").notNull(),
+		inputSchemaVersion: text("input_schema_version").notNull(),
+		outputSchemaVersion: text("output_schema_version"),
+		accessClass: text("access_class").notNull(),
+		capabilityStatus: text("capability_status").notNull(),
+		retentionClass: text("retention_class"),
+		contractVersion: text("contract_version").notNull(),
+		version: integer("version").notNull(),
+		contractMetadata: jsonb("contract_metadata").notNull().default({}),
+		immutable: boolean("immutable").notNull().default(true),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgProviderSourceVersionUnique: uniqueIndex("sv_provider_dataset_capabilities_org_source_version_unique").on(
+			table.organizationId,
+			table.provider,
+			table.source,
+			table.version,
+		),
+		idOrganizationUnique: uniqueIndex("sv_provider_dataset_capabilities_id_org_unique").on(
+			table.id,
+			table.organizationId,
+		),
+		orgStatusIdx: index("sv_provider_dataset_capabilities_org_status_idx").on(
+			table.organizationId,
+			table.capabilityStatus,
+		),
+		shapeCheck: check(
+			"sv_provider_dataset_capabilities_shape_check",
+			sql`${table.version} > 0 AND ${table.immutable} = true AND jsonb_typeof(${table.contractMetadata}) = 'object' AND length(trim(${table.provider})) > 0 AND length(trim(${table.source})) > 0 AND length(trim(${table.surface})) > 0 AND length(trim(${table.entityType})) > 0 AND length(trim(${table.datasetEnvKey})) > 0 AND length(trim(${table.inputSchemaVersion})) > 0 AND (${table.outputSchemaVersion} IS NULL OR length(trim(${table.outputSchemaVersion})) > 0) AND length(trim(${table.accessClass})) > 0 AND (${table.retentionClass} IS NULL OR length(trim(${table.retentionClass})) > 0) AND length(trim(${table.contractVersion})) > 0`,
+		),
+		domainCheck: check(
+			"sv_provider_dataset_capabilities_domain_check",
+			sql`${table.domain} IN ('AI', 'SEARCH', 'ENTITY', 'REPUTATION', 'SOCIAL', 'TRAVEL')`,
+		),
+		statusCheck: check(
+			"sv_provider_dataset_capabilities_status_check",
+			sql`${table.capabilityStatus} IN ('CONFIGURED_ONLY', 'CANARY_ONLY', 'PILOT_ONLY', 'ALLOWED', 'BLOCKED')`,
+		),
+		accessClassCheck: check(
+			"sv_provider_dataset_capabilities_access_class_check",
+			sql`${table.accessClass} IN ('PUBLIC', 'CONNECTED', 'UPLOADED', 'DERIVED')`,
+		),
+	}),
+).enableRLS();
+
 export const svSourceSnapshots = pgTable(
 	"sv_source_snapshots",
 	{
@@ -88,6 +307,12 @@ export const svSourceSnapshots = pgTable(
 		sourceRef: text("source_ref").notNull(),
 		contentSha256: text("content_sha256").notNull(),
 		snapshot: jsonb("snapshot").notNull(),
+		capabilityId: uuid("capability_id"),
+		providerDatasetRef: text("provider_dataset_ref"),
+		environment: text("environment"),
+		rawReference: text("raw_reference"),
+		inputSchemaVersion: text("input_schema_version"),
+		outputSchemaVersion: text("output_schema_version"),
 		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
 		immutable: boolean("immutable").notNull().default(true),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -98,6 +323,21 @@ export const svSourceSnapshots = pgTable(
 			table.contentSha256,
 		),
 		orgCapturedIdx: index("sv_source_snapshots_org_captured_idx").on(table.organizationId, table.capturedAt),
+		idOrganizationUnique: uniqueIndex("sv_source_snapshots_id_organization_unique").on(table.id, table.organizationId),
+		capabilityScopeReference: foreignKey({
+			columns: [table.capabilityId, table.organizationId],
+			foreignColumns: [svProviderDatasetCapabilities.id, svProviderDatasetCapabilities.organizationId],
+			name: "sv_source_snapshots_capability_org_fk",
+		}),
+		orgCapabilityCapturedIdx: index("sv_source_snapshots_org_capability_captured_idx").on(
+			table.organizationId,
+			table.capabilityId,
+			table.capturedAt,
+		),
+		providerCaptureMetadataCheck: check(
+			"sv_source_snapshots_provider_capture_metadata_check",
+			sql`((${table.capabilityId} IS NULL AND ${table.providerDatasetRef} IS NULL AND ${table.environment} IS NULL AND ${table.rawReference} IS NULL AND ${table.inputSchemaVersion} IS NULL AND ${table.outputSchemaVersion} IS NULL) OR (${table.capabilityId} IS NOT NULL AND length(trim(${table.providerDatasetRef})) > 0 AND length(trim(${table.environment})) > 0 AND length(trim(${table.rawReference})) > 0 AND length(trim(${table.inputSchemaVersion})) > 0 AND (${table.outputSchemaVersion} IS NULL OR length(trim(${table.outputSchemaVersion})) > 0))) IS TRUE`,
+		),
 	}),
 ).enableRLS();
 
@@ -115,10 +355,8 @@ export const svEvidenceIndex = pgTable(
 			.notNull()
 			.references(() => svMeasurementCycles.id),
 		observationRef: text("observation_ref").notNull(),
-		datasetId: uuid("dataset_id")
-			.notNull()
-			.references(() => svMeasurementDatasets.id),
-		sourceSnapshotId: uuid("source_snapshot_id").references(() => svSourceSnapshots.id),
+		datasetId: uuid("dataset_id").notNull(),
+		sourceSnapshotId: uuid("source_snapshot_id"),
 		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 	},
@@ -128,13 +366,60 @@ export const svEvidenceIndex = pgTable(
 			table.observationRef,
 		),
 		cycleDomainReference: foreignKey({
-			columns: [table.cycleId, table.domainId],
-			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			columns: [table.cycleId, table.domainId, table.organizationId],
+			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId, svMeasurementCycles.organizationId],
 			name: "sv_evidence_index_cycle_domain_fk",
+		}),
+		datasetScopeReference: foreignKey({
+			columns: [table.datasetId, table.cycleId, table.organizationId],
+			foreignColumns: [svMeasurementDatasets.id, svMeasurementDatasets.cycleId, svMeasurementDatasets.organizationId],
+			name: "sv_evidence_index_dataset_cycle_org_fk",
+		}),
+		sourceSnapshotScopeReference: foreignKey({
+			columns: [table.sourceSnapshotId, table.organizationId],
+			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.organizationId],
+			name: "sv_evidence_index_source_snapshot_org_fk",
 		}),
 		orgCycleIdx: index("sv_evidence_index_org_cycle_idx").on(table.organizationId, table.cycleId),
 	}),
 ).enableRLS();
+
+// Internal/private provenance projection. Raw locators, provider dataset refs,
+// and content hashes must never be returned by client routes or exports.
+export const svEvidenceProvenance = pgView("sv_evidence_provenance", {
+	organizationId: text("organization_id").notNull(),
+	projectId: uuid("project_id").notNull(),
+	evidenceId: uuid("evidence_id").notNull(),
+	domainId: text("domain_id").notNull(),
+	cycleId: uuid("cycle_id").notNull(),
+	observationRef: text("observation_ref").notNull(),
+	datasetId: uuid("dataset_id").notNull(),
+	datasetKey: text("dataset_key").notNull(),
+	datasetVersion: integer("dataset_version").notNull(),
+	sourceSnapshotId: uuid("source_snapshot_id"),
+	capabilityId: uuid("capability_id"),
+	sourceType: text("source_type"),
+	sourceRef: text("source_ref"),
+	rawReference: text("raw_reference"),
+	contentSha256: text("content_sha256"),
+	environment: text("environment"),
+	providerDatasetRef: text("provider_dataset_ref"),
+	inputSchemaVersion: text("input_schema_version"),
+	outputSchemaVersion: text("output_schema_version"),
+	provider: text("provider"),
+	source: text("source"),
+	surface: text("surface"),
+	capabilityDomain: text("capability_domain"),
+	entityType: text("entity_type"),
+	accessClass: text("access_class"),
+	capabilityStatus: text("capability_status"),
+	retentionClass: text("retention_class"),
+	contractVersion: text("contract_version"),
+	capabilityInputSchemaVersion: text("capability_input_schema_version"),
+	capabilityOutputSchemaVersion: text("capability_output_schema_version"),
+	evidenceCapturedAt: timestamp("evidence_captured_at", { withTimezone: true }).notNull(),
+	sourceCapturedAt: timestamp("source_captured_at", { withTimezone: true }),
+}).existing();
 
 export const svLocalRankValidityEnum = pgEnum("sv_local_rank_validity", ["VALID", "INVALID", "UNMEASURED"]);
 
@@ -240,7 +525,7 @@ export const svLocalScanCycles = pgTable(
 			.notNull()
 			.references(() => organization.id),
 		measurementCycleId: uuid("measurement_cycle_id").notNull(),
-		domainId: text("domain_id").notNull().default("LOCAL"),
+		domainId: text("domain_id").notNull().default("LOCAL_MAPS"),
 		configurationLockId: uuid("configuration_lock_id")
 			.notNull()
 			.references(() => svConfigurationLocks.id),
@@ -264,14 +549,26 @@ export const svLocalScanCycles = pgTable(
 	},
 	(table) => ({
 		measurementCycleUnique: uniqueIndex("sv_local_scan_cycles_measurement_cycle_unique").on(table.measurementCycleId),
+		resultIdentityUnique: uniqueIndex("sv_local_scan_cycles_result_identity_unique").on(
+			table.id,
+			table.organizationId,
+			table.measurementCycleId,
+			table.configurationLockId,
+			table.provider,
+		),
 		cycleMatrixUnique: uniqueIndex("sv_local_scan_cycles_id_location_grid_unique").on(
 			table.id,
 			table.locationId,
 			table.gridDefinitionId,
 		),
 		measurementDomainReference: foreignKey({
-			columns: [table.measurementCycleId, table.domainId],
-			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId],
+			columns: [table.measurementCycleId, table.domainId, table.organizationId, table.configurationLockId],
+			foreignColumns: [
+				svMeasurementCycles.id,
+				svMeasurementCycles.domainId,
+				svMeasurementCycles.organizationId,
+				svMeasurementCycles.configurationLockId,
+			],
 			name: "sv_local_scan_cycles_measurement_domain_fk",
 		}),
 		gridLocationReference: foreignKey({
@@ -280,7 +577,7 @@ export const svLocalScanCycles = pgTable(
 			name: "sv_local_scan_cycles_grid_location_fk",
 		}),
 		orgLocationIdx: index("sv_local_scan_cycles_org_location_idx").on(table.organizationId, table.locationId),
-		domainCheck: check("sv_local_scan_cycles_domain_check", sql`${table.domainId} = 'LOCAL'`),
+		domainCheck: check("sv_local_scan_cycles_domain_check", sql`${table.domainId} = 'LOCAL_MAPS'`),
 		cardinalityCheck: check(
 			"sv_local_scan_cycles_cardinality_check",
 			sql`${table.expectedObservations} > 0 AND ${table.createdObservations} >= 0 AND ${table.createdObservations} <= ${table.expectedObservations}`,
@@ -288,6 +585,100 @@ export const svLocalScanCycles = pgTable(
 		shapeCheck: check(
 			"sv_local_scan_cycles_shape_check",
 			sql`${table.repeats} > 0 AND ${table.captureDepth} >= 0 AND ${table.worstCaseCostUsd} >= 0`,
+		),
+	}),
+).enableRLS();
+
+export const svMeasurementAttemptResults = pgTable(
+	"sv_measurement_attempt_results",
+	{
+		attemptId: uuid("attempt_id").primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		measurementCycleId: uuid("measurement_cycle_id").notNull(),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		configurationLockId: uuid("configuration_lock_id").notNull(),
+		providerId: text("provider_id").notNull(),
+		reservationId: uuid("reservation_id").notNull(),
+		executionKey: text("execution_key").notNull(),
+		attemptIndex: integer("attempt_index").notNull(),
+		resultFingerprint: text("result_fingerprint").notNull(),
+		resultCanonical: text("result_canonical").notNull(),
+		validatedResult: jsonb("validated_result").notNull(),
+		disposition: jsonb("disposition").notNull(),
+		budgetIncident: text("budget_incident"),
+		requiredBudgetState: text("required_budget_state").notNull(),
+		providerTaskId: text("provider_task_id"),
+		rawResponseReference: text("raw_response_reference"),
+		rawResponseSha256: text("raw_response_sha256"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		attemptReference: foreignKey({
+			columns: [
+				table.attemptId,
+				table.organizationId,
+				table.measurementCycleId,
+				table.reservationId,
+				table.executionKey,
+				table.attemptIndex,
+			],
+			foreignColumns: [
+				svMeasurementAttempts.id,
+				svMeasurementAttempts.organizationId,
+				svMeasurementAttempts.measurementCycleId,
+				svMeasurementAttempts.reservationId,
+				svMeasurementAttempts.executionKey,
+				svMeasurementAttempts.attemptIndex,
+			],
+			name: "sv_measurement_attempt_results_attempt_identity_fk",
+		}),
+		localCycleReference: foreignKey({
+			columns: [
+				table.localCycleId,
+				table.organizationId,
+				table.measurementCycleId,
+				table.configurationLockId,
+				table.providerId,
+			],
+			foreignColumns: [
+				svLocalScanCycles.id,
+				svLocalScanCycles.organizationId,
+				svLocalScanCycles.measurementCycleId,
+				svLocalScanCycles.configurationLockId,
+				svLocalScanCycles.provider,
+			],
+			name: "sv_measurement_attempt_results_local_cycle_identity_fk",
+		}),
+		orgFingerprintUnique: uniqueIndex("sv_measurement_attempt_results_org_fingerprint_unique").on(
+			table.organizationId,
+			table.resultFingerprint,
+		),
+		orgCreatedIdx: index("sv_measurement_attempt_results_org_created_idx").on(table.organizationId, table.createdAt),
+		fingerprintCheck: check(
+			"sv_measurement_attempt_results_fingerprint_check",
+			sql`(${table.resultFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.resultCanonical}, 'UTF8')), 'hex') AND ${table.validatedResult} = ${table.resultCanonical}::jsonb) IS TRUE`,
+		),
+		identityCheck: check(
+			"sv_measurement_attempt_results_identity_check",
+			sql`(jsonb_typeof(${table.validatedResult}) = 'object' AND ${table.validatedResult} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'storageClass', 'organizationId', 'measurementCycleId', 'localCycleId', 'configurationLockId', 'attemptId', 'reservationId', 'executionKey', 'attemptIndex', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'provider', 'externalProviderCalls', 'completedAt', 'event', 'targetRank', 'evidenceEligible', 'provenance', 'cost'] AND ${table.validatedResult}->>'schemaVersion' = '1' AND ${table.validatedResult}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.validatedResult}->>'kind' = 'LOCAL_MAPS_LIVE_PROVIDER_RESULT' AND ${table.validatedResult}->>'mode' = 'LIVE_PROVIDER' AND ${table.validatedResult}->>'storageClass' = 'LIVE_ATTEMPT' AND ${table.validatedResult}->>'organizationId' = ${table.organizationId} AND ${table.validatedResult}->>'measurementCycleId' = ${table.measurementCycleId}::text AND ${table.validatedResult}->>'localCycleId' = ${table.localCycleId}::text AND ${table.validatedResult}->>'configurationLockId' = ${table.configurationLockId}::text AND ${table.validatedResult}->>'attemptId' = ${table.attemptId}::text AND ${table.validatedResult}->>'reservationId' = ${table.reservationId}::text AND ${table.validatedResult}->>'executionKey' = ${table.executionKey} AND ${table.validatedResult}->>'attemptIndex' = ${table.attemptIndex}::text AND ${table.validatedResult}#>>'{provider,id}' = ${table.providerId} AND ${table.validatedResult}->>'externalProviderCalls' = '1') IS TRUE`,
+		),
+		liveShapeCheck: check(
+			"sv_measurement_attempt_results_live_shape_check",
+			sql`(${table.validatedResult} - 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text - 'storageClass'::text - 'organizationId'::text - 'measurementCycleId'::text - 'localCycleId'::text - 'configurationLockId'::text - 'attemptId'::text - 'reservationId'::text - 'executionKey'::text - 'attemptIndex'::text - 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text - 'provider'::text - 'externalProviderCalls'::text - 'completedAt'::text - 'event'::text - 'targetRank'::text - 'evidenceEligible'::text - 'provenance'::text - 'cost'::text = '{}'::jsonb AND jsonb_typeof(${table.validatedResult}->'schemaVersion') = 'number' AND jsonb_typeof(${table.validatedResult}->'kind') = 'string' AND jsonb_typeof(${table.validatedResult}->'mode') = 'string' AND jsonb_typeof(${table.validatedResult}->'canonicalizationVersion') = 'string' AND jsonb_typeof(${table.validatedResult}->'storageClass') = 'string' AND jsonb_typeof(${table.validatedResult}->'organizationId') = 'string' AND jsonb_typeof(${table.validatedResult}->'measurementCycleId') = 'string' AND jsonb_typeof(${table.validatedResult}->'localCycleId') = 'string' AND jsonb_typeof(${table.validatedResult}->'configurationLockId') = 'string' AND jsonb_typeof(${table.validatedResult}->'attemptId') = 'string' AND jsonb_typeof(${table.validatedResult}->'reservationId') = 'string' AND jsonb_typeof(${table.validatedResult}->'executionKey') = 'string' AND jsonb_typeof(${table.validatedResult}->'attemptIndex') = 'number' AND jsonb_typeof(${table.validatedResult}->'lockSnapshotCanonical') = 'string' AND length(${table.validatedResult}->>'lockSnapshotCanonical') > 0 AND jsonb_typeof(${table.validatedResult}->'requestSnapshotCanonical') = 'string' AND length(${table.validatedResult}->>'requestSnapshotCanonical') > 0 AND jsonb_typeof(${table.validatedResult}->'externalProviderCalls') = 'number' AND jsonb_typeof(${table.validatedResult}->'completedAt') = 'string' AND jsonb_typeof(${table.validatedResult}->'evidenceEligible') = 'boolean' AND jsonb_typeof(${table.validatedResult}->'provider') = 'object' AND ${table.validatedResult}->'provider' ?& array['id', 'version', 'providerTaskId'] AND (${table.validatedResult}->'provider') - 'id'::text - 'version'::text - 'providerTaskId'::text = '{}'::jsonb AND jsonb_typeof(${table.validatedResult}#>'{provider,id}') = 'string' AND length(${table.validatedResult}#>>'{provider,id}') > 0 AND ${table.validatedResult}#>>'{provider,id}' !~ '[[:space:]]' AND ${table.validatedResult}#>>'{provider,id}' !~* '^(stub|noop)(-|$)' AND jsonb_typeof(${table.validatedResult}#>'{provider,version}') = 'string' AND length(${table.validatedResult}#>>'{provider,version}') > 0 AND ${table.validatedResult}#>>'{provider,version}' !~ '[[:space:]]' AND jsonb_typeof(${table.validatedResult}#>'{provider,providerTaskId}') IN ('string', 'null') AND jsonb_typeof(${table.validatedResult}->'event') = 'object' AND jsonb_typeof(${table.validatedResult}->'provenance') = 'object' AND ${table.validatedResult}->'provenance' ?& array['evidenceKind', 'checkReference', 'rawResponseReference', 'rawResponseSha256', 'providerObservedAt'] AND (${table.validatedResult}->'provenance') - 'evidenceKind'::text - 'checkReference'::text - 'rawResponseReference'::text - 'rawResponseSha256'::text - 'providerObservedAt'::text = '{}'::jsonb AND ${table.validatedResult}#>>'{provenance,evidenceKind}' = 'MAPS_SERP_PROVIDER' AND jsonb_typeof(${table.validatedResult}#>'{provenance,checkReference}') IN ('string', 'null') AND (jsonb_typeof(${table.validatedResult}#>'{provenance,checkReference}') = 'null' OR (length(${table.validatedResult}#>>'{provenance,checkReference}') > 0 AND ${table.validatedResult}#>>'{provenance,checkReference}' !~ '[[:space:]]' AND ${table.validatedResult}#>>'{provenance,checkReference}' !~* '^(stub-local-maps:|stub:)')) AND jsonb_typeof(${table.validatedResult}->'cost') = 'object' AND ${table.validatedResult}->'cost' ?& array['status', 'currency', 'amountUsd', 'basis'] AND (${table.validatedResult}->'cost') - 'status'::text - 'currency'::text - 'amountUsd'::text - 'basis'::text = '{}'::jsonb AND ${table.validatedResult}#>>'{cost,currency}' = 'USD' AND ((${table.validatedResult}->'event' = '{"kind":"FOUND"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'number' AND mod((${table.validatedResult}->>'targetRank')::numeric, 1) = 0 AND (${table.validatedResult}->>'targetRank')::numeric BETWEEN 1 AND 20 AND ${table.validatedResult}->>'evidenceEligible' = 'true' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,checkReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string') OR (${table.validatedResult}->'event' = '{"kind":"ABSENT_WITHIN_DEPTH"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'true' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,checkReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string') OR ((((${table.validatedResult}#>>'{event,kind}' = 'RETRYABLE_FAILURE' AND (${table.validatedResult}->'event') - 'kind'::text - 'reason'::text = '{}'::jsonb AND ${table.validatedResult}#>>'{event,reason}' IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT', 'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE')) OR ${table.validatedResult}->'event' = '{"kind":"PROVIDER_AUTH_FAILURE"}'::jsonb) AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'false' AND ${table.validatedResult}#>>'{cost,status}' = 'KNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'string' AND ((jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'null') OR (jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string')))) OR (${table.validatedResult}->'event' = '{"kind":"OUTCOME_UNKNOWN"}'::jsonb AND jsonb_typeof(${table.validatedResult}->'targetRank') = 'null' AND ${table.validatedResult}->>'evidenceEligible' = 'false' AND ${table.validatedResult}#>>'{cost,status}' = 'UNKNOWN' AND jsonb_typeof(${table.validatedResult}#>'{cost,amountUsd}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{cost,basis}') = 'null' AND ((jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'null' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'null') OR (jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseReference}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,rawResponseSha256}') = 'string' AND jsonb_typeof(${table.validatedResult}#>'{provenance,providerObservedAt}') = 'string'))))) IS TRUE`,
+		),
+		dispositionCheck: check(
+			"sv_measurement_attempt_results_disposition_check",
+			sql`(jsonb_typeof(${table.disposition}) = 'object' AND ${table.disposition} ?& array['attemptStatus', 'observationValidity', 'observationOutcome', 'cycleStatus', 'retryAllowed', 'finalInvalidReason'] AND ${table.disposition} - 'attemptStatus'::text - 'observationValidity'::text - 'observationOutcome'::text - 'cycleStatus'::text - 'retryAllowed'::text - 'finalInvalidReason'::text = '{}'::jsonb AND ${table.disposition}->>'attemptStatus' IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION') AND ${table.disposition}->>'observationValidity' IN ('VALID', 'INVALID', 'UNMEASURED') AND ${table.disposition}->>'observationOutcome' IN ('FOUND', 'ABSENT_WITHIN_DEPTH', 'RETRY_PENDING', 'PROVIDER_ERROR', 'PROVIDER_BLOCKED', 'PREFLIGHT_BLOCKED', 'UNKNOWN_RECONCILIATION') AND ${table.disposition}->>'cycleStatus' IN ('RUNNING', 'PARTIAL_FAILURE', 'PROVIDER_BLOCKED', 'PREFLIGHT_BLOCKED', 'STOPPED') AND jsonb_typeof(${table.disposition}->'retryAllowed') = 'boolean' AND jsonb_typeof(${table.disposition}->'finalInvalidReason') IN ('string', 'null')) IS TRUE`,
+		),
+		budgetCheck: check(
+			"sv_measurement_attempt_results_budget_check",
+			sql`(${table.requiredBudgetState} IN ('RESERVED', 'SPENT', 'RELEASED') AND (${table.budgetIncident} IS NULL OR ${table.budgetIncident} = 'REPORTED_COST_EXCEEDS_RESERVATION')) IS TRUE`,
+		),
+		provenanceCheck: check(
+			"sv_measurement_attempt_results_provenance_check",
+			sql`((${table.providerTaskId} IS NULL OR (length(${table.providerTaskId}) > 0 AND ${table.providerTaskId} !~ '[[:space:]]')) AND ((${table.rawResponseReference} IS NULL AND ${table.rawResponseSha256} IS NULL) OR (${table.rawResponseReference} IS NOT NULL AND ${table.rawResponseSha256} IS NOT NULL AND length(${table.rawResponseReference}) > 0 AND ${table.rawResponseReference} !~ '[[:space:]]' AND ${table.rawResponseReference} !~* '^(stub-local-maps:|stub:)' AND ${table.rawResponseSha256} ~ '^sha256:[a-f0-9]{64}$')) AND (${table.validatedResult}#>>'{provider,providerTaskId}') IS NOT DISTINCT FROM ${table.providerTaskId} AND (${table.validatedResult}#>>'{provenance,rawResponseReference}') IS NOT DISTINCT FROM ${table.rawResponseReference} AND (${table.validatedResult}#>>'{provenance,rawResponseSha256}') IS NOT DISTINCT FROM ${table.rawResponseSha256} AND (coalesce((${table.validatedResult}->>'evidenceEligible')::boolean, false) = false OR ${table.rawResponseReference} IS NOT NULL)) IS TRUE`,
 		),
 	}),
 ).enableRLS();
@@ -354,7 +745,7 @@ export const svLocalRankObservations = pgTable(
 		orgCycleIdx: index("sv_local_rank_observations_org_cycle_idx").on(table.organizationId, table.cycleId),
 		captureDepthCheck: check("sv_local_rank_observations_capture_depth_check", sql`${table.captureDepth} >= 0`),
 		repeatCheck: check("sv_local_rank_observations_repeat_check", sql`${table.repeatIndex} >= 0`),
-		attemptCheck: check("sv_local_rank_observations_attempt_check", sql`${table.attemptCount} > 0`),
+		attemptCheck: check("sv_local_rank_observations_attempt_check", sql`${table.attemptCount} BETWEEN 1 AND 3`),
 		rankCheck: check(
 			"sv_local_rank_observations_target_rank_check",
 			sql`${table.targetRank} IS NULL OR (${table.targetRank} > 0 AND ${table.targetRank} <= ${table.captureDepth})`,

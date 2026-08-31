@@ -302,6 +302,69 @@
       "when": 1787940004000,
       "tag": "0042_visibility_os_outcome_layer",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787940005000,
+      "tag": "0043_visibility_os_local_domain_attempts_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787940006000,
+      "tag": "0044_visibility_os_local_live_persistence",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787940007000,
+      "tag": "0045_visibility_os_domain_and_lock_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787940008000,
+      "tag": "0046_selena_journal_daily_claims",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787940009000,
+      "tag": "0047_visibility_os_local_attempt_count_cap",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787940010000,
+      "tag": "0048_selena_api_idempotency_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1787940011000,
+      "tag": "0049_visibility_os_claimed_submit_lease",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1787940012000,
+      "tag": "0050_visibility_os_jsonb_text_operator_casts",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1787940013000,
+      "tag": "0051_visibility_os_provider_evidence_provenance",
+      "breakpoints": true
     }
   ]
 }

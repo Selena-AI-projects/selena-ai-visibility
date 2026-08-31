@@ -35,9 +35,9 @@ export const createSelenaLockFn = createServerFn({ method: "POST" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const lock = await repositories.locks.create(await resolveSessionAuthContext(), {
+		const lock = await repositories.locks.allocate(await resolveSessionAuthContext(), {
 			projectId: data.projectId,
-			version: data.version,
+			expectedVersion: data.version,
 			snapshot: data.snapshot,
 			engineSha: data.engineSha,
 			expectedRuns: data.expectedRuns,
