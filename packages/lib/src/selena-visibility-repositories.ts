@@ -57,18 +57,35 @@ const cycleStatusesPreservedOnRunCompletion = new Set<CycleStatus>([
 	"CARDINALITY_INCIDENT",
 ]);
 
+/**
+ * The Perplexity breaker exists for one failure shape: the collector rejecting
+ * the request contract itself, where every further permit buys the same
+ * refusal. A 4xx names that shape. A timeout, an empty page or a provider
+ * outage is one question's loss on a scraped surface — those are recorded
+ * honestly and the cycle continues, with total spend still held by the order
+ * cap. Observed on staging (cycle 72b43b3a): one transient Perplexity failure
+ * cancelled 69 permits that would have measured fine.
+ */
+function isPerplexityContractRejection(invalidReason: string | null | undefined): boolean {
+	return /^PROVIDER_HTTP_4\d\d$/.test(invalidReason ?? "");
+}
+
 export function cycleProgressAfterRunCompletion(input: {
 	status: CycleStatus;
 	completedRuns: number;
 	expectedRuns: number;
 	systemId?: string | null;
 	runStatus?: RunOutcome["status"];
+	invalidReason?: string | null;
 }): { status: CycleStatus; completedRuns: number; cycleDone: boolean } {
 	const completedRuns = input.completedRuns + 1;
 	const cycleDone = completedRuns >= input.expectedRuns;
 	const status = cycleStatusesPreservedOnRunCompletion.has(input.status)
 		? input.status
-		: input.systemId === "Perplexity" && input.runStatus !== undefined && input.runStatus !== "SUCCEEDED"
+		: input.systemId === "Perplexity" &&
+				input.runStatus !== undefined &&
+				input.runStatus !== "SUCCEEDED" &&
+				isPerplexityContractRejection(input.invalidReason)
 			? "STOPPED"
 			: cycleDone
 				? "QC_REQUIRED"
@@ -1004,6 +1021,7 @@ export function createSelenaRepositories(db: Db) {
 						...cycle,
 						systemId: run.systemId,
 						runStatus: parsed.status,
+						invalidReason: parsed.invalidReason ?? null,
 					});
 					const circuitBroken =
 						progress.status === "STOPPED" &&
