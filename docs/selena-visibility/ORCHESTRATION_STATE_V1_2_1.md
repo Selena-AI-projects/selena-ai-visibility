@@ -37,7 +37,7 @@ The two DOCX source files are present at the owner-provided Downloads paths and 
 |---|---|
 | Contracts Vitest (Node 24) | `27 files / 232 tests PASS` |
 | Contracts TypeScript | `PASS` |
-| Lib Vitest (Node 24) | `75 files / 898 tests PASS` |
+| Lib Vitest (Node 24) | `75 files / 902 tests PASS` |
 | Lib TypeScript (Node 24) | `PASS` |
 | Web Vitest (Node 24) | `34 files / 372 tests PASS; 1 file / 4 tests skipped` |
 | Web browser/storybook Vitest (Node 24) | `BLOCKED_ENV — unit project passes 372/372 with 4 skipped; browser/storybook execution could not launch because the Playwright Chromium executable is absent; no browser download was attempted` |
