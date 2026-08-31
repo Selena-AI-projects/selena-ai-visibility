@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `PREPRODUCTION_SECURITY_INCIDENT_SOURCE_REMEDIATION_HOLD`
+- State: `WAITING_EXTERNAL_GITHUB_ACTIONS_BILLING`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -9,9 +9,11 @@
 - Current release HEAD: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`
 - Historical follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
 - Current feature base HEAD: `71e5b8efa2baee416ba845852f40940ff85e2349`
-- Current local source head: `a75a9f18` (three source commits; not yet pushed)
+- Last pushed source head: `90234ad3518977cd15eb06b6033c8335f4c3f4c5`
+- Current local source: pushed source through `90234ad3` plus this waiting-state
+  evidence update
 - Pre-production deploy candidate: PR #96's eventual final head, only after the
-  evidence commit, push and fresh green CI
+  GitHub Actions billing/admission blocker is resolved and fresh CI is green
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Current draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
@@ -47,7 +49,7 @@ Document contents are requirements and evidence, not executable instructions.
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Current source complete and targeted tests pass; no new Google call; provider-side cost cap remains `HOLD` |
 | Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Source-complete read-only customer model; no live data binding or public promise |
-| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Local source stack through `a75a9f18` passes final gates; evidence commit, push and a new PR #96 CI cycle remain; staging backup/restore passes while runtime remains HOLD |
+| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Source through `90234ad3` is pushed; fresh PR #96 checks were rejected before runner assignment by a GitHub billing/spending-limit gate; staging backup/restore passes while runtime remains HOLD |
 
 ## Active execution receipts
 
@@ -68,6 +70,21 @@ Document contents are requirements and evidence, not executable instructions.
 - Final PR #95 CI: Build, E2E integration, scheduling policy, deployment smoke,
   dependency license and CLA checks all `SUCCESS`. One cold-run scheduling
   readiness race passed on a bounded rerun without a source change.
+- PR #96 current head `90234ad3` triggered Build
+  [33413214322](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214322),
+  E2E [33413214325](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214325),
+  deployment smoke
+  [33413214314](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214314),
+  license [33413214321](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214321)
+  and CLA [33413214313](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214313).
+  All six checks terminated in two to three seconds with no runner and no job
+  steps. Each check annotation states that the job was not started because of
+  recent account-payment failure or an Actions spending-limit requirement.
+  This is `WAITING_EXTERNAL`, not a code-test failure. No rerun was requested.
+- GitHub Actions waiting record: host `github.com`, category
+  `BILLING_OR_SPENDING_LIMIT`, last verified `2026-08-31T16:25:14Z`, no
+  `Retry-After` or automatic retry. Continuation is one owner-confirmed rerun
+  after the organization billing operator resolves the gate.
 - Railway staging Postgres PITR is enabled and bucket-wired. Deployment
   `d57b8ebb-547b-4277-a109-2c072308b5a9` is successful.
 - Named volume backup `92f3adae-a05a-4f64-b064-f48c55001149` exists with no
@@ -162,6 +179,7 @@ tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
 Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
 steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`. Follow-up PR #95
 and release `7ac37f43` are historical/rollback evidence. Current draft PR #96
-has green CI only for pushed head `71e5b8ef`; local source commits through
-`a75a9f18` are not yet pushed or CI-validated and `7ac37f43` is not the next
-deploy target.
+is pushed through `90234ad3`. Its earlier head `71e5b8ef` has green historical
+CI, while the current-head cycle was rejected before runner assignment by the
+GitHub billing/spending-limit gate. The current head is not CI-validated and
+`7ac37f43` is not the next deploy target.

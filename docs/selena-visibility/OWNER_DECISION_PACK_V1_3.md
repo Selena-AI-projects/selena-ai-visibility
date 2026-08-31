@@ -1,14 +1,15 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `SECURITY_INCIDENT_ROTATION_AND_SOURCE_REMEDIATION_HOLD`
+Status: `GITHUB_BILLING_AND_SECURITY_ROTATION_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
 Current release: `7ac37f436b08f0e48c97acb61dfaee8a6458760a`, historical/rollback only.
 Draft PR #96 last pushed head:
-`71e5b8efa2baee416ba845852f40940ff85e2349`. Source hardening is committed
-locally through `a75a9f18` but not yet pushed or CI-validated. The only
-eligible future candidate is PR #96's eventual final head containing this pack,
-after fresh green CI and zero unresolved P0/P1.
+`90234ad3518977cd15eb06b6033c8335f4c3f4c5`. Source hardening and the prior
+evidence pack are pushed, but the fresh current-head CI jobs were rejected
+before runner assignment by a GitHub account-payment or Actions spending-limit
+gate. The only eligible future candidate is PR #96's eventual fully green head
+with zero unresolved P0/P1.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
@@ -29,6 +30,11 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
 
 ## Execution disposition
 
+- PR #96 current-head CI: `OWNER_GATE`. Build, E2E integration, scheduling
+  policy, deployment smoke, license and CLA all terminated before runner
+  assignment with zero executed steps. GitHub's annotations identify recent
+  account-payment failure or an Actions spending-limit requirement. The agent
+  did not request a rerun or change billing.
 - `OD-A`: failed its no-value condition. Railway CLI `variable list`
   unexpectedly rendered raw staging values during a key-presence audit. Values
   are not reproduced in this pack, but affected credentials are considered
@@ -199,11 +205,12 @@ interchangeable with the recommended Google canary.
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
 | OD-S | Rotate/revoke the credentials exposed by the failed staging key-presence audit, coordinate session/database/encryption migrations, and verify replacement key presence without printing values. Because the current web serves `app.selenasystems.com`, this requires separate production-impact permission. |
+| OD-CI | GitHub organization billing operator must resolve the failed payment or Actions spending-limit gate, then explicitly confirm it is safe to request one CI rerun. The agent must not modify billing. |
 | OD-P | Any production access, production database, billing change, recurring schedule or production deploy. This remains outside the pack. |
 
 OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
 for this bounded loop, but their ordered gate conditions still apply. The
-current credential-rotation, domain-binding, runtime-RLS and provider-activity
-findings stop OD-B1/B3/B4/B5 and OD-C; authorization is not a PASS. Backup
-restoreability itself is now proven. OD-S and OD-P are never implied and remain
-separately gated.
+current CI billing, credential-rotation, domain-binding, runtime-RLS and
+provider-activity findings stop OD-B1/B3/B4/B5 and OD-C; authorization is not a
+PASS. Backup restoreability itself is now proven. OD-CI, OD-S and OD-P are
+never implied and remain separately gated.

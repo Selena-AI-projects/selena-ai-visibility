@@ -51,13 +51,14 @@ which is not counted as acceptance evidence.
   eligible redeploy candidate.
 - Draft follow-up PR
   [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is open from
-  `feature/selena-visibility-v1-2-1`. Its last pushed head is
-  `71e5b8efa2baee416ba845852f40940ff85e2349`; the additional v1.3 provider,
-  RLS/evidence and HoReCa hardening is now committed locally through source
-  head `a75a9f18`, but has not yet been pushed. Therefore PR #96's existing
-  green CI does **not** validate the current source. The deploy candidate is
-  PR #96's eventual final head (the commit containing this matrix), only after
-  push and a new fully green CI cycle.
+  `feature/selena-visibility-v1-2-1`. Its current pushed head is
+  `90234ad3518977cd15eb06b6033c8335f4c3f4c5`, including the v1.3 provider,
+  RLS/evidence, HoReCa and pre-production evidence commits. A fresh CI cycle
+  was created for this head, but GitHub rejected every job before runner
+  assignment because of an account-payment or Actions spending-limit gate.
+  Therefore the current source remains unvalidated by CI. The deploy candidate
+  is PR #96's eventual final head only after the external billing gate is
+  resolved and a new fully green CI cycle completes.
 
 | Gate | Required evidence | Current status | Evidence class |
 |---|---|---|---|
@@ -69,12 +70,12 @@ which is not counted as acceptance evidence.
 | V13-EVIDENCE | Capability/source snapshot/evidence provenance is tenant-scoped; raw references and private hashes remain denied; reserved schemas are not invented | `PASS_SOURCE_AND_DISPOSABLE_RUNTIME_UNKNOWN` | Source plus disposable DB |
 | V13-HORECA | Local-first read model exposes independent modules, accepted-sample counts, UNKNOWN and evidence-linked actions without a composite score | `PASS_SOURCE_UI` | Source/UI only |
 | V13-PILOTS | AVLI and KORA packages contain evidence/UNKNOWN gates, intent ontology, report templates and unit-economics decision fields without fabricated facts | `PASS_ARTIFACT` | Repository artifact |
-| V13-TESTS | Current working-tree Node 24 lint, all-workspace typecheck, uncached tests and uncached build pass; new PR #96 CI remains pending after commit/push | `PASS_LOCAL_HOLD_NEW_CI` | Local plus PR CI |
+| V13-TESTS | Current working-tree Node 24 lint, all-workspace typecheck, uncached tests and uncached build pass; PR #96 current-head jobs were rejected before execution by GitHub billing/admission | `PASS_LOCAL_HOLD_CI_BILLING` | Local plus PR CI |
 | V13-STABILITY | Deterministic Local Maps rehearsal passes five isolated Node 24 replays with zero transport calls, cost, persistence or evidence eligibility | `PASS_LIMITED_REPLAY` | Local executed |
 | V13-CODEX | Independent Provider, HoReCa, DB/RLS and formal security-diff reviews cross-audit the implementation; final frozen scan has no reportable P0/P1/P2 | `PASS_SOURCE_ONLY_EXTERNAL_COST_HOLD` | Static independent review |
 | V13-CLAUDE | Blind read-only Claude Max review of immutable commit `5e616e63` completes without mutation or API fallback | `PASS_READ_ONLY_WITH_RUNTIME_GATES` | Static independent review |
-| V13-BRANCH | Three small source commits preserve the untracked protected handoff; evidence commit and push remain pending | `PASS_LOCAL_COMMITS_PUSH_PENDING` | Git |
-| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 exists but its green runs validate only pushed head `71e5b8ef`, not the current diff | `HOLD_NEW_CI_REQUIRED` | GitHub/CI |
+| V13-BRANCH | Three small source commits and one evidence commit are pushed through `90234ad3`; the untracked protected handoff remains excluded | `PASS_PUSHED_HANDOFF_EXCLUDED` | Git |
+| V13-PR | PR #92/#95 are historical merged evidence; draft PR #96 current-head CI did not start because of a GitHub billing/spending-limit gate | `OWNER_GATE_GITHUB_ACTIONS_BILLING` | GitHub/CI |
 | V13-RUNTIME | Staging service IDs, named backup, disposable 0051 schema RLS and an isolated PITR restore rehearsal are verified; production-like domain isolation, global provider containment and app-wide non-owner RLS remain unproven; migrations, fixtures and the Google canary remain unexecuted | `PARTIAL_BACKUP_PASS_PROVIDER_AND_APP_RLS_HOLD` | Runtime/hosted |
 
 ## GitHub CI evidence
@@ -115,6 +116,24 @@ cycle: [Build 33397249574](https://github.com/parkourcafe/selena-ai-visibility/a
 and [CLA 33397249576](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33397249576).
 These runs are historical evidence only until the current working tree is
 committed and a new CI cycle passes.
+
+PR #96 current pushed head `90234ad3` triggered a fresh cycle, but none of the
+six required jobs reached a runner or executed a step:
+
+| Workflow | Run | Result |
+|---|---|---|
+| Build | [33413214322](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214322) | `FAILURE_BEFORE_RUNNER` |
+| E2E Tests — E2E Integration Tests and Scheduling Policy Verification | [33413214325](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214325) | `FAILURE_BEFORE_RUNNER` |
+| Deployment Smoke Tests | [33413214314](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214314) | `FAILURE_BEFORE_RUNNER` |
+| License Check | [33413214321](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214321) | `FAILURE_BEFORE_RUNNER` |
+| CLA Check | [33413214313](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33413214313) | `FAILURE_BEFORE_RUNNER` |
+
+The GitHub check annotations state that the jobs were not started because
+recent account payments failed or the Actions spending limit must be
+increased. The runs completed in two to three seconds with empty runner names,
+zero steps and no job logs. This is a verified external billing/admission hold,
+not evidence of a source failure. No rerun was requested because billing
+changes remain owner-controlled.
 
 ## Local stability replay
 
