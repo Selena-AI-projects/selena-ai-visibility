@@ -6,9 +6,9 @@ The Selena client layer runs above the existing Elmo Measurement Engine and Evid
 
 ## Safe local verification
 
-1. Preview the bounded action with `bash tools/visibility_os_disposable_rehearsal.sh --dry-run gate12`; this does not call Docker or apply migrations.
-2. Before requesting the separate disposable-migration owner approval, ensure `postgres:16-alpine` already exists in the local Docker image store. The wrapper uses `--pull never`; it does not contact an image registry.
-3. Only after that approval, run `bash tools/visibility_os_disposable_rehearsal.sh --run gate12` from the repository root.
+1. Preview each bounded action with `bash tools/visibility_os_disposable_rehearsal.sh --dry-run gate12`, `--dry-run 0045`, or `--dry-run 0049`; dry-run does not call Docker or apply migrations.
+2. The owner-authorized scope is limited to an isolated no-pull Docker/Colima rehearsal. Ensure `postgres:16-alpine` already exists in the local Docker image store; the wrapper uses `--pull never` and does not contact an image registry.
+3. Under that explicit scope, run `bash tools/visibility_os_disposable_rehearsal.sh --run gate12`, `--run 0045`, or `--run 0049` from the repository root. The 0049 suite runs Gate12 first and then performs the row-level lease assertions.
 4. The wrapper creates a randomly suffixed compose project from `tools/visibility_os_disposable_postgres.compose.yml`, verifies that the generated project label is unused, publishes PostgreSQL on a random loopback port, and uses `tmpfs` rather than a persistent database volume. Every subordinate script rejects a missing or non-rehearsal project name.
 5. On success, script failure, `INT`, or `TERM`, the wrapper runs and verifies the selected Compose command's `down --volumes --remove-orphans` for that exact unique project. `REHEARSAL_COMPLETE` is printed only after teardown succeeds; a teardown failure exits non-zero as `BLOCKED_CLEANUP`.
 6. `SIGKILL` or a host crash cannot run a shell cleanup trap. If either occurs, use the printed exact compose project name to inspect and remove only that uniquely labelled project before retrying.
