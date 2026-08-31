@@ -4,9 +4,10 @@ import { type LocalApiMapResult, localApiCollectionStatuses, localApiMapResultSc
 /**
  * The source-only Local Maps export is intentionally a pure projection of the
  * public read contract. It does not read a database, call a provider, resolve
- * object storage, or create a REST response. A future route may page the read
- * API and pass the resulting rows here once its runtime and migration gates
- * are approved.
+ * object storage, or create a REST response. The web read route pages the
+ * existing read API and passes the resulting rows here; runtime stores, signed
+ * evidence access, and provider execution remain separate gates from this pure
+ * projection.
  */
 export const LOCAL_MAPS_CSV_MAX_ROWS = 10_000 as const;
 

@@ -15,6 +15,7 @@ import {
 } from "@workspace/lib/db/schema";
 import {
 	LOCAL_API_EVIDENCE_TTL_SECONDS,
+	LOCAL_MAPS_CSV_MAX_ROWS,
 	type LocalApiCursorResource,
 	localAiTaskContextHash,
 	localAiTaskContextIdentityKey,
@@ -23,6 +24,7 @@ import {
 	localApiEvidenceResponseSchema,
 	localApiMapResultsResponseSchema,
 	localApiProgressResponseSchema,
+	serializeLocalMapsCsv,
 	observerContextFromTaskSnapshot,
 	readManualLocalAiLock,
 } from "@workspace/selena-visibility-contracts";
@@ -756,6 +758,42 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 			};
 		},
 
+		/**
+		 * Build a bounded public CSV projection from the same cursor-stable Maps
+		 * read model as the JSON endpoint. This is read-only: it never signs raw
+		 * references, mutates state, or calls a provider. A snapshot version is
+		 * carried across pages so a concurrent update fails closed rather than
+		 * producing a mixed export.
+		 */
+		async mapResultsCsv(input: { tenantId: string; cycleId: string }) {
+			let after: LocalReadCursorPosition | null = null;
+			let snapshotVersion: string | null = null;
+			let datasetId: string | null = null;
+			let status: Awaited<ReturnType<LocalReadApi["mapResults"]>>["status"] = "UNKNOWN";
+			const items: Awaited<ReturnType<LocalReadApi["mapResults"]>>["items"] = [];
+
+			for (;;) {
+				const page = await this.mapResults({
+					tenantId: input.tenantId,
+					cycleId: input.cycleId,
+					limit: 200,
+					after,
+					snapshotVersion,
+				});
+				snapshotVersion = page.snapshotVersion;
+				status = page.status;
+				if (datasetId !== null && page.datasetId !== null && datasetId !== page.datasetId)
+					throw new Error("LOCAL_MAPS_DATASET_IDENTITY_MISMATCH");
+				datasetId = datasetId ?? page.datasetId;
+				items.push(...page.items);
+				if (items.length > LOCAL_MAPS_CSV_MAX_ROWS) throw new Error("LOCAL_MAPS_CSV_TOO_MANY_ROWS");
+				if (page.nextPosition === null) break;
+				after = page.nextPosition;
+			}
+
+			return serializeLocalMapsCsv({ cycleId: input.cycleId, datasetId, surface: "LOCAL_MAPS", status, items });
+		},
+
 		async aiResults(input: {
 			tenantId: string;
 			cycleId: string;
@@ -1407,6 +1445,29 @@ export function createSelenaLocalReadRouteHandlers(
 						},
 					}),
 				);
+			} catch (error) {
+				return localReadErrorResponse(error, requestId);
+			}
+		},
+
+		async mapResultsCsv(request: Request, cycleId: string): Promise<Response> {
+			const requestId = dependencies.requestId();
+			try {
+				const auth = await dependencies.authenticate(request);
+				requireSelenaApiScope(auth.permissions, "local:read");
+				const validatedCycleId = validateCycleId(cycleId);
+				const csv = await dependencies.api.mapResultsCsv({
+					tenantId: auth.tenantId,
+					cycleId: validatedCycleId,
+				});
+				return new Response(csv, {
+					status: 200,
+					headers: {
+						"cache-control": "no-store",
+						"content-disposition": `attachment; filename="selena-local-maps-${validatedCycleId}.csv"`,
+						"content-type": "text/csv; charset=utf-8",
+					},
+				});
 			} catch (error) {
 				return localReadErrorResponse(error, requestId);
 			}

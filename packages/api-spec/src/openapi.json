@@ -1706,6 +1706,39 @@
 				}
 			}
 		},
+		"/selena/local-scan-cycles/{cycleId}/map-results/export": {
+			"get": {
+				"summary": "Export local map results",
+				"description": "Returns a bounded, public-field CSV projection of the same cursor-stable Local Maps read model. Private raw references and unsigned evidence URLs are never included. Requires the `local:read` bearer API scope.",
+				"operationId": "exportSelenaLocalScanCycleMapResults",
+				"tags": ["Selena Local Visibility"],
+				"security": [{ "BearerAuth": [] }],
+				"parameters": [
+					{
+						"name": "cycleId",
+						"in": "path",
+						"required": true,
+						"description": "Local scan cycle identifier",
+						"schema": { "type": "string", "format": "uuid" }
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Bounded Local Maps CSV export",
+						"content": {
+							"text/csv": {
+								"schema": { "type": "string" }
+							}
+						}
+					},
+					"400": { "$ref": "#/components/responses/LocalApiBadRequest" },
+					"401": { "$ref": "#/components/responses/LocalApiUnauthorized" },
+					"403": { "$ref": "#/components/responses/LocalApiForbidden" },
+					"404": { "$ref": "#/components/responses/LocalApiNotFound" },
+					"500": { "$ref": "#/components/responses/LocalApiInternalServerError" }
+				}
+			}
+		},
 		"/selena/local-scan-cycles/{cycleId}/ai-results": {
 			"get": {
 				"summary": "List local AI results",

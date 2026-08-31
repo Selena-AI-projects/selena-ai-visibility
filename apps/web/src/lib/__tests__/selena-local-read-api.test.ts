@@ -869,6 +869,44 @@ describe("Selena local read API core", () => {
 		});
 	});
 
+	it("exports a bounded Local Maps CSV from the cursor-stable read model", async () => {
+		const rows = [mapRow(ids.observation1, ids.evidence1, "2026-08-30T02:00:00.000Z")];
+		const listMapResults = vi
+			.fn<SelenaLocalReadStore["listMapResults"]>()
+			.mockResolvedValueOnce(rows)
+			.mockResolvedValueOnce([]);
+		const source = store({ listMapResults });
+		const handlers = createSelenaLocalReadRouteHandlers({
+			api: createSelenaLocalReadApi(source),
+			authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
+			requestId: () => "request-local-export",
+		});
+
+		const response = await handlers.mapResultsCsv(new Request("https://example.test/export"), ids.cycle);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("content-disposition")).toContain(`selena-local-maps-${ids.cycle}.csv`);
+		expect(await response.text()).toContain("cycle_id,dataset_id,surface,collection_status");
+		expect(listMapResults).toHaveBeenCalledTimes(1);
+	});
+
+	it("keeps Local Maps CSV export fail-closed when the authenticated scope is missing", async () => {
+		const source = store();
+		const handlers = createSelenaLocalReadRouteHandlers({
+			api: createSelenaLocalReadApi(source),
+			authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["evidence:read"] })),
+			requestId: () => "request-local-export-scope",
+		});
+
+		const response = await handlers.mapResultsCsv(new Request("https://example.test/export"), ids.cycle);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({ error: { code: "SCOPE_FORBIDDEN" } });
+		expect(source.findCycle).not.toHaveBeenCalled();
+	});
+
 	it("rejects a cursor bound to another tenant before reading the cycle", async () => {
 		const source = store();
 		const handlers = createSelenaLocalReadRouteHandlers({
