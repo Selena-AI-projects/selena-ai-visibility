@@ -95,7 +95,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-CMD ["npx", "drizzle-kit", "migrate"]
+CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
 
 # Worker stage
 FROM base AS worker
