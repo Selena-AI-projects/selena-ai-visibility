@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
-import { svOrders, svPayments } from "@workspace/lib/db/schema";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import {
 	assertPaymentAllowed,
@@ -10,11 +9,21 @@ import {
 	quotePricingSchema,
 	SELENA_CHECKOUT_METADATA,
 } from "@workspace/selena-visibility-contracts";
-import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { canWrite, resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { isSelenaTestPaymentAmount, SelenaTestPaymentError } from "./selena-test-payment-replay";
+import { recordSelenaTestPayment } from "./selena-test-payment-store";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
+
+function testPaymentWritesAllowed(): boolean {
+	try {
+		assertPaymentAllowed(paymentConfigFromEnv(process.env), "test");
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 export const createSelenaQuoteFn = createServerFn({ method: "POST" })
 	.validator(
@@ -65,47 +74,30 @@ export const createSelenaTestPaymentFn = createServerFn({ method: "POST" })
 	.validator(
 		z.object({
 			orderId: z.string().uuid(),
-			amount: z.number().nonnegative(),
-			currency: z.string().length(3),
-			providerEventId: z.string().min(1),
+			amount: z.number().nonnegative().refine(isSelenaTestPaymentAmount, "Payment amount must use whole cents"),
+			currency: z.string().regex(/^[A-Z]{3}$/, "Currency must be a three-letter uppercase code"),
+			providerEventId: z.string().min(1).max(200),
 		}),
 	)
 	.handler(async ({ data }) => {
-		// The owner kill-switch: no payment path may mutate an order while
-		// SELENA_PAYMENTS_ENABLED is unset, regardless of provider.
-		assertPaymentAllowed(paymentConfigFromEnv(process.env), "test");
-		const context = await resolveSessionAuthContext();
-		const [order] = await db
-			.select({ id: svOrders.id, orderCap: svOrders.orderCap })
-			.from(svOrders)
-			.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)))
-			.limit(1);
-		if (!order) throw new Error("Not found: order is outside AuthContext tenant");
-		if (data.amount > Number(order.orderCap)) throw new Error("Payment amount exceeds the order cap");
-		const [payment] = await db
-			.insert(svPayments)
-			.values({
-				organizationId: context.tenantId,
-				orderId: data.orderId,
-				provider: "test",
-				providerEventId: data.providerEventId,
-				status: "SUCCEEDED",
-				amount: String(data.amount),
-				currency: data.currency,
-			})
-			.onConflictDoNothing({ target: [svPayments.provider, svPayments.providerEventId] })
-			.returning();
-		if (payment)
-			await db
-				.update(svOrders)
-				.set({ status: "PAID_REVIEW_REQUIRED", paidAt: new Date(), updatedAt: new Date() })
-				.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)));
-		return (
-			payment ?? {
-				status: "SUCCEEDED",
-				duplicate: true,
-				providerEventId: data.providerEventId,
-				checkoutMetadata: SELENA_CHECKOUT_METADATA,
+		try {
+			const context = await resolveSessionAuthContext();
+			if (!canWrite(context)) throw new Error("Forbidden: viewer cannot record payments");
+			const payment = await recordSelenaTestPayment(
+				{ tenantId: context.tenantId, ...data },
+				{ writesAllowed: testPaymentWritesAllowed() },
+			);
+			return { ...payment, checkoutMetadata: SELENA_CHECKOUT_METADATA };
+		} catch (error) {
+			if (error instanceof SelenaTestPaymentError) {
+				if (error.code === "SELENA_TEST_PAYMENTS_UNAVAILABLE") throw new Error("SELENA_TEST_PAYMENTS_UNAVAILABLE");
+				if (error.code === "SELENA_TEST_PAYMENT_NOT_FOUND") throw new Error("SELENA_TEST_PAYMENT_NOT_FOUND");
+				if (error.code === "SELENA_TEST_PAYMENT_QUOTE_MISMATCH") throw new Error("SELENA_TEST_PAYMENT_INVALID");
+				if (error.code !== "SELENA_TEST_PAYMENT_WRITE_FAILED") throw new Error("SELENA_TEST_PAYMENT_CONFLICT");
 			}
-		);
+			const message = error instanceof Error ? error.message : "";
+			if (message.startsWith("Unauthorized:")) throw new Error("Unauthorized: authenticated session required");
+			if (message.startsWith("Forbidden:")) throw new Error("Forbidden: payment write permission required");
+			throw new Error("SELENA_TEST_PAYMENT_REQUEST_FAILED");
+		}
 	});
