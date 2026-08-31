@@ -90,6 +90,11 @@ ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
 
 # Migration stage — runs drizzle-kit migrate then exits
+# Migration stage — applies pending migrations, then exits.
+#
+# drizzle-kit ships inside the deploy, so the runner uses that binary directly.
+# Package-manager wrappers can trigger a runtime download or dependency repair,
+# turning a migration into a network or filesystem mutation before it starts.
 FROM base AS migrate
 WORKDIR /app
 
