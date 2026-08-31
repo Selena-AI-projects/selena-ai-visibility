@@ -547,16 +547,25 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("records a snapshot that never arrives as unfinished, not as an empty answer", async () => {
-		const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
-			String(input).includes("/scrape")
-				? jsonResponse({ message: "queued", snapshot_id: "s_78" })
-				: jsonResponse({ status: "running" }),
-		) as unknown as typeof fetch;
+		vi.useFakeTimers();
+		try {
+			const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+				String(input).includes("/scrape")
+					? jsonResponse({ message: "queued", snapshot_id: "s_78" })
+					: jsonResponse({ status: "running" }),
+			) as unknown as typeof fetch;
 
-		const outcome = await adapterWith(fetchImpl, { snapshotPollMs: 0, snapshotTimeoutMs: 1 }).execute(permitFor());
-		expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
-		// Silence from the provider must never reach the ledger as evidence.
-		expect(outcome.measurement).toBeUndefined();
+			const outcomePromise = adapterWith(fetchImpl, { snapshotPollMs: 10, snapshotTimeoutMs: 100 }).execute(
+				permitFor(),
+			);
+			await vi.advanceTimersByTimeAsync(100);
+			const outcome = await outcomePromise;
+			expect(outcome).toMatchObject({ status: "INVALID", invalidReason: "SNAPSHOT_NOT_READY" });
+			// Silence from the provider must never reach the ledger as evidence.
+			expect(outcome.measurement).toBeUndefined();
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("lets the owner pin the confirmed request and response shape without editing the adapter", async () => {

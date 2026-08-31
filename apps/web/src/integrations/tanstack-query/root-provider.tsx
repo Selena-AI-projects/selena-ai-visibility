@@ -3,10 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 let browserQueryClient: QueryClient | undefined;
 
 export function getContext() {
-	const queryClient = typeof window === "undefined" ? new QueryClient() : (browserQueryClient ??= new QueryClient());
+	if (typeof window === "undefined") return { queryClient: new QueryClient() };
+	browserQueryClient ??= new QueryClient();
 
 	return {
-		queryClient,
+		queryClient: browserQueryClient,
 	};
 }
 

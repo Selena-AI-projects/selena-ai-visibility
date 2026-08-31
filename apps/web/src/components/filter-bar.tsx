@@ -1,7 +1,6 @@
 import { useSearch } from "@tanstack/react-router";
 import { ModelIcon } from "@workspace/ui/brand/model-icon";
 import { Button } from "@workspace/ui/components/button";
-import { Checkbox } from "@workspace/ui/components/checkbox";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -13,7 +12,7 @@ import {
 } from "@workspace/ui/components/dropdown-menu";
 import { Input } from "@workspace/ui/components/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@workspace/ui/components/popover";
-import { ChevronDown, Clock, Search, Tag as TagIcon, X } from "lucide-react";
+import { Check, ChevronDown, Clock, Search, Tag as TagIcon, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { MdSelectAll } from "react-icons/md";
 import { useBrand } from "@/hooks/use-brands";
@@ -239,7 +238,7 @@ export function TagsDropdown({ availableTags }: { availableTags: readonly string
 						<button
 							type="button"
 							onClick={() => commit([])}
-							className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+							className="min-h-11 min-w-11 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
 						>
 							Clear
 						</button>
@@ -252,28 +251,29 @@ export function TagsDropdown({ availableTags }: { availableTags: readonly string
 						{availableTags.map((tag) => {
 							const checked = selected.includes(tag);
 							return (
-								<div
+								<button
 									key={tag}
-									role="button"
-									tabIndex={0}
-									onClick={(e) => {
-										e.preventDefault();
-										e.stopPropagation();
+									type="button"
+									aria-pressed={checked}
+									onClick={(event) => {
+										event.preventDefault();
+										event.stopPropagation();
 										toggle(tag);
 									}}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											toggle(tag);
-										}
-									}}
-									className={`flex items-center gap-2.5 py-1.5 px-3 cursor-pointer text-left text-sm ${
+									className={`flex min-h-11 w-full items-center gap-2.5 py-1.5 px-3 cursor-pointer text-left text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
 										checked ? "bg-accent" : "hover:bg-muted"
 									}`}
 								>
-									<Checkbox checked={checked} className="pointer-events-none" />
+									<span
+										aria-hidden="true"
+										className={`flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs ${
+											checked ? "border-primary bg-primary text-primary-foreground" : "border-input"
+										}`}
+									>
+										{checked && <Check className="size-3.5" />}
+									</span>
 									<span className="capitalize flex-1">{tag}</span>
-								</div>
+								</button>
 							);
 						})}
 					</div>
@@ -315,8 +315,8 @@ export function SearchInput({ placeholder = "Search prompts..." }: { placeholder
 			setLocal(value);
 			return;
 		}
-		if (value !== local) setLocal(value);
-	}, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+		setLocal((current) => (current === value ? current : value));
+	}, [value]);
 
 	useEffect(() => {
 		if (local === value) return;

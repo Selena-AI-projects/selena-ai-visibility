@@ -47,7 +47,7 @@ function BrandSettingsPage() {
 			setAdditionalDomains(brand.additionalDomains || []);
 			setAliases(brand.aliases || []);
 		}
-	}, [brand?.updatedAt]);
+	}, [brand]);
 
 	const validateDomain = useCallback((val: string): true | string => {
 		const cleaned = cleanAndValidateDomain(val);

@@ -27,6 +27,7 @@ import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/li
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import * as schema from "@workspace/lib/db/schema";
+import { assertGlobalProviderStop } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
 import type { SelenaMeasurementAdapter } from "@workspace/lib/selena-measurement";
@@ -37,6 +38,8 @@ import {
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+
+assertGlobalProviderStop(process.env);
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;

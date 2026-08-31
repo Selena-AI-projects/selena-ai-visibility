@@ -6,6 +6,7 @@ import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
 import boss from "./boss";
 import { registerHandlers } from "./handlers";
+import { reconcileAnswerRetentionSchedule } from "./jobs/selena-answer-retention";
 import { shutdownTelemetry } from "./telemetry";
 
 if (process.env.SENTRY_DSN) {
@@ -110,10 +111,7 @@ async function main() {
 		console.log("Scheduled Auth0 membership sync (every 15 minutes)");
 	}
 
-	// Scheduled daily either way; the job itself refuses to delete anything
-	// until the owner sets SELENA_ANSWER_RETENTION_ENABLED=true, so the safe
-	// state needs no schedule bookkeeping.
-	await boss.schedule("selena-answer-retention", "30 3 * * *", { source: "scheduled" }, { tz: "UTC" });
+	await reconcileAnswerRetentionSchedule(boss, process.env.SELENA_ANSWER_RETENTION_ENABLED);
 
 	// Register job handlers
 	await registerHandlers(boss);

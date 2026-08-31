@@ -1,7 +1,7 @@
 /**
  * /admin/workflows - Monitor prompt scheduling, job execution, and worker health
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { getAppName } from "@/lib/route-head";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
@@ -629,7 +629,7 @@ function WorkflowsPage() {
 	const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
 	const [isRefreshing, setIsRefreshing] = useState(false);
 
-	const fetchData = async (showRefreshing = false) => {
+	const fetchData = useCallback(async (showRefreshing = false) => {
 		if (showRefreshing) setIsRefreshing(true);
 
 		try {
@@ -641,13 +641,13 @@ function WorkflowsPage() {
 			setLoading(false);
 			setIsRefreshing(false);
 		}
-	};
+	}, []);
 
 	useEffect(() => {
 		fetchData();
 		const interval = setInterval(() => fetchData(), 30000);
 		return () => clearInterval(interval);
-	}, []);
+	}, [fetchData]);
 
 	const toggleBrand = (brandId: string) => {
 		setExpandedBrands((prev) => {

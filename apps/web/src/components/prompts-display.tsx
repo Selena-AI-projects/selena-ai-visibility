@@ -237,10 +237,11 @@ function ChartSection({
 }
 
 function ContentLoadingSkeleton() {
+	const loadingCards = ["loading-chart-primary", "loading-chart-secondary", "loading-chart-tertiary"];
 	return (
 		<div className="space-y-6">
-			{[...Array(3)].map((_, i) => (
-				<Card key={i} className="py-3 gap-3">
+			{loadingCards.map((loadingCard) => (
+				<Card key={loadingCard} className="py-3 gap-3">
 					<CardHeader className="flex justify-between items-center px-3">
 						<Skeleton className="h-4 w-48" />
 						<Skeleton className="h-5 w-24 rounded-full" />
