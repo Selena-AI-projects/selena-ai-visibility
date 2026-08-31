@@ -24,9 +24,9 @@ import {
 	localApiEvidenceResponseSchema,
 	localApiMapResultsResponseSchema,
 	localApiProgressResponseSchema,
-	serializeLocalMapsCsv,
 	observerContextFromTaskSnapshot,
 	readManualLocalAiLock,
+	serializeLocalMapsCsv,
 } from "@workspace/selena-visibility-contracts";
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -68,7 +68,7 @@ export type LocalReadMapCounts = {
 
 export type LocalReadMapRow = {
 	observationId: string;
-	evidenceId: string;
+	evidenceId: string | null;
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
 	sourceContentSha256: string | null;
@@ -751,7 +751,7 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 								: measured
 									? "SOURCE_PROVENANCE_UNKNOWN"
 									: (row.invalidReason ?? "SOURCE_STATUS_UNKNOWN"),
-						evidenceIds: [row.evidenceId],
+						evidenceIds: row.evidenceId === null ? [] : [row.evidenceId],
 					};
 				}),
 				nextPosition: page.nextPosition,
@@ -1102,7 +1102,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				unknown: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'UNKNOWN' or (${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and (${svSourceSnapshots.sourceType} is distinct from 'MAPS_SERP_PROVIDER' or ${svSourceSnapshots.immutable} is not true or ${svSourceSnapshots.contentSha256} is null or ${svSourceSnapshots.contentSha256} !~ '^(sha256:)?[a-f0-9]{64}$' or ${svSourceSnapshots.capturedAt} is null)))::integer`,
 			})
 			.from(svVisibilityMapPoints)
-			.innerJoin(
+			.leftJoin(
 				svEvidenceIndex,
 				and(
 					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
@@ -1187,7 +1187,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				isStale: svVisibilityMapPoints.isStale,
 			})
 			.from(svVisibilityMapPoints)
-			.innerJoin(
+			.leftJoin(
 				svMeasurementDatasets,
 				and(
 					eq(svMeasurementDatasets.id, svVisibilityMapPoints.datasetId),
@@ -1195,7 +1195,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 					eq(svMeasurementDatasets.cycleId, svVisibilityMapPoints.measurementCycleId),
 				),
 			)
-			.innerJoin(
+			.leftJoin(
 				svEvidenceIndex,
 				and(
 					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),

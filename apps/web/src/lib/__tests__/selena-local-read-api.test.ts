@@ -197,7 +197,7 @@ function aiEvidenceRow(): LocalReadAiEvidenceRow {
 
 function mapRow(
 	observationId: string,
-	evidenceId: string,
+	evidenceId: string | null,
 	capturedAt: string,
 	overrides: Partial<LocalReadMapRow> = {},
 ): LocalReadMapRow {
@@ -700,6 +700,30 @@ describe("Selena local read API core", () => {
 			status: "UNKNOWN",
 			targetRank: null,
 			reasonCode: "SOURCE_PROVENANCE_UNKNOWN",
+		});
+	});
+
+	it("keeps a Map point with missing evidence as an explicit unknown result", async () => {
+		const row = mapRow(ids.observation1, null, "2026-08-30T02:00:00.000Z", {
+			sourceSnapshotImmutable: null,
+			sourceType: null,
+			sourceContentSha256: null,
+			sourceCapturedAt: null,
+		});
+		const api = createSelenaLocalReadApi(store({ listMapResults: vi.fn(async () => [row]) }));
+
+		await expect(
+			api.mapResults({ tenantId: "tenant-a", cycleId: ids.cycle, limit: 50, after: null }),
+		).resolves.toMatchObject({
+			items: [
+				{
+					observationId: ids.observation1,
+					status: "UNKNOWN",
+					targetRank: null,
+					reasonCode: "SOURCE_PROVENANCE_UNKNOWN",
+					evidenceIds: [],
+				},
+			],
 		});
 	});
 
