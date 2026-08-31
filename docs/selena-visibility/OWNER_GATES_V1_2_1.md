@@ -11,7 +11,7 @@ Owner authorization received on 2026-08-30:
 | Push feature branch | `APPROVED` | `feature/selena-visibility-v1-2-1` only |
 | Draft PR | `APPROVED` | Review only; no merge |
 | Apply migrations to disposable PostgreSQL | `APPROVED — scoped rehearsal only` | Owner authorized an isolated no-pull Docker/Colima rehearsal for migrations `0037–0050`, Gate12 and 0045/0049 checks, with teardown and stop-on-error; no shared/staging/production or provider path |
-| Blind Claude Max full-spec review | `BLOCKED_AUTH — owner re-auth required` | The two original DOCX files and recorded hashes are available, but the latest attempt returned `401 OAuth access token has expired` before any model turn; owner must re-authenticate Claude.ai before retry; no reconstructed ledger or paid API fallback may replace it |
+| Blind Claude Max full-spec review | `COMPLETED — Max5 evidence recorded` | Immutable ref `c00d98b7` reviewed through Claude.ai Max5/Sonnet in 38 read-only turns with zero denials; verdict is conditional Phase 0 only. Runtime/DB/RLS, provider, UI, commercial and production gates remain open; no reconstructed ledger or paid API fallback may replace the report |
 | Paid provider call | `NOT_REACHED` | Requires exact provider, request count, maximum spend, and stop plan |
 | Credentials | `NOT_REACHED` | Creation, reading, rotation, or connection requires separate approval |
 | Shared staging | `NOT_REACHED` | Migration, data mutation, task enqueue, or flag enablement requires separate approval |
