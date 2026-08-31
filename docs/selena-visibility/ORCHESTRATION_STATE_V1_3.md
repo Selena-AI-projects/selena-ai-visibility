@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `READY_TO_PUSH_FEATURE_BRANCH`
+- State: `FEATURE_PUSHED_DRAFT_PR_OWNER_GATE`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -77,4 +77,5 @@ A draft PR to `main` would trigger repository workflows that use
 `blacksmith-*` runners for builds, tests and disposable services. Repository
 evidence does not establish their billing impact. The branch may be pushed, but
 draft PR creation remains blocked until the owner confirms those external CI
-side effects.
+side effects. The proposed title/body and exact workflow inventory are prepared
+in `DRAFT_PR_V1_3.md`.
