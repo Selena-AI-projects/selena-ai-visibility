@@ -95,8 +95,10 @@ export async function main() {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	main().catch((error) => {
-		console.error("migration failed:");
-		console.error(error);
+		// Keep the primary failure visible even when Railway rate-limits logs.
+		console.error(`migration failed: ${String(error?.message ?? error).split("\n")[0]}`);
+		const cause = error?.cause;
+		if (cause) console.error(`cause: ${String(cause?.message ?? cause).split("\n")[0]}`);
 		process.exitCode = 1;
 	});
 }
