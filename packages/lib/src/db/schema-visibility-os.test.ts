@@ -736,6 +736,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const versionCheck = lockConfig.checks.find(
 			(candidate) => candidate.name === "sv_configuration_locks_version_check",
 		);
+		const legacyCollisionOrdinalCheck = lockConfig.checks.find(
+			(candidate) => candidate.name === "sv_configuration_locks_legacy_collision_ordinal_check",
+		);
 		const localDomainCheck = getTableConfig(schema.svLocalScanCycles).checks.find(
 			(candidate) => candidate.name === "sv_local_scan_cycles_domain_check",
 		);
@@ -744,6 +747,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(projectVersionIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
 			"project_id",
 			"version",
+			"legacy_collision_ordinal",
 		]);
 		expect(projectIdentityIndex?.config.unique).toBe(true);
 		expect(projectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
@@ -818,6 +822,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"organization_id",
 		]);
 		expect(versionCheck && dialect.sqlToQuery(versionCheck.value).sql).toContain('"version" > 0');
+		expect(legacyCollisionOrdinalCheck && dialect.sqlToQuery(legacyCollisionOrdinalCheck.value).sql).toContain(
+			'"legacy_collision_ordinal" >= 0',
+		);
 		expect(localDomainCheck && dialect.sqlToQuery(localDomainCheck.value).sql).toContain(
 			"\"domain_id\" = 'LOCAL_MAPS'",
 		);
@@ -1341,7 +1348,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-15)).toEqual([
+		expect(journal.entries.slice(-16)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1417,7 +1424,46 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0052_provider_dataset_snapshot_journal",
 				breakpoints: true,
 			},
+			{
+				idx: 53,
+				version: "7",
+				when: 1787940015000,
+				tag: "0053_configuration_lock_legacy_collision_ordinal",
+				breakpoints: true,
+			},
 		]);
+	});
+
+	it("carries the legacy lock ordinal in a follow-up migration that fits either applied shape", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0053_configuration_lock_legacy_collision_ordinal.sql", import.meta.url),
+			"utf8",
+		);
+		const hardening = readFileSync(
+			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
+			"utf8",
+		);
+		// A database that applied 0045 keeps its journal entry, so the column can
+		// only reach it from a later migration, and only through statements that
+		// pass over a database already holding it.
+		expect(hardening).not.toContain("legacy_collision_ordinal");
+		expect(migration).toContain('ADD COLUMN IF NOT EXISTS "legacy_collision_ordinal"');
+		expect(migration).toContain('DROP CONSTRAINT IF EXISTS "sv_configuration_locks_legacy_collision_ordinal_check"');
+		expect(migration).toContain('DROP TRIGGER IF EXISTS "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain('DROP INDEX IF EXISTS "sv_locks_project_version_unique"');
+		expect(migration).toContain('CREATE OR REPLACE FUNCTION "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(migration).toContain("CONFIGURATION_LOCK_0053_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration).toContain(
+			'CREATE UNIQUE INDEX "sv_locks_project_version_unique"\n\tON "sv_configuration_locks" ("project_id", "version", "legacy_collision_ordinal")',
+		);
+		// The backfill rewrites rows the append-only trigger otherwise refuses.
+		expect(migration.indexOf('DISABLE TRIGGER "sv_prevent_configuration_lock_mutation"')).toBeLessThan(
+			migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock'),
+		);
+		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
+			migration.indexOf('ENABLE TRIGGER "sv_prevent_configuration_lock_mutation"'),
+		);
 	});
 
 	it("caps Local Maps observation attempts at three and fails closed on legacy overflow", () => {
