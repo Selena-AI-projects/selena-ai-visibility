@@ -296,6 +296,71 @@ export const svProviderDatasetCapabilities = pgTable(
 	}),
 ).enableRLS();
 
+export const svProviderDatasetSnapshotEvents = pgTable(
+	"sv_provider_dataset_snapshot_events",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
+		provider: text("provider").notNull().default("BRIGHT_DATA"),
+		source: text("source").notNull(),
+		providerDatasetId: text("provider_dataset_id").notNull(),
+		snapshotId: text("snapshot_id").notNull(),
+		phase: text("phase").notNull(),
+		providerStatus: text("provider_status"),
+		recordCount: integer("record_count"),
+		observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+		eventHash: text("event_hash").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_provider_dataset_snapshot_events_project_org_fk",
+		}),
+		eventHashUnique: uniqueIndex("sv_provider_dataset_snapshot_events_event_hash_unique").on(
+			table.organizationId,
+			table.projectId,
+			table.eventHash,
+		),
+		snapshotObservedIdx: index("sv_provider_dataset_snapshot_events_snapshot_observed_idx").on(
+			table.organizationId,
+			table.projectId,
+			table.snapshotId,
+			table.observedAt,
+		),
+		phaseObservedIdx: index("sv_provider_dataset_snapshot_events_phase_observed_idx").on(
+			table.organizationId,
+			table.projectId,
+			table.phase,
+			table.observedAt,
+		),
+		shapeCheck: check(
+			"sv_provider_dataset_snapshot_events_shape_check",
+			sql`${table.provider} = btrim(${table.provider}) AND length(${table.provider}) > 0 AND ${table.source} = btrim(${table.source}) AND length(${table.source}) > 0 AND ${table.providerDatasetId} = btrim(${table.providerDatasetId}) AND length(${table.providerDatasetId}) > 0 AND ${table.snapshotId} = btrim(${table.snapshotId}) AND length(${table.snapshotId}) > 0 AND (${table.providerStatus} IS NULL OR (${table.providerStatus} = btrim(${table.providerStatus}) AND length(${table.providerStatus}) > 0))`,
+		),
+		phaseCheck: check(
+			"sv_provider_dataset_snapshot_events_phase_check",
+			sql`${table.phase} IN ('TRIGGERED', 'RESUMED', 'PENDING', 'READY', 'DELIVERED', 'TIMEOUT', 'TERMINAL_FAILURE', 'INVALID', 'INTERRUPTED')`,
+		),
+		recordCountCheck: check(
+			"sv_provider_dataset_snapshot_events_record_count_check",
+			sql`((${table.phase} = 'DELIVERED' AND ${table.recordCount} IS NOT NULL AND ${table.recordCount} >= 0) OR (${table.phase} <> 'DELIVERED' AND ${table.recordCount} IS NULL))`,
+		),
+		providerStatusCheck: check(
+			"sv_provider_dataset_snapshot_events_provider_status_check",
+			sql`${table.phase} NOT IN ('PENDING', 'READY', 'TERMINAL_FAILURE') OR ${table.providerStatus} IS NOT NULL`,
+		),
+		eventHashCheck: check(
+			"sv_provider_dataset_snapshot_events_event_hash_check",
+			sql`${table.eventHash} ~ '^sha256:[a-f0-9]{64}$'`,
+		),
+	}),
+).enableRLS();
+
 export const svSourceSnapshots = pgTable(
 	"sv_source_snapshots",
 	{

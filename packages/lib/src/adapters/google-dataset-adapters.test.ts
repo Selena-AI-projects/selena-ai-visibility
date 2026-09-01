@@ -51,6 +51,7 @@ describe("v1.3 core Google dataset adapters", () => {
 			{ observedProviderField: "query" },
 		);
 		const result = await createBrightDataDatasetClient({
+			journal: { record: async () => undefined },
 			lifecycle: {
 				timeoutMs: 1_000,
 				pollIntervalMs: 10,
@@ -60,6 +61,7 @@ describe("v1.3 core Google dataset adapters", () => {
 				terminalFailureStatuses: ["failed"],
 			},
 			transport: {
+				preflight: async () => undefined,
 				trigger: async () => ({ snapshotId: "google-serp-canary-1" }),
 				progress: async () => ({ status: "ready" }),
 				download: async () => [{ providerFieldSeenInCanary: 1 }],
