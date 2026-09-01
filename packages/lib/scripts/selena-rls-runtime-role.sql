@@ -25,12 +25,25 @@ BEGIN
 
 	IF to_regnamespace('pgboss') IS NULL
 		OR to_regclass('pgboss.version') IS NULL
+		OR to_regclass('pgboss.bam') IS NULL
 		OR to_regclass('pgboss.job') IS NULL
-		OR to_regclass('pgboss.queue') IS NULL THEN
+		OR to_regclass('pgboss.job_common') IS NULL
+		OR to_regclass('pgboss.job_dependency') IS NULL
+		OR to_regclass('pgboss.queue') IS NULL
+		OR to_regclass('pgboss.queue_stats') IS NULL
+		OR to_regclass('pgboss.schedule') IS NULL
+		OR to_regclass('pgboss.subscription') IS NULL
+		OR to_regclass('pgboss.warning') IS NULL
+		OR to_regprocedure('pgboss.create_queue(text,jsonb)') IS NULL
+		OR to_regprocedure('pgboss.job_table_format(text,text)') IS NULL
+		OR to_regprocedure('pgboss.delete_queue(text)') IS NULL
+		OR to_regprocedure('pgboss.job_table_run(text,text,text)') IS NULL
+		OR to_regprocedure('pgboss.job_table_run_async(text,integer,text,text,text)') IS NULL THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA';
 	END IF;
 
-	IF (SELECT version FROM pgboss.version) IS DISTINCT FROM 37 THEN
+	IF (SELECT count(*) FROM pgboss.version) <> 1
+		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
 	END IF;
 END;
@@ -64,17 +77,28 @@ REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM selena_app;
 
--- pg-boss schema lifecycle remains owner-managed. Runtime clients are pinned
--- to the already-installed schema version and may only operate queue data and
--- call the existing queue functions; they cannot create or migrate objects.
+-- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
+-- runtime allowlist: schema state is read-only, queue data is mutable, and only
+-- the non-destructive queue bootstrap functions are callable. Migration/DDL
+-- helpers stay owner-only, including through PUBLIC's default function ACL.
 GRANT USAGE ON SCHEMA pgboss TO selena_app;
 REVOKE CREATE ON SCHEMA pgboss FROM selena_app;
+REVOKE CREATE ON SCHEMA pgboss FROM PUBLIC;
 REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM selena_app;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgboss FROM selena_app;
 REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pgboss FROM selena_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA pgboss TO selena_app;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgboss FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+	pgboss.job, pgboss.job_common, pgboss.job_dependency,
+	pgboss.queue, pgboss.schedule, pgboss.subscription
+TO selena_app;
+GRANT SELECT ON pgboss.bam, pgboss.version TO selena_app;
+GRANT EXECUTE ON FUNCTION
+	pgboss.create_queue(text, jsonb)
+TO selena_app;
 
 -- Better Auth and tenant membership bootstrap run before app.organization_id
 -- can be set. These are the only non-Selena identity surfaces used at runtime.

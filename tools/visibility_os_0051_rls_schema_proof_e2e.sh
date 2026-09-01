@@ -11,6 +11,7 @@ if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ 
 fi
 
 psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+pgboss_plan=''
 
 cleanup_runtime_role() {
 	local role_exists
@@ -23,6 +24,9 @@ cleanup_runtime_role() {
 cleanup_on_exit() {
 	local exit_code=$?
 	trap - EXIT
+	if [[ -n "$pgboss_plan" && -f "$pgboss_plan" ]]; then
+		rm -f "$pgboss_plan"
+	fi
 	if ! cleanup_runtime_role; then
 		printf 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_CLEANUP_FAILED\n' >&2
 		if ((exit_code == 0)); then exit_code=1; fi
@@ -35,6 +39,22 @@ trap cleanup_on_exit EXIT
 # migration chain through 0050. It makes no external provider call.
 bash "$repo_root/tools/visibility_os_gate12_e2e.sh" "$compose_file" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0051_visibility_os_provider_evidence_provenance.sql" >/dev/null
+
+# Generate the owner-managed schema from the pinned pg-boss package instead of
+# maintaining a second hand-written copy. The construction plan is applied by
+# the disposable database owner before selena_app exists or receives grants.
+pgboss_plan="$(mktemp "${TMPDIR:-/tmp}/selena-pgboss-v37.XXXXXX.sql")"
+if ! pnpm --dir "$repo_root/apps/worker" exec tsx -e \
+	'import { getConstructionPlans } from "pg-boss"; process.stdout.write(getConstructionPlans("pgboss"));' \
+	> "$pgboss_plan"; then
+	printf 'PGBOSS_SCHEMA_OWNER_PROVISION_FAILED: could not generate pinned construction plan.\n' >&2
+	exit 1
+fi
+if ! "${psql[@]}" < "$pgboss_plan" >/dev/null; then
+	printf 'PGBOSS_SCHEMA_OWNER_PROVISION_FAILED: construction plan did not apply.\n' >&2
+	exit 1
+fi
+
 "${psql[@]}" -v role_password=selena_disposable_role_proof_only \
 	< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql" >/dev/null
 "${psql[@]}" < "$repo_root/tools/visibility_os_0051_rls_schema_proof.sql"

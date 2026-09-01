@@ -258,10 +258,18 @@ BEGIN
 	IF EXISTS (
 		SELECT 1
 		FROM pg_class
-		WHERE relnamespace = 'public'::regnamespace
+		WHERE relnamespace IN ('public'::regnamespace, 'pgboss'::regnamespace)
 			AND relowner = runtime_role.oid
 	) THEN
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_OWNS_RELATION';
+	END IF;
+	IF EXISTS (
+		SELECT 1
+		FROM pg_proc
+		WHERE pronamespace IN ('public'::regnamespace, 'pgboss'::regnamespace)
+			AND proowner = runtime_role.oid
+	) THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_OWNS_FUNCTION';
 	END IF;
 
 	IF EXISTS (SELECT 1 FROM pg_auth_members WHERE member = runtime_role.oid) THEN
@@ -272,8 +280,45 @@ BEGIN
 		OR has_schema_privilege('selena_app', 'public', 'CREATE')
 		OR NOT has_schema_privilege('selena_app', 'pgboss', 'USAGE')
 		OR has_schema_privilege('selena_app', 'pgboss', 'CREATE')
-		OR NOT has_table_privilege('selena_app', 'pgboss.job', 'SELECT,INSERT,UPDATE,DELETE')
+		OR EXISTS (
+			SELECT 1
+			FROM unnest(ARRAY[
+				'pgboss.job', 'pgboss.job_common', 'pgboss.job_dependency',
+				'pgboss.queue', 'pgboss.schedule', 'pgboss.subscription'
+			]) AS runtime_table(name)
+			WHERE NOT has_table_privilege(
+				'selena_app', runtime_table.name, 'SELECT,INSERT,UPDATE,DELETE'
+			)
+		)
+		OR NOT has_table_privilege('selena_app', 'pgboss.bam', 'SELECT')
+		OR has_table_privilege('selena_app', 'pgboss.bam', 'INSERT')
+		OR has_table_privilege('selena_app', 'pgboss.bam', 'UPDATE')
+		OR has_table_privilege('selena_app', 'pgboss.bam', 'DELETE')
+		OR has_table_privilege('selena_app', 'pgboss.bam', 'TRUNCATE')
+		OR has_table_privilege('selena_app', 'pgboss.warning', 'SELECT')
+		OR has_table_privilege('selena_app', 'pgboss.warning', 'INSERT')
+		OR has_table_privilege('selena_app', 'pgboss.warning', 'UPDATE')
+		OR has_table_privilege('selena_app', 'pgboss.warning', 'DELETE')
+		OR has_table_privilege('selena_app', 'pgboss.warning', 'TRUNCATE')
+		OR has_table_privilege('selena_app', 'pgboss.queue_stats', 'SELECT')
+		OR has_table_privilege('selena_app', 'pgboss.queue_stats', 'INSERT')
+		OR has_table_privilege('selena_app', 'pgboss.queue_stats', 'UPDATE')
+		OR has_table_privilege('selena_app', 'pgboss.queue_stats', 'DELETE')
+		OR has_table_privilege('selena_app', 'pgboss.queue_stats', 'TRUNCATE')
+		OR NOT has_table_privilege('selena_app', 'pgboss.version', 'SELECT')
+		OR has_table_privilege('selena_app', 'pgboss.version', 'INSERT')
+		OR has_table_privilege('selena_app', 'pgboss.version', 'UPDATE')
+		OR has_table_privilege('selena_app', 'pgboss.version', 'DELETE')
+		OR has_table_privilege('selena_app', 'pgboss.version', 'TRUNCATE')
 		OR NOT has_function_privilege('selena_app', 'pgboss.create_queue(text,jsonb)', 'EXECUTE')
+		OR has_function_privilege('selena_app', 'pgboss.job_table_format(text,text)', 'EXECUTE')
+		OR has_function_privilege('selena_app', 'pgboss.delete_queue(text)', 'EXECUTE')
+		OR has_function_privilege('selena_app', 'pgboss.job_table_run(text,text,text)', 'EXECUTE')
+		OR has_function_privilege(
+			'selena_app',
+			'pgboss.job_table_run_async(text,integer,text,text,text)',
+			'EXECUTE'
+		)
 		OR NOT has_table_privilege('selena_app', 'public.sv_evidence_read_model', 'SELECT')
 		OR has_table_privilege('selena_app', 'public.sv_evidence_provenance', 'SELECT')
 		OR NOT has_table_privilege('selena_app', 'public.sv_provider_canary_executions', 'SELECT')
@@ -563,6 +608,37 @@ INSERT INTO sv_evidence_acceptance_receipts (
 -- Empty tenant context must fail closed before the runtime role selects a tenant.
 SELECT set_config('app.organization_id', '', true);
 SET LOCAL ROLE selena_app;
+
+-- The allowed runtime queue path is data-only. A partition request reaches
+-- pg-boss' DDL branch and must still fail for the non-owner role.
+DO $proof_pgboss_queue_bootstrap$
+BEGIN
+	PERFORM pgboss.create_queue(
+		'selena-rls-schema-proof-runtime',
+		'{"policy":"standard","partition":false}'::jsonb
+	);
+	IF NOT EXISTS (
+		SELECT 1 FROM pgboss.queue WHERE name = 'selena-rls-schema-proof-runtime'
+	) THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_PGBOSS_QUEUE_BOOTSTRAP_FAILED';
+	END IF;
+
+	BEGIN
+		PERFORM pgboss.create_queue(
+			'selena-rls-schema-proof-ddl',
+			'{"policy":"standard","partition":true}'::jsonb
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_PGBOSS_PARTITION_DDL_ALLOWED';
+	EXCEPTION
+		WHEN insufficient_privilege THEN
+			NULL;
+	END;
+
+	IF EXISTS (SELECT 1 FROM pgboss.queue WHERE name = 'selena-rls-schema-proof-ddl') THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_PGBOSS_PARTITION_DDL_RESIDUE';
+	END IF;
+END;
+$proof_pgboss_queue_bootstrap$;
 
 DO $proof_missing_tenant$
 BEGIN

@@ -8,9 +8,11 @@
  * Runs on a schedule (~every 15 minutes) as a safety net so membership
  * changes don't require users to log out and back in.
  */
-import type { Job } from "pg-boss";
+
 import { listAuth0Accounts } from "@workspace/lib/db/auth-sync";
 import { syncAuth0User } from "@workspace/whitelabel/auth-hooks";
+import type { Job } from "pg-boss";
+import { isRecurringJobsEnabled } from "../recurring-schedules";
 
 export interface SyncAuth0MembershipsData {
 	source: string;
@@ -25,6 +27,10 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function syncAuth0MembershipsJob(jobs: Job<SyncAuth0MembershipsData>[]): Promise<void> {
+	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
+		console.log("[sync-auth0-memberships] Skipped: recurring execution is disabled");
+		return;
+	}
 	for (const _job of jobs) {
 		const accounts = await listAuth0Accounts();
 		console.log(`[sync-auth0-memberships] Syncing ${accounts.length} users`);

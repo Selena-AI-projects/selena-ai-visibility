@@ -1,5 +1,5 @@
 import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
-import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
+import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import type { PgBoss } from "pg-boss";
 
 let bossInstance: PgBoss | null = null;
@@ -26,12 +26,13 @@ export async function getBoss(): Promise<PgBoss> {
 		const boss = new PgBoss({
 			...runtimeDatabaseConnection(),
 			schema: "pgboss",
-			// Hosted schema lifecycle is owner-managed; the non-owner runtime
-			// client is intentionally unable to create or migrate DB objects.
-			createSchema: false,
-			migrate: false,
+			// Hosted staging opts into owner-managed lifecycle explicitly; clean
+			// local and self-hosted installs preserve pg-boss bootstrap.
+			...runtimePgBossSchemaLifecycle(),
 			// Web app only needs to send/schedule jobs, not process them
 			supervise: false, // Let worker handle supervision
+			// Recurring dispatch belongs to the worker's explicitly gated scheduler.
+			schedule: false,
 		});
 
 		await boss.start();

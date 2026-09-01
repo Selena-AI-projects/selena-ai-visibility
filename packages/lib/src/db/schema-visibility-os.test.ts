@@ -364,9 +364,6 @@ describe("Visibility OS provider evidence provenance", () => {
 			new URL("../../../../tools/visibility_os_0051_rls_schema_proof_e2e.sh", import.meta.url),
 			"utf8",
 		);
-		const workerBoss = readFileSync(new URL("../../../../apps/worker/src/boss.ts", import.meta.url), "utf8");
-		const webBoss = readFileSync(new URL("../../../../apps/web/src/lib/boss-client.ts", import.meta.url), "utf8");
-
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
 		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
 		expect(roleBootstrap).toContain("\nCOMMIT;");
@@ -376,14 +373,16 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37");
 		expect(roleBootstrap).toContain("GRANT USAGE ON SCHEMA pgboss TO selena_app");
 		expect(roleBootstrap).toContain("REVOKE CREATE ON SCHEMA pgboss FROM selena_app");
-		expect(roleBootstrap).toContain(
+		expect(roleBootstrap).toContain("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss FROM PUBLIC");
+		expect(roleBootstrap).toContain("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC");
+		expect(roleBootstrap).toContain("pgboss.job, pgboss.job_common, pgboss.job_dependency");
+		expect(roleBootstrap).toContain("GRANT SELECT ON pgboss.bam, pgboss.version TO selena_app");
+		expect(roleBootstrap).toContain("pgboss.create_queue(text, jsonb)");
+		expect(roleBootstrap).not.toContain("pgboss.create_queue(text, jsonb),");
+		expect(roleBootstrap).not.toContain(
 			"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app",
 		);
-		expect(roleBootstrap).toContain("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app");
-		for (const runtimeBoss of [workerBoss, webBoss]) {
-			expect(runtimeBoss).toContain("createSchema: false");
-			expect(runtimeBoss).toContain("migrate: false");
-		}
+		expect(roleBootstrap).not.toContain("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app");
 		for (const relation of [
 			"sv_evidence_index",
 			"sv_measurement_cycles",
@@ -422,12 +421,28 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE");
 		expect(proof).toContain("has_schema_privilege('selena_app', 'pgboss', 'CREATE')");
-		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.job', 'SELECT,INSERT,UPDATE,DELETE')");
+		expect(proof).toContain("'pgboss.job', 'pgboss.job_common', 'pgboss.job_dependency'");
+		expect(proof).toContain("'SELECT,INSERT,UPDATE,DELETE'");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.bam', 'UPDATE')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.warning', 'INSERT')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.queue_stats', 'INSERT')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.version', 'UPDATE')");
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.delete_queue(text)', 'EXECUTE')");
+		expect(proof).toContain(
+			"has_function_privilege('selena_app', 'pgboss.job_table_format(text,text)', 'EXECUTE')",
+		);
+		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_QUEUE_BOOTSTRAP_FAILED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_PARTITION_DDL_ALLOWED");
+		expect(proof).toContain(
+			"has_function_privilege('selena_app', 'pgboss.job_table_run(text,text,text)', 'EXECUTE')",
+		);
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_RELATION_NOT_FORCED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_CROSS_TENANT_VISIBLE");
 		expect(proof).toContain("SET LOCAL ROLE selena_app");
 		expect(proof).not.toContain("selena_rls_schema_probe");
 		expect(proofE2e).toContain('< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql"');
+		expect(proofE2e).toContain("PGBOSS_SCHEMA_OWNER_PROVISION_FAILED");
+		expect(proofE2e).toContain('pnpm --dir "$repo_root/apps/worker" exec tsx');
 		expect(proofE2e).toContain("DROP OWNED BY selena_app; DROP ROLE selena_app;");
 		expect(proofE2e).toContain("trap cleanup_on_exit EXIT");
 	});

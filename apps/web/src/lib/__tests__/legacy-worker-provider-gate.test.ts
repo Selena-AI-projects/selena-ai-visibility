@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { analyzeBrand, boss, dbUpdate, getProvider, parseScrapeTargets } = vi.hoisted(() => ({
-	analyzeBrand: vi.fn(),
-	boss: { send: vi.fn() },
-	dbUpdate: vi.fn(),
-	getProvider: vi.fn(),
-	parseScrapeTargets: vi.fn(),
-}));
+const { analyzeBrand, boss, dbUpdate, getProvider, listAuth0Accounts, parseScrapeTargets, syncAuth0User } = vi.hoisted(
+	() => ({
+		analyzeBrand: vi.fn(),
+		boss: { send: vi.fn() },
+		dbUpdate: vi.fn(),
+		getProvider: vi.fn(),
+		listAuth0Accounts: vi.fn(),
+		parseScrapeTargets: vi.fn(),
+		syncAuth0User: vi.fn(),
+	}),
+);
 
 vi.mock("../../../../worker/src/boss", () => ({ default: boss }));
 vi.mock("@workspace/lib/db/db", () => ({
@@ -19,9 +23,12 @@ vi.mock("@workspace/lib/db/db", () => ({
 }));
 vi.mock("@workspace/lib/onboarding", () => ({ analyzeBrand }));
 vi.mock("@workspace/lib/providers", () => ({ getProvider, parseScrapeTargets }));
+vi.mock("@workspace/lib/db/auth-sync", () => ({ listAuth0Accounts }));
+vi.mock("@workspace/whitelabel/auth-hooks", () => ({ syncAuth0User }));
 
 import { processPromptJob } from "../../../../worker/src/jobs/process-prompt";
 import { scheduleMaintenanceJob } from "../../../../worker/src/jobs/schedule-maintenance";
+import { syncAuth0MembershipsJob } from "../../../../worker/src/jobs/sync-auth0-memberships";
 import { processReportJob } from "../../../../worker/src/report-worker";
 
 describe("legacy worker provider gate", () => {
@@ -62,6 +69,13 @@ describe("legacy worker provider gate", () => {
 		expect(parseScrapeTargets).not.toHaveBeenCalled();
 		expect(dbUpdate).not.toHaveBeenCalled();
 		expect(boss.send).not.toHaveBeenCalled();
+	});
+
+	it("drops stale Auth0 sync jobs while recurring execution is not explicitly enabled", async () => {
+		await syncAuth0MembershipsJob([{ data: { source: "scheduled" } }] as never);
+
+		expect(listAuth0Accounts).not.toHaveBeenCalled();
+		expect(syncAuth0User).not.toHaveBeenCalled();
 	});
 
 	it("drops report jobs before database work, analysis, or provider transport under emergency stop", async () => {
