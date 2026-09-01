@@ -834,12 +834,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_cost_events"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_mutation"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_configuration_locks"');
-		expect(migration).toContain('CREATE TRIGGER "sv_guard_configuration_lock_insert"');
-		expect(migration).toContain('BEFORE INSERT ON "sv_configuration_locks"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_truncate"');
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_configuration_locks"');
-		expect(migration).toContain("CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED");
-		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(migration).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
@@ -885,7 +882,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION",
 			"CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH",
 			"MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH",
-			"CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED",
+			"CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION",
 			"LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION",
 			"LOCAL_MAPS_0045_EVIDENCE_COLLISION",
 			"LOCAL_MAPS_0045_LEGACY_ATTEMPT_IDENTITY",
@@ -900,9 +897,6 @@ describe("Visibility OS local domain and attempt expand", () => {
 		}
 		expect(exclusiveLock).toBeGreaterThan(-1);
 		expect(exclusiveLock).toBe(0);
-		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
-			migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'),
-		);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'));
 		expect(projectLock).toBeLessThan(configurationLock);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf("LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED"));
@@ -941,8 +935,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("apply_through_0044");
 		expect(hardeningGate).toContain("--single-transaction");
 		expect(hardeningGate).toContain("assert_failed_migration_is_atomic");
-		expect(hardeningGate).toContain("legacy_collision_ordinal");
-		expect(hardeningGate).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
 		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(hardeningGate).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
 		expect(hardeningGate).toContain("LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH");
@@ -1355,7 +1348,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-15)).toEqual([
+		expect(journal.entries.slice(-16)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1431,7 +1424,46 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0052_provider_dataset_snapshot_journal",
 				breakpoints: true,
 			},
+			{
+				idx: 53,
+				version: "7",
+				when: 1787940015000,
+				tag: "0053_configuration_lock_legacy_collision_ordinal",
+				breakpoints: true,
+			},
 		]);
+	});
+
+	it("carries the legacy lock ordinal in a follow-up migration that fits either applied shape", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0053_configuration_lock_legacy_collision_ordinal.sql", import.meta.url),
+			"utf8",
+		);
+		const hardening = readFileSync(
+			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
+			"utf8",
+		);
+		// A database that applied 0045 keeps its journal entry, so the column can
+		// only reach it from a later migration, and only through statements that
+		// pass over a database already holding it.
+		expect(hardening).not.toContain("legacy_collision_ordinal");
+		expect(migration).toContain('ADD COLUMN IF NOT EXISTS "legacy_collision_ordinal"');
+		expect(migration).toContain('DROP CONSTRAINT IF EXISTS "sv_configuration_locks_legacy_collision_ordinal_check"');
+		expect(migration).toContain('DROP TRIGGER IF EXISTS "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain('DROP INDEX IF EXISTS "sv_locks_project_version_unique"');
+		expect(migration).toContain('CREATE OR REPLACE FUNCTION "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(migration).toContain("CONFIGURATION_LOCK_0053_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration).toContain(
+			'CREATE UNIQUE INDEX "sv_locks_project_version_unique"\n\tON "sv_configuration_locks" ("project_id", "version", "legacy_collision_ordinal")',
+		);
+		// The backfill rewrites rows the append-only trigger otherwise refuses.
+		expect(migration.indexOf('DISABLE TRIGGER "sv_prevent_configuration_lock_mutation"')).toBeLessThan(
+			migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock'),
+		);
+		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
+			migration.indexOf('ENABLE TRIGGER "sv_prevent_configuration_lock_mutation"'),
+		);
 	});
 
 	it("caps Local Maps observation attempts at three and fails closed on legacy overflow", () => {
