@@ -8,4 +8,4 @@
 
 **Этот репозиторий на карте:** Selena AI Visibility — отдельное клиентское приложение AI Visibility поверх measurement engine. Статус: `EXTRACTED`.
 
-**Решение владельца (2026-09-01):** долгосрочный владелец пользовательского AI Visibility — [`selena-OS`](https://github.com/parkourcafe/selena-OS); этот репозиторий остаётся measurement engine и вспомогательным приложением. Статус: `DECISION`.
+**Решение владельца (2026-09-01, пересмотр):** клиентский AI Visibility остаётся здесь — кабинет клиентов работает на [app.selenasystems.com](https://app.selenasystems.com/). Более ранний пункт о переносе пользовательского AI Visibility в `selena-OS` отменён. Selena OS — кабинет владельца и получает административный обзор данных AI Visibility; клиентский и владельческий кабинеты не объединяются. Статус: `DECISION`.
