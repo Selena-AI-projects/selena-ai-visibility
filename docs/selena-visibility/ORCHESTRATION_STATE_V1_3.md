@@ -1,16 +1,16 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-Updated: `2026-09-01` after the authorized one-shot provider canary and exact
-feature-head CI.
+Updated: `2026-09-01` after staging migration `0053`, exact worker deployment
+and the fail-closed additional diagnostic preflight.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_CANARY_OUTCOME_UNKNOWN_ACCEPTANCE_HOLD`
+- State: `STAGING_0053_EXACT_RUNTIME_PASS_CANARY_OUTCOME_UNKNOWN_ACCEPTANCE_HOLD`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Accepted implementation source: `100d34d8` (PR head before this evidence-only update)
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
-- Last fully reconciled hosted baseline: `2d023470a618c6606e7960ee4dd1b4523dcbdcfe`
+- Evidence baseline before this update: `8c5a8948143feac7738df50c274459e23d437ddb`
 - Active exact staging web: `100d34d8`, deployment `10b51bd2…`, `SUCCESS`
 - Superseded external staging web auto-deploy: release `5cbb7b25`
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
@@ -19,7 +19,8 @@ feature-head CI.
 - Canary-time feature-head required checks: `ALL PASS`
 - Accepted implementation-source checks: `ALL PASS`
 - Production deploy/DB mutations: `0`
-- Provider triggers: `1`, the authorized one-shot canary only
+- Provider triggers: `1`, the historical authorized one-shot canary only; the
+  additional diagnostic preflight made `0` provider calls
 - New cost-event rows since exact deployment: `0`
 - Recurring managed schedules after worker start: `0`
 - PR merge: `NOT_EXECUTED`
@@ -33,8 +34,9 @@ and excluded from every commit and archive.
 - `app.selenasystems.com` and `staging.selenasystems.com` remain on staging.
 - Production, production DB, recurring jobs and Social/Travel activation are
   prohibited.
-- The one-shot provider authorization is consumed. No retry or additional
-  provider trigger is authorized.
+- One additional diagnostic trigger is owner-authorized, but remains unused:
+  exact source `100d34d8` is bound to the already reserved once-only execution
+  identity. The immutable reservation is not deleted or bypassed.
 - Steady runtime provider execution remains disabled after the canary.
 - Secret values must never be read, printed or committed.
 
@@ -42,10 +44,10 @@ and excluded from every commit and archive.
 
 | Stream | Result | Current boundary |
 |---|---|---|
-| Provider | `PASS_COST / HOLD_OUTCOME_UNKNOWN` | Exactly one authorized trigger ran. Terminal receipt: `OUTCOME_UNKNOWN` / `LIFECYCLE_OUTCOME_UNKNOWN`; no retry was allowed or performed. Cost explorer attributes one Google AI Mode Search record and displays `USD 0.00`; the account overview displays `Consumed USD 0.00`. |
-| Database/Evidence | `PASS_HOSTED_CORE_CANARY_HOLD` | The durable reservation count is one. Journal lifecycle is `TRIGGERED -> PENDING -> READY -> INTERRUPTED`; no raw capture was persisted and no acceptance evidence was created. |
+| Provider | `PASS_COST / HOLD_OUTCOME_UNKNOWN / DIAGNOSTIC_BLOCKED_SAFE` | Exactly one historical trigger ran. The additional exact-worker command stopped at `MASTER_PROVIDER_GATE_CLOSED` with `providerCalls=0`, zero retries and cost `USD 0`. |
+| Database/Evidence | `PASS_0053_CANARY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. The original durable reservation and interrupted lifecycle remain immutable. |
 | HoReCa Product | `PASS_HOSTED` | Exact active deployment `10b51bd2…` passed authenticated DOM and visual review with projects at left and the six tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS` | Release `5cbb7b25` is integrated into `100d34d8`; exact-source CI and exact staging web reconciliation passed. |
+| Orchestrator | `STAGING_CORE_PASS` | Release `5cbb7b25` is integrated into `100d34d8`; exact-source CI, exact staging web/worker and migration `0053` reconciliation passed. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -72,15 +74,16 @@ five replays, `73/73` tests per replay.
 
 | Item | Receipt |
 |---|---|
-| Fresh backup | `9b961055-4f2e-4cb2-aae6-a348f2b4cd5f`, no expiry |
+| Fresh backup | `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`, pre-`0053`, no expiry |
 | Isolated restored service | `a34b2749-130a-47f3-8da3-8f58e3775fe9`, healthy restored copy |
 | Active reconciled web | `10b51bd2-ff1b-41a7-b9f8-6d628ea9f8f0`, exact archive `100d34d8`, `SUCCESS/RUNNING`, image `sha256:b92d8e81a26aa20127b681f153bfb32d798673e4128009019fb44101006f1536` |
 | Superseded external web drift | release `5cbb7b25`; replaced by the exact accepted implementation deployment |
-| Last reconciled worker | `586b6e9a-736b-4d2c-b510-280dc79fa478`, `SUCCESS/RUNNING` |
+| Active exact worker | `b26865a7-57c4-4fdb-a1a0-567172b10619`, archive `100d34d8`, `SUCCESS/RUNNING`, image `sha256:b546171d7606994e3bf5cd1707ae44802a452613917f0704a6d5e896b812a976` |
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
-| Migration frontier | `0052` snapshot journal present and used by the one-shot canary |
-| Pending source migration | `0053`, not authorized and not applied; actual staging `0045` row matches the one reviewed historical hash alias, proved by boolean-only readback |
+| Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
+| Post-`0053` proof | `selena_app` non-owner/no bypass; FORCE RLS, ordinal column, validated check, unique index and insert guard all present |
 | Provider canary | One trigger; receipt `OUTCOME_UNKNOWN` / `LIFECYCLE_OUTCOME_UNKNOWN`; no retry allowed or performed |
+| Additional diagnostic | Fail-closed preflight `MASTER_PROVIDER_GATE_CLOSED`; `providerCalls=0`, cost `USD 0`, authorization unused |
 | Canary reservation | One durable reservation; approved cap `USD 0.25` |
 | Canary cost | Bright Data Cost explorer: Google AI Mode Search `1 record`, displayed cost `USD 0.00`; account cash consumed `USD 0.00`. Unrounded one-record list-price calculation `USD 0.0015` remains an estimate, not a charge. |
 | Snapshot journal | `TRIGGERED -> PENDING -> READY -> INTERRUPTED`; no capture persistence |
@@ -106,9 +109,11 @@ Status: `PASS_ADMIN_BINDING`.
    `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`. No retry is allowed. Billing
    attribution is closed: one Google AI Mode Search record, displayed cost and
    account cash consumption both `USD 0.00`.
-2. `HOLD_MIGRATION_0053`: source is ready, but staging application was not
-   authorized and was not attempted.
-3. `NO_GO`: production and PR merge while any hold remains open.
+2. `HOLD_DIAGNOSTIC_IDENTITY`: exact source `100d34d8` accepts only the already
+   reserved once-only identity. A real second trigger needs a separately
+   reviewed identity patch and exact-source authorization; deleting the
+   reservation is prohibited.
+3. `NO_GO`: production and PR merge while the provider hold remains open.
 
 ## Rollback posture
 
@@ -116,8 +121,8 @@ Status: `PASS_ADMIN_BINDING`.
   `cc89f46b-b548-4216-a546-362051e98ecd`.
 - Worker rollback posture: scale to zero first; do not restore the historical
   worker unless fail-closed variables are reconfirmed.
-- Database rollback posture: restore from backup
-  `9b961055-4f2e-4cb2-aae6-a348f2b4cd5f`; migrations are forward-only and the
+- Database rollback posture: restore from fresh pre-`0053` backup
+  `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`; migrations are forward-only and the
   isolated restore receipt is the recovery proof.
 - Automatic rollback was not triggered. The provider result is held for
   reconciliation, steady runtime is safely off, and exact `100d34d8` is the

@@ -7,9 +7,9 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 
 - Accepted implementation source: `100d34d8` (merge parent `5cbb7b25`; canonical
   `0045`, follow-up `0053`, exact historical-hash compatibility gate)
-- Feature/PR HEAD when the canary ran: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
-- Contained worker runtime source: `2d023470a618c6606e7960ee4dd1b4523dcbdcfe`
-- Contained worker runtime tree: `aa93f8c258fad557caefdfc81be99e07225d72d5`
+- Feature/PR HEAD when the first canary ran: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
+- Evidence baseline before this update: `8c5a8948143feac7738df50c274459e23d437ddb`
+- Active worker implementation source: `100d34d8`
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Original release snapshot retained for lineage: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
@@ -27,11 +27,11 @@ staging web candidate and passed the hosted recheck.
 |---|---|---|
 | Source package | `PASS_SOURCE` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. Release `5cbb7b25` is merged and the applied-`0045` hash transition is bounded to one reviewed timestamp/hash pair. |
 | Exact-head CI | `PASS` | Build, E2E, scheduling, smoke, license and CLA checks all passed on accepted implementation source `100d34d8`. |
-| Staging database/RLS | `PASS` | Backup/restore, migrations through `0052`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
-| Staging web/worker | `PASS_EXACT_WEB / PASS_CONTAINED_WORKER` | Exact archive `100d34d8` is active on staging web; the previously accepted contained worker remains unchanged. |
+| Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
+| Staging web/worker | `PASS_EXACT_WEB / PASS_EXACT_WORKER` | Exact archive `100d34d8` is active on both staging web and worker. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
-| Google/Bright Data canary | `COST_PASS / OUTCOME_UNKNOWN / HOLD` | Exactly one `GOOGLE_AI_MODE` trigger was made with `providerCalls=1`, `retries=0`, `recurring=false`. Bright Data Cost explorer attributes one `Google AI Mode Search` record and displays its cost as `USD 0.00`; no provider capture was persisted and the terminal lifecycle remains unknown. |
+| Google/Bright Data canary | `COST_PASS / OUTCOME_UNKNOWN / HOLD` | The historical authorization produced exactly one `GOOGLE_AI_MODE` trigger with `providerCalls=1`, `retries=0`, `recurring=false`. The newly authorized diagnostic reached only the exact-worker preflight and was blocked with `MASTER_PROVIDER_GATE_CLOSED`, `providerCalls=0`, cost `USD 0`. Source `100d34d8` also binds the command to the already reserved once-only identity, so no second trigger can run without a separately reviewed identity change. |
 | Production/merge | `NO_GO` | The canary lifecycle remains unresolved; production is prohibited and PR #96 remains unmerged. |
 
 Overall decision: `STAGING_CANARY_HOLD / PRE_PRODUCTION_NO_GO`.
@@ -64,23 +64,24 @@ was `22.23.0`; CI used the required Node 24.
 
 | Gate | Result | Receipt |
 |---|---|---|
-| Fresh checkpoint | `PASS` | Backup `9b961055-4f2e-4cb2-aae6-a348f2b4cd5f`, no expiry. |
+| Fresh checkpoint | `PASS` | Pre-`0053` backup `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`, external snapshot reference present, no expiry. Earlier isolated restore receipt `a34b2749…` remains the recovery-path proof. |
 | Isolated restore | `PASS` | Restore service `a34b2749-130a-47f3-8da3-8f58e3775fe9` became healthy and proved an actual restored copy. |
-| Migration bound | `PASS` | `0043–0052` applied. Drizzle journal receipt: `53/1787940014000`; `0052` hash `3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca`. |
-| Pending migration | `HOLD_NOT_AUTHORIZED` | Source includes `0053`; staging remains at `0052`. No `0053` database mutation was attempted. |
+| Migration bound | `PASS` | Bounded runner deployment `76fe0d58-0fd8-4213-9b11-f852e72de7f8` applied only `0053`: journal `53/1787940014000` → `54/1787940015000`, runner exit `0`. |
+| Post-`0053` schema/RLS | `PASS` | Values-suppressed readback proved `selena_app`, non-owner/no `BYPASSRLS`, FORCE RLS, `legacy_collision_ordinal`, validated nonnegative check, the three-column unique index and insert guard. |
 | Runtime role | `PASS` | `current_user=selena_app`; `SUPER=false`, `BYPASS_RLS=false`, `CREATE_ROLE=false`, `CREATE_DB=false`. |
 | Administration credential | `PASS` | After the owner-confirmed Postgres rotation, a values-suppressed count-only TCP probe through the service's sealed `POSTGRES_USER`/`POSTGRES_PASSWORD` binding returned `ADMIN_TCP=PASS`. |
 | Tenant GUC | `PASS` | `SET LOCAL app.organization_id` succeeded through the active worker connection. |
-| Hosted 0052/RLS proof | `PASS` | `current_user=selena_app`; `SELECT`/`INSERT` allowed; FORCE RLS active; cross-tenant insert failed with SQLSTATE `42501`; transaction ended in `ROLLBACK`; persisted fixture rows `0`. |
+| Hosted RLS proof | `PASS` | `current_user=selena_app`; `SELECT`/`INSERT` allowed; FORCE RLS active; cross-tenant insert failed with SQLSTATE `42501`; transaction ended in `ROLLBACK`; persisted fixture rows `0`. |
 | Replay/concurrency/idempotency | `PASS` | Two concurrent writes produced one winner; replay was stable; cross-tenant read returned no row; active mutation was blocked; expired fixture cleaned up. |
 | Exact web deploy | `PASS` | Deployment `10b51bd2-ff1b-41a7-b9f8-6d628ea9f8f0` from git archive `100d34d8`, image `sha256:b92d8e81a26aa20127b681f153bfb32d798673e4128009019fb44101006f1536`. |
 | Two-axis UI receipt | `PASS_ACTIVE` | Authenticated DOM and visual review on the exact deployment proved `PROJECTS / HoReCa projects` in the complementary left rail and `TOOLS / Workspace tools` across the top with all six tool links. |
-| Worker deploy | `PASS` | Deployment `586b6e9a-736b-4d2c-b510-280dc79fa478`, image `sha256:869ba5e8f0b91d117f857f7c56e5d06f56bd79f0c3152591b457f2c5b81d6871`. |
+| Worker deploy | `PASS_EXACT` | Deployment `b26865a7-57c4-4fdb-a1a0-567172b10619` from exact archive `100d34d8`, image `sha256:b546171d7606994e3bf5cd1707ae44802a452613917f0704a6d5e896b812a976`. |
 | Public health | `PASS` | `app.selenasystems.com`, `staging.selenasystems.com` and `/api/setup-status` returned HTTP 200. |
 | Runtime containment | `PASS` | Logs: legacy provider execution disabled; recurring scheduler disabled and managed schedules removed; pg-boss started; handlers ready; no error-level log. |
 | Canary trigger receipt | `HOLD` | Exactly one `GOOGLE_AI_MODE` trigger: `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`, `providerCalls=1`, `retries=0`, `recurring=false`; no provider capture persisted. |
 | Snapshot lifecycle journal | `PARTIAL/HOLD` | `TRIGGERED=1`, `PENDING=2`, `READY=1`, `INTERRUPTED=1`; no terminal provider outcome was proved. |
 | Steady-state containment | `PASS` | Measurement off, emergency stop on, recurring off and billing off after the bounded trigger. |
+| Additional diagnostic preflight | `PASS_FAIL_CLOSED / CALL_NOT_CONSUMED` | Exact worker receipt: `PREFLIGHT_BLOCKED/MASTER_PROVIDER_GATE_CLOSED`, `providerCalls=0`, `automaticRetries=0`, `recurring=false`, cost `USD 0`. No provider request occurred. |
 | Fixture cleanup | `PASS` | Temporary API organizations `0`; temporary idempotency rows `0`. |
 
 The earlier administration-only credential mismatch is closed. After the
@@ -140,7 +141,7 @@ published. Active application runtime connectivity is proved through
 `selena_app`; the sealed Postgres administration TCP binding also passed a
 values-suppressed count-only probe after rotation.
 
-- Provider calls in this hosted loop: exactly `1`
+- Provider calls recorded across the hosted acceptance: exactly `1`; the new diagnostic preflight made `0` calls
 - Retries: `0`
 - Recurring: `false`
 - Bright Data usage attribution: `Google AI Mode Search`, exactly `1 record`
@@ -155,12 +156,15 @@ values-suppressed count-only probe after rotation.
 
 ## Remaining owner gates
 
-1. Reconcile the single trigger's terminal provider lifecycle. Billing and
-   usage attribution are closed; no retry or second call is authorized.
-2. Migration `0053` is source-only and pending. It was not authorized or
-   applied; the staging journal remains at `0052`.
-3. Keep PR #96 unmerged and production untouched while either HOLD remains
-   open.
+1. Reconcile the single historical trigger's terminal provider lifecycle.
+   Billing and usage attribution are closed.
+2. The additional diagnostic authorization remains unused. Exact source
+   `100d34d8` is intentionally bound to the already reserved once-only identity;
+   a second provider trigger requires a separately reviewed diagnostic identity
+   patch and exact-source authorization. The immutable reservation must not be
+   deleted or rewritten.
+3. Keep PR #96 unmerged and production untouched while the provider HOLD
+   remains open.
 
 ## Current PR-head CI
 
@@ -175,6 +179,13 @@ Accepted implementation source `100d34d8` passed every required check:
 | Deployment smoke | `PASS` | [run 33491587546 / job 99804073275](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33491587546/job/99804073275) |
 | CLA | `PASS` | [run 33491587571 / job 99804073299](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33491587571/job/99804073299) |
 
-The final evidence-only commit may advance the PR HEAD beyond `100d34d8` without
-changing the deployed implementation tree. Green CI and the exact hosted web
-receipt does not resolve the provider lifecycle or unapplied `0053`.
+Evidence baseline `8c5a8948` also passed all required checks: [Build run
+33495715678 / job 99817304988](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715678/job/99817304988),
+[E2E run 33495715658 / job 99817305096](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715658/job/99817305096),
+[scheduling job 99817305480](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715658/job/99817305480),
+[license run 33495715612 / job 99817304446](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715612/job/99817304446),
+[smoke run 33495715685 / job 99817305097](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715685/job/99817305097)
+and [CLA run 33495715599 / job 99817304550](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33495715599/job/99817304550).
+The final evidence-only commit may advance the PR HEAD beyond `100d34d8`
+without changing the deployed implementation tree. Green CI and the exact
+hosted web/worker receipts do not resolve the provider lifecycle.
