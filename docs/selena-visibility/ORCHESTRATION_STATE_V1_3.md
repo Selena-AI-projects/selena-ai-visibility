@@ -1,18 +1,19 @@
 # Selena AI Visibility v1.3 — orchestration state
 
 Updated: `2026-09-01` after diagnostic-2, mandatory worker rollback, exact-web
-drift recovery, first-party Bright Data cost reconciliation and release-head
-integration evidence.
+drift recovery, first-party Bright Data payload/cost reconciliation, bounded
+snapshot remediation and release-head integration evidence.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_TWO_CANARY_OUTCOMES_UNKNOWN_PR_CLEAN`
+- State: `STAGING_CORE_PASS_HISTORICAL_PAYLOAD_VALIDATED_PERSISTENCE_HOLD`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Accepted staging implementation source: `100d34d8`
 - Diagnostic-2 runtime source: `a9d1f373c48b64127873b34016ce398eabe00c3f`
 - Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
-- Last complete exact-head PR receipt: `2b057229f46f041954403ef9c9ff485a87d7b785`
+- Bounded snapshot-download remediation source: `4a1fd948`
+- Last complete exact-head PR receipt: `4a1fd94803d1a457ab426ff765e2c1052c423646`
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
 - Active exact staging web: `100d34d8`, deployment `c3002c7d…`, restored after
   automatic `release@2e21ef04` drift
@@ -50,10 +51,10 @@ and excluded from every commit and archive.
 
 | Stream | Result | Current boundary |
 |---|---|---|
-| Provider | `PASS_COST / HOLD_TWO_OUTCOMES_UNKNOWN` | Historical and diagnostic-2 identities each made one call. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
+| Provider | `PASS_HISTORICAL_PAYLOAD / HOLD_PERSISTENCE_AND_DIAGNOSTIC` | Historical identity is exactly bound to provider snapshot `sd_mtiflifw2lfu6ne28l`; its one-record payload has a non-empty answer and four normalized citations. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
 | Database/Evidence | `PASS_0053_CANARY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Both reservations remain immutable. |
 | HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `2e21ef04` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / PROVIDER_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Release `2e21ef04` is integrated by merge `34d86417`; PR is clean but merge is not executed. |
+| Orchestrator | `STAGING_CORE_PASS / PROVIDER_PERSISTENCE_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload is reconciled read-only; no retroactive capture write or new call occurred. Release `2e21ef04` is integrated by merge `34d86417`; PR is clean but merge is not executed. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -64,13 +65,16 @@ checks passed on canary-time feature HEAD `3872a396`; current candidate
 Its final source CI and exact hosted web reconciliation passed. Commit
 `a9d1f373` adds only the immutable diagnostic-2 identity contract and its test;
 its manually dispatchable workflows passed. Release-integrated evidence head
-`2b057229` passed the complete PR suite. Source `4f701b35` adds only redacted
+`4a1fd948` passed the complete PR suite. Source `4f701b35` adds only redacted
 trigger failure categories and deterministic mocked tests; it cannot
 retroactively identify diagnostic-2's generic `TRIGGER_OUTCOME_UNKNOWN`.
+Source `4a1fd948` corrects the independently proved historical download defect:
+control responses remain limited to 1 MB while snapshot downloads are bounded
+at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
-- Last complete exact-head receipt: `2b057229f46f041954403ef9c9ff485a87d7b785`
+- Last complete exact-head receipt: `4a1fd94803d1a457ab426ff765e2c1052c423646`
 - Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
 - PR merge aggregation at that receipt: PR #96 `open`, `mergeable=true`,
   `mergeable_state=clean`; merge remains intentionally unexecuted
@@ -87,7 +91,9 @@ Previously recorded local source gates: lint `0 errors / 129 warnings / 12 infos
 Focused Bright Data timeout stability: `20/20`. Focused Local Maps stability:
 five replays, `73/73` tests per replay. Trigger taxonomy source `4f701b35`
 passed lib typecheck, `1086/1086` lib tests, the same root lint baseline and
-root build `16/16` locally.
+root build `16/16` locally. Snapshot-cap source `4a1fd948` passed its focused
+provider suite `19/19` and targeted Biome check; final mutable-head CI is tracked
+on PR #96.
 
 ## Staging receipts
 
@@ -101,11 +107,12 @@ root build `16/16` locally.
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
 | Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
 | Post-`0053` proof | `selena_app` non-owner/no bypass; FORCE RLS, ordinal column, validated check, unique index and insert guard all present |
-| Provider canaries | Historical: `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`; diagnostic-2: `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN`; one call each, zero retries, recurring false |
+| Provider canaries | Historical: exact snapshot `sd_mtiflifw2lfu6ne28l`, provider `READY`, one validated payload record; diagnostic-2: `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN`; one trigger each, zero retries, recurring false |
 | Diagnostic-2 reservation | `db:e432156c-7f5d-40ef-ad40-72a883affac9`; cap `USD 0.25`; internal cost status `UNKNOWN/REQUIRED`; immutable |
 | Diagnostic-2 lifecycle | No `snapshotReference`, record count or new lifecycle event; command terminal in `0.34s`; no retry authorized |
 | Canary cost | First-party post-diagnostic exports: Google AI Mode Search `1 record`, `USD 0.0015` total for 1 September. Because the same one record existed before diagnostic-2, diagnostic-2 added `0` records and `USD 0.0000` incremental billing. |
-| Snapshot journal | `TRIGGERED -> PENDING -> READY -> INTERRUPTED`; no capture persistence |
+| Historical payload | Read-only download: 1,543,419 bytes, file SHA-256 `bfb2ebcae1b69d20573f62e46aa5b586bacaedf8b9e617753b42a4b7a8d64c5a`; immutable schema-discovery validation passed with canonical hash `sha256:7b465dc14c050742f77fd37ecca4c64c5ff1f92eb30a945a9f60d688a8e3721f`, one record, non-empty answer and four normalized citations. |
+| Snapshot journal | Exact raw ID match: `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED`, first event `08:54:47.108Z`; one tenant/project/dataset; no capture persistence |
 | Runtime logs | Steady provider path disabled after the canary; recurring scheduler disabled; pg-boss started; handlers ready |
 | Browser | Both health endpoints 200; HoReCa unauth redirect correct; authenticated project-rail/tool-axis DOM and visual review passed; page-origin errors 0 |
 | API | Two scoped tenants isolated; invalid key 401; fixtures removed |
@@ -116,17 +123,20 @@ root build `16/16` locally.
 
 Owner-confirmed names-only rotation: `BRIGHTDATA`, `OPENAI`, `OPENROUTER`,
 `RESEND`, `GITHUB`, staging Postgres. Active application DB connectivity is
-proved with the rotated `selena_app` binding. A values-suppressed count-only
-probe after the owner-confirmed rotation returned `ADMIN_TCP=PASS` for the
-Postgres service's sealed administration binding. No value was read.
+proved with the rotated `selena_app` binding. After a Railway tunnel diagnostic
+unexpectedly exposed the administration value in restricted tool output, the
+staging PostgreSQL owner role and sealed Railway variable were rotated again.
+A values-suppressed TCP probe passed and temporary rotation material was
+destroyed; no value is retained in source or this report.
 
-Status: `PASS_ADMIN_BINDING`.
+Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 
 ## Remaining gates
 
-1. `HOLD_PROVIDER_TERMINAL`: both immutable calls have unknown terminal
-   provider outcomes. Neither call may be retried. Billing attribution is
-   closed at one Google AI Mode record and `USD 0.0015` total for the day.
+1. `HOLD_PROVIDER_PERSISTENCE`: historical identity, provider snapshot, payload
+   and cost are reconciled; no retroactive staging capture write is authorized
+   or fabricated. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN` and neither
+   immutable identity may be retried.
 2. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 

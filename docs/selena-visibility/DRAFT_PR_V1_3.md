@@ -1,15 +1,16 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
+Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
 - Current remote base head: `2e21ef04`; integrated by merge commit `34d86417`
-- Last complete exact-head PR receipt: `2b057229`, base `2e21ef04`,
-  `mergeable=true`, `mergeable_state=clean`, all six checks passed
+- Last complete exact-head PR receipt: `4a1fd948`, base `2e21ef04`,
+  `mergeable=true`, all six checks passed
 - Accepted staging implementation source: `100d34d8`
 - Diagnostic-2 runtime source: `a9d1f373`
 - Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
+- Bounded snapshot-download remediation source: `4a1fd948`
 - Canary-time feature HEAD: `3872a396`
 - Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
 - Active staging web after drift recovery: `100d34d8`, deployment `c3002c7d…`
@@ -55,7 +56,10 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 - two separately authorized immutable identities each made exactly one Bright
   Data `GOOGLE_AI_MODE` call;
-- historical receipt: `OUTCOME_UNKNOWN / LIFECYCLE_OUTCOME_UNKNOWN`;
+- historical snapshot `sd_mtiflifw2lfu6ne28l` is exactly bound to five staging
+  journal events: `TRIGGERED`, two `PENDING`, `READY`, `INTERRUPTED`;
+- provider `READY` timestamp `08:54:46Z` precedes the first journal event at
+  `08:54:47.108Z`; one tenant/project/dataset matched the raw ID;
 - diagnostic-2 receipt: `OUTCOME_UNKNOWN / TRIGGER_OUTCOME_UNKNOWN`;
 - each call used `automaticRetries=0`, `retryAllowed=false` and
   `recurring=false`;
@@ -63,7 +67,12 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
   `db:e432156c-7f5d-40ef-ad40-72a883affac9`;
 - diagnostic-2 completed in `0.34s` with no snapshot reference, record count or
   new snapshot-lifecycle event;
-- no accepted provider capture was persisted by either call;
+- read-only download produced one 1,543,419-byte record; offline registry
+  validation passed with a non-empty normalized answer and four citations;
+- the historical interruption is explained by the former 1 MB download cap;
+  source `4a1fd948` keeps control responses at 1 MB and bounds snapshot downloads
+  at 4 MiB;
+- no accepted provider capture was retroactively persisted by either call;
 - first-party Bright Data exports after diagnostic-2 show exactly one Google AI
   Mode Search record and `USD 0.0015` total for 1 September;
 - the pre-diagnostic evidence already contained the same one record, therefore
@@ -76,6 +85,10 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 - prospective source diagnostics now classify HTTP 4xx/5xx, invalid response,
   transport failure and hard trigger timeout without logging the provider body;
   this does not reinterpret either already-consumed canary receipt.
+- the staging Postgres administration credential was rotated again after a
+  Railway tunnel diagnostic exposed it in restricted tool output; the sealed
+  variable and database role were updated together, a values-suppressed TCP
+  probe passed and temporary rotation material was destroyed.
 
 ### HoReCa hosted evidence
 
@@ -105,13 +118,13 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### CI evidence
 
-- release-integrated evidence head `2b057229` passed Build, E2E Integration,
+- release-integrated evidence head `4a1fd948` passed Build, E2E Integration,
   Scheduling Policy Verification, Deployment Smoke, License and CLA; exact run
   links are in `ACCEPTANCE_MATRIX_V1_3.md`;
 - release integration `34d86417` preserved the feature historical-hash gate,
   adopted release advisory-lock ordering and passed lib migration tests `10/10`
   plus CLI migration image tests `2/2` locally;
-- GitHub reported PR #96 clean and mergeable at `2b057229`; this source-quality
+- GitHub reported PR #96 mergeable at `4a1fd948`; this source-quality
   result does not override the provider HOLD;
 - the E2E scheduling job now replays the final bounded runner through `0053`
   against disposable real PostgreSQL after the journal is already complete;
@@ -123,8 +136,9 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### Remaining gates
 
-1. Both Bright Data terminal outcomes remain `UNKNOWN/HOLD`; first-party cost
-   and usage attribution is closed and neither execution may be retried.
+1. Historical Bright Data identity, payload and cost are reconciled, but no
+   retroactive staging capture write is authorized. Diagnostic-2 remains
+   `TRIGGER_OUTCOME_UNKNOWN`; neither execution may be retried.
 2. Production, production DB, recurring jobs, billing activation,
    Social/Travel activation, additional provider calls and PR merge remain
    prohibited.
