@@ -18,6 +18,8 @@ export type EvidenceReadModel = {
 	capturedAt: string;
 	moduleState: HoReCaModuleState;
 	provenanceState: "LINKED" | "PARTIAL" | "UNKNOWN";
+	acceptanceStatus: "ACCEPTED" | "UNKNOWN";
+	acceptedAt: string | null;
 };
 
 export type EvidenceReadPage = {
@@ -36,7 +38,7 @@ export type EvidenceCoverageSummary = {
 	coverage: number | null;
 };
 
-type EvidenceProjection = {
+export type EvidenceProjection = {
 	organizationId: string;
 	projectId: string;
 	evidenceId: string;
@@ -53,6 +55,8 @@ type EvidenceProjection = {
 	outputSchemaVersion: string | null;
 	capabilityInputSchemaVersion: string | null;
 	capabilityOutputSchemaVersion: string | null;
+	acceptanceStatus: string | null;
+	acceptedAt: Date | null;
 	evidenceCapturedAt: Date;
 };
 
@@ -185,7 +189,8 @@ export function toEvidenceReadModel(
 		throw new Error("Not found: evidence is outside AuthContext tenant or project");
 	const hasSnapshot = row.sourceSnapshotId !== null;
 	const compatibleDomain =
-		row.capabilityDomain === row.domainId || (row.capabilityDomain === "ENTITY" && row.domainId === "LOCAL");
+		row.capabilityDomain === row.domainId ||
+		(row.capabilityDomain === "ENTITY" && (row.domainId === "LOCAL" || row.domainId === "LOCAL_MAPS"));
 	const hasVersionedCapability =
 		hasSnapshot &&
 		row.capabilityId !== null &&
@@ -197,6 +202,12 @@ export function toEvidenceReadModel(
 		row.inputSchemaVersion === row.capabilityInputSchemaVersion &&
 		row.outputSchemaVersion !== null &&
 		row.outputSchemaVersion === row.capabilityOutputSchemaVersion;
+	const acceptedAtMs = row.acceptedAt?.getTime();
+	const accepted =
+		row.acceptanceStatus === "ACCEPTED" &&
+		typeof acceptedAtMs === "number" &&
+		Number.isFinite(acceptedAtMs) &&
+		acceptedAtMs >= row.evidenceCapturedAt.getTime();
 	return {
 		evidenceId: row.evidenceId,
 		domain: row.domainId,
@@ -206,6 +217,8 @@ export function toEvidenceReadModel(
 		capturedAt: row.evidenceCapturedAt.toISOString(),
 		moduleState: customerModuleState(row.capabilityStatus),
 		provenanceState: hasVersionedCapability ? "LINKED" : hasSnapshot ? "PARTIAL" : "UNKNOWN",
+		acceptanceStatus: accepted ? "ACCEPTED" : "UNKNOWN",
+		acceptedAt: accepted ? (row.acceptedAt?.toISOString() ?? null) : null,
 	};
 }
 
@@ -301,6 +314,8 @@ export function createSelenaEvidenceReadRepository(
 						outputSchemaVersion: schema.svEvidenceReadModel.outputSchemaVersion,
 						capabilityInputSchemaVersion: schema.svEvidenceReadModel.capabilityInputSchemaVersion,
 						capabilityOutputSchemaVersion: schema.svEvidenceReadModel.capabilityOutputSchemaVersion,
+						acceptanceStatus: schema.svEvidenceReadModel.acceptanceStatus,
+						acceptedAt: schema.svEvidenceReadModel.acceptedAt,
 						evidenceCapturedAt: schema.svEvidenceReadModel.evidenceCapturedAt,
 					})
 					.from(schema.svEvidenceReadModel)

@@ -12,15 +12,37 @@ fi
 
 psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
 
+cleanup_runtime_role() {
+	local role_exists
+	role_exists="$("${psql[@]}" -Atc "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')")"
+	if [[ "$role_exists" == "t" ]]; then
+		"${psql[@]}" -c 'DROP OWNED BY selena_app; DROP ROLE selena_app;' >/dev/null
+	fi
+}
+
+cleanup_on_exit() {
+	local exit_code=$?
+	trap - EXIT
+	if ! cleanup_runtime_role; then
+		printf 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_CLEANUP_FAILED\n' >&2
+		if ((exit_code == 0)); then exit_code=1; fi
+	fi
+	exit "$exit_code"
+}
+trap cleanup_on_exit EXIT
+
 # Gate 12 creates the complete disposable parent graph and applies the ordered
 # migration chain through 0050. It makes no external provider call.
 bash "$repo_root/tools/visibility_os_gate12_e2e.sh" "$compose_file" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0051_visibility_os_provider_evidence_provenance.sql" >/dev/null
+"${psql[@]}" -v role_password=selena_disposable_role_proof_only \
+	< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql" >/dev/null
 "${psql[@]}" < "$repo_root/tools/visibility_os_0051_rls_schema_proof.sql"
+cleanup_runtime_role
 
-if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_provider_dataset_capabilities') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_rls_schema_probe') AND NOT EXISTS (SELECT 1 FROM organization WHERE id IN ('rls-schema-proof-org-a', 'rls-schema-proof-org-b'))")" != "t" ]]; then
+if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_provider_dataset_capabilities') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app') AND NOT EXISTS (SELECT 1 FROM organization WHERE id IN ('rls-schema-proof-org-a', 'rls-schema-proof-org-b'))")" != "t" ]]; then
 	printf 'RLS_SCHEMA_PROOF_ROLLBACK_RECEIPT_FAILED\n' >&2
 	exit 1
 fi
 
-printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migration=0051 rollback=verified\n'
+printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migration=0051 runtime_role=validated cleanup=verified\n'

@@ -218,6 +218,7 @@ describe("Visibility OS provider evidence provenance", () => {
 			(candidate) => candidate.name === "sv_source_snapshots_provider_capture_metadata_check",
 		);
 		const outputSchema = snapshot.columns.find((column) => column.name === "output_schema_version");
+		const digestFormatValid = snapshot.columns.find((column) => column.name === "content_sha256_format_valid");
 		const compiledCheck = metadataCheck && new PgDialect().sqlToQuery(metadataCheck.value).sql;
 		expect(capabilityReference?.reference().columns.map((column) => column.name)).toEqual([
 			"capability_id",
@@ -228,6 +229,8 @@ describe("Visibility OS provider evidence provenance", () => {
 			"organization_id",
 		]);
 		expect(outputSchema?.notNull).toBe(false);
+		expect(digestFormatValid?.generated).toMatchObject({ type: "always", mode: "stored" });
+		expect(compiledCheck).toContain('"output_schema_version"');
 		expect(compiledCheck).toContain('"output_schema_version" IS NULL');
 	});
 
@@ -254,6 +257,11 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_provider_dataset_capabilities"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_source_snapshots"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_evidence_index"');
+		expect(migration).toContain('ALTER TABLE "sv_evidence_acceptance_receipts" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain("EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE");
 		expect(migration).toContain('REVOKE ALL ON "sv_evidence_provenance" FROM PUBLIC');
 		expect(migration).toContain("IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
 		expect(migration).toContain(`EXECUTE 'REVOKE ALL ON "sv_evidence_provenance" FROM selena_app'`);
@@ -275,6 +283,33 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(migration).not.toContain("provider_call");
 	});
 
+	it("models one immutable tenant-scoped acceptance receipt per evidence row", () => {
+		const evidence = getTableConfig(schema.svEvidenceIndex);
+		const receipt = getTableConfig(schema.svEvidenceAcceptanceReceipts);
+		expect(
+			evidence.indexes.find((index) => index.config.name === "sv_evidence_index_id_organization_unique")?.config.unique,
+		).toBe(true);
+		expect(receipt.name).toBe("sv_evidence_acceptance_receipts");
+		expect(receipt.enableRLS).toBe(true);
+		expect(
+			receipt.indexes.find((index) => index.config.name === "sv_evidence_acceptance_receipts_org_evidence_unique")
+				?.config.unique,
+		).toBe(true);
+		const reference = receipt.foreignKeys.find(
+			(candidate) => candidate.getName() === "sv_evidence_acceptance_receipts_evidence_org_fk",
+		);
+		expect(reference?.reference().columns.map((column) => column.name)).toEqual(["evidence_id", "organization_id"]);
+		expect(reference?.reference().foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(receipt.columns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+			"evidence_id",
+			"accepted_at",
+			"accepted_by",
+			"created_at",
+		]);
+	});
+
 	it("exposes a separate security-invoker evidence projection without raw provenance", () => {
 		const migration = readFileSync(
 			new URL("./migrations/0051_visibility_os_provider_evidence_provenance.sql", import.meta.url),
@@ -293,6 +328,8 @@ describe("Visibility OS provider evidence provenance", () => {
 				"source_snapshot_id",
 				"capability_id",
 				"source_type",
+				"acceptance_status",
+				"accepted_at",
 				"evidence_captured_at",
 			]),
 		);
@@ -303,12 +340,15 @@ describe("Visibility OS provider evidence provenance", () => {
 			"environment",
 			"content_sha256",
 			"snapshot",
+			"accepted_by",
 		])
 			expect(columns).not.toContain(forbidden);
 		expect(migration).toContain('CREATE VIEW "sv_evidence_read_model" WITH (security_invoker = true)');
 		expect(migration).toContain('REVOKE ALL ON "sv_evidence_read_model" FROM PUBLIC');
 		expect(migration).toContain('GRANT SELECT ON "sv_evidence_read_model" TO selena_app');
 		expect(migration).toContain('REVOKE SELECT ON "sv_source_snapshots" FROM selena_app');
+		expect(migration).toContain('"content_sha256_format_valid" boolean');
+		expect(migration).toContain('"content_sha256_format_valid",');
 		expect(migration).not.toMatch(
 			/GRANT SELECT \([\s\S]*?"content_sha256"[\s\S]*?\) ON "sv_source_snapshots" TO selena_app/,
 		);
@@ -320,12 +360,27 @@ describe("Visibility OS provider evidence provenance", () => {
 			new URL("../../../../tools/visibility_os_0051_rls_schema_proof.sql", import.meta.url),
 			"utf8",
 		);
+		const proofE2e = readFileSync(
+			new URL("../../../../tools/visibility_os_0051_rls_schema_proof_e2e.sh", import.meta.url),
+			"utf8",
+		);
 
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
 		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
 		expect(roleBootstrap).toContain("\nCOMMIT;");
 		expect(roleBootstrap).toContain("WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
 		expect(roleBootstrap).toContain("\\gexec");
+		expect(roleBootstrap).toContain("NOINHERIT NOBYPASSRLS");
+		for (const relation of [
+			"sv_evidence_index",
+			"sv_measurement_cycles",
+			"sv_configuration_locks",
+			"sv_measurement_datasets",
+			"sv_source_snapshots",
+			"sv_provider_dataset_capabilities",
+			"sv_evidence_acceptance_receipts",
+		])
+			expect(roleBootstrap).toContain(`ALTER TABLE ${relation} FORCE ROW LEVEL SECURITY;`);
 		expect(roleBootstrap).toContain("CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)");
 		expect(roleBootstrap).toContain("SECURITY DEFINER\nSET search_path = ''");
 		expect(roleBootstrap).toContain("REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC");
@@ -333,8 +388,14 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).not.toContain("GRANT USAGE, SELECT ON ALL SEQUENCES");
 		expect(roleBootstrap).not.toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT");
 		expect(roleBootstrap).not.toMatch(
-			/GRANT SELECT \([\s\S]*?content_sha256[\s\S]*?\) ON sv_source_snapshots TO selena_app/,
+			/GRANT SELECT \([\s\S]*?\bcontent_sha256\b(?:\s|,|\))[\s\S]*?\) ON sv_source_snapshots TO selena_app/,
 		);
+		expect(roleBootstrap).toContain("content_sha256_format_valid");
+		expect(roleBootstrap).toContain("REVOKE ALL ON sv_evidence_acceptance_receipts FROM selena_app");
+		expect(roleBootstrap).toMatch(
+			/GRANT SELECT \(id, organization_id, evidence_id, accepted_at\)\s+ON sv_evidence_acceptance_receipts TO selena_app/,
+		);
+		expect(roleBootstrap).not.toMatch(/GRANT (?:SELECT|INSERT)[^;]*accepted_by[^;]*TO selena_app/);
 		expect(roleBootstrap).toMatch(
 			/REVOKE SELECT \([\s\S]*?content_sha256[\s\S]*?\) ON sv_source_snapshots FROM selena_app/,
 		);
@@ -342,6 +403,16 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_DELETE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_TRUNCATE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_CONTENT_HASH_VISIBLE");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_ACTOR_VISIBLE");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_RELATION_NOT_FORCED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_CROSS_TENANT_VISIBLE");
+		expect(proof).toContain("SET LOCAL ROLE selena_app");
+		expect(proof).not.toContain("selena_rls_schema_probe");
+		expect(proofE2e).toContain('< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql"');
+		expect(proofE2e).toContain("DROP OWNED BY selena_app; DROP ROLE selena_app;");
+		expect(proofE2e).toContain("trap cleanup_on_exit EXIT");
 	});
 });
 

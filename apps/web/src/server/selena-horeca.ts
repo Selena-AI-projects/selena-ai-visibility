@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svEvidenceReadModel } from "@workspace/lib/db/schema";
-import { toEvidenceReadModel } from "@workspace/lib/selena-evidence-read-models";
+import { type EvidenceProjection, toEvidenceReadModel } from "@workspace/lib/selena-evidence-read-models";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -20,6 +20,15 @@ const horecaWorkspaceInputSchema = z.object({
 	projectId: z.string().uuid().optional(),
 	evidenceId: z.string().uuid().optional(),
 });
+
+export function toHorecaApplicationEvidence(row: EvidenceProjection, scope: { tenantId: string; projectId: string }) {
+	return {
+		...toEvidenceReadModel(row, scope),
+		organizationId: row.organizationId,
+		projectId: row.projectId,
+		snapshotLinked: row.sourceSnapshotId !== null,
+	};
+}
 
 async function readApplicationEvidence(tenantId: string, projectId: string) {
 	const rows = await withOrganizationTransaction(db, tenantId, (tx) =>
@@ -41,6 +50,8 @@ async function readApplicationEvidence(tenantId: string, projectId: string) {
 				outputSchemaVersion: svEvidenceReadModel.outputSchemaVersion,
 				capabilityInputSchemaVersion: svEvidenceReadModel.capabilityInputSchemaVersion,
 				capabilityOutputSchemaVersion: svEvidenceReadModel.capabilityOutputSchemaVersion,
+				acceptanceStatus: svEvidenceReadModel.acceptanceStatus,
+				acceptedAt: svEvidenceReadModel.acceptedAt,
 				evidenceCapturedAt: svEvidenceReadModel.evidenceCapturedAt,
 			})
 			.from(svEvidenceReadModel)
@@ -49,19 +60,7 @@ async function readApplicationEvidence(tenantId: string, projectId: string) {
 			.limit(MAX_HORECA_EVIDENCE_ROWS + 1),
 	);
 	if (rows.length > MAX_HORECA_EVIDENCE_ROWS) throw new Error("HORECA_EVIDENCE_WINDOW_EXCEEDED");
-	return rows.map((row) => {
-		const evidence = toEvidenceReadModel(row, { tenantId, projectId });
-		return {
-			...evidence,
-			organizationId: row.organizationId,
-			projectId: row.projectId,
-			// The safe projection has no authoritative acceptance decision or
-			// timestamp. Keep it UNKNOWN until such a record can be joined.
-			acceptanceStatus: "UNKNOWN" as const,
-			acceptedAt: null,
-			snapshotLinked: row.sourceSnapshotId !== null,
-		};
-	});
+	return rows.map((row) => toHorecaApplicationEvidence(row, { tenantId, projectId }));
 }
 
 export const getSelenaHorecaWorkspaceFn = createServerFn({ method: "GET" })

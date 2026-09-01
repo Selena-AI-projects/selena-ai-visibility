@@ -11,6 +11,13 @@ BEGIN;
 DO $preflight$
 BEGIN
 	IF to_regclass('public.sv_provider_canary_executions') IS NULL
+		OR to_regclass('public.sv_evidence_index') IS NULL
+		OR to_regclass('public.sv_measurement_cycles') IS NULL
+		OR to_regclass('public.sv_configuration_locks') IS NULL
+		OR to_regclass('public.sv_measurement_datasets') IS NULL
+		OR to_regclass('public.sv_source_snapshots') IS NULL
+		OR to_regclass('public.sv_provider_dataset_capabilities') IS NULL
+		OR to_regclass('public.sv_evidence_acceptance_receipts') IS NULL
 		OR to_regclass('public.sv_evidence_read_model') IS NULL
 		OR to_regprocedure('public.sv_resolve_api_key_context(text)') IS NULL THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051';
@@ -19,14 +26,25 @@ END;
 $preflight$;
 
 SELECT format(
-	'CREATE ROLE selena_app LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS',
+	'CREATE ROLE selena_app LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
 	:'role_password'
 )
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')
 \gexec
 
-ALTER ROLE selena_app LOGIN PASSWORD :'role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+ALTER ROLE selena_app LOGIN PASSWORD :'role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
 GRANT USAGE ON SCHEMA public TO selena_app;
+
+-- The safe evidence view is security-invoker. Force every tenant policy on its
+-- complete underlying graph so an accidental owner connection cannot bypass
+-- isolation while the runtime role is being accepted or rotated.
+ALTER TABLE sv_evidence_index FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_measurement_cycles FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_configuration_locks FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_measurement_datasets FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_source_snapshots FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_provider_dataset_capabilities FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_evidence_acceptance_receipts FORCE ROW LEVEL SECURITY;
 
 -- Remove privileges left by an older version of this bootstrap before applying
 -- the explicit runtime allowlist. No future table or sequence is auto-granted.
@@ -83,7 +101,8 @@ REVOKE SELECT (
 ) ON sv_source_snapshots FROM selena_app;
 GRANT SELECT (
 	id, organization_id, source_type, capability_id,
-	input_schema_version, output_schema_version, captured_at, immutable, created_at
+	input_schema_version, output_schema_version, content_sha256_format_valid,
+	captured_at, immutable, created_at
 ) ON sv_source_snapshots TO selena_app;
 
 -- Security-invoker read models also require read access to their safe
@@ -92,6 +111,9 @@ GRANT SELECT ON
 	sv_evidence_read_model, sv_visibility_map_points, sv_visibility_map_datasets
 TO selena_app;
 REVOKE ALL ON sv_evidence_provenance FROM selena_app;
+REVOKE ALL ON sv_evidence_acceptance_receipts FROM selena_app;
+GRANT SELECT (id, organization_id, evidence_id, accepted_at)
+	ON sv_evidence_acceptance_receipts TO selena_app;
 
 -- Bootstrap only the tenant identifier needed to enter report-table RLS. The
 -- function cannot return report content and ignores unattributed legacy rows.

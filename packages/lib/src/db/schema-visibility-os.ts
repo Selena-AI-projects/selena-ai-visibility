@@ -398,6 +398,9 @@ export const svSourceSnapshots = pgTable(
 		sourceType: text("source_type").notNull(),
 		sourceRef: text("source_ref").notNull(),
 		contentSha256: text("content_sha256").notNull(),
+		contentSha256FormatValid: boolean("content_sha256_format_valid").generatedAlwaysAs(
+			sql`"content_sha256" ~ '^(sha256:)?[a-f0-9]{64}$'`,
+		),
 		snapshot: jsonb("snapshot").notNull(),
 		capabilityId: uuid("capability_id"),
 		providerDatasetRef: text("provider_dataset_ref"),
@@ -453,6 +456,7 @@ export const svEvidenceIndex = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
+		idOrganizationUnique: uniqueIndex("sv_evidence_index_id_organization_unique").on(table.id, table.organizationId),
 		domainObservationUnique: uniqueIndex("sv_evidence_index_domain_observation_unique").on(
 			table.domainId,
 			table.observationRef,
@@ -473,6 +477,32 @@ export const svEvidenceIndex = pgTable(
 			name: "sv_evidence_index_source_snapshot_org_fk",
 		}),
 		orgCycleIdx: index("sv_evidence_index_org_cycle_idx").on(table.organizationId, table.cycleId),
+	}),
+).enableRLS();
+
+export const svEvidenceAcceptanceReceipts = pgTable(
+	"sv_evidence_acceptance_receipts",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		evidenceId: uuid("evidence_id").notNull(),
+		acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull(),
+		acceptedBy: text("accepted_by").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		evidenceOrganizationReference: foreignKey({
+			columns: [table.evidenceId, table.organizationId],
+			foreignColumns: [svEvidenceIndex.id, svEvidenceIndex.organizationId],
+			name: "sv_evidence_acceptance_receipts_evidence_org_fk",
+		}),
+		orgEvidenceUnique: uniqueIndex("sv_evidence_acceptance_receipts_org_evidence_unique").on(
+			table.organizationId,
+			table.evidenceId,
+		),
+		actorCheck: check("sv_evidence_acceptance_receipts_actor_check", sql`length(trim(${table.acceptedBy})) > 0`),
 	}),
 ).enableRLS();
 
@@ -532,6 +562,8 @@ export const svEvidenceReadModel = pgView("sv_evidence_read_model", {
 	capabilityStatus: text("capability_status"),
 	capabilityInputSchemaVersion: text("capability_input_schema_version"),
 	capabilityOutputSchemaVersion: text("capability_output_schema_version"),
+	acceptanceStatus: text("acceptance_status"),
+	acceptedAt: timestamp("accepted_at", { withTimezone: true }),
 	evidenceCapturedAt: timestamp("evidence_captured_at", { withTimezone: true }).notNull(),
 }).existing();
 

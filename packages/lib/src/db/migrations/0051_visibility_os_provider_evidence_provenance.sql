@@ -167,7 +167,9 @@ ALTER TABLE "sv_source_snapshots"
 	ADD COLUMN "environment" text,
 	ADD COLUMN "raw_reference" text,
 	ADD COLUMN "input_schema_version" text,
-	ADD COLUMN "output_schema_version" text;
+	ADD COLUMN "output_schema_version" text,
+	ADD COLUMN "content_sha256_format_valid" boolean
+		GENERATED ALWAYS AS ("content_sha256" ~ '^(sha256:)?[a-f0-9]{64}$') STORED;
 --> statement-breakpoint
 ALTER TABLE "sv_source_snapshots"
 	ADD CONSTRAINT "sv_source_snapshots_capability_org_fk"
@@ -279,6 +281,77 @@ CREATE TRIGGER "sv_evidence_index_truncate_guard"
 	BEFORE TRUNCATE ON "sv_evidence_index"
 	FOR EACH STATEMENT EXECUTE FUNCTION "sv_reject_evidence_mutation"();
 --> statement-breakpoint
+CREATE UNIQUE INDEX "sv_evidence_index_id_organization_unique"
+	ON "sv_evidence_index" ("id", "organization_id");
+--> statement-breakpoint
+CREATE TABLE "sv_evidence_acceptance_receipts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"organization_id" text NOT NULL REFERENCES "organization"("id"),
+	"evidence_id" uuid NOT NULL,
+	"accepted_at" timestamptz NOT NULL,
+	"accepted_by" text NOT NULL,
+	"created_at" timestamptz DEFAULT now() NOT NULL,
+	CONSTRAINT "sv_evidence_acceptance_receipts_evidence_org_fk"
+		FOREIGN KEY ("evidence_id", "organization_id")
+		REFERENCES "sv_evidence_index" ("id", "organization_id"),
+	CONSTRAINT "sv_evidence_acceptance_receipts_actor_check"
+		CHECK (length(trim("accepted_by")) > 0)
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX "sv_evidence_acceptance_receipts_org_evidence_unique"
+	ON "sv_evidence_acceptance_receipts" ("organization_id", "evidence_id");
+--> statement-breakpoint
+ALTER TABLE "sv_evidence_acceptance_receipts" ENABLE ROW LEVEL SECURITY;
+--> statement-breakpoint
+ALTER TABLE "sv_evidence_acceptance_receipts" FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
+CREATE POLICY "tenant_isolation" ON "sv_evidence_acceptance_receipts"
+	USING ("organization_id" = current_setting('app.organization_id', true))
+	WITH CHECK ("organization_id" = current_setting('app.organization_id', true));
+--> statement-breakpoint
+CREATE FUNCTION "sv_enforce_evidence_acceptance_receipt"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+	evidence_captured_at timestamptz;
+BEGIN
+	SELECT "captured_at" INTO evidence_captured_at
+	FROM "sv_evidence_index"
+	WHERE "id" = NEW."evidence_id"
+		AND "organization_id" = NEW."organization_id";
+	IF NOT FOUND THEN
+		RAISE EXCEPTION 'EVIDENCE_ACCEPTANCE_SOURCE_NOT_VISIBLE';
+	END IF;
+	IF NEW."accepted_at" < evidence_captured_at THEN
+		RAISE EXCEPTION 'EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE';
+	END IF;
+	RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION "sv_reject_evidence_acceptance_mutation"() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+	RAISE EXCEPTION 'EVIDENCE_ACCEPTANCE_IMMUTABLE';
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER "sv_evidence_acceptance_receipts_scope_guard"
+	BEFORE INSERT ON "sv_evidence_acceptance_receipts"
+	FOR EACH ROW EXECUTE FUNCTION "sv_enforce_evidence_acceptance_receipt"();
+--> statement-breakpoint
+CREATE TRIGGER "sv_evidence_acceptance_receipts_immutable_guard"
+	BEFORE UPDATE OR DELETE ON "sv_evidence_acceptance_receipts"
+	FOR EACH ROW EXECUTE FUNCTION "sv_reject_evidence_acceptance_mutation"();
+--> statement-breakpoint
+CREATE TRIGGER "sv_evidence_acceptance_receipts_truncate_guard"
+	BEFORE TRUNCATE ON "sv_evidence_acceptance_receipts"
+	FOR EACH STATEMENT EXECUTE FUNCTION "sv_reject_evidence_acceptance_mutation"();
+--> statement-breakpoint
+COMMENT ON TABLE "sv_evidence_acceptance_receipts" IS
+	'Append-only human acceptance receipts. Presence means ACCEPTED; absence remains UNKNOWN. accepted_by is private.';
+--> statement-breakpoint
+REVOKE ALL ON "sv_evidence_acceptance_receipts" FROM PUBLIC;
+--> statement-breakpoint
 CREATE VIEW "sv_evidence_provenance" WITH (security_invoker = true) AS
 	SELECT
 		"evidence"."organization_id",
@@ -355,6 +428,8 @@ CREATE VIEW "sv_evidence_read_model" WITH (security_invoker = true) AS
 		"capability"."capability_status",
 		"capability"."input_schema_version" AS "capability_input_schema_version",
 		"capability"."output_schema_version" AS "capability_output_schema_version",
+		CASE WHEN "acceptance"."id" IS NULL THEN NULL ELSE 'ACCEPTED'::text END AS "acceptance_status",
+		"acceptance"."accepted_at",
 		"evidence"."captured_at" AS "evidence_captured_at"
 	FROM "sv_evidence_index" AS "evidence"
 	INNER JOIN "sv_measurement_cycles" AS "cycle"
@@ -373,7 +448,10 @@ CREATE VIEW "sv_evidence_read_model" WITH (security_invoker = true) AS
 		AND "snapshot"."organization_id" = "evidence"."organization_id"
 	LEFT JOIN "sv_provider_dataset_capabilities" AS "capability"
 		ON "capability"."id" = "snapshot"."capability_id"
-		AND "capability"."organization_id" = "evidence"."organization_id";
+		AND "capability"."organization_id" = "evidence"."organization_id"
+	LEFT JOIN "sv_evidence_acceptance_receipts" AS "acceptance"
+		ON "acceptance"."evidence_id" = "evidence"."id"
+		AND "acceptance"."organization_id" = "evidence"."organization_id";
 --> statement-breakpoint
 COMMENT ON VIEW "sv_evidence_read_model" IS
 	'Application-safe evidence projection. Excludes raw locators, provider references, content hashes and snapshot payloads.';
@@ -384,11 +462,15 @@ DO $$
 BEGIN
 	IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app') THEN
 		EXECUTE 'REVOKE ALL ON "sv_evidence_provenance" FROM selena_app';
+		REVOKE ALL ON "sv_evidence_acceptance_receipts" FROM selena_app;
 		REVOKE SELECT ON "sv_source_snapshots" FROM selena_app;
 		GRANT SELECT (
 			"id", "organization_id", "source_type", "capability_id",
-			"input_schema_version", "output_schema_version", "captured_at", "immutable", "created_at"
+			"input_schema_version", "output_schema_version", "content_sha256_format_valid",
+			"captured_at", "immutable", "created_at"
 		) ON "sv_source_snapshots" TO selena_app;
+		GRANT SELECT ("id", "organization_id", "evidence_id", "accepted_at")
+			ON "sv_evidence_acceptance_receipts" TO selena_app;
 		GRANT SELECT ON "sv_evidence_read_model" TO selena_app;
 	END IF;
 END;
