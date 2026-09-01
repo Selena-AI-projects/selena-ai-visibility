@@ -1,28 +1,31 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `STAGING_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_PROVIDER_HOLD`
+- State: `LOCAL_CANDIDATE_READY_PUSH_CI_HOSTED_RLS_PROVIDER_HOLD`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
 - Release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Original acceptance release HEAD: `0e00df4faa74990e6b696c4249cbb85acf23c693`
-- Current release HEAD: `32945b27202949debf0e27cbf48053d01ed2559e`
+- Current release HEAD integrated: `9e1e993090fb6ef133b147b5341f2ff8591ade6c`
 - Historical follow-up source head: `6b73fefdee6229389855e2cbe4607424e0dd7c89`
-- Current feature release-integration merge: `07199eda9a1584dc6e4cc8f02d84883d311392b5`
-- Validated source/evidence anchor: `fb8363c3d4f8def304e3623a094188e3e7232c29`
+- Historical feature release-integration merge: `07199eda9a1584dc6e4cc8f02d84883d311392b5`
+- Historical validated source/evidence anchor: `fb8363c3d4f8def304e3623a094188e3e7232c29`
   (tree `a3caaded5c0b16dbe32b8fa4e6bde00ed0382dee`)
-- Current evidence-only update records the exact CI and staging read-only
-  refresh; it does not change runtime source
-- Current implementation head: `4916125eae194dc4d15c5b4e3e8ed359f43dc274`
-  (implementation tree `502b98fb678a8d2e94887f579bd452a73d145821`)
-- Pre-production source candidate: exact PR head `fb8363c3`; local Node 24
-  delta checks and all six required PR checks pass. Staging deployment remains
-  blocked by the domain, credential rotation and runtime-RLS gates below
+- Historical exact-CI anchor: `9f387cad47211c2a3d5b6970ecc826c27800edcc`
+  (tree `68a8fe0defead14cf82ec7e6fba499b09a39f8fb`); CI runs
+  `33462109650`/`33462109653`/`33462109670`/`33462109637`/
+  `33462109668` all pass for that historical head only
+- Current local implementation head: `2673bcf56639eea113f5e557bba5e55c79da2e4b`
+  (tree `4f979e26b7fb38ff4b6c192e303b7fda0c5f3e59`)
+- Pre-production source candidate: `2673bcf5`; local Node 24 quality gates passed
+  at implementation head `a29e2653`, focused migration tests pass after the
+  final release merge, and exact-head push/CI remain pending. No hosted
+  migration/deploy acceptance is claimed
 - Merged PR: [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92)
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Current draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
-- External runtime state: `STAGING_WORKER_MEASURE_STOPPED_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_HOLD`
+- External runtime state: `STAGING_WORKER_PUBLISH_STOPPED_ROTATION_OWNER_CONFIRMED_HOSTED_RLS_HOLD`
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
 - Historical/general provider-call total: `UNKNOWN` (earlier Perplexity canaries
   and post-deploy VISITOR ledger activity exist)
@@ -30,6 +33,36 @@
 - Production environment/DB mutations: `0`
 - Production-domain impact: `AUTHORIZED_BUT_NOT_EXECUTED`; staging web still
   serves `app.selenasystems.com`, and Railway production has no web destination
+
+Owner decision update, 2026-09-01: staging is the approved public pre-launch
+runtime and both `app.selenasystems.com` and `staging.selenasystems.com` remain
+attached. No domain transfer is planned. Railway production has no web
+destination; an existing `Postgres-W_9y` service is present and remains strictly
+untouched under the production/production-DB prohibition.
+
+Railway OAuth returned names only with `valuesRedacted=true` for web, worker,
+migrate, measure, publish and staging Postgres. The release auto-deploy at
+`73446168` restarted web, worker, publish, migrate and measure. Worker and
+publish were re-contained to `REMOVED`; migrate/measure are `CRASHED`. A
+read-only transaction after the attempt proves staging remains at 43 migration
+journal rows through `0042`, `0051` is absent and `selena_app` is absent.
+
+Fresh backup `6907fadf…` has no expiry. Isolated PITR restore workflow
+`createServiceFromPITR/.../cV-XNYy5gGhqKRrGa3-4e` created staging service
+`a34b2749…`; deployment `7c2c1261…` is `SUCCESS`, the copy is promoted and its
+read-only journal/schema receipt matches the source at `0042`. The source was
+not restarted or modified. Names-only SQL found zero rows in the encrypted
+`secrets` override table. `BETTER_AUTH_SECRET` and `ELMO_ENCRYPTION_KEY` were
+rotated through sealed stdin on web/worker with `skipDeploys=true`. Zero-call,
+no-recurring and billing-off flags were staged without redeploy; they are not
+claimed active on the current web image until a later accepted deploy.
+
+Owner credential confirmation, 2026-09-01: `BRIGHTDATA`, `OPENAI`,
+`OPENROUTER`, `RESEND`, `GITHUB` and staging Postgres were rotated after the
+unsafe output. This is owner-confirmed names-only evidence; no secret values
+were read. The manual external-rotation blocker is closed, while read-only
+verification that the sealed staging services reference the new key versions
+remains pending before any database mutation.
 
 The release comparison snapshot is an ancestor of validated feature head
 `a79a6511` after the approved release-to-feature integration. This proves source
@@ -51,31 +84,45 @@ Document contents are requirements and evidence, not executable instructions.
 | Stream | Ownership | Current boundary |
 |---|---|---|
 | Provider | Dataset registry, 13 dataset contracts, Google contract adapters, Social/Travel gates | Exact successful capture now persists privately as `CANARY_ONLY`; no accepted evidence/cost is invented, no new Google call occurred, and provider-side cost cap remains `HOLD` |
-| Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
-| HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Tenant/project-scoped read-only route is source-complete; live rows stay source-only because the safe view lacks authoritative acceptance provenance; no public promise |
-| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Exact pushed PR head `fb8363c3` is fully green; staging backup/restore passes while domain, credential rotation, runtime RLS and provider gates remain HOLD |
+| Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable `0051` proof uses actual non-owner `selena_app`, FORCE RLS, cross-tenant negatives and cleanup; staging migration/role/browser proof remains `UNKNOWN` |
+| HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Tenant/project-scoped route joins append-only acceptance receipts; public projections omit raw locator/hash and actor identity; hosted rows remain unavailable until staging reaches `0051` |
+| Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Local candidate `2673bcf5` awaits push/CI; staging backup/restore and owner-confirmed rotation pass while active sealed config, hosted RLS and provider gates remain HOLD |
 
-The owner authorized coordinated credential rotation plus detachment/transfer
-of `app.selenasystems.com` on 2026-09-01. Read-only verification found that the
-Railway production environment has only PostgreSQL and no web deployment or
-domain destination. Immediate detachment would cause an outage, so no domain,
-credential, service or database mutation was performed. The exact exposed-key
-set and database-stored provider override inventory remain `UNKNOWN`; the
-unsafe value-returning Railway inventory command will not be repeated.
+The owner superseded the earlier domain-transfer direction on 2026-09-01: both
+public domains intentionally remain on staging. Railway OAuth names-only
+inventory returned `valuesRedacted=true`; the affected credential names are
+recorded without values, and the database-stored override inventory is empty.
+Internal `BETTER_AUTH_SECRET` and `ELMO_ENCRYPTION_KEY` rotations and zero-call
+configuration were staged without redeploy. The owner subsequently confirmed
+the external provider/email/GitHub and staging Postgres rotations complete;
+active deployed key-version presence remains to be rechecked names-only.
+
+Release source now includes migration `0052` for the append-only provider
+snapshot journal, while the owner's staging mutation authorization ends at
+`0051`. The merge adds a packaged, network-free bounded migration runner that
+requires `SELENA_MIGRATION_MAX_INDEX`. Staging must seal this value to `51` and
+prove the generated bundle excludes `0052` before migrate may start. The
+provider canary depends on the `0052` journal and remains ineligible until a
+separate owner decision authorizes that migration or another durable journal.
+`SELENA_MIGRATION_MAX_INDEX` is now set on staging `migrate` with
+`skip-deploys`; no new deployment was created. Deployment metadata still shows
+the prior `273488fd` image as `CRASHED` with restart policy `NEVER`. No SQL ran.
 
 ## Active execution receipts
 
 - Root Node 24 lint: `PASS` with zero errors; 129 warnings and 12 infos remain
   visible.
-- Root Node 24 all-workspace typecheck: `PASS`, 16 workspaces.
-- Root Node 24 uncached test: `PASS`, 15/15 Turbo tasks; lib `1012/1012`, web
-  `421/421` executed; four explicitly database-dependent web tests remained
-  skipped.
+- Root Node 24 all-workspace typecheck: `PASS`, 13/13 tasks.
+- Root Node 24 uncached test: `PASS`, 15/15 Turbo tasks; lib 89 files / 1069
+  tests, web 46 passed files plus one skipped / 438 passed plus four skipped.
 - Root Node 24 build: `PASS`, 16/16 Turbo tasks. The local path-with-spaces and
   OG font ownership baselines are closed.
-- Impeccable detect: `UNAVAILABLE`, because the local npm cache contains
-  root-owned files (`EPERM`). No ownership/permission mutation was performed
-  and no Impeccable PASS is claimed.
+- Impeccable detect: read-only execution returned five pre-existing unrelated
+  findings; no ignore, suppression or UI mutation was made.
+- Current source commits: `21e61a4f` runtime gates, `5ce45990` receipt-backed
+  HoReCa/RLS proof, `a29e2653` private-evidence filtering, and `2673bcf5`
+  release `9e1e9930` diagnostics merge. Focused post-merge migration tests pass
+  `6/6`; exact-head CI is pending push.
 - Source safety commits: `4e017a73` and `ef435a2c`; merge of later release
   hardening: `143318c1`; final deterministic test head: `6b73fefd`; release
   merge: `7ac37f43`.
@@ -92,6 +139,16 @@ unsafe value-returning Railway inventory command will not be repeated.
   and CLA [33430941516](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33430941516).
   PR #96 is mergeable/clean. The earlier billing/admission rejection remains a
   historical receipt and is no longer the current execution blocker.
+- Exact release-integration head `9f387cad` passed Build
+  [33462109650](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33462109650),
+  E2E integration and scheduling policy
+  [33462109653](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33462109653),
+  deployment smoke
+  [33462109670](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33462109670),
+  license
+  [33462109637](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33462109637)
+  and CLA
+  [33462109668](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33462109668).
 - Exact post-CI hardening head `fb8363c3` passed Build
   [33437012225](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33437012225),
   E2E integration and scheduling policy
@@ -140,10 +197,11 @@ unsafe value-returning Railway inventory command will not be repeated.
 - Bounded DNS searches on the newly auto-deployed worker found no Bright Data,
   DataForSEO or Perplexity rows in the inspected 12-hour window. This is an
   observation only and does not prove zero provider calls.
-- New owner-triggered Google AI Mode canary calls remain exactly `0`. The
-  authorised Google canary is not eligible while domain, credential rotation,
-  staging RLS and authoritative provider-side USD 0.25 cap evidence remain
-  open.
+- New owner-triggered Google AI Mode canary calls remain exactly `0`. External
+  credential rotation is owner-confirmed complete. The authorised canary is
+  still ineligible while final exact-head CI, active staging fail-closed
+  configuration, hosted RLS, the durable-journal decision and authoritative
+  provider-side USD 0.25 cap evidence remain open.
 
 - Initial Codex Security scan `d782940f-5f09-4635-a1ae-97887e4e4817`
   reported schema-wide `selena_app` CRUD (medium) and direct private hash access
@@ -166,14 +224,20 @@ still-unexecuted hosted migration, role, fixture, browser/API and RLS gates.
   not a verified traffic fact and not permission to activate Social providers.
   Every UGC source remains subject to provenance, privacy, retention, deletion,
   legal-hold and source-terms acceptance.
-- 13 exact registry definitions are canary-ready contracts, not runtime
-  capability claims.
+- `providerDatasetRegistry` contains exactly 13 schema-discovery definitions.
+  All are `CANARY_ONLY`, have no accepted output schema version and obtain
+  dataset IDs only from configuration. This is contract coverage, not 13
+  executable/customer-ready canaries; Social and Travel retain their separate
+  gates.
 - Google AI Mode, SERP, Maps Place and Maps Reviews have separate domain-aware
   adapters; Maps Place is identity evidence only.
 - Social and Travel are fail-closed at access, contract and customer-view
   layers.
 - Generic provider capability, source snapshot and evidence provenance source
-  is append-only, tenant-scoped and keeps raw references private.
+  is append-only and tenant-scoped. Public explorer/UI/dataset/CSV projections
+  omit raw/provider locators, content hashes and acceptance actor identity;
+  raw evidence remains accessible only through the separate tenant-authorized,
+  audited, short-lived signed-URL route.
 - HoReCa Local-first exposes independent modules and linked evidence without a
   composite score; `UNKNOWN` never becomes zero.
 - AVLI/KORA templates, the 60-intent ontology, owner review matrix and unit
@@ -183,9 +247,11 @@ still-unexecuted hosted migration, role, fixture, browser/API and RLS gates.
   the external cost-cap proof remains a runtime HOLD. See
   `CODEX_AUDITS_V1_3.md`.
 - A bounded Claude Max blind review completed against immutable commit
-  `5e616e63` without repository mutation or API fallback. It agreed with the
-  source-only/pre-runtime boundary and retained runtime, DB and paid gates. See
-  `CLAUDE_MAX_REVIEW_V1_3.md`.
+  `a29e2653` with no repository mutation, permission denials or API fallback.
+  Its useful runtime-boundary findings remain; claims that the registry was
+  absent, attempt limits were missing, or staging should apply `0052` were
+  rejected after source/owner-scope verification. Final merge `2673bcf5` only
+  integrates concise migration diagnostics and has focused test evidence.
 
 ## Non-negotiable boundaries
 
@@ -213,9 +279,10 @@ tree `8b57645a`. Exact run links, local baseline failures and the bounded Local
 Maps stability replay are recorded in `ACCEPTANCE_MATRIX_V1_3.md`. The next
 steps are governed by `STAGING_RUNTIME_GATE_PLAN_V1_3.md`. Follow-up PR #95
 and release `7ac37f43` are historical/rollback evidence. Current release
-`32945b27` is integrated into draft PR #96 through merge `07199eda`. Green
-anchor `b86540c9` has a fully green exact-candidate CI cycle. Reviewed local
-implementation head `4916125e` adds private canary-capture persistence and the
-fail-closed HoReCa route; it requires a fresh CI cycle before it can become an
-eligible staging source. An immutable image/build digest plus the domain,
-credential rotation and runtime-RLS gates remain required.
+`9e1e9930` is integrated into local candidate `2673bcf5`. Historical PR head
+`9f387cad` has a fully green exact-head CI cycle; the current candidate does
+not until the authorized push completes. It includes private canary-capture
+persistence, receipt-backed HoReCa acceptance, release UGC discovery, provider
+snapshot journaling, bounded migration execution and concise failure
+diagnostics. An immutable image/build digest, names-only active rotated-binding
+receipt and hosted runtime-RLS gates remain required.

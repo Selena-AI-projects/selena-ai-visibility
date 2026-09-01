@@ -1,31 +1,36 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `CI_GREEN_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_PROVIDER_HOLD`
+Status: `LOCAL_CANDIDATE_READY_ROTATION_OWNER_CONFIRMED_HOSTED_RLS_PROVIDER_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
-Current release: `32945b27202949debf0e27cbf48053d01ed2559e`.
+Current release integrated: `9e1e993090fb6ef133b147b5341f2ff8591ade6c`.
 Historical release `7ac37f43` remains rollback evidence only. Draft PR #96
-validated source/evidence anchor is
-`fb8363c3d4f8def304e3623a094188e3e7232c29`, tree
-`a3caaded5c0b16dbe32b8fa4e6bde00ed0382dee`; local Node 24 delta checks and all
-six required PR checks pass. Source readiness does not close staging runtime
+last pushed/green anchor is `9f387cad47211c2a3d5b6970ecc826c27800edcc`.
+The current local candidate is
+`2673bcf56639eea113f5e557bba5e55c79da2e4b`, tree
+`4f979e26b7fb38ff4b6c192e303b7fda0c5f3e59`; push and exact-head CI are
+pending and no hosted acceptance is claimed.
+Earlier exact head `01aa9d0c` passed all six required checks. Source readiness does not close staging runtime
 gates or make this a production candidate.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
-On 2026-09-01 the owner additionally authorized the production-impacting
-detachment/transfer of `app.selenasystems.com` and coordinated rotation of the
-affected credentials. That authorization does not authorize a production web
-deployment or production database action.
+On 2026-09-01 the owner superseded the earlier transfer direction: current
+Railway staging is the approved public pre-launch runtime, both existing public
+domains remain attached, and no production web may be created. Existing
+production Postgres remains untouched. The owner confirmed `BRIGHTDATA`,
+`OPENAI`, `OPENROUTER`, `RESEND`, `GITHUB` and staging Postgres rotated after
+the unsafe output. No values were read; active hosted bindings still require a
+names-only verification receipt.
 
 ## Recommended decision set
 
 | Item | Proposed decision | Current status |
 |---|---|---|
-| Environment | Shared **staging only**; production excluded | `AUTHORIZED_CURRENT_LOOP`, subject to domain-binding HOLD |
-| Runtime role | `selena_app`, non-owner, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS` | Creation authorized; web/worker switch `HOLD` until app-wide GUC proof |
-| Database scope | Inspect current version first; apply only pending migrations through `0051`; use transaction-local `app.organization_id` | Authorized, but stopped at runtime-RLS condition |
-| Zero-call runtime | Stub selectors, maintenance disabled, measurement disabled and emergency stop engaged | Authorized after domain/RLS gates pass |
+| Environment | Shared **staging only**; production excluded | `AUTHORIZED_CURRENT_LOOP`; both public domains intentionally remain on staging |
+| Runtime role | `selena_app`, non-owner, `NOINHERIT`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOBYPASSRLS` | Creation authorized; web/worker switch `HOLD` until app-wide GUC proof |
+| Database scope | Inspect current version first; apply only pending migrations through `0051`; seal `SELENA_MIGRATION_MAX_INDEX=51`; use transaction-local `app.organization_id` | Authorized after final exact-head/config freshness checks; source `0052` is excluded |
+| Zero-call runtime | Stub selectors, maintenance disabled, measurement disabled and emergency stop engaged | Staged without redeploy; activation waits for active-binding and hosted RLS gates |
 | First dataset canary | `GOOGLE_AI_MODE` through Bright Data in `ISOLATED_CANARY`; UGC/Social remains behind privacy, retention, deletion, legal-hold and source-terms approval | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
 | External calls | Exactly `1`; non-recurring; no automatic, generic, empty-result or whole-dataset retry | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
 | Maximum canary cost | **USD 0.25 total** for this one canary, only when a preflight quote proves worst-case cost is at or below the cap | `AUTHORIZED_CAP` |
@@ -34,24 +39,39 @@ deployment or production database action.
 
 ## Execution disposition
 
-- PR #96 exact-head CI: `PASS`. Build, E2E integration, scheduling policy,
-  deployment smoke, license and CLA all succeeded on `fb8363c3`. The earlier
+- PR #96 historical exact-head CI: `PASS`. Build, E2E integration, scheduling policy,
+  deployment smoke, license and CLA all succeeded on `9f387cad`. Current local
+  candidate `2673bcf5` is not CI-green until the next push completes. The earlier
   pre-runner billing/admission rejection is historical and no longer blocks the
   loop.
-- `OD-A`: failed its no-value condition. Railway CLI `variable list`
+- Release source contains migration `0052` for the provider snapshot journal,
+  but the owner authorized staging only through `0051`. The packaged migration
+  runner now requires an explicit maximum index; staging must seal it to `51`
+  and the generated bundle must exclude `0052`. The provider canary depends on
+  the `0052` journal and therefore needs a separate owner decision or another
+  approved durable journal path.
+- Staging `migrate` now has names-only confirmation that
+  `SELENA_MIGRATION_MAX_INDEX` was set with `skip-deploys` to the approved
+  upper bound `51`. No deployment or SQL followed; the last deployment remains
+  the prior `273488fd` image, `CRASHED`, with restart policy `NEVER`.
+- Historical `OD-A` no-value condition failed. Railway CLI `variable list`
   unexpectedly rendered raw staging values during a key-presence audit. Values
   are not reproduced in this pack, but affected credentials are considered
-  compromised and runtime acceptance is stopped pending rotation.
-- `OD-S`: authorized on 2026-09-01, but not yet executable as a complete
-  cutover. A fresh read-only topology check found that Railway `production`
-  contains only PostgreSQL service `1d67db6f-7df7-44d6-a9d7-3d7058afafff`;
-  there is no production web deployment or domain destination. Both public
-  domains still return `200` from staging web deployment `3eefbf4a…`.
-  Detaching `app.selenasystems.com` now would therefore create an outage, so no
-  domain mutation was performed. A Railway domain-status response also
-  rendered a verification token; it is not reproduced and is treated as
-  exposed operational metadata requiring revalidation/rotation if the platform
-  supports it.
+  compromised. Owner-confirmed rotations now close the revoke/reissue item;
+  runtime acceptance still waits for names-only active-binding verification.
+- `OD-S` domain portion is complete by owner decision: both public domains
+  remain attached to staging and no transfer is planned. Railway `production`
+  has no web destination; its existing PostgreSQL service remains untouched.
+  A previously rendered Railway domain verification token is not reproduced
+  and remains exposed operational metadata requiring platform revalidation if
+  supported.
+- Latest pre-mutation checkpoint: backup
+  `6907fadf-d73b-49fd-b052-11715c5daabf` has no expiry. PITR restored target
+  `2026-09-01T01:33:02Z` into isolated staging service `a34b2749…`; deployment
+  `7c2c1261…` is `SUCCESS`, and read-only SQL matches the source at 43 journal
+  rows through `0042`, with no `0051` table or `selena_app` role. The source
+  remained online and unchanged. The isolated restore remains available as
+  inspectable evidence.
 - `OD-B2` backup portion: executed. PITR is enabled and bucket-wired; named
   backup `92f3adae-a05a-4f64-b064-f48c55001149` exists. A PITR restore to
   `2026-08-31T13:26:46Z` completed in isolated staging service
@@ -73,7 +93,7 @@ deployment or production database action.
 - PR #95 merge triggered Railway Git deployment of web/worker release
   `7ac37f43` before the RLS/domain gates passed. Post-deploy journal evidence
   remained through `0042`, so pending migrations were not applied.
-- Railway Git integration later auto-deployed current release `32945b27`. Web
+- Railway Git integration earlier auto-deployed release `32945b27`. Web
   deployment `3eefbf4a…` is running and still serves both the production-like
   and staging domains. Migration deployment `2b092c4c…` crashed while Corepack
   attempted a runtime pnpm download. Worker deployment `c50d857e…` reached
@@ -81,21 +101,27 @@ deployment or production database action.
   could not be proven safely. The authorized rollback path stopped it; latest
   worker marker `5adf69b9…` has `deploymentStopped=true`. No web, database,
   provider or billing mutation was performed during this containment.
+- Railway Git integration subsequently auto-deployed current release
+  `73446168`. Web deployment `51e00af1…` is running. Worker and publish were
+  re-contained to `REMOVED`; measure and migrate are `CRASHED`. The current
+  migration image invoked its binary directly without a Corepack download, but
+  read-only SQL after the attempt proves no migration was applied.
 - Read-only ledger reconciliation found zero new permits, three VISITOR run
   rows and three estimated Bright Data cost events totalling `USD 0.030000`.
   The actual number of new external calls is `UNKNOWN`; two run rows succeeded,
   one remained ledger-`RUNNING`, and no active/created/retry `selena-measure`
   or `process-prompt` queue job remained.
-- Automatic staging containment set worker emergency stop true and
-  measurement/maintenance false. No selected recurring pg-boss schedule is
+- Automatic staging containment stopped worker/publish. Zero-call,
+  no-recurring and billing-off configuration is staged with no redeploy; it is
+  not claimed active on the current web image. No selected recurring pg-boss schedule is
   present; the next read-only checkpoint found zero new permits, runs, cost
   events or active `selena-measure`/`process-prompt` queue jobs. The
   public-domain blast radius prevents an unreviewed web change. After source
   audit found legacy bypasses, the staging worker and legacy measure
-  deployments were stopped. The current web key inventory lacks the master
-  emergency-stop key, so direct user-triggered provider paths remain a P0 risk
-  until the production-like domain is isolated or an owner-authorized rotation
-  and stop configuration is deployed.
+  deployments were stopped. External rotation is owner-confirmed complete;
+  direct user-triggered provider paths remain a P0 runtime risk until the
+  rotated bindings and staged stop configuration are verified active on the
+  accepted deployment.
 - `OD-C`: authorized but not eligible. New Google AI Mode calls remain exactly
   zero in this loop until SR-00 through SR-08 pass and the post-deploy provider
   activity is reconciled. Earlier Perplexity canaries and current VISITOR
@@ -118,6 +144,56 @@ cost remains `UNKNOWN` until post-call reconciliation, so acceptance remains
 
 Secret values must be stored in the platform's sealed secret store. They must
 not be pasted into chat, committed, printed in logs or included in evidence.
+
+### Names-only affected credential inventory
+
+Railway OAuth reported `valuesRedacted=true` for every inventory response. No
+value was read. Conservatively affected names from the earlier unsafe output
+scope are:
+
+| Staging service | Credential names only |
+|---|---|
+| web | `BETTER_AUTH_SECRET`, `DATABASE_URL`, `ELMO_ENCRYPTION_KEY`, `OPENROUTER_API_KEY`, `RESEND_API_KEY`, `SELENA_RUNTIME_DATABASE_CA_PEM` |
+| worker | `BETTER_AUTH_SECRET`, `BRIGHTDATA_API_TOKEN`, `DATABASE_URL`, `ELMO_ENCRYPTION_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `SELENA_RUNTIME_DATABASE_CA_PEM` |
+| migrate | `DATABASE_URL` |
+| measure | `BRIGHTDATA_API_TOKEN`, `DATABASE_URL`, `GITHUB_TOKEN`, `OPENROUTER_API_KEY` |
+| publish | `DATABASE_URL`, `GITHUB_TOKEN` |
+| Postgres | `DATABASE_URL`, `PGPASSWORD`, `POSTGRES_PASSWORD`, `WAL_ARCHIVE_KEY`, `WAL_ARCHIVE_SECRET` |
+| domain metadata | Railway domain verification token previously rendered by the platform; value not retained or reproduced |
+
+Dataset IDs, origins, feature flags and Railway identity variables are tracked
+as configuration names, not credentials. Database-stored provider overrides
+remain a separate encrypted scope and cannot be declared rotated from this
+environment inventory alone.
+
+Names-only SQL found no rows in the encrypted `secrets` override table.
+`BETTER_AUTH_SECRET` and `ELMO_ENCRYPTION_KEY` were therefore rotated for web
+and worker through sealed stdin without retaining or displaying either value;
+`skipDeploys=true` kept the stopped worker stopped. The current running web
+does not use those staged versions until the accepted deploy. The following
+non-secret containment settings are also staged on web/worker without deploy:
+`SELENA_EMERGENCY_STOP=true`, `SELENA_MEASUREMENT_ENABLED=false`,
+`SCHEDULE_MAINTENANCE_ENABLED=false`,
+`SELENA_FREE_AUTO_DISPATCH_ENABLED=false`, `SELENA_PAYMENTS_ENABLED=false`,
+`SCRAPE_TARGETS=stub:stub`, `ONBOARDING_LLM_TARGET=stub:stub`. Measure is staged
+with emergency stop, measurement disabled and journal force disabled.
+
+Fresh backup `6907fadf-d73b-49fd-b052-11715c5daabf` and isolated restore
+service `a34b2749-130a-47f3-8da3-8f58e3775fe9` close the backup/restore
+precondition. Restore deployment `7c2c1261-b879-41af-b0cd-510a231020f9` is
+`SUCCESS`; the promoted copy matches 43 journal rows through `0042` and has no
+`0051` table or `selena_app`. The source remained online and unchanged.
+
+### External owner rotation receipt — complete, values undisclosed
+
+The owner confirmed that `BRIGHTDATA`, `OPENAI`, `OPENROUTER`, `RESEND`,
+`GITHUB` and staging Postgres were rotated after the unsafe output. This is the
+required names-only confirmation; no replacement value is stored in this
+repository or evidence pack. Before staging SQL, the orchestrator must only
+verify key presence/key-version binding through a values-redacted platform
+surface and re-run the read-only journal/configuration checkpoint. A missing or
+stale service binding returns the loop to `HOLD`; it does not authorize reading
+the value or rotating a second time.
 
 | Purpose | Required name/access | Boundary |
 |---|---|---|
@@ -143,14 +219,13 @@ as a private credential.
 These actions may affect `app.selenasystems.com` and therefore require explicit
 owner approval for production-impacting credential work.
 
-That production-impacting approval is now present, but the exact exposed-key
-set remains `UNKNOWN`: the unsafe value-returning inventory command must not be
-repeated, and no proven names-only platform inventory is available. Rotation
-must also account for database-stored provider overrides, which take precedence
-over environment credentials. `ELMO_ENCRYPTION_KEY_OLD` provides transitional
-decryption only; it does not rotate external provider credentials, and the old
-key cannot be removed until every stored credential has been re-saved under the
-new key. No credential was changed or revoked during this evidence refresh.
+That production-impacting approval is now present. Railway OAuth produced a
+names-only inventory with `valuesRedacted=true`, and read-only SQL found no
+database-stored provider overrides. `BETTER_AUTH_SECRET` and
+`ELMO_ENCRYPTION_KEY` were rotated through sealed stdin and staged without
+redeploy. The owner subsequently confirmed Bright Data, OpenAI, OpenRouter,
+Resend, GitHub and staging Postgres rotations complete. Active service binding
+is not inferred from that confirmation and remains a names-only pre-SQL check.
 
 `OPENROUTER_API_KEY`, payment credentials, Social OAuth credentials and
 production secrets are not required for the recommended dataset canary and must
@@ -212,8 +287,10 @@ interchangeable with the recommended Google canary.
 
 1. Before any database mutation, record a staging backup/PITR checkpoint or use
    a disposable replacement database and verify who owns restoration.
-2. Run migrations through `0051` as a one-shot owner job with restart policy
-   `NEVER`, then apply idempotent least-privilege `selena_app` grants. On failure,
+2. Seal `SELENA_MIGRATION_MAX_INDEX=51`, prove the generated migration bundle
+   ends at `0051` and excludes source migration `0052`, then run it as a
+   one-shot owner job with restart policy `NEVER`. Apply idempotent
+   least-privilege `selena_app` grants only afterward. On failure,
    do not deploy web or worker; preserve logs and restore the checkpoint or
    replace the staging database. Do not improvise destructive down migrations.
 3. Retain the prior immutable web/worker image and prior runtime connection
@@ -236,18 +313,18 @@ interchangeable with the recommended Google canary.
 | OD-B1 | After OD-B2, create/update `selena_app` through the reviewed idempotent least-privilege grant script; do not use schema-wide CRUD/default grants. |
 | OD-B2 | Take/verify the staging backup checkpoint and run the one-shot pending migration chain through `0051` as owner before OD-B1. |
 | OD-B3 | Change staging secret/config bindings, including runtime `DATABASE_URL`, CA, auth/encryption keys, stub/stop flags and application origins. |
-| OD-B4 | Deploy/restart only exact green PR head `fb8363c3` (or a later separately validated head) after recording an immutable image/build digest and satisfying the remaining staging gates; `0e00df4f` and `7ac37f43` are historical/rollback evidence, not fix candidates. |
+| OD-B4 | Deploy/restart only the final exact CI-green PR head after recording an immutable image/build digest and satisfying the remaining staging gates. Current local candidate is `2673bcf5`; `9f387cad`, `0e00df4f`, `7ac37f43` and `01aa9d0c` are historical evidence, not current deploy targets. |
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
-| OD-S | `AUTHORIZED_HOLD_TARGET_AND_INVENTORY`: rotate/revoke credentials exposed by the failed staging audit and transfer/detach `app.selenasystems.com` without printing values. Execution remains ordered behind a healthy destination or explicit outage decision, safe names-only inventory, external replacement access and encryption/database rollback proof. |
-| OD-CI | `COMPLETED_HISTORICAL`: Actions budget was restored and exact-candidate CI passed; no billing mutation was performed by the agent. |
+| OD-S | `DOMAIN_DECISION_COMPLETE_ROTATION_OWNER_CONFIRMED`: keep both public domains on staging; affected external and staging Postgres credential rotations are owner-confirmed complete without values. Active sealed bindings still require names-only verification. |
+| OD-CI | `PENDING_CURRENT_HEAD`: Actions budget was restored; historical `9f387cad` CI passed, while current local candidate `2673bcf5` awaits push and one exact-head CI cycle. |
 | OD-P | Any production access, production database, billing change, recurring schedule or production deploy. This remains outside the pack. |
 
 OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
-for this bounded loop, but their ordered gate conditions still apply. The
-credential-rotation, domain-target, runtime-RLS and provider-activity findings
-stop OD-B1/B3/B4/B5 and OD-C; authorization is not a PASS. Backup
-restoreability itself is proven at the recorded checkpoint and must be refreshed
-before SQL. OD-S is authorized but prerequisite-blocked; OD-P remains
-separately gated.
+for this bounded loop, but their ordered gate conditions still apply. Rotation
+is no longer the blocker. Final exact-head CI, active fail-closed configuration,
+hosted migration/RLS and provider cost/durable-journal findings stop the later
+boundaries; authorization is not a PASS. Backup restoreability is proven at the
+recorded checkpoint and must be refreshed before SQL. OD-P remains separately
+gated.
