@@ -104,6 +104,7 @@ jobs:
           ONBOARDING_LLM_TARGET=stub:stub
           SELENA_MEASUREMENT_ENABLED=true
           SELENA_EMERGENCY_STOP=false
+          SELENA_RECURRING_JOBS_ENABLED=true
           SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
           PATCH
 
@@ -223,6 +224,7 @@ jobs:
       DISABLE_TELEMETRY: 1
       SELENA_MEASUREMENT_ENABLED: "true"
       SELENA_EMERGENCY_STOP: "false"
+      SELENA_RECURRING_JOBS_ENABLED: "true"
 
     steps:
       - name: Checkout
