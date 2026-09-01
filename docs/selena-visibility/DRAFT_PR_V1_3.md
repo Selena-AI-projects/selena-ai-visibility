@@ -4,9 +4,13 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
-- Accepted implementation source: `100d34d8`
+- Current remote base head: `2e21ef04`; PR API snapshot still reports
+  `5cbb7b25` and `mergeable_state=dirty`
+- Accepted staging implementation source: `100d34d8`
+- Diagnostic-2 source / current PR HEAD before this evidence update: `a9d1f373`
 - Canary-time feature HEAD: `3872a396`
-- Active staging worker runtime source: `100d34d8`
+- Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
+- Active staging web after drift recovery: `100d34d8`, deployment `c3002c7d…`
 - Integrated release parent: `5cbb7b25`
 
 ## Proposed title
@@ -47,48 +51,48 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### Provider canary evidence
 
-- exactly one authorized Bright Data `GOOGLE_AI_MODE` trigger ran;
-- receipt: `OUTCOME_UNKNOWN / LIFECYCLE_OUTCOME_UNKNOWN`;
-- `providerCalls=1`, `automaticRetries=0`, `retryAllowed=false`,
+- two separately authorized immutable identities each made exactly one Bright
+  Data `GOOGLE_AI_MODE` call;
+- historical receipt: `OUTCOME_UNKNOWN / LIFECYCLE_OUTCOME_UNKNOWN`;
+- diagnostic-2 receipt: `OUTCOME_UNKNOWN / TRIGGER_OUTCOME_UNKNOWN`;
+- each call used `automaticRetries=0`, `retryAllowed=false` and
   `recurring=false`;
-- journal: `TRIGGERED=1`, `PENDING=2`, `READY=1`, `INTERRUPTED=1`;
-- no provider capture was persisted;
-- Bright Data Cost explorer attributes exactly one record to `Google AI Mode
-  Search` and displays its cost as `USD 0.00`; the account overview also shows
-  `Consumed USD 0.00`;
-- the unrounded one-record list-price calculation remains `USD 0.0015` and is
-  not represented as a cash charge;
-- the daily `USD 0.02` Web Scraper API total covers 11 records across three
-  APIs; ten non-Google-AI-Mode records are excluded from canary attribution;
-- the once-only reservation prevents a second trigger, and no retry is
-  performed;
-- the newly authorized diagnostic command was executed only with sealed
-  steady-state gates and returned `PREFLIGHT_BLOCKED / MASTER_PROVIDER_GATE_CLOSED`,
-  `providerCalls=0`, retries `0`, recurring `false`, cost `USD 0`;
-- exact source `100d34d8` binds the command to the already reserved once-only
-  identity. The additional call authorization remains unused and the immutable
-  reservation was not deleted or bypassed.
+- diagnostic-2 reserved cap `USD 0.25` at durable reference
+  `db:e432156c-7f5d-40ef-ad40-72a883affac9`;
+- diagnostic-2 completed in `0.34s` with no snapshot reference, record count or
+  new snapshot-lifecycle event;
+- no accepted provider capture was persisted by either call;
+- first-party Bright Data exports after diagnostic-2 show exactly one Google AI
+  Mode Search record and `USD 0.0015` total for 1 September;
+- the pre-diagnostic evidence already contained the same one record, therefore
+  diagnostic-2 added no billable record and `USD 0.0000` incremental cost;
+- the daily Web Scraper API total is `USD 0.0285` for 19 records; ChatGPT Search
+  and Gemini Search account for 18 records and `USD 0.0270` and are excluded
+  from Google AI Mode attribution;
+- both reservations remain immutable; no retry or additional provider call is
+  authorized.
 
 ### HoReCa hosted evidence
 
-- exact staging deployment `10b51bd2-ff1b-41a7-b9f8-6d628ea9f8f0` from git
-  archive `100d34d8` reached `SUCCESS` with image
-  `sha256:b92d8e81a26aa20127b681f153bfb32d798673e4128009019fb44101006f1536`;
+- exact staging deployment `c3002c7d-e789-4236-9e55-2df00529ae37` from git
+  archive `100d34d8` restored the accepted web after automatic release
+  deployment `b5ca2d0f…` (`2e21ef04`) superseded the earlier exact receipt;
 - projects were presented in the complementary `PROJECTS / HoReCa projects`
   rail;
 - `Overview`, `Visibility`, `Evidence`, `Competitors`, `Actions` and
   `Outcomes` were presented in the top `TOOLS / Workspace tools` navigation;
-- external release auto-deploy `5cbb7b25` temporarily superseded the first UI
-  receipt; the exact `100d34d8` deployment replaced that drift;
+- external release auto-deploys `5cbb7b25` and `2e21ef04` each superseded an
+  exact UI deployment; exact `100d34d8` was restored after both drifts;
 - authenticated DOM and visual rechecks passed on the active exact deployment,
   both public health endpoints returned 200, and no page-origin browser errors
   were observed.
 
 ### Exact worker evidence
 
-- deployment `b26865a7-57c4-4fdb-a1a0-567172b10619` was built from exact archive
-  `100d34d8` and reached `SUCCESS` with image
-  `sha256:b546171d7606994e3bf5cd1707ae44802a452613917f0704a6d5e896b812a976`;
+- temporary deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran diagnostic
+  source `a9d1f373` and was removed after the single call;
+- rollback deployment `73ee9186-5df2-4b4c-a578-fb8e988c86f6` restored exact
+  archive `100d34d8` and reached `SUCCESS`;
 - startup logs prove legacy provider execution disabled, recurring scheduler
   disabled, managed schedules removed, pg-boss ready and all handlers
   registered;
@@ -96,11 +100,11 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### CI evidence
 
-- canary-time HEAD `3872a396` passed Build, E2E, scheduling, deployment smoke,
-  license and CLA; exact run links are in `ACCEPTANCE_MATRIX_V1_3.md`;
-- accepted implementation source `100d34d8` passed its complete
-  Blacksmith/GitHub Actions cycle: Build, E2E Integration, scheduling,
-  deployment smoke, dependency license and CLA;
+- diagnostic source `a9d1f373` passed exact-head Build, E2E Integration,
+  Scheduling Policy Verification, Deployment Smoke and License workflows;
+  exact run links are in `ACCEPTANCE_MATRIX_V1_3.md`;
+- the CLA workflow is not manually dispatchable; PR #96 currently reports
+  `mergeable=false`, `mergeable_state=dirty`, so no merge gate is claimed;
 - local focused gates after the release merge: migration/repository tests
   `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
   shell syntax PASS and diff check clean;
@@ -108,13 +112,12 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### Remaining gates
 
-1. Bright Data terminal lifecycle remains `UNKNOWN/HOLD`; billing attribution
-   is closed and no retry of the historical execution is authorized.
-2. A real additional diagnostic trigger requires a separately reviewed
-   execution-identity patch because `100d34d8` is fail-closed on the original
-   immutable reservation.
+1. Both Bright Data terminal outcomes remain `UNKNOWN/HOLD`; first-party cost
+   and usage attribution is closed and neither execution may be retried.
+2. PR #96 remains `dirty` and lacks automatic exact-head check aggregation.
 3. Production, production DB, recurring jobs, billing activation,
-   Social/Travel activation and PR merge remain prohibited.
+   Social/Travel activation, additional provider calls and PR merge remain
+   prohibited.
 
 `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
 
