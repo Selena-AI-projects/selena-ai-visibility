@@ -364,6 +364,8 @@ describe("Visibility OS provider evidence provenance", () => {
 			new URL("../../../../tools/visibility_os_0051_rls_schema_proof_e2e.sh", import.meta.url),
 			"utf8",
 		);
+		const workerBoss = readFileSync(new URL("../../../../apps/worker/src/boss.ts", import.meta.url), "utf8");
+		const webBoss = readFileSync(new URL("../../../../apps/web/src/lib/boss-client.ts", import.meta.url), "utf8");
 
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
 		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
@@ -371,6 +373,17 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
 		expect(roleBootstrap).toContain("\\gexec");
 		expect(roleBootstrap).toContain("NOINHERIT NOBYPASSRLS");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37");
+		expect(roleBootstrap).toContain("GRANT USAGE ON SCHEMA pgboss TO selena_app");
+		expect(roleBootstrap).toContain("REVOKE CREATE ON SCHEMA pgboss FROM selena_app");
+		expect(roleBootstrap).toContain(
+			"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app",
+		);
+		expect(roleBootstrap).toContain("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app");
+		for (const runtimeBoss of [workerBoss, webBoss]) {
+			expect(runtimeBoss).toContain("createSchema: false");
+			expect(runtimeBoss).toContain("migrate: false");
+		}
 		for (const relation of [
 			"sv_evidence_index",
 			"sv_measurement_cycles",
@@ -384,7 +397,9 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)");
 		expect(roleBootstrap).toContain("SECURITY DEFINER\nSET search_path = ''");
 		expect(roleBootstrap).toContain("REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC");
-		expect(roleBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES");
+		expect(roleBootstrap).not.toContain(
+			"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public",
+		);
 		expect(roleBootstrap).not.toContain("GRANT USAGE, SELECT ON ALL SEQUENCES");
 		expect(roleBootstrap).not.toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT");
 		expect(roleBootstrap).not.toMatch(
@@ -406,6 +421,8 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_ACTOR_VISIBLE");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE");
+		expect(proof).toContain("has_schema_privilege('selena_app', 'pgboss', 'CREATE')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.job', 'SELECT,INSERT,UPDATE,DELETE')");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_RELATION_NOT_FORCED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_CROSS_TENANT_VISIBLE");
 		expect(proof).toContain("SET LOCAL ROLE selena_app");

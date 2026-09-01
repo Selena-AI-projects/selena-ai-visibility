@@ -270,6 +270,10 @@ BEGIN
 
 	IF NOT has_schema_privilege('selena_app', 'public', 'USAGE')
 		OR has_schema_privilege('selena_app', 'public', 'CREATE')
+		OR NOT has_schema_privilege('selena_app', 'pgboss', 'USAGE')
+		OR has_schema_privilege('selena_app', 'pgboss', 'CREATE')
+		OR NOT has_table_privilege('selena_app', 'pgboss.job', 'SELECT,INSERT,UPDATE,DELETE')
+		OR NOT has_function_privilege('selena_app', 'pgboss.create_queue(text,jsonb)', 'EXECUTE')
 		OR NOT has_table_privilege('selena_app', 'public.sv_evidence_read_model', 'SELECT')
 		OR has_table_privilege('selena_app', 'public.sv_evidence_provenance', 'SELECT')
 		OR NOT has_table_privilege('selena_app', 'public.sv_provider_canary_executions', 'SELECT')

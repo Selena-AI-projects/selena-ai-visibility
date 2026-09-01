@@ -26,6 +26,10 @@ export async function getBoss(): Promise<PgBoss> {
 		const boss = new PgBoss({
 			...runtimeDatabaseConnection(),
 			schema: "pgboss",
+			// Hosted schema lifecycle is owner-managed; the non-owner runtime
+			// client is intentionally unable to create or migrate DB objects.
+			createSchema: false,
+			migrate: false,
 			// Web app only needs to send/schedule jobs, not process them
 			supervise: false, // Let worker handle supervision
 		});

@@ -22,6 +22,17 @@ BEGIN
 		OR to_regprocedure('public.sv_resolve_api_key_context(text)') IS NULL THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051';
 	END IF;
+
+	IF to_regnamespace('pgboss') IS NULL
+		OR to_regclass('pgboss.version') IS NULL
+		OR to_regclass('pgboss.job') IS NULL
+		OR to_regclass('pgboss.queue') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA';
+	END IF;
+
+	IF (SELECT version FROM pgboss.version) IS DISTINCT FROM 37 THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
+	END IF;
 END;
 $preflight$;
 
@@ -52,6 +63,18 @@ REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM selena_app;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM selena_app;
+
+-- pg-boss schema lifecycle remains owner-managed. Runtime clients are pinned
+-- to the already-installed schema version and may only operate queue data and
+-- call the existing queue functions; they cannot create or migrate objects.
+GRANT USAGE ON SCHEMA pgboss TO selena_app;
+REVOKE CREATE ON SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pgboss FROM selena_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA pgboss TO selena_app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app;
 
 -- Better Auth and tenant membership bootstrap run before app.organization_id
 -- can be set. These are the only non-Selena identity surfaces used at runtime.
