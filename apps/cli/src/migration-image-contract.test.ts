@@ -19,10 +19,18 @@ describe("database migration image", () => {
 		);
 		expect(boundedRunner).toContain("apply-migrations.mjs");
 		expect(boundedRunner).not.toContain("node_modules/.bin/drizzle-kit");
+
+		const migrationRunner = readFileSync(
+			new URL("../../../packages/lib/scripts/apply-migrations.mjs", import.meta.url),
+			"utf8",
+		);
+		expect(migrationRunner).toContain("select hash, created_at::text");
+		expect(migrationRunner).toContain("SELENA_MIGRATION_JOURNAL_MISMATCH");
 	});
 
 	it("pins the generated compose service to the reviewed migration ceiling", () => {
 		const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-		expect(source).toContain('"    - SELENA_MIGRATION_MAX_INDEX=52"');
+		expect(source).toContain('"    - SELENA_MIGRATION_MAX_INDEX=51"');
+		expect(source).not.toContain('"    - SELENA_MIGRATION_MAX_INDEX=52"');
 	});
 });

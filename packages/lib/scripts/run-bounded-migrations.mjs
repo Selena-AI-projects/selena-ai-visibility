@@ -1,15 +1,30 @@
 import { spawn } from "node:child_process";
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { waitForMigrationChild } from "../src/db/bounded-migration-process.ts";
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDirectory = resolve(packageRoot, "src/db/migrations");
 
+function assertSafeTargetDirectory(targetDirectory) {
+	const absoluteTarget = resolve(targetDirectory);
+	const temporaryRoot = resolve(tmpdir());
+	const relativeTarget = relative(temporaryRoot, absoluteTarget);
+	if (
+		!relativeTarget ||
+		isAbsolute(relativeTarget) ||
+		relativeTarget.startsWith("..") ||
+		!relativeTarget.split("/").at(-1)?.startsWith("selena-")
+	)
+		throw new Error("SELENA_BOUNDED_MIGRATIONS_DIR_UNSAFE");
+}
+
 export function prepareBoundedMigrations({ maximumIndex, targetDirectory }) {
 	if (!Number.isSafeInteger(maximumIndex) || maximumIndex < 0) throw new Error("SELENA_MIGRATION_MAX_INDEX_INVALID");
+	assertSafeTargetDirectory(targetDirectory);
 	const journal = JSON.parse(readFileSync(resolve(sourceDirectory, "meta/_journal.json"), "utf8"));
 	if (!Array.isArray(journal.entries)) throw new Error("SELENA_MIGRATION_JOURNAL_INVALID");
 	const entries = journal.entries.filter((entry) => Number.isSafeInteger(entry.idx) && entry.idx <= maximumIndex);
@@ -42,11 +57,9 @@ async function main() {
 		env: { ...process.env, SELENA_MIGRATIONS_DIR: targetDirectory },
 		stdio: "inherit",
 	});
-	const code = await new Promise((resolveExit, reject) => {
-		child.once("error", reject);
-		child.once("exit", (exitCode, signal) => resolveExit(exitCode ?? (signal ? 1 : 0)));
-	});
-	process.stdout.write(`drizzle-orm migration runner exited with code ${code}\n`);
+	const { childCode, code, timedOut } = await waitForMigrationChild(child);
+	if (timedOut) process.stderr.write("SELENA_MIGRATION_HARD_TIMEOUT\n");
+	process.stdout.write(`drizzle-orm migration runner exited with code ${childCode}\n`);
 	await delay(15_000);
 	process.exitCode = code;
 }

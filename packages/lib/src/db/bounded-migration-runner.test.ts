@@ -1,9 +1,11 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { waitForMigrationChild } from "./bounded-migration-process";
 
 const temporaryDirectories: string[] = [];
 const runner = fileURLToPath(new URL("../../scripts/run-bounded-migrations.mjs", import.meta.url));
@@ -40,5 +42,36 @@ describe("bounded migration runner", () => {
 
 		expect(result.status).toBe(1);
 		expect(result.stderr).toContain("SELENA_MIGRATION_MAX_INDEX_REQUIRED");
+	});
+
+	it("refuses a recursive target outside the operating-system temporary directory", () => {
+		const result = spawnSync(process.execPath, [runner, "--prepare-only"], {
+			env: {
+				...process.env,
+				SELENA_MIGRATION_MAX_INDEX: "51",
+				SELENA_BOUNDED_MIGRATIONS_DIR: "/",
+			},
+			encoding: "utf8",
+		});
+
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("SELENA_BOUNDED_MIGRATIONS_DIR_UNSAFE");
+	});
+
+	it("returns a failure when a timed-out child handles SIGTERM with exit zero", async () => {
+		const child = spawn(
+			process.execPath,
+			[
+				"-e",
+				"process.on('SIGTERM', () => process.exit(0)); process.stdout.write('ready'); setInterval(() => {}, 1000)",
+			],
+			{ stdio: ["ignore", "pipe", "ignore"] },
+		);
+		if (!child.stdout) throw new Error("TEST_CHILD_STDOUT_REQUIRED");
+		await once(child.stdout, "data");
+
+		const result = await waitForMigrationChild(child, { hardTimeoutMs: 20, killGraceMs: 100 });
+
+		expect(result).toEqual({ childCode: 0, code: 1, timedOut: true });
 	});
 });
