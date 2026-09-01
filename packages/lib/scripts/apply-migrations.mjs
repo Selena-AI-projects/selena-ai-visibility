@@ -23,17 +23,35 @@ const MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '5s'";
 const MIGRATION_LOCK_SQL = "select pg_advisory_lock(1397050446, 1095587150)";
 const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock(1397050446, 1095587150) as unlocked";
 
+// Staging applied the temporary 0045 variant that introduced the legacy lock
+// ordinal before the follow-up 0053 migration was added. Drizzle keeps the
+// applied file hash immutable, so accept that one reviewed historical hash at
+// that one timestamp while requiring the canonical source hash everywhere
+// else. 0053 is idempotent across both shapes and remains the only place new
+// installations receive the ordinal.
+const APPLIED_MIGRATION_HASH_ALIASES = new Map([
+	[
+		"1787940007000:321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec",
+		Object.freeze(["3b3915803095bf23f8e8b2e70134bfd71a7774d2793bf40f2e0a0bd03b1c051b"]),
+	],
+]);
+
 export async function expectedJournalRows(migrationsFolder) {
 	const journal = JSON.parse(await readFile(resolve(migrationsFolder, "meta/_journal.json"), "utf8"));
 	if (!Array.isArray(journal.entries) || journal.entries.length === 0)
 		throw new Error("SELENA_MIGRATION_JOURNAL_INVALID");
 	const rows = await Promise.all(
-		journal.entries.map(async (entry) => ({
-			createdAt: String(entry.when),
-			hash: createHash("sha256")
+		journal.entries.map(async (entry) => {
+			const createdAt = String(entry.when);
+			const hash = createHash("sha256")
 				.update(await readFile(resolve(migrationsFolder, `${entry.tag}.sql`), "utf8"))
-				.digest("hex"),
-		})),
+				.digest("hex");
+			return {
+				createdAt,
+				hash,
+				acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(`${createdAt}:${hash}`) ?? Object.freeze([]),
+			};
+		}),
 	);
 	if (!/^\d+$/.test(rows.at(-1)?.createdAt ?? "")) throw new Error("SELENA_MIGRATION_JOURNAL_INVALID");
 	return rows;
@@ -98,7 +116,9 @@ export function assertJournalPrefix(actualRows, expectedRows) {
 	if (actualRows.length > expectedRows.length) throw new Error("SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED");
 	for (const [index, actual] of actualRows.entries()) {
 		const expected = expectedRows[index];
-		if (!expected || actual.createdAt !== expected.createdAt || actual.hash !== expected.hash)
+		const hashMatches =
+			expected && (actual.hash === expected.hash || expected.acceptedAppliedHashes?.includes(actual.hash));
+		if (!expected || actual.createdAt !== expected.createdAt || !hashMatches)
 			throw new Error("SELENA_MIGRATION_JOURNAL_MISMATCH");
 	}
 }

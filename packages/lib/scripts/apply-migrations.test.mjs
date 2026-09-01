@@ -18,6 +18,23 @@ describe("bounded migration journal acceptance", () => {
 		);
 	});
 
+	it("accepts a reviewed historical hash only at its exact migration timestamp", () => {
+		const canonical = {
+			createdAt: "1787940007000",
+			hash: "canonical-0045",
+			acceptedAppliedHashes: ["reviewed-staging-0045"],
+		};
+		expect(() =>
+			assertJournalPrefix([{ createdAt: canonical.createdAt, hash: "reviewed-staging-0045" }], [canonical]),
+		).not.toThrow();
+		expect(() =>
+			assertJournalPrefix([{ createdAt: "1787940008000", hash: "reviewed-staging-0045" }], [canonical]),
+		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+		expect(() =>
+			assertJournalPrefix([{ createdAt: canonical.createdAt, hash: "unreviewed-0045" }], [canonical]),
+		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+	});
+
 	it("requires the exact reviewed journal as the postcondition", () => {
 		expect(() => assertJournalPostcondition(expected, expected)).not.toThrow();
 		expect(() => assertJournalPostcondition(expected.slice(0, 2), expected)).toThrow(

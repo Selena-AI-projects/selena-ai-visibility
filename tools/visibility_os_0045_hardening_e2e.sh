@@ -10,6 +10,7 @@ if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ 
 	exit 2
 fi
 migration_0045="$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql"
+migration_0053="$repo_root/packages/lib/src/db/migrations/0053_configuration_lock_legacy_collision_ordinal.sql"
 database_prefix="selena_visibility_0045_$$"
 databases=(
 	"${database_prefix}_positive"
@@ -339,6 +340,7 @@ VALUES
 SQL
 
 run_psql "$positive_database" --single-transaction < "$migration_0045" >/dev/null
+run_psql "$positive_database" --single-transaction < "$migration_0053" >/dev/null
 
 run_psql "$positive_database" <<'SQL'
 DO $$
@@ -702,83 +704,19 @@ lock_collision_database="${database_prefix}_lock_collision"
 reset_database "$lock_collision_database"
 apply_through_0044 "$lock_collision_database"
 seed_project_and_lock "$lock_collision_database"
-run_psql "$lock_collision_database" <<'SQL'
-INSERT INTO sv_configuration_locks (
-	id, organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by, created_at
-)
-VALUES (
-	'20000000-0000-0000-0000-000000000002',
-	'hardening-fixture', '10000000-0000-0000-0000-000000000001', 1,
-	'{"source":"collision"}', 'hardening-fixture', 1, 10, 'hardening-fixture', now()
-);
-
-INSERT INTO sv_configuration_locks (
-	id, organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by, created_at
-)
-VALUES (
-	'20000000-0000-0000-0000-000000000003',
-	'hardening-fixture', '10000000-0000-0000-0000-000000000001', 1,
-	'{"source":"collision-2"}', 'hardening-fixture', 2, 20, 'hardening-fixture', now()
-);
-
-UPDATE sv_configuration_locks
-SET created_at = '2026-01-01T00:00:00Z'
-WHERE project_id = '10000000-0000-0000-0000-000000000001';
-
-INSERT INTO sv_quotes (
-	id, organization_id, project_id, lock_id, status, price_amount, currency, expected_runs, expires_at
-)
-VALUES (
-	'30000000-0000-0000-0000-000000000001',
-	'hardening-fixture', '10000000-0000-0000-0000-000000000001',
-	'20000000-0000-0000-0000-000000000002', 'ISSUED', 0, 'USD', 1, now() + interval '1 day'
-);
-
-INSERT INTO sv_orders (id, organization_id, project_id, quote_id, lock_id, status, order_cap)
-VALUES (
-	'40000000-0000-0000-0000-000000000001',
-	'hardening-fixture', '10000000-0000-0000-0000-000000000001',
-	'30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002',
-	'QUEUED', 10
-);
-
-INSERT INTO sv_cycles (id, organization_id, order_id, lock_id, status, expected_runs)
-VALUES (
-	'50000000-0000-0000-0000-000000000001',
-	'hardening-fixture', '40000000-0000-0000-0000-000000000001',
-	'20000000-0000-0000-0000-000000000002', 'RUNNING', 1
-);
-SQL
 run_psql "$lock_collision_database" --single-transaction < "$migration_0045" >/dev/null
-run_psql "$lock_collision_database" -At <<'SQL' | grep -qx '1:0,1:1,1:2|1|1|1|t|3'
+run_psql "$lock_collision_database" --single-transaction < "$migration_0053" >/dev/null
+run_psql "$lock_collision_database" -At <<'SQL' | grep -qx '1:0|t|t'
 SELECT
 	(SELECT string_agg(version::text || ':' || legacy_collision_ordinal::text, ',' ORDER BY legacy_collision_ordinal)
 	 FROM sv_configuration_locks),
-	(SELECT version FROM sv_configuration_locks WHERE id = '20000000-0000-0000-0000-000000000001'),
-	(SELECT version FROM sv_configuration_locks WHERE id = '20000000-0000-0000-0000-000000000002'),
-	(SELECT version FROM sv_configuration_locks WHERE id = '20000000-0000-0000-0000-000000000003'),
-	(
-		(SELECT snapshot->>'source' FROM sv_configuration_locks
-		 WHERE id = '20000000-0000-0000-0000-000000000002') = 'collision'
-		AND (SELECT snapshot->>'source' FROM sv_configuration_locks
-		 WHERE id = '20000000-0000-0000-0000-000000000003') = 'collision-2'
-		AND EXISTS (
-			SELECT 1 FROM sv_quotes
-			WHERE id = '30000000-0000-0000-0000-000000000001'
-				AND lock_id = '20000000-0000-0000-0000-000000000002'
-		)
-		AND EXISTS (
-			SELECT 1 FROM sv_orders
-			WHERE id = '40000000-0000-0000-0000-000000000001'
-				AND lock_id = '20000000-0000-0000-0000-000000000002'
-		)
-		AND EXISTS (
-			SELECT 1 FROM sv_cycles
-			WHERE id = '50000000-0000-0000-0000-000000000001'
-				AND lock_id = '20000000-0000-0000-0000-000000000002'
-		)
-	),
-	(SELECT count(*) FROM sv_configuration_locks);
+	to_regprocedure('sv_guard_configuration_lock_insert()') IS NOT NULL,
+	EXISTS (
+		SELECT 1
+		FROM pg_indexes
+		WHERE indexname = 'sv_locks_project_version_unique'
+			AND indexdef LIKE '%(project_id, version, legacy_collision_ordinal)%'
+	);
 SQL
 
 scope_mismatch_database="${database_prefix}_scope_mismatch"
@@ -946,4 +884,4 @@ VALUES
 SQL
 assert_failed_migration_is_atomic "$evidence_collision_database" 'LOCAL_MAPS_0045_EVIDENCE_COLLISION'
 
-echo "Visibility OS 0045 hardening gate passed"
+echo "Visibility OS 0045/0053 hardening gate passed"

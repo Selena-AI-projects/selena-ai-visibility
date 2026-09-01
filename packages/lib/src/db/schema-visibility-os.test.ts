@@ -396,9 +396,7 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)");
 		expect(roleBootstrap).toContain("SECURITY DEFINER\nSET search_path = ''");
 		expect(roleBootstrap).toContain("REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC");
-		expect(roleBootstrap).not.toContain(
-			"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public",
-		);
+		expect(roleBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
 		expect(roleBootstrap).not.toContain("GRANT USAGE, SELECT ON ALL SEQUENCES");
 		expect(roleBootstrap).not.toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT");
 		expect(roleBootstrap).not.toMatch(
@@ -428,14 +426,10 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.queue_stats', 'INSERT')");
 		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.version', 'UPDATE')");
 		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.delete_queue(text)', 'EXECUTE')");
-		expect(proof).toContain(
-			"has_function_privilege('selena_app', 'pgboss.job_table_format(text,text)', 'EXECUTE')",
-		);
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.job_table_format(text,text)', 'EXECUTE')");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_QUEUE_BOOTSTRAP_FAILED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_PARTITION_DDL_ALLOWED");
-		expect(proof).toContain(
-			"has_function_privilege('selena_app', 'pgboss.job_table_run(text,text,text)', 'EXECUTE')",
-		);
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.job_table_run(text,text,text)', 'EXECUTE')");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_RELATION_NOT_FORCED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_CROSS_TENANT_VISIBLE");
 		expect(proof).toContain("SET LOCAL ROLE selena_app");
@@ -895,6 +889,10 @@ describe("Visibility OS local domain and attempt expand", () => {
 			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
 			"utf8",
 		);
+		const migration0053 = readFileSync(
+			new URL("./migrations/0053_configuration_lock_legacy_collision_ordinal.sql", import.meta.url),
+			"utf8",
+		);
 		const hardeningGate = readFileSync(
 			new URL("../../../../tools/visibility_os_0045_hardening_e2e.sh", import.meta.url),
 			"utf8",
@@ -1042,12 +1040,13 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_cost_events"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_mutation"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_configuration_locks"');
-		expect(migration).toContain('CREATE TRIGGER "sv_guard_configuration_lock_insert"');
-		expect(migration).toContain('BEFORE INSERT ON "sv_configuration_locks"');
+		expect(migration0053).toContain('CREATE TRIGGER "sv_guard_configuration_lock_insert"');
+		expect(migration0053).toContain('BEFORE INSERT ON "sv_configuration_locks"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_truncate"');
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_configuration_locks"');
-		expect(migration).toContain("CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED");
-		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(migration0053).toContain("CONFIGURATION_LOCK_0053_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration0053).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(migration).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
@@ -1093,7 +1092,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION",
 			"CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH",
 			"MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH",
-			"CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED",
+			"CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION",
 			"LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION",
 			"LOCAL_MAPS_0045_EVIDENCE_COLLISION",
 			"LOCAL_MAPS_0045_LEGACY_ATTEMPT_IDENTITY",
@@ -1108,9 +1107,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		}
 		expect(exclusiveLock).toBeGreaterThan(-1);
 		expect(exclusiveLock).toBe(0);
-		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
-			migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'),
-		);
+		expect(migration).not.toContain('UPDATE "sv_configuration_locks" AS configuration_lock');
 		expect(exclusiveLock).toBeLessThan(migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'));
 		expect(projectLock).toBeLessThan(configurationLock);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf("LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED"));
