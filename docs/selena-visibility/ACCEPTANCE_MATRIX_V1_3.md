@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
-Evidence date: `2026-09-01`. This document is the canonical post-hosted
+Evidence date: `2026-09-02`. This document is the canonical post-hosted
 acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 
 ## Canonical anchors
@@ -16,7 +16,7 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 - Bounded snapshot-download remediation source: `4a1fd948` (control responses
   remain capped at 1 MB; snapshot downloads are bounded at 4 MiB)
 - Last exact PR evidence head verified inside this document:
-  `4a1fd94803d1a457ab426ff765e2c1052c423646`
+  `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Active worker implementation source after mandatory rollback: `100d34d8`
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
@@ -24,7 +24,7 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 - Latest release integration merge: `84cce314`
   (parents `eaffa6de` and `4400d435`)
 - Current source-only reconciliation patch: `b01a310b`, carried by follow-up
-  PR [#106](https://github.com/parkourcafe/selena-ai-visibility/pull/106);
+  PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108);
   it separates provider `capturedAt` from journal `historicalReadyObservedAt`,
   validates canonical stored evidence/capability/audit rows on replay and
   rolls back idempotent dry-runs.
@@ -47,9 +47,9 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS` | Exact source head `f4b1418d` passed Build, E2E, Scheduling, Smoke, License and CLA. The E2E timeout patch and release `0054` replay ceiling are green in PR #108; PR #96 is also clean/mergeable at the same head. |
+| Exact-head CI | `PASS` | Implementation source `f4b1418d` and documentation head `1f3dd9d7` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #108 and PR #96 are clean/mergeable at the verified head. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
-| Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
+| Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` and worker deployment `9275a824-281d-4afa-8098-1ed7184ffc68`. Worker was temporarily deployed from the diagnostic source and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
 | Google/Bright Data canary | `COST_PASS / READY_PAYLOAD_VALIDATED / PERSISTENCE_HOLD` | The historical trigger is now exactly bound to provider snapshot `sd_mtiflifw2lfu6ne28l`: provider `READY` at `08:54:46Z`, staging journal `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED` beginning `08:54:47.108Z`. Read-only download produced one valid 1,543,419-byte record with non-empty answer and four normalized citations. The interruption is explained by the former 1 MB client cap, now corrected in source. No accepted staging capture was persisted. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN`, added no record and cost `USD 0.0000`. |
@@ -59,16 +59,16 @@ Overall decision: `STAGING_PROVIDER_PAYLOAD_PASS / PERSISTENCE_HOLD / PRE_PRODUC
 
 ## Exact-head CI evidence
 
-Final source-head receipt for `f4b1418d` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
+Final source-head receipt for `1f3dd9d7` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33530605525](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605525) |
-| E2E Integration Tests | `PASS` | [run 33530605559](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605559) |
-| Scheduling Policy Verification | `PASS` | [run 33530605559](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605559) |
-| Dependency License Audit | `PASS` | [run 33530605598](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605598) |
-| Deployment smoke | `PASS` | [run 33530605542](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605542) |
-| CLA | `PASS` | [run 33530605664](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605664) |
+| Build | `PASS` | [run 33532090636](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090636) |
+| E2E Integration Tests | `PASS` | [run 33532090581](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090581) |
+| Scheduling Policy Verification | `PASS` | [run 33532090581](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090581) |
+| Dependency License Audit | `PASS` | [run 33532090577](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090577) |
+| Deployment smoke | `PASS` | [run 33532090695](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090695) |
+| CLA | `PASS` | [run 33532090697](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090697) |
 
 The scheduling job passed the real-PostgreSQL bounded replay at disposable
 frontier `0054`; this does not authorize applying `0054` to shared staging.
@@ -103,14 +103,14 @@ response cap from a 4 MiB snapshot-download cap. Its focused provider suite
 passed `19/19` and Biome checked both changed files. The final mutable-head CI
 receipt is recorded on PR #96 after this documentation commit.
 
-The offline historical reconciliation path is source-only and has not been
-run against staging. It requires the exact journal READY timestamp as a
-separate manifest field, verifies the canonical stored payload and registry
-capability on idempotent replay, and returns `DRY_RUN_ROLLED_BACK` even when
-the target is already reconciled. Staging persistence remains an explicit
-owner gate. Current local focused gates are lib `16/16`, worker `23/23`, both
-package check-types, targeted Biome and `git diff --check`. The E2E workflow
-timeout is now bounded at 35 minutes to include cleanup after successful tests.
+The offline historical reconciliation path was executed against the restored
+staging worker in dry-run mode only. It returned
+`DRY_RUN_ROLLED_BACK` with `providerCalls:0`, `evidenceIndexStatus:NOT_CREATED`,
+`costEventStatus:NOT_CREATED`, `acceptanceReceiptStatus:NOT_CREATED` and
+`acceptance:HOLD`. Staging persistence remains an explicit owner gate. Current
+local focused gates are lib `16/16`, worker `23/23`, both package check-types,
+targeted Biome and `git diff --check`. The E2E workflow timeout is now bounded
+at 35 minutes to include cleanup after successful tests.
 
 ## Staging infrastructure evidence
 
@@ -126,9 +126,9 @@ timeout is now bounded at 35 minutes to include cleanup after successful tests.
 | Tenant GUC | `PASS` | `SET LOCAL app.organization_id` succeeded through the active worker connection. |
 | Hosted RLS proof | `PASS` | `current_user=selena_app`; `SELECT`/`INSERT` allowed; FORCE RLS active; cross-tenant insert failed with SQLSTATE `42501`; transaction ended in `ROLLBACK`; persisted fixture rows `0`. |
 | Replay/concurrency/idempotency | `PASS` | Two concurrent writes produced one winner; replay was stable; cross-tenant read returned no row; active mutation was blocked; expired fixture cleaned up. |
-| Exact web deploy | `PASS_RESTORED` | Automatic release deployment `43a3e3c1-58fe-4caf-b2a9-b76de3b1e797` (`4400d435`) superseded the earlier exact receipt. Exact archive `100d34d8` was restored by deployment `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a`, image `sha256:2cf8b99cfa6a4d0db7a6793f267454e95479f9c45c4b6d15a4e59530f7008d92`, terminal `SUCCESS`; both setup-status endpoints and the public app returned HTTP 200. |
+| Exact web deploy | `PASS_RESTORED` | Automatic release drift was superseded. Exact archive `100d34d8` was restored by deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b`, terminal `SUCCESS`; both setup-status endpoints returned HTTP 200. |
 | Two-axis UI receipt | `PASS_RESTORED` | Authenticated post-restore DOM on `app.selenasystems.com/app/selena-horeca` proved `ПРОЕКТЫ` in the complementary project rail and `ИНСТРУМЕНТЫ` across the top with all six tool links. Both `/api/setup-status` endpoints returned HTTP 200. |
-| Worker deploy | `PASS_ROLLBACK_EXACT` | Temporary diagnostic-2 deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran source `a9d1f373` and was removed. Rollback deployment `73ee9186-5df2-4b4c-a578-fb8e988c86f6` restored exact `100d34d8` and is `SUCCESS`. |
+| Worker deploy | `PASS_ROLLBACK_EXACT` | Temporary diagnostic-2 deployment was removed. Rollback deployment `9275a824-281d-4afa-8098-1ed7184ffc68` restored exact `100d34d8` and is `SUCCESS`. |
 | Public health | `PASS` | `app.selenasystems.com`, `staging.selenasystems.com` and `/api/setup-status` returned HTTP 200. |
 | Runtime containment | `PASS` | Logs: legacy provider execution disabled; recurring scheduler disabled and managed schedules removed; pg-boss started; handlers ready; no error-level log. |
 | Canary trigger receipts | `HISTORICAL_READY_PAYLOAD / DIAGNOSTIC_HOLD` | Historical identity is exactly reconciled to `sd_mtiflifw2lfu6ne28l`; diagnostic-2 remains `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN`. Each immutable identity made one trigger, retries `0`, `recurring=false`; no accepted staging capture was retroactively persisted. |
@@ -147,10 +147,9 @@ source, acceptance evidence or user-visible reporting.
 
 Automatic release deployments `5cbb7b25`, `2e21ef04` and `4400d435` each
 superseded an exact feature web deployment. Read-only Railway evidence caught
-the third drift at deployment `43a3e3c1…`; exact archive deployment
-`a3b0cadd…` restored `100d34d8`. This matrix treats release auto-deploy drift as
-an operational HOLD unless the exact source is actively re-established and
-rechecked.
+the drift; exact archive deployment `835aca8d…` restored `100d34d8`. This matrix
+treats release auto-deploy drift as an operational HOLD unless the exact source
+is actively re-established and rechecked.
 
 ## API and browser evidence
 

@@ -1,8 +1,8 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-Updated: `2026-09-01` after diagnostic-2, mandatory worker rollback, exact-web
+Updated: `2026-09-02` after diagnostic-2, mandatory worker rollback, exact-web
 drift recovery, first-party Bright Data payload/cost reconciliation, bounded
-snapshot remediation and release-head integration evidence.
+snapshot remediation, release-head integration evidence and staging dry-run.
 
 ## Current state
 
@@ -13,17 +13,17 @@ snapshot remediation and release-head integration evidence.
 - Diagnostic-2 runtime source: `a9d1f373c48b64127873b34016ce398eabe00c3f`
 - Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
 - Bounded snapshot-download remediation source: `4a1fd948`
-- Last complete exact-head PR receipt: `4a1fd94803d1a457ab426ff765e2c1052c423646`
+- Last complete exact-head PR receipt: `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
-- Active exact staging web: `100d34d8`, deployment `a3b0cadd…`, restored after
-  automatic `release@4400d435` drift
-- Active worker after diagnostic rollback: `100d34d8`, deployment `73ee9186…`,
+- Active exact staging web: `100d34d8`, deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b`, restored after
+  automatic release drift
+- Active worker after diagnostic rollback: `100d34d8`, deployment `9275a824-281d-4afa-8098-1ed7184ffc68`,
   `SUCCESS`
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
 - Latest release integration merge: `84cce314`
 - Current source-only reconciliation patch: `b01a310b`, carried by follow-up
-  PR [#106](https://github.com/parkourcafe/selena-ai-visibility/pull/106);
+  PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108);
   provider capture and journal READY timestamps are separate and idempotent
   replay/dry-run invariants are hardened.
 - Current release-integrated source head: `f4b1418d`; final PR #108 checks are
@@ -82,7 +82,7 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
-- Last complete exact-head receipt: `4a1fd94803d1a457ab426ff765e2c1052c423646`
+- Last complete exact-head receipt: `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
 - PR merge aggregation at that receipt: PR #96 `open`, `mergeable=true`,
   `mergeable_state=clean`; merge remains intentionally unexecuted
@@ -110,9 +110,9 @@ check; exact-head CI is green on PR #108.
 |---|---|
 | Fresh backup | `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`, pre-`0053`, no expiry |
 | Isolated restored service | `a34b2749-130a-47f3-8da3-8f58e3775fe9`, healthy restored copy |
-| Active reconciled web | `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a`, exact archive `100d34d8`, `SUCCESS`, image `sha256:2cf8b99cfa6a4d0db7a6793f267454e95479f9c45c4b6d15a4e59530f7008d92`; replaces automatic release deployment `43a3e3c1…` (`4400d435`); public app and both setup-status endpoints returned 200 |
+| Active reconciled web | `835aca8d-2a47-4bad-af75-d7f4920cd35b`, exact archive `100d34d8`, `SUCCESS`; replaces automatic release drift; public app and both setup-status endpoints returned 200 |
 | Superseded external web drift | releases `5cbb7b25`, `2e21ef04` and `4400d435`; all were replaced by exact accepted implementation deployments |
-| Active rollback worker | `73ee9186-5df2-4b4c-a578-fb8e988c86f6`, archive `100d34d8`, `SUCCESS`; diagnostic-2 deployment `de5df16a…` is `REMOVED` |
+| Active rollback worker | `9275a824-281d-4afa-8098-1ed7184ffc68`, archive `100d34d8`, `SUCCESS`; temporary diagnostic deployment is `REMOVED` |
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
 | Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
 | Post-`0053` proof | `selena_app` non-owner/no bypass; FORCE RLS, ordinal column, validated check, unique index and insert guard all present |
@@ -121,6 +121,7 @@ check; exact-head CI is green on PR #108.
 | Diagnostic-2 lifecycle | No `snapshotReference`, record count or new lifecycle event; command terminal in `0.34s`; no retry authorized |
 | Canary cost | First-party post-diagnostic exports: Google AI Mode Search `1 record`, `USD 0.0015` total for 1 September. Because the same one record existed before diagnostic-2, diagnostic-2 added `0` records and `USD 0.0000` incremental billing. |
 | Historical payload | Read-only download: 1,543,419 bytes, file SHA-256 `bfb2ebcae1b69d20573f62e46aa5b586bacaedf8b9e617753b42a4b7a8d64c5a`; immutable schema-discovery validation passed with canonical hash `sha256:7b465dc14c050742f77fd37ecca4c64c5ff1f92eb30a945a9f60d688a8e3721f`, one record, non-empty answer and four normalized citations. |
+| Reconciliation dry-run | `DRY_RUN_ROLLED_BACK`; restored worker returned `providerCalls=0`, no evidence/cost/acceptance rows and `HOLD`; irreversible persistence commit was not run. |
 | Snapshot journal | Exact raw ID match: `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED`, first event `08:54:47.108Z`; one tenant/project/dataset; no capture persistence |
 | Runtime logs | Steady provider path disabled after the canary; recurring scheduler disabled; pg-boss started; handlers ready |
 | Browser | Both health endpoints 200; HoReCa unauth redirect correct; authenticated project-rail/tool-axis DOM and visual review passed; page-origin errors 0 |
@@ -143,10 +144,10 @@ Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 ## Remaining gates
 
 1. `HOLD_PROVIDER_PERSISTENCE`: historical identity, provider snapshot, payload
-   and cost are reconciled; no retroactive staging capture write is authorized
-   or fabricated. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN` and neither
-   immutable identity may be retried. The source-only path is ready for a
-   separate owner-gated staging dry-run/commit decision.
+   and cost are reconciled. The staging dry-run returned
+   `DRY_RUN_ROLLED_BACK` with no provider call, evidence, cost or acceptance
+   writes. No retroactive capture write is authorized or fabricated. Diagnostic-2
+   remains `TRIGGER_OUTCOME_UNKNOWN` and neither immutable identity may be retried.
 2. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 
@@ -154,7 +155,7 @@ Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 
 - Web rollback source: prior successful deployment
   `cc89f46b-b548-4216-a546-362051e98ecd`.
-- Worker rollback completed: exact `100d34d8` deployment `73ee9186…` is active;
+- Worker rollback completed: exact `100d34d8` deployment `9275a824…` is active;
   logs confirm recurring scheduler disabled, legacy provider execution disabled,
   pg-boss started and handlers ready.
 - Database rollback posture: restore from fresh pre-`0053` backup

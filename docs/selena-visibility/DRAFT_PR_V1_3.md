@@ -5,15 +5,15 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
 - Current remote base head: `4400d435`; integrated by merge commit `84cce314`
-- Last complete exact-head PR receipt: `4a1fd948`, base `2e21ef04`,
+- Last complete exact-head PR receipt: `1f3dd9d7`, base `330bab2a`,
   `mergeable=true`, all six checks passed
 - Accepted staging implementation source: `100d34d8`
 - Diagnostic-2 runtime source: `a9d1f373`
 - Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
 - Bounded snapshot-download remediation source: `4a1fd948`
 - Canary-time feature HEAD: `3872a396`
-- Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
-- Active staging web after drift recovery: `100d34d8`, deployment `a3b0cadd…`
+- Active staging worker after rollback: `100d34d8`, deployment `9275a824…`
+- Active staging web after drift recovery: `100d34d8`, deployment `835aca8d…`
 - Integrated release parent: `5cbb7b25`
 - Current offline reconciliation source patch: `b01a310b` in follow-up [PR
   #108](https://github.com/parkourcafe/selena-ai-visibility/pull/108); exact
@@ -87,9 +87,9 @@ provider capture/journal timestamps, strict replay checks and idempotent
   from Google AI Mode attribution;
 - both reservations remain immutable; no retry or additional provider call is
   authorized.
-- offline historical reconciliation is source-only, provider-free and locally
-  green; it has not mutated staging and remains behind a separate persistence
-  owner gate.
+- offline historical reconciliation ran in staging dry-run mode and returned
+  `DRY_RUN_ROLLED_BACK`; it made no provider call or persistence write and
+  remains behind a separate owner gate for the irreversible commit.
 - prospective source diagnostics now classify HTTP 4xx/5xx, invalid response,
   transport failure and hard trigger timeout without logging the provider body;
   this does not reinterpret either already-consumed canary receipt.
@@ -100,9 +100,8 @@ provider capture/journal timestamps, strict replay checks and idempotent
 
 ### HoReCa hosted evidence
 
-- exact staging deployment `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a` from git
-  archive `100d34d8` restored the accepted web after automatic release
-  deployment `43a3e3c1…` (`4400d435`) superseded the earlier exact receipt;
+- exact staging deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` from git
+  archive `100d34d8` restored the accepted web after automatic release drift;
 - projects were presented in the complementary `PROJECTS / HoReCa projects`
   rail;
 - `Overview`, `Visibility`, `Evidence`, `Competitors`, `Actions` and
@@ -118,7 +117,7 @@ provider capture/journal timestamps, strict replay checks and idempotent
 
 - temporary deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran diagnostic
   source `a9d1f373` and was removed after the single call;
-- rollback deployment `73ee9186-5df2-4b4c-a578-fb8e988c86f6` restored exact
+- rollback deployment `9275a824-281d-4afa-8098-1ed7184ffc68` restored exact
   archive `100d34d8` and reached `SUCCESS`;
 - startup logs prove legacy provider execution disabled, recurring scheduler
   disabled, managed schedules removed, pg-boss ready and all handlers
