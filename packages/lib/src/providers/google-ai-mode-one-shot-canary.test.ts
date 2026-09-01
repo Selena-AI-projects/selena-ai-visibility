@@ -4,6 +4,7 @@ import type { ProviderDatasetAccessRequest } from "./dataset-registry";
 import {
 	createBrightDataGoogleAiModeTransport,
 	GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
+	GOOGLE_AI_MODE_MAX_SNAPSHOT_BYTES,
 	type GoogleAiModeCanaryReservationResult,
 	type GoogleAiModeCostPreflightEvidence,
 	runGoogleAiModeOneShotCanary,
@@ -537,5 +538,34 @@ describe("verified Bright Data GOOGLE_AI_MODE HTTP transport", () => {
 		expect(urls[2]).toContain("/datasets/v3/snapshot/snapshot-1?format=json");
 		expect(urls[3]).toContain("/datasets/v3/snapshot/snapshot-1/cancel");
 		expect(urls.join("\n")).not.toContain("private-token");
+	});
+
+	it("accepts a bounded real-world snapshot while rejecting oversized payloads", async () => {
+		const realWorldSizedPayload = JSON.stringify([
+			{
+				answer_text: "fixture answer",
+				answer_html: "x".repeat(1_600_000),
+				citations: [{ url: "https://example.test/source" }],
+			},
+		]);
+		const responses = [
+			new Response(realWorldSizedPayload, { status: 200 }),
+			new Response("{}", {
+				status: 200,
+				headers: { "content-length": String(GOOGLE_AI_MODE_MAX_SNAPSHOT_BYTES + 1) },
+			}),
+		];
+		const fetchImpl = vi.fn(
+			async (_input: string | URL | Request, _init?: RequestInit) =>
+				responses.shift() ?? new Response(null, { status: 500 }),
+		);
+		const transport = createBrightDataGoogleAiModeTransport({ apiKey: "private-token", fetchImpl });
+
+		await expect(transport.download("snapshot-bounded", new AbortController().signal)).resolves.toEqual(
+			JSON.parse(realWorldSizedPayload),
+		);
+		await expect(transport.download("snapshot-oversized", new AbortController().signal)).rejects.toThrow(
+			"BRIGHTDATA_GOOGLE_AI_MODE_DOWNLOAD_FAILED",
+		);
 	});
 });

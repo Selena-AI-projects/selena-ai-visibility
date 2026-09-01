@@ -402,17 +402,22 @@ export async function runGoogleAiModeOneShotCanary(
 }
 
 const BRIGHT_DATA_DATASET_BASE_URL = "https://api.brightdata.com/datasets/v3";
-const MAX_RESPONSE_BYTES = 1_000_000;
+const MAX_CONTROL_RESPONSE_BYTES = 1_000_000;
+export const GOOGLE_AI_MODE_MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024;
 
-async function readJsonResponse(response: Response, errorCode: string): Promise<unknown> {
+async function readJsonResponse(
+	response: Response,
+	errorCode: string,
+	maxResponseBytes = MAX_CONTROL_RESPONSE_BYTES,
+): Promise<unknown> {
 	if (!response.ok) {
 		await response.body?.cancel().catch(() => undefined);
 		throw new Error(errorCode);
 	}
 	const declaredSize = Number(response.headers.get("content-length"));
-	if (Number.isFinite(declaredSize) && declaredSize > MAX_RESPONSE_BYTES) throw new Error(errorCode);
+	if (Number.isFinite(declaredSize) && declaredSize > maxResponseBytes) throw new Error(errorCode);
 	const body = await response.text();
-	if (Buffer.byteLength(body, "utf8") > MAX_RESPONSE_BYTES) throw new Error(errorCode);
+	if (Buffer.byteLength(body, "utf8") > maxResponseBytes) throw new Error(errorCode);
 	try {
 		return JSON.parse(body) as unknown;
 	} catch {
@@ -499,6 +504,7 @@ export function createBrightDataGoogleAiModeTransport(input: {
 					signal,
 				}),
 				"BRIGHTDATA_GOOGLE_AI_MODE_DOWNLOAD_FAILED",
+				GOOGLE_AI_MODE_MAX_SNAPSHOT_BYTES,
 			);
 		},
 		async cancel(snapshotId, signal) {
