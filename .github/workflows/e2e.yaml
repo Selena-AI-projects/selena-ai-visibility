@@ -245,6 +245,11 @@ jobs:
       - name: Apply migrations
         run: pnpm -C packages/lib exec drizzle-kit migrate
 
+      - name: Replay bounded migrations on real PostgreSQL
+        env:
+          SELENA_MIGRATION_MAX_INDEX: "53"
+        run: node packages/lib/scripts/run-bounded-migrations.mjs
+
       - name: Seed local fixtures
         run: pnpm -C e2e exec tsx seed.ts
 

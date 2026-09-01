@@ -5,10 +5,11 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
 - Current remote base head: `2e21ef04`; integrated by merge commit `34d86417`
-- Pre-merge PR API snapshot: cached base `5cbb7b25`,
-  `mergeable_state=dirty`; refresh pending after push
+- Last complete exact-head PR receipt: `2b057229`, base `2e21ef04`,
+  `mergeable=true`, `mergeable_state=clean`, all six checks passed
 - Accepted staging implementation source: `100d34d8`
-- Diagnostic-2 source / current PR HEAD before this evidence update: `a9d1f373`
+- Diagnostic-2 runtime source: `a9d1f373`
+- Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
 - Canary-time feature HEAD: `3872a396`
 - Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
 - Active staging web after drift recovery: `100d34d8`, deployment `c3002c7d…`
@@ -22,7 +23,7 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### Summary
 
-- integrate release `5cbb7b25` without rewriting feature history;
+- integrate release `2e21ef04` without rewriting feature history;
 - provide the provider registry and 13 canary-ready dataset contracts;
 - harden Google adapters and keep generic live probes fail-closed;
 - keep Social/Travel hidden at server, workflow and UI boundaries;
@@ -72,6 +73,9 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
   from Google AI Mode attribution;
 - both reservations remain immutable; no retry or additional provider call is
   authorized.
+- prospective source diagnostics now classify HTTP 4xx/5xx, invalid response,
+  transport failure and hard trigger timeout without logging the provider body;
+  this does not reinterpret either already-consumed canary receipt.
 
 ### HoReCa hosted evidence
 
@@ -101,14 +105,17 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### CI evidence
 
-- diagnostic source `a9d1f373` passed exact-head Build, E2E Integration,
-  Scheduling Policy Verification, Deployment Smoke and License workflows;
-  exact run links are in `ACCEPTANCE_MATRIX_V1_3.md`;
+- release-integrated evidence head `2b057229` passed Build, E2E Integration,
+  Scheduling Policy Verification, Deployment Smoke, License and CLA; exact run
+  links are in `ACCEPTANCE_MATRIX_V1_3.md`;
 - release integration `34d86417` preserved the feature historical-hash gate,
   adopted release advisory-lock ordering and passed lib migration tests `10/10`
   plus CLI migration image tests `2/2` locally;
-- the CLA workflow is not manually dispatchable; refreshed PR mergeability and
-  final exact-head CI are required after push, so no merge gate is claimed;
+- GitHub reported PR #96 clean and mergeable at `2b057229`; this source-quality
+  result does not override the provider HOLD;
+- the E2E scheduling job now replays the final bounded runner through `0053`
+  against disposable real PostgreSQL after the journal is already complete;
+  the current-head E2E check is the authoritative no-op/advisory-lock receipt;
 - local focused gates after the release merge: migration/repository tests
   `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
   shell syntax PASS and diff check clean;
@@ -118,9 +125,7 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 1. Both Bright Data terminal outcomes remain `UNKNOWN/HOLD`; first-party cost
    and usage attribution is closed and neither execution may be retried.
-2. Final exact-head CI and refreshed PR mergeability are required after release
-   integration merge `34d86417` is pushed.
-3. Production, production DB, recurring jobs, billing activation,
+2. Production, production DB, recurring jobs, billing activation,
    Social/Travel activation, additional provider calls and PR merge remain
    prohibited.
 

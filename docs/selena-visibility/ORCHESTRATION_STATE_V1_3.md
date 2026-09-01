@@ -1,16 +1,18 @@
 # Selena AI Visibility v1.3 — orchestration state
 
 Updated: `2026-09-01` after diagnostic-2, mandatory worker rollback, exact-web
-drift recovery and first-party Bright Data cost reconciliation.
+drift recovery, first-party Bright Data cost reconciliation and release-head
+integration evidence.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_TWO_CANARY_OUTCOMES_UNKNOWN_MERGE_HEAD_CI_PENDING`
+- State: `STAGING_CORE_PASS_TWO_CANARY_OUTCOMES_UNKNOWN_PR_CLEAN`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Accepted staging implementation source: `100d34d8`
-- Diagnostic-2 source and PR HEAD before this evidence update:
-  `a9d1f373c48b64127873b34016ce398eabe00c3f`
+- Diagnostic-2 runtime source: `a9d1f373c48b64127873b34016ce398eabe00c3f`
+- Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
+- Last complete exact-head PR receipt: `2b057229f46f041954403ef9c9ff485a87d7b785`
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
 - Active exact staging web: `100d34d8`, deployment `c3002c7d…`, restored after
   automatic `release@2e21ef04` drift
@@ -22,7 +24,7 @@ drift recovery and first-party Bright Data cost reconciliation.
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Historical draft PR reference: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Canary-time feature-head required checks: `ALL PASS`
-- Accepted implementation-source checks: `ALL PASS`
+- Release-integrated exact-head checks: `ALL PASS`; PR `CLEAN/MERGEABLE`
 - Production deploy/DB mutations: `0`
 - Provider triggers: `2`, one for each separately authorized immutable
   identity; retries `0`, recurring `false`
@@ -51,7 +53,7 @@ and excluded from every commit and archive.
 | Provider | `PASS_COST / HOLD_TWO_OUTCOMES_UNKNOWN` | Historical and diagnostic-2 identities each made one call. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
 | Database/Evidence | `PASS_0053_CANARY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Both reservations remain immutable. |
 | HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `2e21ef04` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / FINAL_CI_PENDING` | Exact staging implementation and diagnostic CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Release `2e21ef04` is integrated by merge `34d86417`; PR merge is not executed. |
+| Orchestrator | `STAGING_CORE_PASS / PROVIDER_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Release `2e21ef04` is integrated by merge `34d86417`; PR is clean but merge is not executed. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -61,25 +63,31 @@ checks passed on canary-time feature HEAD `3872a396`; current candidate
 `100d34d8` adds the release merge and bounded `0045` historical-hash handling.
 Its final source CI and exact hosted web reconciliation passed. Commit
 `a9d1f373` adds only the immutable diagnostic-2 identity contract and its test;
-its manually dispatchable exact-head workflows passed.
+its manually dispatchable workflows passed. Release-integrated evidence head
+`2b057229` passed the complete PR suite. Source `4f701b35` adds only redacted
+trigger failure categories and deterministic mocked tests; it cannot
+retroactively identify diagnostic-2's generic `TRIGGER_OUTCOME_UNKNOWN`.
 
 ## CI state
 
-- Diagnostic source: `a9d1f373c48b64127873b34016ce398eabe00c3f`
-- Exact-head manually dispatchable workflows: Build, E2E, Scheduling, Smoke,
-  License `ALL PASS`
-- PR merge aggregation: `HOLD`; PR #96 is `open`, `mergeable=false`,
-  `mergeable_state=dirty` in the pre-merge API snapshot; refresh pending after
-  pushing merge `34d86417`
+- Last complete exact-head receipt: `2b057229f46f041954403ef9c9ff485a87d7b785`
+- Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
+- PR merge aggregation at that receipt: PR #96 `open`, `mergeable=true`,
+  `mergeable_state=clean`; merge remains intentionally unexecuted
 - Merge-resolution tests: lib migration runner `10/10`; CLI migration image
   contract `2/2`
 - Hosted deployment equality: `PASS_RESTORED`; exact git archive `100d34d8`
   replaced automatic release drift.
+- The E2E scheduling workflow now requires a real-PostgreSQL no-op replay through
+  the final bounded migration runner at journal frontier `54/0053`; the current
+  PR-head E2E check is its authoritative receipt.
 
 Previously recorded local source gates: lint `0 errors / 129 warnings / 12 infos`, typecheck
 `13/13`, tests `16/16` tasks, Impeccable detect `PASS`, build `16/16`.
 Focused Bright Data timeout stability: `20/20`. Focused Local Maps stability:
-five replays, `73/73` tests per replay.
+five replays, `73/73` tests per replay. Trigger taxonomy source `4f701b35`
+passed lib typecheck, `1086/1086` lib tests, the same root lint baseline and
+root build `16/16` locally.
 
 ## Staging receipts
 
@@ -119,10 +127,7 @@ Status: `PASS_ADMIN_BINDING`.
 1. `HOLD_PROVIDER_TERMINAL`: both immutable calls have unknown terminal
    provider outcomes. Neither call may be retried. Billing attribution is
    closed at one Google AI Mode record and `USD 0.0015` total for the day.
-2. `HOLD_FINAL_CI`: release head `2e21ef04` is integrated by merge `34d86417`.
-   Exact-head CI and the refreshed PR mergeability result remain required. No
-   PR merge is executed.
-3. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
+2. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 
 ## Rollback posture

@@ -9,8 +9,12 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
   `5cbb7b25`; canonical `0045`, follow-up `0053`, exact historical-hash
   compatibility gate)
 - First-canary feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
-- Diagnostic-2 source and current PR HEAD before this evidence update:
-  `a9d1f373c48b64127873b34016ce398eabe00c3f`
+- Diagnostic-2 runtime source: `a9d1f373c48b64127873b34016ce398eabe00c3f`
+- Trigger-diagnostics source before this evidence reconciliation:
+  `4f701b35` (sanitized HTTP/response/transport/timeout taxonomy only; no provider
+  execution path or retry policy was enabled)
+- Last exact PR evidence head verified inside this document:
+  `2b057229f46f041954403ef9c9ff485a87d7b785`
 - Active worker implementation source after mandatory rollback: `100d34d8`
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `2e21ef04e3a0a87d0bd103b15603a23775dad6ab`
@@ -31,40 +35,43 @@ an exact `100d34d8` archive deployment before this matrix was finalized.
 
 | Boundary | Decision | Reason |
 |---|---|---|
-| Source package | `PASS_SOURCE` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. Release `5cbb7b25` is merged and the applied-`0045` hash transition is bounded to one reviewed timestamp/hash pair. |
-| Exact-head CI | `PASS_DIAGNOSTIC / PENDING_MERGE_HEAD` | Build, E2E, scheduling, smoke and license completed successfully on diagnostic source `a9d1f373`. Release integration `34d86417` resolved the two migration-runner conflicts and passed 12 targeted tests locally; final exact-head workflows must complete after push. |
+| Source package | `PASS_SOURCE` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. Release `2e21ef04` is integrated and the applied-`0045` hash transition is bounded to one reviewed timestamp/hash pair. |
+| Exact-head CI | `PASS_LAST_VERIFIED` | Head `2b057229` passed Build, E2E, scheduling, smoke, license and CLA and GitHub reported `mergeable=true`, `mergeable_state=clean`. The current mutable PR head and its checks must be read from GitHub; the final PR evidence comment is authoritative for commits after this document's immutable receipt. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
 | Google/Bright Data canary | `COST_PASS / OUTCOME_UNKNOWN / HOLD` | Two separately authorized immutable identities each made exactly one provider call. The historical call ended `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`. Diagnostic-2 ended `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN` before a snapshot reference existed. Both used zero retries and `recurring=false`; no accepted provider capture exists. First-party billing exports show one Google AI Mode record and `USD 0.0015` total for the day, so diagnostic-2 added no billable record and `USD 0.0000` incremental cost. |
-| Production/merge | `NO_GO` | Provider terminal outcome remains unresolved, PR #96 is `dirty`, production is prohibited and no merge was executed. |
+| Production/merge | `NO_GO` | Provider terminal outcome remains unresolved. PR #96 was clean and mergeable at verified head `2b057229`, but production is prohibited and no merge was executed. |
 
 Overall decision: `STAGING_CANARY_HOLD / PRE_PRODUCTION_NO_GO`.
 
-## Diagnostic-head CI evidence
+## Exact-head CI evidence
 
-The manually dispatched exact-head workflows below passed against
-`a9d1f373c48b64127873b34016ce398eabe00c3f`:
+The pull-request workflows below passed against
+`2b057229f46f041954403ef9c9ff485a87d7b785`, which contains release merge
+`34d86417`:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33502678567 / job 99839402251](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678567/job/99839402251) |
-| E2E Integration Tests | `PASS` | [run 33502678587 / job 99839403550](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678587/job/99839403550) |
-| Scheduling Policy Verification | `PASS` | [run 33502678587 / job 99839403329](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678587/job/99839403329) |
-| Dependency License Audit | `PASS` | [run 33502678649 / job 99839403470](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678649/job/99839403470) |
-| Deployment smoke | `PASS` | [run 33502678500 / job 99839403464](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678500/job/99839403464) |
+| Build | `PASS` | [run 33507985205 / job 99856532788](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985205/job/99856532788) |
+| E2E Integration Tests | `PASS` | [run 33507985163 / job 99856532556](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985163/job/99856532556) |
+| Scheduling Policy Verification | `PASS` | [run 33507985163 / job 99856532317](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985163/job/99856532317) |
+| Dependency License Audit | `PASS` | [run 33507985181 / job 99856532559](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985181/job/99856532559) |
+| Deployment smoke | `PASS` | [run 33507985233 / job 99856538953](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985233/job/99856538953) |
+| CLA | `PASS` | [run 33507985186 / job 99856532348](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985186/job/99856532348) |
 
-The CLA workflow is not manually dispatchable. Its earlier PR check passed on
-the accepted source lineage, but GitHub currently reports PR #96
-`mergeable=false`, `mergeable_state=dirty`; therefore the matrix does not
-claim an exact-head merge gate.
+GitHub API returned `base=2e21ef04`, `head=2b057229`, `state=open`,
+`mergeable=true`, `mergeable_state=clean`. This is a source-quality gate only:
+the unresolved provider outcome still prevents merge.
 
-Recorded local root gates for diagnostic source `a9d1f373`:
+Recorded local root gates before the sanitized trigger-taxonomy commit:
 lint `0 errors / 129 warnings / 12 infos`, typecheck `13/13`, tests `16/16`
 tasks, Impeccable detect `PASS`, build `16/16`, `git diff --check` clean. The
 warnings/infos are the registered root baseline and are non-blocking. Local Node
-was `22.23.0`; CI used the required Node 24.
+was `22.23.0`; CI used the required Node 24. Trigger-taxonomy source `4f701b35`
+also passed lib typecheck, `1086/1086` lib tests, root lint with the same
+non-blocking baseline and root build `16/16` locally.
 
 ## Staging infrastructure evidence
 
@@ -73,6 +80,7 @@ was `22.23.0`; CI used the required Node 24.
 | Fresh checkpoint | `PASS` | Pre-`0053` backup `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`, external snapshot reference present, no expiry. Earlier isolated restore receipt `a34b2749…` remains the recovery-path proof. |
 | Isolated restore | `PASS` | Restore service `a34b2749-130a-47f3-8da3-8f58e3775fe9` became healthy and proved an actual restored copy. |
 | Migration bound | `PASS` | Bounded runner deployment `76fe0d58-0fd8-4213-9b11-f852e72de7f8` applied only `0053`: journal `53/1787940014000` → `54/1787940015000`, runner exit `0`. |
+| Final runner real-PostgreSQL replay | `CI_GATED` | The E2E scheduling job now reapplies the bounded runner through index `53` after the disposable PostgreSQL journal already reached `54/0053`. The current-head E2E check is the authoritative receipt for advisory lock, exact journal prefix/postcondition, no-op replay and unlock. |
 | Post-`0053` schema/RLS | `PASS` | Values-suppressed readback proved `selena_app`, non-owner/no `BYPASSRLS`, FORCE RLS, `legacy_collision_ordinal`, validated nonnegative check, the three-column unique index and insert guard. |
 | Runtime role | `PASS` | `current_user=selena_app`; `SUPER=false`, `BYPASS_RLS=false`, `CREATE_ROLE=false`, `CREATE_DB=false`. |
 | Administration credential | `PASS` | After the owner-confirmed Postgres rotation, a values-suppressed count-only TCP probe through the service's sealed `POSTGRES_USER`/`POSTGRES_PASSWORD` binding returned `ADMIN_TCP=PASS`. |
@@ -129,7 +137,7 @@ unless the exact source is actively re-established and rechecked.
 | Scope | Result | Boundary |
 |---|---|---|
 | Provider registry and 13 dataset contracts | `PASS_SOURCE_CANARY_READY` | Contract and adapter source plus exact-head CI; two separately authorized bounded Google AI Mode calls produced no accepted provider capture. |
-| Google adapters | `PASS_SOURCE / HOLD_RUNTIME_OUTCOME` | Request/response validation, bounded timeout and zero internal retries passed in source; neither hosted call has a proven terminal provider outcome. |
+| Google adapters | `PASS_SOURCE / HOLD_RUNTIME_OUTCOME` | Request/response validation, bounded timeout and zero internal retries passed in source. Sanitized trigger taxonomy now distinguishes HTTP 4xx/5xx, invalid response, transport failure and hard timeout without storing a provider body; this is prospective diagnostics and does not reinterpret either historical receipt. Neither hosted call has a proven terminal provider outcome. |
 | Social/Travel | `PASS_HIDDEN` | Server strips hidden modules before the customer boundary; workflow and UI cannot activate them. |
 | HoReCa Local-first read models/UI | `PASS_HOSTED_RESTORED` | Exact source `100d34d8` was restored after automatic release drift. Its authenticated receipt separates the project rail at left from the six-tool axis across the top. |
 | AVLI/KORA pilot package | `PASS_TEMPLATE/HOLD_DATA` | Templates exist; no unsupported venue facts or provider results were invented. |
@@ -177,24 +185,25 @@ values-suppressed count-only probe after rotation.
    retrying either call. Billing and usage attribution are closed.
 2. Keep both reservations immutable. No additional provider call, identity,
    retry or cost-cap increase is authorized.
-3. Obtain exact final-head CI and refreshed GitHub mergeability after pushing
-   release integration merge `34d86417`. Production remains prohibited.
+3. Keep production, production DB and PR merge prohibited while the provider
+   gate remains `HOLD`, even when the current PR checks are green.
 
-## Current diagnostic-head CI
+## Evidence lineage and mutable PR state
 
-Source `a9d1f373` passed every manually dispatchable exact-head workflow:
+Diagnostic source `a9d1f373` passed every manually dispatchable workflow. The
+release-integrated evidence head `2b057229` then passed the complete PR suite:
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33502678567 / job 99839402251](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678567/job/99839402251) |
-| E2E Integration Tests | `PASS` | [run 33502678587 / job 99839403550](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678587/job/99839403550) |
-| Scheduling Policy Verification | `PASS` | [run 33502678587 / job 99839403329](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678587/job/99839403329) |
-| Dependency License Audit | `PASS` | [run 33502678649 / job 99839403470](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678649/job/99839403470) |
-| Deployment smoke | `PASS` | [run 33502678500 / job 99839403464](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678500/job/99839403464) |
+| Build | `PASS` | [run 33507985205](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985205) |
+| E2E + Scheduling | `PASS` | [run 33507985163](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985163) |
+| Dependency License Audit | `PASS` | [run 33507985181](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985181) |
+| Deployment smoke | `PASS` | [run 33507985233](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985233) |
+| CLA | `PASS` | [run 33507985186](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33507985186) |
 
-GitHub API evidence before the release integration merge: `head=a9d1f373`,
-cached PR `base=5cbb7b25`, `state=open`, `mergeable=false`,
-`mergeable_state=dirty`, while the base ref itself resolved to `2e21ef04`.
-Merge commit `34d86417` now integrates that exact release head, preserves the
-feature-side reviewed `0045` hash alias, and adopts the release-side advisory
-lock ordering. GitHub mergeability and final CI must be read back after push.
+Merge commit `34d86417` integrates exact release head `2e21ef04`, preserves the
+feature-side reviewed `0045` hash alias and adopts the release-side advisory
+lock ordering. GitHub reported PR #96 clean and mergeable at `2b057229`. Since a
+Markdown file cannot contain the hash of its own enclosing commit, GitHub PR
+metadata and the latest exact-head evidence comment are authoritative for later
+source-only evidence commits and their checks.
