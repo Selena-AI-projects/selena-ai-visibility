@@ -4,7 +4,7 @@ Updated: `2026-09-01` after exact-head hosted acceptance.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_OWNER_GATES_REMAIN`
+- State: `STAGING_NONPAID_PASS_PAID_CANARY_HOLD`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Runtime/source HEAD: `2d023470a618c6606e7960ee4dd1b4523dcbdcfe`
@@ -38,7 +38,7 @@ and excluded from every commit and archive.
 |---|---|---|
 | Provider | `PASS_SOURCE` | Registry, 13 dataset contracts and Google adapters are exact-head CI green. Generic live probes are unreachable; Social/Travel is hidden. No provider call ran. |
 | Database/Evidence | `PASS_HOSTED_CORE` | Backup/restore, migrations through 0051, actual non-owner role, RLS, rollback, replay, concurrency and idempotency passed. |
-| HoReCa Product | `PASS_SOURCE_HOSTED_BOUNDARY` | Local-first modules, UNKNOWN semantics, evidence privacy, scoped API and unauthenticated browser boundary passed. Authenticated human UI is pending. |
+| HoReCa Product | `PASS_HOSTED` | Local-first modules, UNKNOWN semantics, evidence privacy, scoped API plus unauthenticated and authenticated AVLI/KORA browser boundaries passed. |
 | Orchestrator | `PASS_WITH_OWNER_GATES` | Exact archive deployed to web/worker, CI and runtime receipts reconciled, zero-call containment proved. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
@@ -88,11 +88,10 @@ Status: `PASS_ADMIN_BINDING`.
 
 ## Remaining gates
 
-1. `HOLD_ACCESS`: authenticated owner browser session for HoReCa/Local UI.
-2. `HOLD_OWNER`: paid canary. Actual price is `UNKNOWN`; incurred price is
+1. `HOLD_OWNER`: paid canary. Actual price is `UNKNOWN`; incurred price is
    `USD 0.00`. A future run requires explicit authorization for migration
    `0052` and for one paid call.
-3. `NO_GO`: production and PR merge while any gate above is open.
+2. `NO_GO`: production and PR merge while the gate above is open.
 
 ## Rollback posture
 

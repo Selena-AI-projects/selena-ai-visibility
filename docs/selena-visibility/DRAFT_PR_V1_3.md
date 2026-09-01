@@ -50,7 +50,6 @@ Accepted runtime/source HEAD:
 
 ### Remaining gates
 
-- authenticated owner browser session for HoReCa/Local UI;
 - any paid canary requires a new explicit authorization for migration 0052 and
   one provider call; current price is UNKNOWN and incurred cost is USD 0.00;
 - production, production DB, recurring jobs, billing, Social/Travel activation
@@ -71,3 +70,7 @@ The later credential/browser receipt is documentation-only: it closes the
 Postgres administration binding gate and records that both available browser
 profiles require interactive sign-in. It does not change the accepted runtime
 source.
+
+The owner subsequently completed interactive sign-in. Authenticated AVLI/KORA
+route selection, Local-first states, hidden Social/Travel, sanitized JSON
+payloads and zero console/network errors passed without exposing credentials.

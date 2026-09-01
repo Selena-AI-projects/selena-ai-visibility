@@ -9,10 +9,9 @@ Staging core acceptance is complete for exact-head CI, backup/restore,
 migrations through `0051`, non-owner runtime, RLS, API, public browser,
 replay/concurrency/idempotency, web and worker lifecycle.
 
-Overall release state remains `NO_GO` because two owner gates remain:
+Overall release state remains `NO_GO` because one owner gate remains:
 
-1. Authenticated owner browser acceptance.
-2. Optional paid canary plus migration `0052` authorization.
+1. Optional paid canary plus migration `0052` authorization.
 
 Production and PR #96 merge remain prohibited at this state.
 
@@ -94,17 +93,16 @@ Without all five, the provider path stays off.
 
 ## Authenticated browser
 
-The public and unauthenticated browser gate passed. Both the Codex in-app
-browser and the connected Chrome profile redirect to the normal login page;
-no authenticated owner session is available. Authenticated HoReCa/Local UI
-evidence is therefore `UNKNOWN`.
+The public, unauthenticated and authenticated browser gates passed. The owner
+signed in interactively without sharing credentials. AVLI and KORA each opened
+through the project selector with correct source-only/unknown states.
+Social/Travel and private provenance field names were absent from both rendered
+DOM and observed JSON customer payloads; navigation and console errors were 0.
 
-### OD-3 — required owner action
+### OD-3 — closed
 
-Sign in through the normal staging login in an interactive browser. Do not
-send credentials in chat. The acceptance reviewer will then verify the HoReCa
-read model, hidden Social/Travel DOM boundary, UNKNOWN/locked states and
-tenant-scoped network responses.
+Authenticated owner browser acceptance completed for AVLI Bali and KORA Food
+Hall. No credential or session material was retained in the evidence package.
 
 ## Timeout and retry limits
 
@@ -133,6 +131,6 @@ tenant-scoped network responses.
 |---|---|---|
 | OD-1 | Reconcile staging Postgres administration credential through Railway's official rotation surface | `CLOSED/PASS` |
 | OD-2 | Authorize migration 0052 and one paid canary under an explicit new envelope | `DENY/HOLD` |
-| OD-3 | Provide an authenticated staging browser session by signing in normally | `REQUIRED` |
+| OD-3 | Provide an authenticated staging browser session by signing in normally | `CLOSED/PASS` |
 | OD-4 | Merge PR #96 after all required gates and a final green docs-head CI | `DENY/HOLD` |
 | OD-5 | Any production deploy or production DB action | `DENY` |

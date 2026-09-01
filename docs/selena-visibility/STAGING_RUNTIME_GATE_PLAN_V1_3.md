@@ -15,7 +15,7 @@ Updated after execution on `2026-09-01`. Runtime/source anchor:
 | SR-05 Migrations/runtime role/RLS | `PASS` | 0043–0051 present, 0052 absent; actual `selena_app`, GUC and RLS proof passed and rolled back. |
 | SR-06 Exact web/worker deploy | `PASS` | Web `7e7de294…`, worker `586b6e9a…`, both running. |
 | SR-07 Zero-call fixture/API | `PASS` | Two scoped API tenants isolated; invalid key 401; fixture cleanup proved. |
-| SR-08 Browser | `PARTIAL_PASS` | Public and unauthenticated boundary passed; authenticated owner UI remains `HOLD_ACCESS`. |
+| SR-08 Browser | `PASS` | Public/unauthenticated boundary plus authenticated AVLI/KORA project, Local-first state, hidden Social/Travel and sanitized payload checks passed. |
 | SR-09 Replay/concurrency/idempotency | `PASS` | One concurrent winner, stable replay, cross-tenant fence, immutable active receipt, cleanup. |
 | SR-10 Local Maps stability | `PASS_5_OF_5` | 73 focused tests per replay, five replays, zero calls. |
 | SR-11 Paid canary | `NOT_EXECUTED/HOLD_OWNER` | Latest owner decision prohibits paid calls; 0052 is outside the migration authorization. |
@@ -52,10 +52,10 @@ connection check through the service's sealed administration binding returned
 The working `selena_app` runtime remains unchanged and both public setup-status
 endpoints continue to return HTTP 200.
 
-### G2 — authenticated browser acceptance
+### G2 — authenticated browser acceptance (`CLOSED`)
 
-Owner action required: sign in through the normal staging login surface in an
-interactive browser. The reviewer then verifies:
+The owner signed in through the normal staging login without sharing
+credentials. The reviewer verified:
 
 1. HoReCa page loads under the intended test organization.
 2. Local-first modules remain independent and preserve `UNKNOWN`/locked state.
@@ -63,7 +63,8 @@ interactive browser. The reviewer then verifies:
 4. API/network failures expose no raw provider locator, content hash, secret or
    cross-tenant row.
 
-No credential may be sent in chat or persisted in an acceptance artifact.
+No credential or session material was sent in chat or persisted in an
+acceptance artifact. Authenticated network failures and console errors were 0.
 
 ### G3 — optional paid canary
 

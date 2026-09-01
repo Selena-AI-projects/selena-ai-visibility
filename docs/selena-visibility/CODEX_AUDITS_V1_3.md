@@ -23,10 +23,9 @@ idempotency, public browser, web and worker lifecycle gates. Provider calls
 and new cost events remained zero.
 
 Open items are owner/access gates, not unresolved P0/P1 source findings:
-authenticated human browser acceptance and any future paid canary plus
-migration `0052` authorization. The earlier Postgres administration mismatch
-is closed by the owner-confirmed rotation and a values-suppressed
-`ADMIN_TCP=PASS` receipt.
+any future paid canary plus migration `0052` authorization. The earlier
+Postgres administration and authenticated-browser gates are closed by runtime
+receipts; no new P0/P1 source finding was introduced.
 
 Three non-overlapping implementation agents performed cross-stream read-only
 reviews after integration. They did not edit files during audit turns and did
@@ -145,7 +144,6 @@ remaining P0/P1 in this slice.
 
 ## Remaining owner gates
 
-- authenticated owner browser acceptance for the HoReCa/Local UI;
 - separate authorization for migration `0052` and any paid Google AI Mode
   canary; the latest decision currently prohibits the call;
 - production, production DB, billing changes, Social/Travel activation,

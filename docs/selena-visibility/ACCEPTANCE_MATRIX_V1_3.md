@@ -25,11 +25,11 @@ represented as a deployed binary.
 | Staging database/RLS | `PASS` | Backup/restore, migrations through `0051`, actual non-owner runtime role, GUC, RLS, rollback, replay, concurrency and idempotency were proved. |
 | Staging web/worker | `PASS` | Exact archive deployed; both services are `SUCCESS` and `RUNNING`; provider and recurring paths remain fail-closed. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
-| Authenticated human browser | `HOLD_ACCESS` | No authenticated owner session was available; no session or credential was fabricated. |
+| Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
 | Paid Google/Bright Data canary | `HOLD_OWNER` | Latest owner decision prohibits paid provider calls. Migration `0052`, required for the durable snapshot journal, is also outside the authorized staging range. |
-| Production/merge | `NO_GO` | Production is prohibited; PR #96 remains unmerged while the human-browser and paid-canary gates are open. |
+| Production/merge | `NO_GO` | Production is prohibited; PR #96 remains unmerged while the paid-canary gate is open. |
 
-Overall decision: `STAGING_CORE_PASS / PRE_PRODUCTION_NO_GO`.
+Overall decision: `STAGING_NONPAID_PASS / PRE_PRODUCTION_NO_GO`.
 
 ## Exact-head CI evidence
 
@@ -90,11 +90,17 @@ application/admin TCP path. No credential value was read or printed.
 - Headless Chrome: home returned 200 with title `Selena Systems — AI
   Visibility`; unauthenticated HoReCa redirected to `/auth/login` with
   `returnTo=/app/selena-horeca`; console errors `0`, page errors `0`.
-- The current Codex in-app browser and the connected Chrome profile were both
-  checked after hosted acceptance. Each redirected the HoReCa route to the
-  normal login page, so neither contains an authenticated owner session.
-- Authenticated human UI remains `UNKNOWN/HOLD_ACCESS`; API-key proof is not
-  relabelled as a browser session.
+- The owner signed in interactively through the normal Chrome staging login;
+  no credential was shared with the reviewer.
+- AVLI Bali and KORA Food Hall each opened through the project selector with
+  the selected project bound in the route and decision view.
+- Both showed source-only preview, `Phase: Not confirmed`, independent `Not
+  measured` / `Needs approval` / `Not assessed` states and no measurement-start
+  control.
+- Social/Travel were absent from the rendered DOM and from the JSON customer
+  payloads observed during both project navigations. `rawLocator`,
+  `contentHash`, provider-reference and snapshot-UUID fields were also absent.
+- Authenticated navigation failures `0`; console errors `0`.
 
 ## Product and dataset acceptance
 
@@ -128,11 +134,9 @@ values-suppressed count-only probe after rotation.
 
 ## Remaining owner gates
 
-1. Establish an authenticated owner browser session and rerun HoReCa/Local
-   read-model UI acceptance without sharing credentials in chat.
-2. If a paid canary is desired, explicitly authorize both migration `0052` and
+1. If a paid canary is desired, explicitly authorize both migration `0052` and
    one Bright Data call with a new cost cap. Until then the canary is forbidden.
-3. Keep PR #96 unmerged and production untouched while any gate above remains
+2. Keep PR #96 unmerged and production untouched while any gate above remains
    open.
 
 ## Documentation-head CI
@@ -145,3 +149,6 @@ checks: [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs
 and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506112).
 This later credential/browser receipt is documentation-only and does not
 change the accepted runtime source.
+
+The credential-gate documentation head `26c5ab62` also passed all six required
+PR checks, including [E2E Integration](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33483389403/job/99777805819).
