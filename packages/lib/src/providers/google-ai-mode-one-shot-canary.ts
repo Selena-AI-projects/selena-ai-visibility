@@ -93,6 +93,29 @@ export type GoogleAiModeCanaryRunResult = Readonly<{
 	prepared?: PreparedProviderDatasetCanary;
 }>;
 
+type GoogleAiModeTriggerFailureReason =
+	| "TRIGGER_GATE_CLOSED"
+	| "TRIGGER_HTTP_4XX"
+	| "TRIGGER_HTTP_5XX"
+	| "TRIGGER_HTTP_REJECTED"
+	| "TRIGGER_RESPONSE_INVALID"
+	| "TRIGGER_TIMEOUT"
+	| "TRIGGER_TRANSPORT_FAILED";
+
+class GoogleAiModeTriggerFailure extends Error {
+	constructor(readonly receiptReason: GoogleAiModeTriggerFailureReason) {
+		super(receiptReason);
+		this.name = "GoogleAiModeTriggerFailure";
+	}
+}
+
+function sanitizedTriggerFailureReason(error: unknown): GoogleAiModeTriggerFailureReason | undefined {
+	if (error instanceof GoogleAiModeTriggerFailure) return error.receiptReason;
+	if (error instanceof Error && error.message === "LEGACY_PROVIDER_EXECUTION_DISABLED") return "TRIGGER_GATE_CLOSED";
+	if (error instanceof Error && error.message === "BRIGHTDATA_DATASET_TRIGGER_TIMEOUT") return "TRIGGER_TIMEOUT";
+	return undefined;
+}
+
 type Clock = Readonly<{
 	now?: () => number;
 	nowIso?: () => string;
@@ -283,6 +306,7 @@ export async function runGoogleAiModeOneShotCanary(
 
 	let providerCalls: 0 | 1 = 0;
 	let observedSnapshotId: string | undefined;
+	let observedTriggerFailureReason: GoogleAiModeTriggerFailureReason | undefined;
 	const transport = options.transport;
 	const guardedTransport: BrightDataDatasetTransport = {
 		preflight: (request, signal) => transport.preflight(request, signal),
@@ -290,9 +314,14 @@ export async function runGoogleAiModeOneShotCanary(
 			executeLegacyProviderTransport(async () => {
 				if (providerCalls !== 0) throw new Error("GOOGLE_AI_MODE_CANARY_TRIGGER_ALREADY_ATTEMPTED");
 				providerCalls = 1;
-				const trigger = await transport.trigger(request, signal);
-				observedSnapshotId = trigger.snapshotId;
-				return trigger;
+				try {
+					const trigger = await transport.trigger(request, signal);
+					observedSnapshotId = trigger.snapshotId;
+					return trigger;
+				} catch (error) {
+					observedTriggerFailureReason = sanitizedTriggerFailureReason(error);
+					throw error;
+				}
 			}),
 		progress: (snapshotId, signal) => transport.progress(snapshotId, signal),
 		download: (snapshotId, signal) => transport.download(snapshotId, signal),
@@ -347,7 +376,9 @@ export async function runGoogleAiModeOneShotCanary(
 				preflightEvidenceReference: options.costPreflight.evidenceReference,
 			}),
 		});
-	} catch {
+	} catch (error) {
+		const terminalTriggerFailureReason =
+			observedTriggerFailureReason ?? sanitizedTriggerFailureReason(error) ?? "TRIGGER_OUTCOME_UNKNOWN";
 		return Object.freeze({
 			receipt: createReceipt({
 				status: providerCalls === 0 ? "PREFLIGHT_BLOCKED" : "OUTCOME_UNKNOWN",
@@ -356,7 +387,7 @@ export async function runGoogleAiModeOneShotCanary(
 						? "MASTER_PROVIDER_GATE_CLOSED"
 						: observedSnapshotId
 							? "LIFECYCLE_OUTCOME_UNKNOWN"
-							: "TRIGGER_OUTCOME_UNKNOWN",
+							: terminalTriggerFailureReason,
 				providerCalls,
 				access: options.access,
 				startedAt,
@@ -415,18 +446,37 @@ export function createBrightDataGoogleAiModeTransport(input: {
 				url.searchParams.set("notify", "false");
 				url.searchParams.set("include_errors", "true");
 				url.searchParams.set("format", "json");
-				const payload = await readJsonResponse(
-					await fetchImpl(url, {
+				let response: Response;
+				try {
+					response = await fetchImpl(url, {
 						method: "POST",
 						headers,
 						body: JSON.stringify(request.input.records),
 						signal,
-					}),
-					"BRIGHTDATA_GOOGLE_AI_MODE_TRIGGER_FAILED",
-				);
+					});
+				} catch (error) {
+					if (signal.aborted) throw error;
+					throw new GoogleAiModeTriggerFailure("TRIGGER_TRANSPORT_FAILED");
+				}
+				if (!response.ok) {
+					await response.body?.cancel().catch(() => undefined);
+					const reason =
+						response.status >= 400 && response.status < 500
+							? "TRIGGER_HTTP_4XX"
+							: response.status >= 500 && response.status < 600
+								? "TRIGGER_HTTP_5XX"
+								: "TRIGGER_HTTP_REJECTED";
+					throw new GoogleAiModeTriggerFailure(reason);
+				}
+				let payload: unknown;
+				try {
+					payload = await readJsonResponse(response, "BRIGHTDATA_GOOGLE_AI_MODE_TRIGGER_FAILED");
+				} catch {
+					throw new GoogleAiModeTriggerFailure("TRIGGER_RESPONSE_INVALID");
+				}
 				const snapshotId = record(payload)?.snapshot_id;
 				if (typeof snapshotId !== "string" || !snapshotId.trim())
-					throw new Error("BRIGHTDATA_GOOGLE_AI_MODE_TRIGGER_FAILED");
+					throw new GoogleAiModeTriggerFailure("TRIGGER_RESPONSE_INVALID");
 				return { snapshotId };
 			});
 		},

@@ -67,6 +67,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
+		vi.useRealTimers();
 	});
 
 	it("fails before transport unless the global provider master gate is open", async () => {
@@ -219,6 +220,114 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			reason: "TRIGGER_OUTCOME_UNKNOWN",
 		});
 		expect(JSON.stringify(result.receipt)).not.toContain("secret-bearing");
+	});
+
+	it("classifies a provider HTTP 4xx without leaking its response body or retrying", async () => {
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		const fetchImpl = vi.fn(async () => new Response("sensitive provider rejection", { status: 400 }));
+		const transport = createBrightDataGoogleAiModeTransport({ apiKey: "private-token", fetchImpl });
+		const snapshotJournal = journal();
+		const result = await runGoogleAiModeOneShotCanary({
+			access: access(),
+			environment: configuredEnvironment,
+			providerInput: { query: "best restaurants in Ubud" },
+			transport,
+			journal: snapshotJournal,
+			costPreflight: costEvidence(),
+			reserveOnce: reserved,
+		});
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(result.receipt).toMatchObject({
+			status: "OUTCOME_UNKNOWN",
+			providerCalls: 1,
+			automaticRetries: 0,
+			retryAllowed: false,
+			reason: "TRIGGER_HTTP_4XX",
+			snapshotReference: null,
+		});
+		expect(snapshotJournal.record).not.toHaveBeenCalled();
+		expect(JSON.stringify(result.receipt)).not.toContain("sensitive provider rejection");
+	});
+
+	it.each([
+		["HTTP 5xx", async () => new Response("sensitive provider failure", { status: 503 }), "TRIGGER_HTTP_5XX"],
+		["invalid JSON", async () => new Response("sensitive invalid JSON", { status: 200 }), "TRIGGER_RESPONSE_INVALID"],
+		[
+			"missing snapshot id",
+			async () => new Response(JSON.stringify({ private_detail: "sensitive missing id" }), { status: 200 }),
+			"TRIGGER_RESPONSE_INVALID",
+		],
+		[
+			"transport failure",
+			async () => Promise.reject(new Error("sensitive network failure")),
+			"TRIGGER_TRANSPORT_FAILED",
+		],
+	])("classifies %s without exposing provider details", async (_label, fetchResponse, expectedReason) => {
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		const fetchImpl = vi.fn(fetchResponse);
+		const transport = createBrightDataGoogleAiModeTransport({ apiKey: "private-token", fetchImpl });
+		const snapshotJournal = journal();
+		const result = await runGoogleAiModeOneShotCanary({
+			access: access(),
+			environment: configuredEnvironment,
+			providerInput: { query: "best restaurants in Ubud" },
+			transport,
+			journal: snapshotJournal,
+			costPreflight: costEvidence(),
+			reserveOnce: reserved,
+		});
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(result.receipt).toMatchObject({
+			status: "OUTCOME_UNKNOWN",
+			providerCalls: 1,
+			automaticRetries: 0,
+			retryAllowed: false,
+			reason: expectedReason,
+			snapshotReference: null,
+		});
+		expect(snapshotJournal.record).not.toHaveBeenCalled();
+		expect(JSON.stringify(result.receipt)).not.toContain("sensitive");
+	});
+
+	it("classifies the hard trigger deadline without waiting or retrying", async () => {
+		vi.useFakeTimers();
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		const fetchImpl = vi.fn(
+			(_input: string | URL | Request, init?: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init?.signal?.addEventListener("abort", () => reject(new Error("sensitive aborted request")));
+				}),
+		);
+		const transport = createBrightDataGoogleAiModeTransport({ apiKey: "private-token", fetchImpl });
+		const snapshotJournal = journal();
+		const pending = runGoogleAiModeOneShotCanary({
+			access: access(),
+			environment: configuredEnvironment,
+			providerInput: { query: "best restaurants in Ubud" },
+			transport,
+			journal: snapshotJournal,
+			costPreflight: costEvidence(),
+			reserveOnce: reserved,
+		});
+		await vi.advanceTimersByTimeAsync(25_001);
+		const result = await pending;
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(result.receipt).toMatchObject({
+			status: "OUTCOME_UNKNOWN",
+			providerCalls: 1,
+			automaticRetries: 0,
+			retryAllowed: false,
+			reason: "TRIGGER_TIMEOUT",
+			snapshotReference: null,
+		});
+		expect(snapshotJournal.record).not.toHaveBeenCalled();
+		expect(JSON.stringify(result.receipt)).not.toContain("sensitive");
 	});
 
 	it("times out one lifecycle without retriggering", async () => {
