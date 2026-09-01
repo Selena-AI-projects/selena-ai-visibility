@@ -1,13 +1,13 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN_STAGING_CORE_ACCEPTED_OWNER_GATES_REMAIN`.
+Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
-PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
-
-Base: `release/selena-visibility-mvp`.
-
-Accepted runtime/source HEAD:
-`2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
+- PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
+- Base: `release/selena-visibility-mvp`
+- Accepted implementation source: `100d34d8`
+- Canary-time feature HEAD: `3872a396`
+- Canary worker runtime source: `2d023470`
+- Integrated release parent: `5cbb7b25`
 
 ## Proposed title
 
@@ -17,60 +17,83 @@ Accepted runtime/source HEAD:
 
 ### Summary
 
-- integrate release `9e1e9930` without rewriting feature history;
-- provide the registry and 13 canary-ready dataset contracts;
-- harden Google adapters and make generic live provider probes unreachable;
+- integrate release `5cbb7b25` without rewriting feature history;
+- provide the provider registry and 13 canary-ready dataset contracts;
+- harden Google adapters and keep generic live probes fail-closed;
 - keep Social/Travel hidden at server, workflow and UI boundaries;
-- run web/worker with non-owner `selena_app` and owner-managed pg-boss schema;
-- fail closed on recurring, provider, billing and free-dispatch paths;
-- deliver HoReCa Local-first safe read models/UI plus AVLI/KORA pilot templates;
+- run staging through non-owner `selena_app` with tenant RLS;
+- keep recurring, billing and steady provider execution disabled;
+- deliver the HoReCa Local-first read model and separate the project axis from
+  the workspace-tool axis;
 - preserve the protected untracked recovery handoff boundary.
 
-### Exact-head evidence
+### Source and migration evidence
 
-- PR checks: Build, E2E, scheduling, deployment smoke, license and CLA all
-  passed on `2d023470`;
-- local root gates: lint 0 errors, typecheck 13/13, tests 16/16 tasks,
-  Impeccable detect PASS, build 16/16;
-- Bright Data timeout stability 20/20;
-- Local Maps focused stability five replays, 73 tests per replay;
-- independent cross-stream Codex reviews found no remaining P0/P1 in the
-  material source changes.
+- migration `0052` is applied in staging; journal frontier is
+  `53/1787940014000` and its exact hash is recorded in the Acceptance Matrix;
+- migration `0053` exists in source but is not authorized and was not applied;
+- canonical `0045` remains immutable for new installations;
+- the bounded runner accepts the one reviewed ordinal-bearing historical
+  `0045` hash only at timestamp `1787940007000`; a boolean-only staging
+  readback matched that historical variant and rejected the mistaken `0051`
+  hash;
+- `selena_app` has only the required `SELECT`/`INSERT` access to the snapshot
+  journal, FORCE RLS is active, cross-tenant insert returned SQLSTATE `42501`,
+  and the acceptance transaction rolled back to zero rows.
 
-### Hosted staging evidence
+### Provider canary evidence
 
-- fresh backup `9b961055…` and isolated restored service `a34b2749…` passed;
-- migrations 0043–0051 are present and 0052 remains excluded;
-- actual `selena_app`, `SET LOCAL app.organization_id`, FORCE RLS,
-  cross-tenant/private negatives and rollback passed;
-- replay/concurrency/idempotency passed and cleaned up;
-- exact web `7e7de294…` and worker `586b6e9a…` are running;
-- public health, scoped API and unauthenticated browser gates passed;
-- provider calls 0, cost-event rows 0, managed recurring schedules 0.
+- exactly one authorized Bright Data `GOOGLE_AI_MODE` trigger ran;
+- receipt: `OUTCOME_UNKNOWN / LIFECYCLE_OUTCOME_UNKNOWN`;
+- `providerCalls=1`, `automaticRetries=0`, `retryAllowed=false`,
+  `recurring=false`;
+- journal: `TRIGGERED=1`, `PENDING=2`, `READY=1`, `INTERRUPTED=1`;
+- no provider capture was persisted;
+- one-record verified worst-case/list price is `USD 0.0015`; actual billed
+  amount remains `UNKNOWN` and must not be inferred from the estimate;
+- the once-only reservation prevents a second trigger, and no retry is
+  authorized.
+
+### HoReCa hosted evidence
+
+- exact staging deployment `10b51bd2-ff1b-41a7-b9f8-6d628ea9f8f0` from git
+  archive `100d34d8` reached `SUCCESS` with image
+  `sha256:b92d8e81a26aa20127b681f153bfb32d798673e4128009019fb44101006f1536`;
+- projects were presented in the complementary `PROJECTS / HoReCa projects`
+  rail;
+- `Overview`, `Visibility`, `Evidence`, `Competitors`, `Actions` and
+  `Outcomes` were presented in the top `TOOLS / Workspace tools` navigation;
+- external release auto-deploy `5cbb7b25` temporarily superseded the first UI
+  receipt; the exact `100d34d8` deployment replaced that drift;
+- authenticated DOM and visual rechecks passed on the active exact deployment,
+  both public health endpoints returned 200, and no page-origin browser errors
+  were observed.
+
+### CI evidence
+
+- canary-time HEAD `3872a396` passed Build, E2E, scheduling, deployment smoke,
+  license and CLA; exact run links are in `ACCEPTANCE_MATRIX_V1_3.md`;
+- accepted implementation source `100d34d8` passed its complete
+  Blacksmith/GitHub Actions cycle: Build, E2E Integration, scheduling,
+  deployment smoke, dependency license and CLA;
+- local focused gates after the release merge: migration/repository tests
+  `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
+  shell syntax PASS and diff check clean;
+- local runtime is Node 22 while CI uses the required Node 24.
 
 ### Remaining gates
 
-- any paid canary requires a new explicit authorization for migration 0052 and
-  one provider call; current price is UNKNOWN and incurred cost is USD 0.00;
-- production, production DB, recurring jobs, billing, Social/Travel activation
-  and PR merge remain prohibited.
+1. Bright Data terminal lifecycle and actual billing remain
+   `UNKNOWN/HOLD`; no second call or retry is authorized.
+2. Applying staging migration `0053` requires separate owner authorization.
+3. Production, production DB, recurring jobs, billing activation,
+   Social/Travel activation and PR merge remain prohibited.
 
 `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
 
 ## CI side effects
 
-Each push to PR #96 starts the six documented GitHub/Blacksmith checks. The
-owner restored the Actions budget and authorized bounded feature-branch
-pushes. The documentation reconciliation commit will therefore receive one
-final exact docs-head CI cycle. Merge is a separate gate and must not happen
-while any owner gate remains open.
-
-The first hosted-evidence documentation head `6efa98d4` passed all six checks.
-The later credential/browser receipt is documentation-only: it closes the
-Postgres administration binding gate and records that both available browser
-profiles require interactive sign-in. It does not change the accepted runtime
-source.
-
-The owner subsequently completed interactive sign-in. Authenticated AVLI/KORA
-route selection, Local-first states, hidden Social/Travel, sanitized JSON
-payloads and zero console/network errors passed without exposing credentials.
+Every push to PR #96 starts the documented GitHub/Blacksmith checks. The owner
+restored the Actions budget and authorized bounded feature-branch pushes. A
+green check suite proves source quality only; it does not close provider-cost,
+hosted-runtime or production gates.

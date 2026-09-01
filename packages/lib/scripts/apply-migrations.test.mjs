@@ -1,5 +1,11 @@
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { assertJournalPostcondition, assertJournalPrefix, runMigrationCycleWithLock } from "./apply-migrations.mjs";
+import {
+	assertJournalPostcondition,
+	assertJournalPrefix,
+	expectedJournalRows,
+	runMigrationCycleWithLock,
+} from "./apply-migrations.mjs";
 
 const expected = [
 	{ hash: "hash-0049", createdAt: "1787940011000" },
@@ -32,6 +38,26 @@ describe("bounded migration journal acceptance", () => {
 		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
 		expect(() =>
 			assertJournalPrefix([{ createdAt: canonical.createdAt, hash: "unreviewed-0045" }], [canonical]),
+		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+	});
+
+	it("binds the staging 0045 alias to the canonical migration manifest", async () => {
+		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
+		expect(rows[45]).toEqual({
+			createdAt: "1787940007000",
+			hash: "321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec",
+			acceptedAppliedHashes: ["3b3915803095bf23f8e8b2e70134bfd71a7774d2793bf40f2e0a0bd03b1c051b"],
+		});
+		expect(() =>
+			assertJournalPrefix(
+				[
+					{
+						createdAt: "1787940007000",
+						hash: "c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768",
+					},
+				],
+				[rows[45]],
+			),
 		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
 	});
 
