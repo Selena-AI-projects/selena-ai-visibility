@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LOCAL_AI_DISCOVERY_POLICY } from "./local-discovery.js";
+import { isAffirmativeEnvValue } from "./measurement-execution.js";
 
 export type { GridPoint, GridSpec } from "./legacy-visibility-grid.js";
 // Backward-compatible exports for the historical planar micro-slice. The
@@ -85,7 +86,11 @@ export function assertSurfaceCaptureAllowed(
 	env: Record<string, string | undefined>,
 ): void {
 	const surface = VISIBILITY_SURFACES[surfaceId];
-	if (env[surface.featureFlag] !== "true") throw new Error("VISIBILITY_SURFACE_DISABLED");
+	const enabled =
+		surface.featureFlag === "SELENA_MEASUREMENT_ENABLED"
+			? isAffirmativeEnvValue(env[surface.featureFlag])
+			: env[surface.featureFlag] === "true";
+	if (!enabled) throw new Error("VISIBILITY_SURFACE_DISABLED");
 	if (surface.status !== "MEASURED") throw new Error("VISIBILITY_SURFACE_NOT_IMPLEMENTED");
 	if (!surface.captureMethods.includes(method)) throw new Error("VISIBILITY_CAPTURE_METHOD_BLOCKED");
 }

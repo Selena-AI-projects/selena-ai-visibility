@@ -1,3 +1,5 @@
+import { isAffirmativeEnvValue } from "@workspace/selena-visibility-contracts";
+
 /**
  * One boundary in front of every provider call that costs money.
  *
@@ -22,7 +24,7 @@ export const SUGGEST_FREE_BUDGET_CLASS = "free_budget";
 type Env = Record<string, string | undefined>;
 
 export function isGlobalProviderStopEngaged(env: Env = process.env): boolean {
-	return env[PROVIDER_STOP_ENV] === "true";
+	return isAffirmativeEnvValue(env[PROVIDER_STOP_ENV]);
 }
 
 /**

@@ -11,13 +11,15 @@ import {
 
 describe("global provider stop", () => {
 	it("halts every provider path, not only measurement", () => {
-		expect(() => assertGlobalProviderStop({ SELENA_EMERGENCY_STOP: "true" })).toThrow("PROVIDER_CALLS_STOPPED");
-		expect(isGlobalProviderStopEngaged({ SELENA_EMERGENCY_STOP: "true" })).toBe(true);
+		for (const value of ["1", "true", "yes", " true "]) {
+			expect(() => assertGlobalProviderStop({ SELENA_EMERGENCY_STOP: value })).toThrow("PROVIDER_CALLS_STOPPED");
+			expect(isGlobalProviderStopEngaged({ SELENA_EMERGENCY_STOP: value })).toBe(true);
+		}
 	});
 
-	it("is only engaged by the exact value, so a typo cannot silently disarm the check", () => {
-		expect(() => assertGlobalProviderStop({})).not.toThrow();
-		expect(() => assertGlobalProviderStop({ SELENA_EMERGENCY_STOP: "TRUE" })).not.toThrow();
+	it("stays fail-closed for absent or unrecognized values", () => {
+		for (const value of [undefined, "", " ", "0", "false", "no", "TRUE", "enabled"])
+			expect(isGlobalProviderStopEngaged({ SELENA_EMERGENCY_STOP: value })).toBe(false);
 	});
 });
 

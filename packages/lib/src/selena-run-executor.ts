@@ -18,6 +18,7 @@ import type { SelenaExecutablePermit, SelenaMeasurementAdapter } from "./selena-
 // rather than restating the flag names it depends on.
 export {
 	assertDispatchModes,
+	isAffirmativeEnvValue,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	type SelenaMeasurementConfig,
@@ -68,7 +69,7 @@ export type MeasurementRunStore<Ctx> = {
 	claim(
 		ctx: Ctx,
 		permitId: string,
-		opts?: { now?: Date },
+		opts?: { now?: Date; journalClaimId?: string },
 	): Promise<{
 		permit: SelenaExecutablePermit;
 		run: { id: string };
@@ -102,6 +103,8 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	cycleState?: Partial<ControlledCycleState>;
 	/** Fresh completion clock; `now` remains the deterministic claim time. */
 	clock?: () => Date;
+	/** Fenced atomically with permit consumption by the real run store. */
+	journalClaimId?: string;
 	now?: Date;
 }): Promise<MeasurementRunResult> {
 	// Checked before anything is read or written: while measurement is off the
@@ -113,7 +116,10 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
 	const claimTime = input.now ?? input.clock?.() ?? new Date();
 	const completionTime = () => input.clock?.() ?? new Date();
-	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, { now: claimTime });
+	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, {
+		now: claimTime,
+		...(input.journalClaimId ? { journalClaimId: input.journalClaimId } : {}),
+	});
 	// Chosen from the permit, not from the environment: a plan sells several
 	// systems and the surface a customer bought decides which adapter measures
 	// it.

@@ -379,6 +379,13 @@
       "when": 1787940015000,
       "tag": "0053_configuration_lock_legacy_collision_ordinal",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1787940016000,
+      "tag": "0054_journal_daily_claim_execution_lease",
+      "breakpoints": true
     }
   ]
 }

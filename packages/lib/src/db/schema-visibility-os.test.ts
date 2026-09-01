@@ -1158,7 +1158,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("tgenabled <> 'O'");
 		expect(gate12).toContain('--single-transaction < "$migration"');
 		expect(gate12).toContain("sv_journal_daily_claims_project_organization_fk");
-		expect(gate12).toContain("complete numbered migration chain through 0049");
+		expect(gate12).toContain("complete numbered migration chain through 0054");
 		const gate12Through0036 = gate12.indexOf("10#$migration_number > 36");
 		const gate12RegistryFixture = gate12.indexOf('bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh"');
 		const gate12HistoricalChain = gate12.indexOf('bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh"');
@@ -1170,7 +1170,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const gate12Apply0048 = gate12.indexOf("0048_selena_api_idempotency_records.sql");
 		const gate12Apply0049 = gate12.indexOf("0049_visibility_os_claimed_submit_lease.sql");
 		const gate12Marker = gate12.indexOf("sv_journal_daily_claims_project_organization_fk");
-		const gate12Seed = gate12.indexOf("INSERT INTO organization");
+		const gate12Seed = gate12.indexOf("INSERT INTO organization", gate12Marker);
 		expect(gate12).toContain('if [[ "$fresh_database" == true ]]');
 		expect(gate12Through0036).toBeGreaterThan(-1);
 		expect(gate12Through0036).toBeLessThan(gate12RegistryFixture);
@@ -1391,6 +1391,21 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).not.toContain("GRANT ");
 		expect(journal).toContain('"tag": "0046_selena_journal_daily_claims"');
 	});
+
+	it("leases executing journal claims and releases only abandoned attempts", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0054_journal_daily_claim_execution_lease.sql", import.meta.url),
+			"utf8",
+		);
+		const config = getTableConfig(schema.svJournalDailyClaims);
+		const abandonedAt = config.columns.find((column) => column.name === "abandoned_at");
+
+		expect(abandonedAt).toBeDefined();
+		expect(migration).toContain("'ABANDONED'");
+		expect(migration).toContain("NEW.\"status\" NOT IN ('EXECUTING', 'HOLD', 'COMPLETED', 'ABANDONED')");
+		expect(migration).toContain("OLD.\"status\" IN ('NO_SPEND', 'HOLD', 'COMPLETED', 'ABANDONED')");
+		expect(migration).toContain("WHERE \"status\" IN ('CLAIMED', 'EXECUTING', 'HOLD')");
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -1560,7 +1575,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-16)).toEqual([
+		expect(journal.entries.slice(-17)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1641,6 +1656,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940015000,
 				tag: "0053_configuration_lock_legacy_collision_ordinal",
+				breakpoints: true,
+			},
+			{
+				idx: 54,
+				version: "7",
+				when: 1787940016000,
+				tag: "0054_journal_daily_claim_execution_lease",
 				breakpoints: true,
 			},
 		]);

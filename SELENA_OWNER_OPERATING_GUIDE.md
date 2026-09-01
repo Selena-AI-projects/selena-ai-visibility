@@ -35,9 +35,11 @@ failure outside this application.
 
 Execution ships inert and stays inert until two separate decisions are made.
 
-`SELENA_MEASUREMENT_ENABLED=false` is the safe state, and unset means off. While
-it is not exactly `true`, the measurement worker records nothing, reads nothing
-and calls no adapter — a permit that is queued by mistake is simply dropped.
+`SELENA_MEASUREMENT_ENABLED=false` is the safe state, and unset means off. The
+affirmative values are `1`, `true`, and `yes`; surrounding whitespace is ignored.
+Every other value leaves measurement off. While it is off, the worker records
+nothing, reads nothing and calls no adapter — a permit queued by mistake is
+simply dropped.
 
 `SELENA_MEASUREMENT_ADAPTER=noop` selects which adapter executes a permit. Only
 adapters that hold no credentials and perform no provider call — `noop`,
@@ -48,8 +50,9 @@ never be the side effect of setting one variable. Until then the noop adapter
 records every run as `INVALID`, so an accidental run cannot produce something
 that reads like a real measurement.
 
-`SELENA_EMERGENCY_STOP=true` blocks execution at the point a provider would be
-contacted, including for runs that are already claimed. It is the one stop for
+`SELENA_EMERGENCY_STOP=1` (also `true` or `yes`, with surrounding whitespace
+ignored) blocks execution at the point a provider would be contacted, including
+for runs that are already claimed. It is the one stop for
 every paid path, not only measurement: the onboarding research call refuses
 under it too, because a stop that halts runs while a button keeps calling a
 vendor is not a stop.
@@ -257,7 +260,13 @@ anything else fails to build, and a service named `measure` is the job. It runs
 once and exits; a second run of the same question set on the same day costs
 nothing and says so, because a platform that restarts what exits must not be
 able to turn a job into a spending loop. `SELENA_JOURNAL_FORCE=1` repeats it on
-purpose.
+purpose; `true` and `yes` are equivalent and surrounding whitespace is ignored.
+
+An active attempt refreshes its database heartbeat before and after each answer.
+If a process disappears and the heartbeat remains unchanged for 45 minutes, the
+next invocation records the old attempt as `ABANDONED`, audits its recorded runs
+and cost, and allocates a new attempt. `HOLD` is different: it means spend is
+still ambiguous after an observed failure and remains blocked for owner review.
 
 The question sets live in `packages/lib/src/selena-journal-scenarios.ts` and are
 versioned: the version is the prompt family's identity, so changing a question
@@ -302,4 +311,3 @@ VERIFIED`; do not present them as ranking, mention or revenue guarantees.
 Production PostgreSQL plus recoverable backup/PITR must exist before production
 boot or rollback can be verified. No DNS, paid infrastructure, live provider
 calls or real payment calls are performed by the current release process.
-
