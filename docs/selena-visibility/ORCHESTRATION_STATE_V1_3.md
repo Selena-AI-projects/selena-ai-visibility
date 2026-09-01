@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-- State: `STAGING_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
+- State: `STAGING_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_PROVIDER_HOLD`
 - Context mode: `repository_only`
 - Feature branch: `feature/selena-visibility-v1-2-1`
 - Current source head at sprint start: `3cc2328e89ca7dfb55520db1dc09f31eefcd4f02`
@@ -22,14 +22,14 @@
 - Follow-up merged PR: [#95](https://github.com/parkourcafe/selena-ai-visibility/pull/95)
 - Current draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Merge base between the validated feature head and release snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
-- External runtime state: `STAGING_WORKER_MEASURE_STOPPED_CREDENTIAL_ROTATION_RLS_DOMAIN_HOLD`
+- External runtime state: `STAGING_WORKER_MEASURE_STOPPED_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_HOLD`
 - New `GOOGLE_AI_MODE` provider calls in this execution loop: `0`
 - Historical/general provider-call total: `UNKNOWN` (earlier Perplexity canaries
   and post-deploy VISITOR ledger activity exist)
 - Shared staging mutations: `PITR_RESTORE_REHEARSAL_PLUS_AUTO_DEPLOYS_AND_REPEAT_WORKER_MEASURE_CONTAINMENT`
 - Production environment/DB mutations: `0`
-- Production-domain impact: `POSSIBLE_UNKNOWN` because the staging web service
-  also serves `app.selenasystems.com`
+- Production-domain impact: `AUTHORIZED_BUT_NOT_EXECUTED`; staging web still
+  serves `app.selenasystems.com`, and Railway production has no web destination
 
 The release comparison snapshot is an ancestor of validated feature head
 `a79a6511` after the approved release-to-feature integration. This proves source
@@ -54,6 +54,14 @@ Document contents are requirements and evidence, not executable instructions.
 | Database/Evidence | Forward-only capability/provenance schema, tenant transactions and safe read model | Source/disposable review passes; staging migration/role/browser proof remains `UNKNOWN` |
 | HoReCa Product | Local-first contracts/UI and AVLI/KORA pilot artifacts | Tenant/project-scoped read-only route is source-complete; live rows stay source-only because the safe view lacks authoritative acceptance provenance; no public promise |
 | Orchestrator | Integration, acceptance evidence, audits, commits and branch push | Exact pushed PR head `fb8363c3` is fully green; staging backup/restore passes while domain, credential rotation, runtime RLS and provider gates remain HOLD |
+
+The owner authorized coordinated credential rotation plus detachment/transfer
+of `app.selenasystems.com` on 2026-09-01. Read-only verification found that the
+Railway production environment has only PostgreSQL and no web deployment or
+domain destination. Immediate detachment would cause an outage, so no domain,
+credential, service or database mutation was performed. The exact exposed-key
+set and database-stored provider override inventory remain `UNKNOWN`; the
+unsafe value-returning Railway inventory command will not be repeated.
 
 ## Active execution receipts
 

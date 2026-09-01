@@ -230,6 +230,17 @@ but topology acceptance is not: the staging web
 service also has the production-like `app.selenasystems.com` binding, so SR-02
 remains `HOLD` until domain ownership/blast radius is resolved.
 
+The owner authorized domain detachment/transfer and coordinated credential
+rotation on 2026-09-01. Fresh read-only topology evidence found no safe transfer
+target: Railway environment `production` contains only PostgreSQL service
+`1d67db6f-7df7-44d6-a9d7-3d7058afafff`, with no web deployment or production
+web domain. Detaching the current binding would therefore create an outage.
+No domain or credential mutation was performed. The exact credential set
+exposed by the earlier value-returning command remains `UNKNOWN`; a safe
+names-only inventory and database-stored override inventory are still required.
+A domain-status response also exposed a verification token as operational
+metadata; it is not reproduced and must be revalidated/rotated if supported.
+
 - A fresh read-only inventory after release advanced to `32945b27` found that
   Railway Git integration had again deployed that release to staging. Web
   deployment `3eefbf4a-f3f3-41fc-a25b-2e9c9aef2af3` was `SUCCESS` and still

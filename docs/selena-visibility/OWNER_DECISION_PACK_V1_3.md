@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — owner decision pack
 
-Status: `CI_GREEN_SECURITY_ROTATION_DOMAIN_RLS_PROVIDER_HOLD`
+Status: `CI_GREEN_ROTATION_AUTHORIZED_DOMAIN_TARGET_RLS_PROVIDER_HOLD`
 
 Original release anchor: `0e00df4faa74990e6b696c4249cbb85acf23c693`.
 Current release: `32945b27202949debf0e27cbf48053d01ed2559e`.
@@ -13,6 +13,10 @@ gates or make this a production candidate.
 The owner authorized the bounded pre-production actions in this pack on
 2026-08-31. Production, production DB, application recurring jobs, additional
 provider calls, Social/Travel activation and a higher cost cap remain excluded.
+On 2026-09-01 the owner additionally authorized the production-impacting
+detachment/transfer of `app.selenasystems.com` and coordinated rotation of the
+affected credentials. That authorization does not authorize a production web
+deployment or production database action.
 
 ## Recommended decision set
 
@@ -38,6 +42,16 @@ provider calls, Social/Travel activation and a higher cost cap remain excluded.
   unexpectedly rendered raw staging values during a key-presence audit. Values
   are not reproduced in this pack, but affected credentials are considered
   compromised and runtime acceptance is stopped pending rotation.
+- `OD-S`: authorized on 2026-09-01, but not yet executable as a complete
+  cutover. A fresh read-only topology check found that Railway `production`
+  contains only PostgreSQL service `1d67db6f-7df7-44d6-a9d7-3d7058afafff`;
+  there is no production web deployment or domain destination. Both public
+  domains still return `200` from staging web deployment `3eefbf4a…`.
+  Detaching `app.selenasystems.com` now would therefore create an outage, so no
+  domain mutation was performed. A Railway domain-status response also
+  rendered a verification token; it is not reproduced and is treated as
+  exposed operational metadata requiring revalidation/rotation if the platform
+  supports it.
 - `OD-B2` backup portion: executed. PITR is enabled and bucket-wired; named
   backup `92f3adae-a05a-4f64-b064-f48c55001149` exists. A PITR restore to
   `2026-08-31T13:26:46Z` completed in isolated staging service
@@ -129,6 +143,15 @@ as a private credential.
 These actions may affect `app.selenasystems.com` and therefore require explicit
 owner approval for production-impacting credential work.
 
+That production-impacting approval is now present, but the exact exposed-key
+set remains `UNKNOWN`: the unsafe value-returning inventory command must not be
+repeated, and no proven names-only platform inventory is available. Rotation
+must also account for database-stored provider overrides, which take precedence
+over environment credentials. `ELMO_ENCRYPTION_KEY_OLD` provides transitional
+decryption only; it does not rotate external provider credentials, and the old
+key cannot be removed until every stored credential has been re-saved under the
+new key. No credential was changed or revoked during this evidence refresh.
+
 `OPENROUTER_API_KEY`, payment credentials, Social OAuth credentials and
 production secrets are not required for the recommended dataset canary and must
 not be added under this decision.
@@ -217,13 +240,14 @@ interchangeable with the recommended Google canary.
 | OD-B5 | Create staging fixture rows and run browser/API/RLS acceptance that mutates the staging database. |
 | OD-C | Inject `BRIGHTDATA_API_TOKEN` and the approved dataset ID, then execute one isolated provider call with the confirmed USD 0.25 and 25-minute caps. |
 | OD-R | Execute the rollback/restore procedure, including environment changes, job cancellation, service restart or image rollback. |
-| OD-S | Rotate/revoke the credentials exposed by the failed staging key-presence audit, coordinate session/database/encryption migrations, and verify replacement key presence without printing values. Because the current web serves `app.selenasystems.com`, this requires separate production-impact permission. |
+| OD-S | `AUTHORIZED_HOLD_TARGET_AND_INVENTORY`: rotate/revoke credentials exposed by the failed staging audit and transfer/detach `app.selenasystems.com` without printing values. Execution remains ordered behind a healthy destination or explicit outage decision, safe names-only inventory, external replacement access and encryption/database rollback proof. |
 | OD-CI | `COMPLETED_HISTORICAL`: Actions budget was restored and exact-candidate CI passed; no billing mutation was performed by the agent. |
 | OD-P | Any production access, production database, billing change, recurring schedule or production deploy. This remains outside the pack. |
 
 OD-A, OD-B1 through OD-B5, OD-C and automatic staging rollback are authorized
 for this bounded loop, but their ordered gate conditions still apply. The
-credential-rotation, domain-binding, runtime-RLS and provider-activity findings
+credential-rotation, domain-target, runtime-RLS and provider-activity findings
 stop OD-B1/B3/B4/B5 and OD-C; authorization is not a PASS. Backup
 restoreability itself is proven at the recorded checkpoint and must be refreshed
-before SQL. OD-S and OD-P remain separately gated.
+before SQL. OD-S is authorized but prerequisite-blocked; OD-P remains
+separately gated.
