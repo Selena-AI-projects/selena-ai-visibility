@@ -36,9 +36,8 @@ async function main() {
 		`prepared ${prepared.migrationCount} migrations through index ${prepared.maximumIndex} in bounded runtime bundle\n`,
 	);
 	if (process.argv.includes("--prepare-only")) return;
-	const binary = resolve(packageRoot, "node_modules/.bin/drizzle-kit");
-	const config = resolve(packageRoot, "drizzle.config.ts");
-	const child = spawn(binary, ["migrate", `--config=${config}`], {
+	const migrationRunner = resolve(packageRoot, "scripts/apply-migrations.mjs");
+	const child = spawn(process.execPath, [migrationRunner], {
 		cwd: packageRoot,
 		env: { ...process.env, SELENA_MIGRATIONS_DIR: targetDirectory },
 		stdio: "inherit",
@@ -47,7 +46,7 @@ async function main() {
 		child.once("error", reject);
 		child.once("exit", (exitCode, signal) => resolveExit(exitCode ?? (signal ? 1 : 0)));
 	});
-	process.stdout.write(`drizzle-kit migrate exited with code ${code}\n`);
+	process.stdout.write(`drizzle-orm migration runner exited with code ${code}\n`);
 	await delay(15_000);
 	process.exitCode = code;
 }

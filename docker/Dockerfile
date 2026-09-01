@@ -90,22 +90,15 @@ ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
 
 # Migration stage — applies pending migrations, then exits.
-#
-# The binary is invoked by path, with no launcher in front of it. Both
-# launchers reach the network before they reach the database, and both failed
-# here: `npx` downloads drizzle-kit at container start (killed mid-download
-# once, exited zero having applied nothing once), and `pnpm exec` runs a
-# dependency check that decided to reinstall and aborted for want of a TTY.
-# drizzle-kit is a dependency of the library, so `pnpm deploy` already put it
-# in ./node_modules/.bin.
 FROM base AS migrate
 WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-# The Node runner requires an explicit maximum migration index, builds a
-# matching Drizzle journal/SQL bundle, invokes the packaged binary directly and
-# retains the final log line for Railway collection. It performs no downloads.
+# The Node runner requires an explicit maximum migration index and builds an
+# exact Drizzle journal/SQL bundle before invoking the programmatic drizzle-orm
+# migrator. It performs no package-manager or migration-CLI downloads. The
+# bounded runner also keeps the final status visible for Railway log capture.
 CMD ["node", "./scripts/run-bounded-migrations.mjs"]
 
 # Worker stage
