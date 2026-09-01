@@ -19,26 +19,32 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
   `4a1fd94803d1a457ab426ff765e2c1052c423646`
 - Active worker implementation source after mandatory rollback: `100d34d8`
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
-- Current remote release head: `2e21ef04e3a0a87d0bd103b15603a23775dad6ab`
-  (`Bound migrations to the reviewed release ceiling`)
-- Release integration merge: `34d864176c831a78741f504e0f9eda8d69d1e0fc`
-  (parents `3b1118e9` and `2e21ef04`)
+- Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
+  (`free the measurement's idle slots and widen its pace one step`)
+- Latest release integration merge: `84cce314`
+  (parents `eaffa6de` and `4400d435`)
+- Current source-only reconciliation patch: `b01a310b` (local commit, not yet
+  pushed);
+  it separates provider `capturedAt` from journal `historicalReadyObservedAt`,
+  validates canonical stored evidence/capability/audit rows on replay and
+  rolls back idempotent dry-runs.
 - Original release snapshot retained for lineage: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Protected untracked `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched and excluded.
 
 The accepted implementation source, both canary source identities and active
-runtime are separate evidence anchors. Railway twice auto-deployed a release
-branch over the accepted two-axis UI: first `5cbb7b25`, then `2e21ef04`. The
-second drift was detected by a read-only deployment-list check and replaced by
-an exact `100d34d8` archive deployment before this matrix was finalized.
+runtime are separate evidence anchors. Railway three times auto-deployed a
+release branch over the accepted two-axis UI: `5cbb7b25`, `2e21ef04`, then
+`4400d435`. The third drift was detected by a read-only deployment-list check
+and replaced by an exact `100d34d8` archive deployment before this matrix was
+finalized.
 
 ## Decision
 
 | Boundary | Decision | Reason |
 |---|---|---|
-| Source package | `PASS_SOURCE` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. Release `2e21ef04` is integrated and the applied-`0045` hash transition is bounded to one reviewed timestamp/hash pair. |
-| Exact-head CI | `PASS_LAST_VERIFIED` | Head `4a1fd948` passed Build, E2E, scheduling, smoke, license and CLA and GitHub reported `mergeable=true`. The current mutable PR head and final evidence comment are authoritative after this document's immutable receipt. |
+| Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
+| Exact-head CI | `PASS_LAST_VERIFIED / NEW_HEAD_PENDING` | Head `4a1fd948` passed Build, E2E, scheduling, smoke, license and CLA and GitHub reported `mergeable=true`. The current source-only reconciliation patch is locally green but has not yet been pushed for its exact-head CI cycle. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -80,6 +86,14 @@ response cap from a 4 MiB snapshot-download cap. Its focused provider suite
 passed `19/19` and Biome checked both changed files. The final mutable-head CI
 receipt is recorded on PR #96 after this documentation commit.
 
+The offline historical reconciliation path is source-only and has not been
+run against staging. It requires the exact journal READY timestamp as a
+separate manifest field, verifies the canonical stored payload and registry
+capability on idempotent replay, and returns `DRY_RUN_ROLLED_BACK` even when
+the target is already reconciled. Staging persistence remains an explicit
+owner gate. Current local focused gates are lib `16/16`, worker `23/23`, both
+package check-types, targeted Biome and `git diff --check`.
+
 ## Staging infrastructure evidence
 
 | Gate | Result | Receipt |
@@ -94,7 +108,7 @@ receipt is recorded on PR #96 after this documentation commit.
 | Tenant GUC | `PASS` | `SET LOCAL app.organization_id` succeeded through the active worker connection. |
 | Hosted RLS proof | `PASS` | `current_user=selena_app`; `SELECT`/`INSERT` allowed; FORCE RLS active; cross-tenant insert failed with SQLSTATE `42501`; transaction ended in `ROLLBACK`; persisted fixture rows `0`. |
 | Replay/concurrency/idempotency | `PASS` | Two concurrent writes produced one winner; replay was stable; cross-tenant read returned no row; active mutation was blocked; expired fixture cleaned up. |
-| Exact web deploy | `PASS_RESTORED` | Earlier exact deployment `10b51bd2-ff1b-41a7-b9f8-6d628ea9f8f0` was superseded by automatic release deployment `b5ca2d0f-ff16-4752-ba36-c6a1f07e052f` (`2e21ef04`). Exact archive `100d34d8` was restored by deployment `c3002c7d-e789-4236-9e55-2df00529ae37`, image `sha256:0f43cfae75ff6f550d891e7f6430052cd167192ef53a2d809d9d8f5473ed05f3`, terminal `SUCCESS`. |
+| Exact web deploy | `PASS_RESTORED` | Automatic release deployment `43a3e3c1-58fe-4caf-b2a9-b76de3b1e797` (`4400d435`) superseded the earlier exact receipt. Exact archive `100d34d8` was restored by deployment `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a`, image `sha256:2cf8b99cfa6a4d0db7a6793f267454e95479f9c45c4b6d15a4e59530f7008d92`, terminal `SUCCESS`; both setup-status endpoints and the public app returned HTTP 200. |
 | Two-axis UI receipt | `PASS_RESTORED` | Authenticated post-restore DOM on `app.selenasystems.com/app/selena-horeca` proved `ПРОЕКТЫ` in the complementary project rail and `ИНСТРУМЕНТЫ` across the top with all six tool links. Both `/api/setup-status` endpoints returned HTTP 200. |
 | Worker deploy | `PASS_ROLLBACK_EXACT` | Temporary diagnostic-2 deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran source `a9d1f373` and was removed. Rollback deployment `73ee9186-5df2-4b4c-a578-fb8e988c86f6` restored exact `100d34d8` and is `SUCCESS`. |
 | Public health | `PASS` | `app.selenasystems.com`, `staging.selenasystems.com` and `/api/setup-status` returned HTTP 200. |
@@ -113,11 +127,12 @@ the same newly generated value; a values-suppressed TCP probe returned
 after verification and is not recoverable. No secret value is retained in
 source, acceptance evidence or user-visible reporting.
 
-Automatic release deployments `5cbb7b25` and later `2e21ef04` each superseded
-an exact feature web deployment. Read-only Railway evidence caught the second
-drift at deployment `b5ca2d0f…`; exact archive deployment `c3002c7d…` restored
-`100d34d8`. This matrix treats release auto-deploy drift as an operational HOLD
-unless the exact source is actively re-established and rechecked.
+Automatic release deployments `5cbb7b25`, `2e21ef04` and `4400d435` each
+superseded an exact feature web deployment. Read-only Railway evidence caught
+the third drift at deployment `43a3e3c1…`; exact archive deployment
+`a3b0cadd…` restored `100d34d8`. This matrix treats release auto-deploy drift as
+an operational HOLD unless the exact source is actively re-established and
+rechecked.
 
 ## API and browser evidence
 
@@ -221,9 +236,10 @@ release-integrated evidence head `4a1fd948` then passed the complete PR suite:
 | Deployment smoke | `PASS` | [run 33517852017](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33517852017) |
 | CLA | `PASS` | [run 33517852057](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33517852057) |
 
-Merge commit `34d86417` integrates exact release head `2e21ef04`, preserves the
-feature-side reviewed `0045` hash alias and adopts the release-side advisory
-lock ordering. GitHub reported PR #96 mergeable at `4a1fd948`. Since a
+Merge commit `84cce314` integrates exact release head `4400d435` without
+rewriting feature history; the earlier `34d86417` merge preserves the reviewed
+`0045` hash alias and release-side advisory-lock ordering. GitHub reported PR
+#96 mergeable at `4a1fd948`. Since a
 Markdown file cannot contain the hash of its own enclosing commit, GitHub PR
 metadata and the latest exact-head evidence comment are authoritative for later
 source-only evidence commits and their checks.

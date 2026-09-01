@@ -15,17 +15,22 @@ snapshot remediation and release-head integration evidence.
 - Bounded snapshot-download remediation source: `4a1fd948`
 - Last complete exact-head PR receipt: `4a1fd94803d1a457ab426ff765e2c1052c423646`
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
-- Active exact staging web: `100d34d8`, deployment `c3002c7d…`, restored after
-  automatic `release@2e21ef04` drift
+- Active exact staging web: `100d34d8`, deployment `a3b0cadd…`, restored after
+  automatic `release@4400d435` drift
 - Active worker after diagnostic rollback: `100d34d8`, deployment `73ee9186…`,
   `SUCCESS`
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
-- Current remote release head: `2e21ef04e3a0a87d0bd103b15603a23775dad6ab`
-- Release integration merge: `34d864176c831a78741f504e0f9eda8d69d1e0fc`
+- Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
+- Latest release integration merge: `84cce314`
+- Current source-only reconciliation patch: `b01a310b` (local commit, not yet
+  pushed);
+  provider capture and journal READY timestamps are separate and idempotent
+  replay/dry-run invariants are hardened.
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Historical draft PR reference: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Canary-time feature-head required checks: `ALL PASS`
-- Release-integrated exact-head checks: `ALL PASS`; PR `CLEAN/MERGEABLE`
+- Release-integrated exact-head checks: `ALL PASS`; PR `CLEAN/MERGEABLE` at
+  `4a1fd948`; new source-only candidate CI is pending push
 - Production deploy/DB mutations: `0`
 - Provider triggers: `2`, one for each separately authorized immutable
   identity; retries `0`, recurring `false`
@@ -52,9 +57,9 @@ and excluded from every commit and archive.
 | Stream | Result | Current boundary |
 |---|---|---|
 | Provider | `PASS_HISTORICAL_PAYLOAD / HOLD_PERSISTENCE_AND_DIAGNOSTIC` | Historical identity is exactly bound to provider snapshot `sd_mtiflifw2lfu6ne28l`; its one-record payload has a non-empty answer and four normalized citations. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
-| Database/Evidence | `PASS_0053_CANARY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Both reservations remain immutable. |
-| HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `2e21ef04` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / PROVIDER_PERSISTENCE_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload is reconciled read-only; no retroactive capture write or new call occurred. Release `2e21ef04` is integrated by merge `34d86417`; PR is clean but merge is not executed. |
+| Database/Evidence | `PASS_0053_CANARY_HOLD / SOURCE_RECONCILIATION_READY` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. The offline path is locally green and unrun against staging. Both reservations remain immutable. |
+| HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `4400d435` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
+| Orchestrator | `STAGING_CORE_PASS / PROVIDER_PERSISTENCE_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload is reconciled read-only; no retroactive capture write or new call occurred. Release `4400d435` is integrated by merge `84cce314`; PR is not merged. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -92,8 +97,9 @@ Focused Bright Data timeout stability: `20/20`. Focused Local Maps stability:
 five replays, `73/73` tests per replay. Trigger taxonomy source `4f701b35`
 passed lib typecheck, `1086/1086` lib tests, the same root lint baseline and
 root build `16/16` locally. Snapshot-cap source `4a1fd948` passed its focused
-provider suite `19/19` and targeted Biome check; final mutable-head CI is tracked
-on PR #96.
+provider suite `19/19` and targeted Biome check. Current reconciliation focused
+gates are lib `16/16`, worker `23/23`, both check-types, targeted Biome and diff
+check; final mutable-head CI is pending push.
 
 ## Staging receipts
 
@@ -101,8 +107,8 @@ on PR #96.
 |---|---|
 | Fresh backup | `d2ac59a9-fd4b-4bd1-afda-d6d999ef4dc4`, pre-`0053`, no expiry |
 | Isolated restored service | `a34b2749-130a-47f3-8da3-8f58e3775fe9`, healthy restored copy |
-| Active reconciled web | `c3002c7d-e789-4236-9e55-2df00529ae37`, exact archive `100d34d8`, `SUCCESS`, image `sha256:0f43cfae75ff6f550d891e7f6430052cd167192ef53a2d809d9d8f5473ed05f3`; replaces automatic release deployment `b5ca2d0f…` (`2e21ef04`) |
-| Superseded external web drift | releases `5cbb7b25` and `2e21ef04`; both were replaced by exact accepted implementation deployments |
+| Active reconciled web | `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a`, exact archive `100d34d8`, `SUCCESS`, image `sha256:2cf8b99cfa6a4d0db7a6793f267454e95479f9c45c4b6d15a4e59530f7008d92`; replaces automatic release deployment `43a3e3c1…` (`4400d435`); public app and both setup-status endpoints returned 200 |
+| Superseded external web drift | releases `5cbb7b25`, `2e21ef04` and `4400d435`; all were replaced by exact accepted implementation deployments |
 | Active rollback worker | `73ee9186-5df2-4b4c-a578-fb8e988c86f6`, archive `100d34d8`, `SUCCESS`; diagnostic-2 deployment `de5df16a…` is `REMOVED` |
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
 | Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
@@ -136,7 +142,8 @@ Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 1. `HOLD_PROVIDER_PERSISTENCE`: historical identity, provider snapshot, payload
    and cost are reconciled; no retroactive staging capture write is authorized
    or fabricated. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN` and neither
-   immutable identity may be retried.
+   immutable identity may be retried. The source-only path is ready for a
+   separate owner-gated staging dry-run/commit decision.
 2. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 

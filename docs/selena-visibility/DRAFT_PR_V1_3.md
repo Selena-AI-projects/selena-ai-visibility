@@ -4,7 +4,7 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
-- Current remote base head: `2e21ef04`; integrated by merge commit `34d86417`
+- Current remote base head: `4400d435`; integrated by merge commit `84cce314`
 - Last complete exact-head PR receipt: `4a1fd948`, base `2e21ef04`,
   `mergeable=true`, all six checks passed
 - Accepted staging implementation source: `100d34d8`
@@ -13,8 +13,12 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 - Bounded snapshot-download remediation source: `4a1fd948`
 - Canary-time feature HEAD: `3872a396`
 - Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
-- Active staging web after drift recovery: `100d34d8`, deployment `c3002c7d…`
+- Active staging web after drift recovery: `100d34d8`, deployment `a3b0cadd…`
 - Integrated release parent: `5cbb7b25`
+- Current offline reconciliation source patch: `b01a310b` (local commit, not
+  yet pushed); exact
+  provider capture/journal timestamps, strict replay checks and idempotent
+  dry-run rollback are covered by focused tests; push/CI pending.
 
 ## Proposed title
 
@@ -24,7 +28,7 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 
 ### Summary
 
-- integrate release `2e21ef04` without rewriting feature history;
+- integrate release `4400d435` without rewriting feature history;
 - provide the provider registry and 13 canary-ready dataset contracts;
 - harden Google adapters and keep generic live probes fail-closed;
 - keep Social/Travel hidden at server, workflow and UI boundaries;
@@ -82,6 +86,9 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
   from Google AI Mode attribution;
 - both reservations remain immutable; no retry or additional provider call is
   authorized.
+- offline historical reconciliation is source-only, provider-free and locally
+  green; it has not mutated staging and remains behind a separate persistence
+  owner gate.
 - prospective source diagnostics now classify HTTP 4xx/5xx, invalid response,
   transport failure and hard trigger timeout without logging the provider body;
   this does not reinterpret either already-consumed canary receipt.
@@ -92,15 +99,16 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 
 ### HoReCa hosted evidence
 
-- exact staging deployment `c3002c7d-e789-4236-9e55-2df00529ae37` from git
+- exact staging deployment `a3b0cadd-a1f2-49f2-80f2-fc03336aeb6a` from git
   archive `100d34d8` restored the accepted web after automatic release
-  deployment `b5ca2d0f…` (`2e21ef04`) superseded the earlier exact receipt;
+  deployment `43a3e3c1…` (`4400d435`) superseded the earlier exact receipt;
 - projects were presented in the complementary `PROJECTS / HoReCa projects`
   rail;
 - `Overview`, `Visibility`, `Evidence`, `Competitors`, `Actions` and
   `Outcomes` were presented in the top `TOOLS / Workspace tools` navigation;
-- external release auto-deploys `5cbb7b25` and `2e21ef04` each superseded an
-  exact UI deployment; exact `100d34d8` was restored after both drifts;
+- external release auto-deploys `5cbb7b25`, `2e21ef04` and `4400d435` each
+  superseded an exact UI deployment; exact `100d34d8` was restored after all
+  three drifts;
 - authenticated DOM and visual rechecks passed on the active exact deployment,
   both public health endpoints returned 200, and no page-origin browser errors
   were observed.
@@ -126,6 +134,8 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
   plus CLI migration image tests `2/2` locally;
 - GitHub reported PR #96 mergeable at `4a1fd948`; this source-quality
   result does not override the provider HOLD;
+- the current source-only reconciliation patch is not yet included in that
+  receipt; its exact-head CI must run after the authorized push;
 - the E2E scheduling job now replays the final bounded runner through `0053`
   against disposable real PostgreSQL after the journal is already complete;
   the current-head E2E check is the authoritative no-op/advisory-lock receipt;
