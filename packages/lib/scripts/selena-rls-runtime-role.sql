@@ -74,6 +74,9 @@ GRANT SELECT, INSERT ON
 	sv_audit_events, sv_provider_dataset_capabilities,
 	sv_provider_canary_executions, sv_evidence_index
 TO selena_app;
+SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'
+WHERE to_regclass('public.sv_provider_dataset_snapshot_events') IS NOT NULL
+\gexec
 GRANT INSERT ON sv_source_snapshots TO selena_app;
 REVOKE SELECT (
 	source_ref, content_sha256, snapshot, provider_dataset_ref, environment, raw_reference

@@ -345,6 +345,67 @@ describe("Visibility OS provider evidence provenance", () => {
 	});
 });
 
+describe("Provider dataset snapshot journal", () => {
+	it("models append-only tenant and project scoped lifecycle metadata", () => {
+		const table = getTableConfig(schema.svProviderDatasetSnapshotEvents);
+		const dialect = new PgDialect();
+		expect(table.name).toBe("sv_provider_dataset_snapshot_events");
+		expect(table.enableRLS).toBe(true);
+		expect(
+			table.indexes.find((index) => index.config.name === "sv_provider_dataset_snapshot_events_event_hash_unique")
+				?.config.unique,
+		).toBe(true);
+		expect(
+			table.foreignKeys
+				.find((foreignKey) => foreignKey.getName() === "sv_provider_dataset_snapshot_events_project_org_fk")
+				?.reference()
+				.columns.map((column) => column.name),
+		).toEqual(["project_id", "organization_id"]);
+		const phaseCheck = table.checks.find(
+			(candidate) => candidate.name === "sv_provider_dataset_snapshot_events_phase_check",
+		);
+		expect(phaseCheck && dialect.sqlToQuery(phaseCheck.value).sql).toContain("'INTERRUPTED'");
+	});
+
+	it("keeps raw and normalized social data out of the journal contract", () => {
+		const columns = getTableConfig(schema.svProviderDatasetSnapshotEvents).columns.map((column) => column.name);
+		expect(columns).toEqual([
+			"id",
+			"organization_id",
+			"project_id",
+			"provider",
+			"source",
+			"provider_dataset_id",
+			"snapshot_id",
+			"phase",
+			"provider_status",
+			"record_count",
+			"observed_at",
+			"event_hash",
+			"created_at",
+		]);
+		for (const forbidden of ["url", "raw_payload", "text", "handle", "caption", "media_url"])
+			expect(columns).not.toContain(forbidden);
+	});
+
+	it("aligns SQL with forced RLS, idempotency, transitions and immutable events", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0052_provider_dataset_snapshot_journal.sql", import.meta.url),
+			"utf8",
+		);
+		expect(migration).toContain('ALTER TABLE "sv_provider_dataset_snapshot_events" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_dataset_snapshot_events"');
+		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_INITIAL_PHASE_INVALID");
+		expect(migration).toContain("IF NEW.\"phase\" <> 'TRIGGERED' THEN");
+		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_TERMINAL");
+		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_RESUME_REQUIRED");
+		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_EVENT_IMMUTABLE");
+		expect(migration).toContain("RETURN NULL;");
+		expect(migration).not.toContain("raw_payload");
+		expect(migration).not.toContain("GRANT ");
+	});
+});
+
 describe("Visibility OS Local schema", () => {
 	it("exports seven RLS-enabled Local tables and keeps Ask Maps observations separate", () => {
 		expect(localTables.map((table) => getTableConfig(table).name)).toEqual([
@@ -1035,11 +1096,13 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"visibility_os_gate12_e2e.sh",
 			"visibility_os_0045_hardening_e2e.sh",
 			"visibility_os_0049_lifecycle_e2e.sh",
+			"visibility_os_0051_rls_schema_proof_e2e.sh",
+			"visibility_os_0052_snapshot_journal_e2e.sh",
 		].map((name) => readFileSync(new URL(`../../../../tools/${name}`, import.meta.url), "utf8"));
 
 		expect(wrapper).toContain("mode='dry-run'");
 		expect(wrapper).toContain("--run) mode='run'");
-		expect(wrapper).toContain("gate12|0045|0049");
+		expect(wrapper).toContain("gate12|0045|0049|0051|0052");
 		expect(wrapper.indexOf("if [[ \"$mode\" == 'dry-run' ]]")).toBeLessThan(wrapper.indexOf("command -v docker"));
 		expect(wrapper).toMatch(/compose_project="selena-visibility-rehearsal-\$\{PPID\}-\$\$-\$\{random_suffix\}"/);
 		expect(wrapper).toContain("label=com.docker.compose.project=$compose_project");
@@ -1383,7 +1446,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-14)).toEqual([
+		expect(journal.entries.slice(-15)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1450,6 +1513,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940013000,
 				tag: "0051_visibility_os_provider_evidence_provenance",
+				breakpoints: true,
+			},
+			{
+				idx: 52,
+				version: "7",
+				when: 1787940014000,
+				tag: "0052_provider_dataset_snapshot_journal",
 				breakpoints: true,
 			},
 		]);

@@ -103,7 +103,10 @@ WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
+# The Node runner requires an explicit maximum migration index, builds a
+# matching Drizzle journal/SQL bundle, invokes the packaged binary directly and
+# retains the final log line for Railway collection. It performs no downloads.
+CMD ["node", "./scripts/run-bounded-migrations.mjs"]
 
 # Worker stage
 FROM base AS worker

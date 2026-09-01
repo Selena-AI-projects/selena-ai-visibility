@@ -12,6 +12,7 @@ import {
 
 async function collectFixture(prepared: ReturnType<typeof prepareProviderDatasetCanary>, rawPayload: unknown) {
 	const result = await createBrightDataDatasetClient({
+		journal: { record: async () => undefined, claimResume: async () => false },
 		lifecycle: {
 			timeoutMs: 1_000,
 			pollIntervalMs: 10,
@@ -21,6 +22,7 @@ async function collectFixture(prepared: ReturnType<typeof prepareProviderDataset
 			terminalFailureStatuses: ["failed"],
 		},
 		transport: {
+			preflight: async () => undefined,
 			trigger: async () => ({ snapshotId: "snapshot-one" }),
 			progress: async () => ({ status: "ready" }),
 			download: async () => rawPayload,
@@ -212,6 +214,13 @@ describe("v1.3 provider dataset registry", () => {
 	});
 
 	it("keeps Social and Travel behind their separate fail-closed gates", () => {
+		expect(() =>
+			assertProviderDatasetAccess("INSTAGRAM_COMMENTS", {
+				...safeCanary,
+				privacyReviewApproved: true,
+				retentionReviewApproved: true,
+			}),
+		).toThrow("PROVIDER_DATASET_BLOCKED_COST_AND_PERSONAL_DATA");
 		expect(() => assertProviderDatasetAccess("INSTAGRAM_PROFILES", safeCanary)).toThrow(
 			"PROVIDER_DATASET_SOCIAL_POLICY_GATE_REQUIRED",
 		);

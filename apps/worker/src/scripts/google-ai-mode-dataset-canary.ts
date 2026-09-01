@@ -7,6 +7,7 @@
  * this command deliberately does not guess it.
  */
 
+import { createPostgresBrightDataSnapshotJournal } from "@workspace/lib/adapters/brightdata-snapshot-journal";
 import { db } from "@workspace/lib/db/db";
 import {
 	type GoogleAiModeCanaryCapturePersistenceReceipt,
@@ -78,6 +79,7 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 	};
 	const apiKey = getCredential("BRIGHTDATA_API_TOKEN")?.trim();
 	const organizationId = process.env.SELENA_GOOGLE_AI_MODE_CANARY_ORGANIZATION_ID?.trim();
+	const projectId = process.env.SELENA_GOOGLE_AI_MODE_CANARY_PROJECT_ID?.trim();
 	const result = await runGoogleAiModeOneShotCanary({
 		access,
 		environment: {
@@ -85,6 +87,10 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 		},
 		providerInput: providerInput(process.env.SELENA_GOOGLE_AI_MODE_CANARY_INPUT_JSON),
 		transport: apiKey ? createBrightDataGoogleAiModeTransport({ apiKey }) : undefined,
+		journal:
+			organizationId && projectId
+				? createPostgresBrightDataSnapshotJournal({ db, organizationId, projectId })
+				: undefined,
 		costPreflight,
 		reserveOnce: organizationId
 			? async () => {

@@ -446,6 +446,8 @@ export function assertProviderDatasetAccess(
 	request: ProviderDatasetAccessRequest,
 ): void {
 	const definition = getProviderDatasetDefinition(source);
+	if (source === "INSTAGRAM_COMMENTS")
+		throw new Error("PROVIDER_DATASET_BLOCKED_COST_AND_PERSONAL_DATA:INSTAGRAM_COMMENTS");
 	if (definition.capabilityStatus !== "CANARY_ONLY" || request.mode !== "CANARY")
 		throw new Error(`PROVIDER_DATASET_CANARY_ONLY:${source}`);
 	if (!request.ownerApproved) throw new Error(`PROVIDER_DATASET_OWNER_APPROVAL_REQUIRED:${source}`);

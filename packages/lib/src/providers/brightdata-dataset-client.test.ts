@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	BrightDataDatasetInterruptedError,
 	type BrightDataDatasetTransport,
+	type BrightDataSnapshotJournalEntry,
 	type BrightDataSnapshotLifecycleContract,
 	createBrightDataDatasetClient,
 } from "./brightdata-dataset-client";
@@ -36,8 +38,30 @@ const lifecycle: BrightDataSnapshotLifecycleContract = {
 	terminalFailureStatuses: ["failed", "cancelled"],
 };
 
+function createJournal() {
+	const entries: BrightDataSnapshotJournalEntry[] = [];
+	return {
+		entries,
+		journal: {
+			record: vi.fn(async (entry: BrightDataSnapshotJournalEntry) => void entries.push(entry)),
+			claimResume: vi.fn(async (entry: BrightDataSnapshotJournalEntry & { phase: "RESUMED" }) => {
+				const authorized = entries.some(
+					(candidate) =>
+						candidate.source === entry.source &&
+						candidate.datasetId === entry.datasetId &&
+						candidate.snapshotId === entry.snapshotId &&
+						candidate.phase !== "RESUMED",
+				);
+				if (authorized) entries.push(entry);
+				return authorized;
+			}),
+		},
+	};
+}
+
 function transportWith(overrides: Partial<BrightDataDatasetTransport> = {}): BrightDataDatasetTransport {
 	return {
+		preflight: vi.fn(async () => undefined),
 		trigger: vi.fn(async () => ({ snapshotId: "snapshot-1" })),
 		progress: vi.fn(async () => ({ status: "ready" })),
 		download: vi.fn(async () => [{ observed: true }]),
@@ -48,8 +72,32 @@ function transportWith(overrides: Partial<BrightDataDatasetTransport> = {}): Bri
 
 describe("Bright Data dataset lifecycle client", () => {
 	it("cannot use ambient network when no transport is injected", async () => {
-		const client = createBrightDataDatasetClient({ lifecycle });
+		const state = createJournal();
+		const client = createBrightDataDatasetClient({ lifecycle, journal: state.journal });
 		await expect(client.collect(preparedCanary())).rejects.toThrow("BRIGHTDATA_DATASET_TRANSPORT_REQUIRED");
+	});
+
+	it("preflights before the single trigger and journals the snapshot before polling", async () => {
+		const state = createJournal();
+		const order: string[] = [];
+		const transport = transportWith({
+			preflight: vi.fn(async () => void order.push("preflight")),
+			trigger: vi.fn(async () => {
+				order.push("trigger");
+				return { snapshotId: "snapshot-1" };
+			}),
+			progress: vi.fn(async () => {
+				order.push("progress");
+				expect(state.entries[0]?.phase).toBe("TRIGGERED");
+				return { status: "ready" };
+			}),
+		});
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
+
+		await expect(client.collect(preparedCanary())).resolves.toMatchObject({ status: "COMPLETE" });
+		expect(order).toEqual(["preflight", "trigger", "progress"]);
+		expect(transport.trigger).toHaveBeenCalledTimes(1);
+		expect(state.entries.map((entry) => entry.phase)).toEqual(["TRIGGERED", "READY", "DELIVERED"]);
 	});
 
 	it("aborts a trigger that exceeds the collection deadline", async () => {
@@ -61,9 +109,11 @@ describe("Bright Data dataset lifecycle client", () => {
 					signal.addEventListener("abort", () => reject(new Error("aborted")));
 				}),
 		);
+		const state = createJournal();
 		const client = createBrightDataDatasetClient({
 			transport: transportWith({ trigger }),
 			lifecycle: { ...lifecycle, triggerTimeoutMs: 5 },
+			journal: state.journal,
 		});
 
 		await expect(client.collect(preparedCanary())).rejects.toThrow("BRIGHTDATA_DATASET_TRIGGER_TIMEOUT");
@@ -71,13 +121,73 @@ describe("Bright Data dataset lifecycle client", () => {
 		expect(triggerSignal?.aborted).toBe(true);
 	});
 
-	it("triggers once, polls progress and downloads a ready snapshot", async () => {
+	it("times out a hanging progress call without retriggering", async () => {
+		const progress = vi.fn(
+			(_snapshotId: string, signal: AbortSignal) =>
+				new Promise<never>((_resolve, reject) => {
+					signal.addEventListener("abort", () => reject(new Error("aborted")));
+				}),
+		);
+		const state = createJournal();
+		const transport = transportWith({ progress });
+		const client = createBrightDataDatasetClient({
+			transport,
+			lifecycle: { ...lifecycle, progressTimeoutMs: 5 },
+			journal: state.journal,
+		});
+
+		await expect(client.collect(preparedCanary())).resolves.toEqual({ status: "TIMEOUT", snapshotId: "snapshot-1" });
+		expect(transport.trigger).toHaveBeenCalledTimes(1);
+		expect(progress).toHaveBeenCalledTimes(1);
+		expect(transport.cancel).toHaveBeenCalledTimes(1);
+		expect(state.entries.at(-1)?.phase).toBe("TIMEOUT");
+	});
+
+	it("times out a hanging download call and records the terminal timeout", async () => {
+		const download = vi.fn(
+			(_snapshotId: string, signal: AbortSignal) =>
+				new Promise<never>((_resolve, reject) => {
+					signal.addEventListener("abort", () => reject(new Error("aborted")));
+				}),
+		);
+		const state = createJournal();
+		const transport = transportWith({ download });
+		const client = createBrightDataDatasetClient({
+			transport,
+			lifecycle: { ...lifecycle, downloadTimeoutMs: 5 },
+			journal: state.journal,
+		});
+
+		await expect(client.collect(preparedCanary())).resolves.toEqual({ status: "TIMEOUT", snapshotId: "snapshot-1" });
+		expect(download).toHaveBeenCalledTimes(1);
+		expect(transport.cancel).toHaveBeenCalledTimes(1);
+		expect(state.entries.map((entry) => entry.phase)).toEqual(["TRIGGERED", "READY", "TIMEOUT"]);
+	});
+
+	it("rejects empty status sets and per-operation deadlines beyond the lifecycle", () => {
+		expect(() =>
+			createBrightDataDatasetClient({
+				lifecycle: { ...lifecycle, readyStatuses: [] },
+				journal: createJournal().journal,
+			}),
+		).toThrow("BRIGHTDATA_DATASET_READY_STATUSES_REQUIRED");
+		expect(() =>
+			createBrightDataDatasetClient({
+				lifecycle: { ...lifecycle, progressTimeoutMs: lifecycle.timeoutMs + 1 },
+				journal: createJournal().journal,
+			}),
+		).toThrow("BRIGHTDATA_DATASET_PROGRESS_TIMEOUT_POLICY_INVALID");
+	});
+
+	it("polls progress and returns an immutable raw capture", async () => {
 		const statuses = ["pending", "running", "ready"];
 		let currentTime = 0;
+		const state = createJournal();
 		const transport = transportWith({ progress: vi.fn(async () => ({ status: statuses.shift() ?? "ready" })) });
 		const client = createBrightDataDatasetClient({
 			transport,
 			lifecycle,
+			journal: state.journal,
 			now: () => currentTime,
 			nowIso: () => "2026-08-31T01:00:00.000Z",
 			sleep: async (durationMs) => {
@@ -101,23 +211,30 @@ describe("Bright Data dataset lifecycle client", () => {
 		});
 		if (result.status !== "COMPLETE") throw new Error("expected complete fixture");
 		expect(Object.isFrozen(result.capture.rawPayload)).toBe(true);
-		expect(transport.trigger).toHaveBeenCalledTimes(1);
 		expect(transport.progress).toHaveBeenCalledTimes(3);
-		expect(transport.download).toHaveBeenCalledTimes(1);
-		expect(transport.cancel).not.toHaveBeenCalled();
+		expect(state.entries.map((entry) => entry.phase)).toEqual([
+			"TRIGGERED",
+			"PENDING",
+			"PENDING",
+			"READY",
+			"DELIVERED",
+		]);
 	});
 
 	it("rejects a structurally forged request before transport", async () => {
+		const state = createJournal();
 		const transport = transportWith();
-		const client = createBrightDataDatasetClient({ transport, lifecycle });
-		const forged = { ...preparedCanary() };
-		await expect(client.collect(forged)).rejects.toThrow("PROVIDER_DATASET_CANARY_PREPARATION_REQUIRED");
-		expect(transport.trigger).not.toHaveBeenCalled();
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
+		await expect(client.collect({ ...preparedCanary() })).rejects.toThrow(
+			"PROVIDER_DATASET_CANARY_PREPARATION_REQUIRED",
+		);
+		expect(transport.preflight).not.toHaveBeenCalled();
 	});
 
 	it("consumes each prepared canary exactly once", async () => {
+		const state = createJournal();
 		const transport = transportWith();
-		const client = createBrightDataDatasetClient({ transport, lifecycle });
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
 		const prepared = preparedCanary();
 
 		await expect(client.collect(prepared)).resolves.toMatchObject({ status: "COMPLETE" });
@@ -125,21 +242,66 @@ describe("Bright Data dataset lifecycle client", () => {
 		expect(transport.trigger).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects status groups that normalize to empty strings", () => {
-		expect(() => createBrightDataDatasetClient({ lifecycle: { ...lifecycle, readyStatuses: ["   "] } })).toThrow(
-			"BRIGHTDATA_DATASET_READY_STATUSES_REQUIRED",
+	it("resumes a durable snapshot without retriggering", async () => {
+		const state = createJournal();
+		await state.journal.record({
+			source: "GOOGLE_SERP",
+			datasetId: "gd_fixture123",
+			snapshotId: "snapshot-existing",
+			phase: "INTERRUPTED",
+			observedAt: "2026-08-31T00:00:00.000Z",
+		});
+		const transport = transportWith();
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
+
+		await expect(client.resume(preparedCanary(), { snapshotId: "snapshot-existing" })).resolves.toMatchObject({
+			status: "COMPLETE",
+			snapshotId: "snapshot-existing",
+		});
+		expect(transport.trigger).not.toHaveBeenCalled();
+		expect(state.entries.map((entry) => entry.phase)).toEqual(["INTERRUPTED", "RESUMED", "READY", "DELIVERED"]);
+	});
+
+	it("rejects an unowned snapshot before preflight or download", async () => {
+		const state = createJournal();
+		const transport = transportWith();
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
+
+		await expect(client.resume(preparedCanary(), { snapshotId: "snapshot-other-tenant" })).rejects.toThrow(
+			"BRIGHTDATA_DATASET_RESUME_NOT_AUTHORIZED",
 		);
+		expect(transport.preflight).not.toHaveBeenCalled();
+		expect(transport.progress).not.toHaveBeenCalled();
+		expect(transport.download).not.toHaveBeenCalled();
+	});
+
+	it("does not poll when durable snapshot journaling fails", async () => {
+		const transport = transportWith();
+		const client = createBrightDataDatasetClient({
+			transport,
+			lifecycle,
+			journal: {
+				record: vi.fn(async () => Promise.reject(new Error("storage unavailable"))),
+				claimResume: vi.fn(async () => false),
+			},
+		});
+
+		await expect(client.collect(preparedCanary())).rejects.toMatchObject({
+			message: "BRIGHTDATA_DATASET_JOURNAL_FAILED",
+			snapshotId: "snapshot-1",
+		});
+		expect(transport.progress).not.toHaveBeenCalled();
 	});
 
 	it("times out without retriggering and performs best-effort cancellation", async () => {
 		let currentTime = 0;
-		const cancel = vi.fn(async () => {
-			throw new Error("cleanup unavailable");
-		});
+		const state = createJournal();
+		const cancel = vi.fn(async () => Promise.reject(new Error("cleanup unavailable")));
 		const transport = transportWith({ progress: vi.fn(async () => ({ status: "pending" })), cancel });
 		const client = createBrightDataDatasetClient({
 			transport,
 			lifecycle: { ...lifecycle, timeoutMs: 200 },
+			journal: state.journal,
 			now: () => currentTime,
 			sleep: async (durationMs) => {
 				currentTime += durationMs;
@@ -148,68 +310,54 @@ describe("Bright Data dataset lifecycle client", () => {
 
 		await expect(client.collect(preparedCanary())).resolves.toEqual({ status: "TIMEOUT", snapshotId: "snapshot-1" });
 		expect(transport.trigger).toHaveBeenCalledTimes(1);
-		expect(transport.progress).toHaveBeenCalledTimes(2);
 		expect(transport.download).not.toHaveBeenCalled();
 		expect(cancel).toHaveBeenCalledTimes(1);
+		expect(state.entries.at(-1)?.phase).toBe("TIMEOUT");
 	});
 
-	it("bounds best-effort cancellation when the transport only reacts to abort", async () => {
-		let currentTime = 0;
-		let cancelSignal: AbortSignal | undefined;
-		const cancel = vi.fn(
-			(_snapshotId: string, signal: AbortSignal) =>
-				new Promise<never>((_resolve, reject) => {
-					cancelSignal = signal;
-					signal.addEventListener("abort", () => reject(new Error("aborted")));
-				}),
-		);
-		const client = createBrightDataDatasetClient({
-			transport: transportWith({ progress: vi.fn(async () => ({ status: "pending" })), cancel }),
-			lifecycle: { ...lifecycle, timeoutMs: 1, cancelTimeoutMs: 5 },
-			now: () => currentTime,
-			sleep: async (durationMs) => {
-				currentTime += durationMs;
-			},
-		});
-
-		await expect(client.collect(preparedCanary())).resolves.toEqual({ status: "TIMEOUT", snapshotId: "snapshot-1" });
-		expect(cancel).toHaveBeenCalledTimes(1);
-		expect(cancelSignal?.aborted).toBe(true);
-	});
-
-	it("fails closed on unknown status and never invents a result", async () => {
+	it("fails closed on an unknown status", async () => {
+		const state = createJournal();
 		const transport = transportWith({ progress: vi.fn(async () => ({ status: "new-provider-state" })) });
-		const client = createBrightDataDatasetClient({ transport, lifecycle });
+		const client = createBrightDataDatasetClient({ transport, lifecycle, journal: state.journal });
 
 		await expect(client.collect(preparedCanary())).resolves.toEqual({
 			status: "INVALID",
 			snapshotId: "snapshot-1",
 			reason: "UNRECOGNIZED_STATUS",
 		});
-		expect(transport.trigger).toHaveBeenCalledTimes(1);
 		expect(transport.download).not.toHaveBeenCalled();
 		expect(transport.cancel).toHaveBeenCalledTimes(1);
 	});
 
-	it("does not internally retry a failed trigger or progress request", async () => {
-		const trigger = vi.fn(async () => {
-			throw new Error("secret-bearing provider detail");
-		});
+	it("never retries trigger and preserves snapshot authority across a transient progress failure", async () => {
+		const trigger = vi.fn(async () => Promise.reject(new Error("secret-bearing provider detail")));
+		const triggerState = createJournal();
 		const triggerFailure = transportWith({ trigger });
 		await expect(
-			createBrightDataDatasetClient({ transport: triggerFailure, lifecycle }).collect(preparedCanary()),
+			createBrightDataDatasetClient({ transport: triggerFailure, lifecycle, journal: triggerState.journal }).collect(
+				preparedCanary(),
+			),
 		).rejects.toThrow("BRIGHTDATA_DATASET_TRIGGER_FAILED");
 		expect(trigger).toHaveBeenCalledTimes(1);
 
-		const progress = vi.fn(async () => {
-			throw new Error("transient");
-		});
+		const progress = vi.fn(async () => Promise.reject(new Error("transient")));
+		const progressState = createJournal();
 		const progressFailure = transportWith({ progress });
-		await expect(
-			createBrightDataDatasetClient({ transport: progressFailure, lifecycle }).collect(preparedCanary()),
-		).rejects.toThrow("BRIGHTDATA_DATASET_PROGRESS_FAILED");
+		let failure: unknown;
+		try {
+			await createBrightDataDatasetClient({
+				transport: progressFailure,
+				lifecycle,
+				journal: progressState.journal,
+			}).collect(preparedCanary());
+		} catch (error) {
+			failure = error;
+		}
+		expect(failure).toBeInstanceOf(BrightDataDatasetInterruptedError);
+		expect(failure).toMatchObject({ message: "BRIGHTDATA_DATASET_PROGRESS_FAILED", snapshotId: "snapshot-1" });
 		expect(progressFailure.trigger).toHaveBeenCalledTimes(1);
 		expect(progress).toHaveBeenCalledTimes(1);
-		expect(progressFailure.cancel).toHaveBeenCalledTimes(1);
+		expect(progressFailure.cancel).not.toHaveBeenCalled();
+		expect(progressState.entries.at(-1)?.phase).toBe("INTERRUPTED");
 	});
 });

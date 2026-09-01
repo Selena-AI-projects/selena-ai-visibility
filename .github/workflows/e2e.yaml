@@ -167,9 +167,9 @@ jobs:
       - name: Run worker job-processing test
         run: pnpm -C e2e exec playwright test --project=worker --reporter=list,github
 
-      - name: Dump worker logs
+      - name: Dump service logs
         if: failure()
-        run: docker compose logs worker
+        run: docker compose logs db-migrate postgres web worker
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v7

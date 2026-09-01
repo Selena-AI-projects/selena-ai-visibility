@@ -136,11 +136,13 @@ async function privateCaptureFixture() {
 			terminalFailureStatuses: ["failed"],
 		},
 		transport: {
+			preflight: async () => undefined,
 			trigger: async () => ({ snapshotId: "private-snapshot-id" }),
 			progress: async () => ({ status: "ready" }),
 			download: async () => [{ privateAnswer: "never-print-this" }],
 			cancel: async () => undefined,
 		},
+		journal: { record: async () => undefined, claimResume: async () => false },
 		nowIso: () => "2026-08-31T10:01:00.000Z",
 	}).collect(prepared);
 	if (collected.status !== "COMPLETE") throw new Error("TEST_CAPTURE_NOT_COMPLETE");

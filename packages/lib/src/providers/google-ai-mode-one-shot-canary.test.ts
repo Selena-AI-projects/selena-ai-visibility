@@ -23,6 +23,7 @@ const access = (overrides: Partial<ProviderDatasetAccessRequest> = {}): Provider
 
 function transportWith(overrides: Partial<BrightDataDatasetTransport> = {}): BrightDataDatasetTransport {
 	return {
+		preflight: vi.fn(async () => undefined),
 		trigger: vi.fn(async () => ({ snapshotId: "snapshot-1" })),
 		progress: vi.fn(async () => ({ status: "ready" })),
 		download: vi.fn(async () => [{ answer: "fixture" }]),
@@ -30,6 +31,8 @@ function transportWith(overrides: Partial<BrightDataDatasetTransport> = {}): Bri
 		...overrides,
 	};
 }
+
+const journal = () => ({ record: vi.fn(async () => undefined), claimResume: vi.fn(async () => false) });
 
 const configuredEnvironment = { SELENA_BRIGHTDATA_DATASET_GOOGLE_AI: "gd_fixture123" } as const;
 const reserved = (): Promise<GoogleAiModeCanaryReservationResult> =>
@@ -68,6 +71,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport,
+			journal: journal(),
 		});
 
 		expect(result.receipt).toMatchObject({
@@ -95,6 +99,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 				environment: configuredEnvironment,
 				providerInput: { query: "best restaurants in Ubud" },
 				transport,
+				journal: journal(),
 				costPreflight: costEvidence(),
 				reserveOnce: reserved,
 			});
@@ -112,6 +117,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport,
+			journal: journal(),
 			costPreflight: costEvidence(),
 			reserveOnce: reserved,
 			clock: { nowIso: () => "2026-08-31T10:00:00.000Z" },
@@ -168,6 +174,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 				environment: configuredEnvironment,
 				providerInput: { query: "best restaurants in Ubud" },
 				transport,
+				journal: journal(),
 				costPreflight,
 				reserveOnce,
 			});
@@ -193,6 +200,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport,
+			journal: journal(),
 			costPreflight: costEvidence(),
 			reserveOnce: reserved,
 		});
@@ -218,6 +226,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport,
+			journal: journal(),
 			costPreflight: costEvidence(),
 			reserveOnce: reserved,
 			clock: {
@@ -261,6 +270,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 				environment: configuredEnvironment,
 				providerInput: { query: "best restaurants in Ubud" },
 				transport,
+				journal: journal(),
 				costPreflight: costEvidence(),
 				reserveOnce,
 			});
@@ -296,6 +306,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport: transportWith({ trigger }),
+			journal: journal(),
 			costPreflight: costEvidence(),
 			reserveOnce,
 		};
@@ -318,6 +329,7 @@ describe("GOOGLE_AI_MODE one-shot canary", () => {
 			environment: configuredEnvironment,
 			providerInput: { query: "best restaurants in Ubud" },
 			transport,
+			journal: journal(),
 			costPreflight: costEvidence(),
 		};
 
@@ -353,6 +365,7 @@ describe("verified Bright Data GOOGLE_AI_MODE HTTP transport", () => {
 		await expect(
 			transport.trigger(
 				{
+					source: "GOOGLE_AI_MODE",
 					datasetId: "gd_fixture123",
 					input: {
 						schemaVersion: "schema-discovery-input-v1",
@@ -385,6 +398,7 @@ describe("verified Bright Data GOOGLE_AI_MODE HTTP transport", () => {
 		await expect(
 			transport.trigger(
 				{
+					source: "GOOGLE_AI_MODE",
 					datasetId: "gd_fixture123",
 					input: {
 						schemaVersion: "schema-discovery-input-v1",

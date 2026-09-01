@@ -1,6 +1,7 @@
 import { executeLegacyProviderTransport, isLegacyProviderExecutionEnabled } from "../run-policy/spend-gate";
 import {
 	type BrightDataDatasetTransport,
+	type BrightDataSnapshotJournal,
 	type BrightDataSnapshotLifecycleContract,
 	createBrightDataDatasetClient,
 } from "./brightdata-dataset-client";
@@ -104,6 +105,7 @@ export type GoogleAiModeOneShotCanaryOptions = Readonly<{
 	environment: Readonly<Partial<Record<ProviderDatasetEnvKey, string | undefined>>>;
 	providerInput: unknown;
 	transport?: BrightDataDatasetTransport;
+	journal?: BrightDataSnapshotJournal;
 	costPreflight?: GoogleAiModeCostPreflightEvidence;
 	reserveOnce?: () => Promise<GoogleAiModeCanaryReservationResult>;
 	clock?: Clock;
@@ -251,6 +253,7 @@ export async function runGoogleAiModeOneShotCanary(
 		return preflightReceipt("COST_PREFLIGHT_EVIDENCE_REQUIRED");
 	if (!isApprovedCostPolicy(options.access, options.costPreflight)) return preflightReceipt("COST_POLICY_INVALID");
 	if (!options.transport) return preflightReceipt("VERIFIED_TRANSPORT_REQUIRED");
+	if (!options.journal) return preflightReceipt("DURABLE_SNAPSHOT_JOURNAL_REQUIRED");
 	if (!options.reserveOnce) return preflightReceipt("DURABLE_RESERVATION_REQUIRED");
 
 	let prepared: ReturnType<typeof prepareProviderDatasetCanary>;
@@ -282,6 +285,7 @@ export async function runGoogleAiModeOneShotCanary(
 	let observedSnapshotId: string | undefined;
 	const transport = options.transport;
 	const guardedTransport: BrightDataDatasetTransport = {
+		preflight: (request, signal) => transport.preflight(request, signal),
 		trigger: (request, signal) =>
 			executeLegacyProviderTransport(async () => {
 				if (providerCalls !== 0) throw new Error("GOOGLE_AI_MODE_CANARY_TRIGGER_ALREADY_ATTEMPTED");
@@ -298,6 +302,7 @@ export async function runGoogleAiModeOneShotCanary(
 	try {
 		const result = await createBrightDataDatasetClient({
 			transport: guardedTransport,
+			journal: options.journal,
 			lifecycle: GOOGLE_AI_MODE_CANARY_LIFECYCLE,
 			now: options.clock?.now,
 			nowIso,
@@ -399,6 +404,10 @@ export function createBrightDataGoogleAiModeTransport(input: {
 	const fetchImpl = input.fetchImpl ?? fetch;
 	const headers = { Authorization: `Bearer ${input.apiKey}`, "Content-Type": "application/json" };
 	return Object.freeze({
+		async preflight(request) {
+			if (request.source !== "GOOGLE_AI_MODE" || !/^gd_[a-z0-9]+$/.test(request.datasetId))
+				throw new Error("BRIGHTDATA_GOOGLE_AI_MODE_REQUEST_INVALID");
+		},
 		async trigger(request, signal) {
 			return executeLegacyProviderTransport(async () => {
 				const url = new URL(`${BRIGHT_DATA_DATASET_BASE_URL}/trigger`);

@@ -1,4 +1,8 @@
-import type { PreparedProviderDatasetCanary, ProviderDatasetRawCapture } from "./dataset-registry";
+import type {
+	PreparedProviderDatasetCanary,
+	ProviderDatasetRawCapture,
+	ProviderDatasetSourceId,
+} from "./dataset-registry";
 import {
 	consumePreparedProviderDatasetCanary,
 	createProviderDatasetRawCaptureFromLifecycle,
@@ -7,11 +11,15 @@ import {
 export type BrightDataSnapshotProgress = Readonly<{ status: string }>;
 export type BrightDataSnapshotTrigger = Readonly<{ snapshotId: string }>;
 
+export type BrightDataDatasetTransportRequest = Readonly<{
+	source: ProviderDatasetSourceId;
+	datasetId: string;
+	input: PreparedProviderDatasetCanary["input"];
+}>;
+
 export type BrightDataDatasetTransport = Readonly<{
-	trigger(
-		request: Readonly<{ datasetId: string; input: PreparedProviderDatasetCanary["input"] }>,
-		signal: AbortSignal,
-	): Promise<BrightDataSnapshotTrigger>;
+	preflight(request: BrightDataDatasetTransportRequest, signal: AbortSignal): Promise<void>;
+	trigger(request: BrightDataDatasetTransportRequest, signal: AbortSignal): Promise<BrightDataSnapshotTrigger>;
 	progress(snapshotId: string, signal: AbortSignal): Promise<BrightDataSnapshotProgress>;
 	download(snapshotId: string, signal: AbortSignal): Promise<unknown>;
 	cancel(snapshotId: string, signal: AbortSignal): Promise<void>;
@@ -29,6 +37,34 @@ export type BrightDataSnapshotLifecycleContract = Readonly<{
 	terminalFailureStatuses: readonly string[];
 }>;
 
+export type BrightDataSnapshotJournalPhase =
+	| "TRIGGERED"
+	| "RESUMED"
+	| "PENDING"
+	| "READY"
+	| "DELIVERED"
+	| "TIMEOUT"
+	| "TERMINAL_FAILURE"
+	| "INVALID"
+	| "INTERRUPTED";
+
+export type BrightDataSnapshotJournalEntry = Readonly<{
+	source: ProviderDatasetSourceId;
+	datasetId: string;
+	snapshotId: string;
+	phase: BrightDataSnapshotJournalPhase;
+	observedAt: string;
+	providerStatus?: string;
+	recordCount?: number;
+}>;
+
+/** This must use durable storage before the client is wired into a worker. */
+export type BrightDataSnapshotJournal = Readonly<{
+	record(entry: BrightDataSnapshotJournalEntry): Promise<void>;
+	/** Atomically verifies tenant-scoped snapshot ownership and records RESUMED. */
+	claimResume(entry: BrightDataSnapshotJournalEntry & Readonly<{ phase: "RESUMED" }>): Promise<boolean>;
+}>;
+
 export type BrightDataDatasetCollectionResult =
 	| Readonly<{ status: "COMPLETE"; snapshotId: string; capture: ProviderDatasetRawCapture }>
 	| Readonly<{ status: "TIMEOUT"; snapshotId: string }>
@@ -37,11 +73,25 @@ export type BrightDataDatasetCollectionResult =
 
 export type BrightDataDatasetClientOptions = Readonly<{
 	transport?: BrightDataDatasetTransport;
+	journal: BrightDataSnapshotJournal;
 	lifecycle: BrightDataSnapshotLifecycleContract;
 	now?: () => number;
 	nowIso?: () => string;
 	sleep?: (durationMs: number) => Promise<void>;
 }>;
+
+export class BrightDataDatasetInterruptedError extends Error {
+	constructor(
+		message:
+			| "BRIGHTDATA_DATASET_PROGRESS_FAILED"
+			| "BRIGHTDATA_DATASET_DOWNLOAD_FAILED"
+			| "BRIGHTDATA_DATASET_JOURNAL_FAILED",
+		public readonly snapshotId: string,
+	) {
+		super(message);
+		this.name = "BrightDataDatasetInterruptedError";
+	}
+}
 
 function normalizedStatuses(statuses: readonly string[], field: string): ReadonlySet<string> {
 	const normalized = new Set(statuses.map((status) => status.trim().toLowerCase()).filter(Boolean));
@@ -150,20 +200,135 @@ export function createBrightDataDatasetClient(options: BrightDataDatasetClientOp
 	const nowIso = options.nowIso ?? (() => new Date().toISOString());
 	const sleep = options.sleep ?? defaultSleep;
 
+	async function record(
+		prepared: PreparedProviderDatasetCanary,
+		snapshotId: string,
+		phase: BrightDataSnapshotJournalPhase,
+		details: Readonly<{ providerStatus?: string; recordCount?: number }> = {},
+	): Promise<void> {
+		try {
+			await options.journal.record({
+				source: prepared.definition.source,
+				datasetId: prepared.providerDatasetId,
+				snapshotId,
+				phase,
+				observedAt: nowIso(),
+				...details,
+			});
+		} catch {
+			throw new BrightDataDatasetInterruptedError("BRIGHTDATA_DATASET_JOURNAL_FAILED", snapshotId);
+		}
+	}
+
+	async function preflight(
+		prepared: PreparedProviderDatasetCanary,
+		transport: BrightDataDatasetTransport,
+		deadline: number,
+	): Promise<BrightDataDatasetTransportRequest> {
+		const request = Object.freeze({
+			source: prepared.definition.source,
+			datasetId: prepared.providerDatasetId,
+			input: prepared.input,
+		});
+		try {
+			await withinDeadline(deadline, now, (signal) => transport.preflight(request, signal));
+		} catch (error) {
+			if (error instanceof SnapshotDeadlineError) throw new Error("BRIGHTDATA_DATASET_PREFLIGHT_TIMEOUT");
+			throw new Error("BRIGHTDATA_DATASET_PREFLIGHT_FAILED");
+		}
+		return request;
+	}
+
+	async function finish(
+		prepared: PreparedProviderDatasetCanary,
+		transport: BrightDataDatasetTransport,
+		snapshotId: string,
+		deadline: number,
+	): Promise<BrightDataDatasetCollectionResult> {
+		while (now() < deadline) {
+			let progress: BrightDataSnapshotProgress;
+			try {
+				progress = await withinDeadline(
+					deadline,
+					now,
+					(signal) => transport.progress(snapshotId, signal),
+					options.lifecycle.progressTimeoutMs,
+				);
+			} catch (error) {
+				if (error instanceof SnapshotDeadlineError) {
+					await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
+					await record(prepared, snapshotId, "TIMEOUT");
+					return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
+				}
+				await record(prepared, snapshotId, "INTERRUPTED");
+				throw new BrightDataDatasetInterruptedError("BRIGHTDATA_DATASET_PROGRESS_FAILED", snapshotId);
+			}
+			const status = progress.status.trim().toLowerCase();
+			if (ready.has(status)) {
+				await record(prepared, snapshotId, "READY", { providerStatus: status });
+				let rawPayload: unknown;
+				try {
+					rawPayload = await withinDeadline(
+						deadline,
+						now,
+						(signal) => transport.download(snapshotId, signal),
+						options.lifecycle.downloadTimeoutMs,
+					);
+				} catch (error) {
+					if (error instanceof SnapshotDeadlineError) {
+						await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
+						await record(prepared, snapshotId, "TIMEOUT");
+						return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
+					}
+					await record(prepared, snapshotId, "INTERRUPTED");
+					throw new BrightDataDatasetInterruptedError("BRIGHTDATA_DATASET_DOWNLOAD_FAILED", snapshotId);
+				}
+				if (rawPayload === undefined || rawPayload === null) {
+					await record(prepared, snapshotId, "INVALID");
+					return Object.freeze({ status: "INVALID" as const, snapshotId, reason: "DOWNLOAD_EMPTY" as const });
+				}
+				const capture = createProviderDatasetRawCaptureFromLifecycle(prepared, {
+					snapshotId,
+					capturedAt: nowIso(),
+					rawPayload,
+				});
+				await record(prepared, snapshotId, "DELIVERED", { recordCount: capture.recordCount });
+				return Object.freeze({ status: "COMPLETE" as const, snapshotId, capture });
+			}
+			if (terminal.has(status)) {
+				await record(prepared, snapshotId, "TERMINAL_FAILURE", { providerStatus: status });
+				return Object.freeze({ status: "TERMINAL_FAILURE" as const, snapshotId, providerStatus: status });
+			}
+			if (!pending.has(status)) {
+				await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
+				await record(prepared, snapshotId, "INVALID", { providerStatus: status });
+				return Object.freeze({ status: "INVALID" as const, snapshotId, reason: "UNRECOGNIZED_STATUS" as const });
+			}
+			await record(prepared, snapshotId, "PENDING", { providerStatus: status });
+			const remainingMs = deadline - now();
+			if (remainingMs <= 0) break;
+			await sleep(Math.min(options.lifecycle.pollIntervalMs, remainingMs));
+		}
+
+		await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
+		await record(prepared, snapshotId, "TIMEOUT");
+		return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
+	}
+
 	return Object.freeze({
 		async collect(prepared: PreparedProviderDatasetCanary): Promise<BrightDataDatasetCollectionResult> {
 			consumePreparedProviderDatasetCanary(prepared);
 			const transport = options.transport;
 			if (!transport) throw new Error("BRIGHTDATA_DATASET_TRANSPORT_REQUIRED");
-			const startedAt = now();
-			const deadline = startedAt + options.lifecycle.timeoutMs;
+			const deadline = now() + options.lifecycle.timeoutMs;
+			const request = await preflight(prepared, transport, deadline);
 			let trigger: BrightDataSnapshotTrigger;
 			try {
-				// Exactly one collection trigger. Retry authority belongs to the attempt ledger.
+				// Exactly one trigger: retry authority stays in the durable ledger, and a lost response may be billable.
 				trigger = await withinDeadline(
 					deadline,
 					now,
-					(signal) => transport.trigger({ datasetId: prepared.providerDatasetId, input: prepared.input }, signal),
+					(signal) => transport.trigger(request, signal),
 					options.lifecycle.triggerTimeoutMs,
 				);
 			} catch (error) {
@@ -171,63 +336,33 @@ export function createBrightDataDatasetClient(options: BrightDataDatasetClientOp
 				throw new Error("BRIGHTDATA_DATASET_TRIGGER_FAILED");
 			}
 			const snapshotId = requireSnapshotId(trigger.snapshotId);
-
-			while (now() < deadline) {
-				let progress: BrightDataSnapshotProgress;
-				try {
-					progress = await withinDeadline(
-						deadline,
-						now,
-						(signal) => transport.progress(snapshotId, signal),
-						options.lifecycle.progressTimeoutMs,
-					);
-				} catch (error) {
-					await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
-					if (error instanceof SnapshotDeadlineError) return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
-					throw new Error("BRIGHTDATA_DATASET_PROGRESS_FAILED");
-				}
-				const status = progress.status.trim().toLowerCase();
-				if (ready.has(status)) {
-					let rawPayload: unknown;
-					try {
-						rawPayload = await withinDeadline(
-							deadline,
-							now,
-							(signal) => transport.download(snapshotId, signal),
-							options.lifecycle.downloadTimeoutMs,
-						);
-					} catch (error) {
-						if (error instanceof SnapshotDeadlineError) {
-							await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
-							return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
-						}
-						throw new Error("BRIGHTDATA_DATASET_DOWNLOAD_FAILED");
-					}
-					if (rawPayload === undefined || rawPayload === null)
-						return Object.freeze({ status: "INVALID" as const, snapshotId, reason: "DOWNLOAD_EMPTY" as const });
-					return Object.freeze({
-						status: "COMPLETE" as const,
-						snapshotId,
-						capture: createProviderDatasetRawCaptureFromLifecycle(prepared, {
-							snapshotId,
-							capturedAt: nowIso(),
-							rawPayload,
-						}),
-					});
-				}
-				if (terminal.has(status))
-					return Object.freeze({ status: "TERMINAL_FAILURE" as const, snapshotId, providerStatus: status });
-				if (!pending.has(status)) {
-					await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
-					return Object.freeze({ status: "INVALID" as const, snapshotId, reason: "UNRECOGNIZED_STATUS" as const });
-				}
-				const remainingMs = deadline - now();
-				if (remainingMs <= 0) break;
-				await sleep(Math.min(options.lifecycle.pollIntervalMs, remainingMs));
+			await record(prepared, snapshotId, "TRIGGERED");
+			return finish(prepared, transport, snapshotId, deadline);
+		},
+		async resume(
+			prepared: PreparedProviderDatasetCanary,
+			resume: Readonly<{ snapshotId: string }>,
+		): Promise<BrightDataDatasetCollectionResult> {
+			consumePreparedProviderDatasetCanary(prepared);
+			const transport = options.transport;
+			if (!transport) throw new Error("BRIGHTDATA_DATASET_TRANSPORT_REQUIRED");
+			const deadline = now() + options.lifecycle.timeoutMs;
+			const snapshotId = requireSnapshotId(resume.snapshotId);
+			let authorized = false;
+			try {
+				authorized = await options.journal.claimResume({
+					source: prepared.definition.source,
+					datasetId: prepared.providerDatasetId,
+					snapshotId,
+					phase: "RESUMED",
+					observedAt: nowIso(),
+				});
+			} catch {
+				throw new BrightDataDatasetInterruptedError("BRIGHTDATA_DATASET_JOURNAL_FAILED", snapshotId);
 			}
-
-			await bestEffortCancel(transport, snapshotId, options.lifecycle.cancelTimeoutMs);
-			return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
+			if (!authorized) throw new Error("BRIGHTDATA_DATASET_RESUME_NOT_AUTHORIZED");
+			await preflight(prepared, transport, deadline);
+			return finish(prepared, transport, snapshotId, deadline);
 		},
 	});
 }

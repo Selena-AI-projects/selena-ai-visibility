@@ -39,6 +39,7 @@
 		"./providers/brightdata-dataset-client": "./src/providers/brightdata-dataset-client.ts",
 		"./providers/dataset-registry": "./src/providers/dataset-registry.ts",
 		"./providers/google-ai-mode-one-shot-canary": "./src/providers/google-ai-mode-one-shot-canary.ts",
+		"./brightdata-social": "./src/brightdata-social/index.ts",
 		"./providers/types": "./src/providers/types.ts",
 		"./entitlements": "./src/entitlements/index.ts",
 		"./run-policy": "./src/run-policy/index.ts",
@@ -79,6 +80,7 @@
 		"./selena-evidence-read-models": "./src/selena-evidence-read-models.ts",
 		"./adapters/openrouter": "./src/adapters/openrouter-measurement-adapter.ts",
 		"./adapters/brightdata": "./src/adapters/brightdata-measurement-adapter.ts",
+		"./adapters/brightdata-snapshot-journal": "./src/adapters/brightdata-snapshot-journal.ts",
 		"./adapters/google-datasets": "./src/adapters/google-dataset-adapters.ts",
 		"./adapters/local-maps-rank": "./src/adapters/local-maps-rank-adapter.ts",
 		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts"
