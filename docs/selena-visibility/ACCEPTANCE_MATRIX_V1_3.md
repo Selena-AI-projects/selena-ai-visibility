@@ -64,6 +64,7 @@ Node 24.
 | Isolated restore | `PASS` | Restore service `a34b2749-130a-47f3-8da3-8f58e3775fe9` became healthy and proved an actual restored copy. |
 | Migration bound | `PASS` | `0043–0051` applied; `sv_provider_dataset_capabilities` exists; `0052` table `sv_provider_dataset_snapshot_events` is absent. |
 | Runtime role | `PASS` | `current_user=selena_app`; `SUPER=false`, `BYPASS_RLS=false`, `CREATE_ROLE=false`, `CREATE_DB=false`. |
+| Administration credential | `PASS` | After the owner-confirmed Postgres rotation, a values-suppressed count-only TCP probe through the service's sealed `POSTGRES_USER`/`POSTGRES_PASSWORD` binding returned `ADMIN_TCP=PASS`. |
 | Tenant GUC | `PASS` | `SET LOCAL app.organization_id` succeeded through the active worker connection. |
 | Hosted RLS proof | `PASS` | Actual `selena_app`, FORCE RLS, least-privilege ACLs, same-tenant positives, cross-tenant/private-column negatives; proof ended in `ROLLBACK`. |
 | Replay/concurrency/idempotency | `PASS` | Two concurrent writes produced one winner; replay was stable; cross-tenant read returned no row; active mutation was blocked; expired fixture cleaned up. |
@@ -74,11 +75,12 @@ Node 24.
 | Zero-call receipt | `PASS` | Since exact web deployment: canary rows `0`, cost-event rows `0`, managed recurring schedules `0`. |
 | Fixture cleanup | `PASS` | Temporary API organizations `0`; temporary idempotency rows `0`. |
 
-An administration-only credential mismatch remains: TCP auth using the
-Postgres service's own `POSTGRES_USER` binding failed after rotation, while the
-local Unix socket, active `selena_app` TCP runtime, pg-boss startup and all
-application DB proofs passed. No value was read or printed. This is
-`HOLD_ADMIN_BINDING`, not evidence of an application-runtime outage.
+The earlier administration-only credential mismatch is closed. After the
+owner-confirmed Postgres rotation, a repeated values-suppressed TCP probe using
+the service's sealed administration binding returned `ADMIN_TCP=PASS`. The
+same SSH process did not authenticate through the local Unix socket because
+that path applies local OS-user authentication and is not the Railway
+application/admin TCP path. No credential value was read or printed.
 
 ## API and browser evidence
 
@@ -88,8 +90,11 @@ application DB proofs passed. No value was read or printed. This is
 - Headless Chrome: home returned 200 with title `Selena Systems — AI
   Visibility`; unauthenticated HoReCa redirected to `/auth/login` with
   `returnTo=/app/selena-horeca`; console errors `0`, page errors `0`.
-- Authenticated human UI remains `UNKNOWN/HOLD_ACCESS` because no owner session
-  was available. API-key proof is not relabelled as a browser session.
+- The current Codex in-app browser and the connected Chrome profile were both
+  checked after hosted acceptance. Each redirected the HoReCa route to the
+  normal login page, so neither contains an authenticated owner session.
+- Authenticated human UI remains `UNKNOWN/HOLD_ACCESS`; API-key proof is not
+  relabelled as a browser session.
 
 ## Product and dataset acceptance
 
@@ -111,8 +116,8 @@ measured traffic evidence.
 Owner-confirmed names-only rotation receipt: `BRIGHTDATA`, `OPENAI`,
 `OPENROUTER`, `RESEND`, `GITHUB`, staging Postgres. Values were never read or
 published. Active application runtime connectivity is proved through
-`selena_app`; the administration-only Postgres binding requires reconciliation
-through Railway's official rotation surface.
+`selena_app`; the sealed Postgres administration TCP binding also passed a
+values-suppressed count-only probe after rotation.
 
 - Provider calls in this hosted loop: `0`
 - Cost-event rows since exact deployment: `0`
@@ -125,9 +130,18 @@ through Railway's official rotation surface.
 
 1. Establish an authenticated owner browser session and rerun HoReCa/Local
    read-model UI acceptance without sharing credentials in chat.
-2. Reconcile the Postgres service administration binding through Railway's
-   official rotate/reissue surface, then repeat the count-only TCP check.
-3. If a paid canary is desired, explicitly authorize both migration `0052` and
+2. If a paid canary is desired, explicitly authorize both migration `0052` and
    one Bright Data call with a new cost cap. Until then the canary is forbidden.
-4. Keep PR #96 unmerged and production untouched while any gate above remains
+3. Keep PR #96 unmerged and production untouched while any gate above remains
    open.
+
+## Documentation-head CI
+
+The first hosted-evidence reconciliation head `6efa98d4` passed all six PR
+checks: [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506128),
+[E2E and scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506080),
+[license](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506074),
+[smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506135)
+and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33481506112).
+This later credential/browser receipt is documentation-only and does not
+change the accepted runtime source.

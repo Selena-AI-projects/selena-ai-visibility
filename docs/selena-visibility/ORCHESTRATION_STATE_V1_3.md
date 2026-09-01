@@ -80,23 +80,19 @@ five replays, `73/73` tests per replay.
 
 Owner-confirmed names-only rotation: `BRIGHTDATA`, `OPENAI`, `OPENROUTER`,
 `RESEND`, `GITHUB`, staging Postgres. Active application DB connectivity is
-proved with the rotated `selena_app` binding. The Postgres service's own
-administration TCP binding does not currently authenticate with its sealed
-`POSTGRES_USER` connection metadata. Socket access and the database are
-healthy. No value was read.
+proved with the rotated `selena_app` binding. A values-suppressed count-only
+probe after the owner-confirmed rotation returned `ADMIN_TCP=PASS` for the
+Postgres service's sealed administration binding. No value was read.
 
-Status: `HOLD_ADMIN_BINDING`. Resolve only through Railway's official
-rotate/reissue surface; do not copy a password into chat or a command line.
+Status: `PASS_ADMIN_BINDING`.
 
 ## Remaining gates
 
 1. `HOLD_ACCESS`: authenticated owner browser session for HoReCa/Local UI.
-2. `HOLD_ADMIN_BINDING`: official reconciliation of the Postgres service
-   administration credential, followed by a count-only TCP proof.
-3. `HOLD_OWNER`: paid canary. Actual price is `UNKNOWN`; incurred price is
+2. `HOLD_OWNER`: paid canary. Actual price is `UNKNOWN`; incurred price is
    `USD 0.00`. A future run requires explicit authorization for migration
    `0052` and for one paid call.
-4. `NO_GO`: production and PR merge while any gate above is open.
+3. `NO_GO`: production and PR merge while any gate above is open.
 
 ## Rollback posture
 

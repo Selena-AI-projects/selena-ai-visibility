@@ -9,11 +9,10 @@ Staging core acceptance is complete for exact-head CI, backup/restore,
 migrations through `0051`, non-owner runtime, RLS, API, public browser,
 replay/concurrency/idempotency, web and worker lifecycle.
 
-Overall release state remains `NO_GO` because three owner gates remain:
+Overall release state remains `NO_GO` because two owner gates remain:
 
-1. Postgres administration credential reconciliation.
-2. Authenticated owner browser acceptance.
-3. Optional paid canary plus migration `0052` authorization.
+1. Authenticated owner browser acceptance.
+2. Optional paid canary plus migration `0052` authorization.
 
 Production and PR #96 merge remain prohibited at this state.
 
@@ -45,19 +44,14 @@ Owner-confirmed rotated names:
 - staging Postgres
 
 No values were read or printed. The working application runtime uses
-`selena_app` successfully. A separate administration-only mismatch remains:
-the Postgres service's sealed `POSTGRES_USER` TCP binding is not accepted by
-the database, while the local socket and application runtime are healthy.
+`selena_app` successfully. After the owner-confirmed Postgres rotation, the
+service's sealed administration binding passed a values-suppressed count-only
+TCP connection check.
 
-### OD-1 — required owner action
+### OD-1 — closed
 
-Use Railway's official rotate/reissue control for the staging Postgres service.
-The objective is one credential generation shared by the service connection
-metadata and the database administration role. Do not paste the password into
-chat and do not manually copy it between unrelated fields.
-
-After the official operation, authorize only a count-only TCP verification.
-No schema or data mutation is needed.
+Owner rotation receipt plus `ADMIN_TCP=PASS` closes the administration
+credential gate. No schema/data mutation or secret-value inspection was used.
 
 ## Runtime role and database scope
 
@@ -100,8 +94,10 @@ Without all five, the provider path stays off.
 
 ## Authenticated browser
 
-The public and unauthenticated browser gate passed. No authenticated owner
-session was available, so authenticated HoReCa/Local UI evidence is `UNKNOWN`.
+The public and unauthenticated browser gate passed. Both the Codex in-app
+browser and the connected Chrome profile redirect to the normal login page;
+no authenticated owner session is available. Authenticated HoReCa/Local UI
+evidence is therefore `UNKNOWN`.
 
 ### OD-3 — required owner action
 
@@ -135,7 +131,7 @@ tenant-scoped network responses.
 
 | ID | Decision/action | Current default |
 |---|---|---|
-| OD-1 | Reconcile staging Postgres administration credential through Railway's official rotation surface | `REQUIRED` |
+| OD-1 | Reconcile staging Postgres administration credential through Railway's official rotation surface | `CLOSED/PASS` |
 | OD-2 | Authorize migration 0052 and one paid canary under an explicit new envelope | `DENY/HOLD` |
 | OD-3 | Provide an authenticated staging browser session by signing in normally | `REQUIRED` |
 | OD-4 | Merge PR #96 after all required gates and a final green docs-head CI | `DENY/HOLD` |

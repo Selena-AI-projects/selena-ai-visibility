@@ -9,7 +9,7 @@ Updated after execution on `2026-09-01`. Runtime/source anchor:
 |---|---|---|
 | SR-00 Exact source identity | `PASS` | Exact Git archive from `2d023470`; protected handoff excluded. |
 | SR-01 Exact-head CI | `PASS` | PR #96 required checks `6/6` green. |
-| SR-02 Names-only credentials | `PASS_WITH_ADMIN_HOLD` | Owner confirmed six rotations; no values read. Application binding works; Postgres administration binding needs official reconciliation. |
+| SR-02 Names-only credentials | `PASS` | Owner confirmed six rotations; no values read. Application binding works and the repeated values-suppressed Postgres administration TCP probe returned `PASS`. |
 | SR-03 Provider/recurring/billing containment | `PASS` | Worker logs prove provider and recurring scheduler disabled; managed schedules 0; canary/cost rows 0. |
 | SR-04 Backup and isolated restore | `PASS` | Backup `9b961055…`; restored service `a34b2749…` healthy. |
 | SR-05 Migrations/runtime role/RLS | `PASS` | 0043–0051 present, 0052 absent; actual `selena_app`, GUC and RLS proof passed and rolled back. |
@@ -43,20 +43,14 @@ does not authorize reading or publishing credential values.
 
 ## Remaining gate sequence
 
-### G1 — Postgres administration binding
+### G1 — Postgres administration binding (`CLOSED`)
 
-Owner action required: use Railway's official staging Postgres rotate/reissue
-surface so the service connection metadata and database administration role
-are one credential generation. Do not paste a password into chat. Afterward:
+The owner confirmed staging Postgres rotation. The follow-up count-only TCP
+connection check through the service's sealed administration binding returned
+`ADMIN_TCP=PASS`; no credential value was read or printed.
 
-1. Run a count-only TCP connection check as the service administration user.
-2. Re-run the three schema-presence booleans: 0051 present, `selena_app`
-   present, 0052 absent.
-3. Do not change the working `selena_app` runtime URL unless Railway rotates
-   it as part of the same official operation.
-
-Failure action: leave web/worker running on the proven `selena_app` binding;
-do not overwrite either side with an unverified value.
+The working `selena_app` runtime remains unchanged and both public setup-status
+endpoints continue to return HTTP 200.
 
 ### G2 — authenticated browser acceptance
 

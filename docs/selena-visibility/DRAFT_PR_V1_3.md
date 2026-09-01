@@ -51,8 +51,6 @@ Accepted runtime/source HEAD:
 ### Remaining gates
 
 - authenticated owner browser session for HoReCa/Local UI;
-- reconcile the staging Postgres administration credential through Railway's
-  official rotation surface;
 - any paid canary requires a new explicit authorization for migration 0052 and
   one provider call; current price is UNKNOWN and incurred cost is USD 0.00;
 - production, production DB, recurring jobs, billing, Social/Travel activation
@@ -67,3 +65,9 @@ owner restored the Actions budget and authorized bounded feature-branch
 pushes. The documentation reconciliation commit will therefore receive one
 final exact docs-head CI cycle. Merge is a separate gate and must not happen
 while any owner gate remains open.
+
+The first hosted-evidence documentation head `6efa98d4` passed all six checks.
+The later credential/browser receipt is documentation-only: it closes the
+Postgres administration binding gate and records that both available browser
+profiles require interactive sign-in. It does not change the accepted runtime
+source.
