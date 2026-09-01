@@ -98,3 +98,13 @@ Codex воспроизвёл и подтвердил всё локально:
 1. Владелец решает запуск замера: Redeploy сервиса `measure` (b61d97b0…), ожидаемая трата ~$0.30.
 2. Смена пароля БД (засвечен в чате 31.08; учесть, что после restore сервис Postgres новый) и перевод `DATABASE_URL` сервиса `migrate` с литерала на `${{Postgres.DATABASE_URL}}`.
 3. Решить судьбу 0052: поднять `SELENA_MIGRATION_MAX_INDEX` до 52, когда её захотят применить, и **запушить bounded-раннер в ветку** — сейчас код в проде расходится с git.
+
+## Запуск замера (1 сентября, после полудня)
+
+Владелец дала команду запустить платный замер. Хронология предохранителей, в порядке срабатывания:
+
+1. `SELENA_EMERGENCY_STOP=true` стоял на сервисе `measure` — оба ранних запуска (02:55 и 07:18 UTC) падали в первую секунду с `PROVIDER_CALLS_STOPPED` (guard `assertGlobalProviderStop`, `packages/lib/src/run-policy/spend-gate.ts`), не потратив ни цента. Владелец сняла флаг рукой (`false`) — агентам запись переменных в Railway запрещена классификатором прав, и это правильно для аварийного рычага.
+2. Следующий запуск (08:02 UTC, деплой 27b3e739) дошёл до второго предохранителя: `SELENA_MEASUREMENT_ENABLED must be true`. Скрипт `apps/worker/src/scripts/measure-journal.ts` требует, в порядке проверки: `DATABASE_URL`, `BRIGHTDATA_API_TOKEN`, `SELENA_JOURNAL_TENANT`, `SELENA_JOURNAL_MAX_COST_USD` (положительное число), `SELENA_MEASUREMENT_ENABLED=true`, валидный `SELENA_MEASUREMENT_ADAPTER`. Все переменные на сервисе есть; осталось перевести `SELENA_MEASUREMENT_ENABLED` в `true`.
+3. Дневной guard повторной траты живёт в самом скрипте (`alreadyMeasuredToday`, обходится только явным `SELENA_JOURNAL_FORCE=1`) — рестарт платформы не может повторить трату.
+
+Замечание для OpenCode: redeploy сервиса через Railway-агент повторно использует последний образ (meta.reason=redeploy, старый commitHash) — свежий коммит он не собирает, несмотря на формулировку «deploy from commit». Для measure это сейчас не важно (изменения #102 касаются только migrate), но при следующем изменении кода measure нужен настоящий push-деплой или сборка из головы ветки.
