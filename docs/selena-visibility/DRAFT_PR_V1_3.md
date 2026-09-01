@@ -15,10 +15,10 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 - Active staging worker after rollback: `100d34d8`, deployment `73ee9186…`
 - Active staging web after drift recovery: `100d34d8`, deployment `a3b0cadd…`
 - Integrated release parent: `5cbb7b25`
-- Current offline reconciliation source patch: `b01a310b` (local commit, not
-  yet pushed); exact
-  provider capture/journal timestamps, strict replay checks and idempotent
-  dry-run rollback are covered by focused tests; push/CI pending.
+- Current offline reconciliation source patch: `b01a310b` in follow-up [PR
+  #106](https://github.com/parkourcafe/selena-ai-visibility/pull/106); exact
+provider capture/journal timestamps, strict replay checks and idempotent
+  dry-run rollback are covered by focused tests; timeout patch push/CI pending.
 
 ## Proposed title
 
@@ -134,8 +134,9 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
   plus CLI migration image tests `2/2` locally;
 - GitHub reported PR #96 mergeable at `4a1fd948`; this source-quality
   result does not override the provider HOLD;
-- the current source-only reconciliation patch is not yet included in that
-  receipt; its exact-head CI must run after the authorized push;
+- PR #106 functional E2E steps passed, but its 30-minute workflow ceiling
+  canceled the job during post-action cleanup; the source-only timeout patch
+  will provide the next exact-head CI receipt;
 - the E2E scheduling job now replays the final bounded runner through `0053`
   against disposable real PostgreSQL after the journal is already complete;
   the current-head E2E check is the authoritative no-op/advisory-lock receipt;

@@ -23,8 +23,8 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
   (`free the measurement's idle slots and widen its pace one step`)
 - Latest release integration merge: `84cce314`
   (parents `eaffa6de` and `4400d435`)
-- Current source-only reconciliation patch: `b01a310b` (local commit, not yet
-  pushed);
+- Current source-only reconciliation patch: `b01a310b`, carried by follow-up
+  PR [#106](https://github.com/parkourcafe/selena-ai-visibility/pull/106);
   it separates provider `capturedAt` from journal `historicalReadyObservedAt`,
   validates canonical stored evidence/capability/audit rows on replay and
   rolls back idempotent dry-runs.
@@ -44,7 +44,7 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS_LAST_VERIFIED / NEW_HEAD_PENDING` | Head `4a1fd948` passed Build, E2E, scheduling, smoke, license and CLA and GitHub reported `mergeable=true`. The current source-only reconciliation patch is locally green but has not yet been pushed for its exact-head CI cycle. |
+| Exact-head CI | `PASS_LAST_VERIFIED / E2E_TIMEOUT_PATCH_PENDING` | Head `4a1fd948` passed Build, E2E, scheduling, smoke, license and CLA. PR #106 reached all functional E2E steps successfully but was canceled during post-action cleanup at the 30-minute workflow ceiling; the bounded timeout patch is now queued for a fresh exact-head CI cycle. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -92,7 +92,8 @@ separate manifest field, verifies the canonical stored payload and registry
 capability on idempotent replay, and returns `DRY_RUN_ROLLED_BACK` even when
 the target is already reconciled. Staging persistence remains an explicit
 owner gate. Current local focused gates are lib `16/16`, worker `23/23`, both
-package check-types, targeted Biome and `git diff --check`.
+package check-types, targeted Biome and `git diff --check`. The E2E workflow
+timeout is now bounded at 35 minutes to include cleanup after successful tests.
 
 ## Staging infrastructure evidence
 

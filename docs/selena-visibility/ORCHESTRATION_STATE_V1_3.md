@@ -22,15 +22,16 @@ snapshot remediation and release-head integration evidence.
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
 - Latest release integration merge: `84cce314`
-- Current source-only reconciliation patch: `b01a310b` (local commit, not yet
-  pushed);
+- Current source-only reconciliation patch: `b01a310b`, carried by follow-up
+  PR [#106](https://github.com/parkourcafe/selena-ai-visibility/pull/106);
   provider capture and journal READY timestamps are separate and idempotent
   replay/dry-run invariants are hardened.
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Historical draft PR reference: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Canary-time feature-head required checks: `ALL PASS`
 - Release-integrated exact-head checks: `ALL PASS`; PR `CLEAN/MERGEABLE` at
-  `4a1fd948`; new source-only candidate CI is pending push
+  `4a1fd948`; PR #106 functional E2E steps passed but the 30-minute cleanup
+  ceiling canceled the check; timeout patch CI is pending
 - Production deploy/DB mutations: `0`
 - Provider triggers: `2`, one for each separately authorized immutable
   identity; retries `0`, recurring `false`
@@ -99,7 +100,7 @@ passed lib typecheck, `1086/1086` lib tests, the same root lint baseline and
 root build `16/16` locally. Snapshot-cap source `4a1fd948` passed its focused
 provider suite `19/19` and targeted Biome check. Current reconciliation focused
 gates are lib `16/16`, worker `23/23`, both check-types, targeted Biome and diff
-check; final mutable-head CI is pending push.
+check; E2E timeout patch CI is pending.
 
 ## Staging receipts
 

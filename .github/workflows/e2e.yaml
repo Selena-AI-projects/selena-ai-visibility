@@ -32,7 +32,10 @@ jobs:
   e2e:
     name: E2E Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Docker image builds plus the two fixture/worker phases can exceed the
+    # default 30-minute ceiling even when every test step passes. Keep enough
+    # bounded time for artifact and action cleanup to complete successfully.
+    timeout-minutes: 35
 
     env:
       # One file set for every `docker compose` invocation below, so no step
