@@ -56,6 +56,9 @@ provider capture/journal timestamps, strict replay checks and idempotent
   and the acceptance transaction rolled back to zero rows.
 - post-`0053` values-suppressed readback proved the non-owner runtime role,
   FORCE RLS, ordinal column, validated check, unique index and insert guard.
+- sealed staging migration bound is `53`; follow-up no-op deployment
+  `b7b7fa33-6da8-49a0-835f-d76b74e9fafb` read journal `54/1787940015000` before
+  and after, verified TLS and exited `0` without applying a new migration.
 
 ### Provider canary evidence
 

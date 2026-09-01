@@ -115,6 +115,7 @@ check; exact-head CI is green on PR #108.
 | Active rollback worker | `9275a824-281d-4afa-8098-1ed7184ffc68`, archive `100d34d8`, `SUCCESS`; temporary diagnostic deployment is `REMOVED` |
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
 | Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
+| Migration no-op replay | `b7b7fa33-6da8-49a0-835f-d76b74e9fafb`, sealed max index `53`, journal `54/1787940015000` → `54/1787940015000`, TLS verified, exit `0` |
 | Post-`0053` proof | `selena_app` non-owner/no bypass; FORCE RLS, ordinal column, validated check, unique index and insert guard all present |
 | Provider canaries | Historical: exact snapshot `sd_mtiflifw2lfu6ne28l`, provider `READY`, one validated payload record; diagnostic-2: `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN`; one trigger each, zero retries, recurring false |
 | Diagnostic-2 reservation | `db:e432156c-7f5d-40ef-ad40-72a883affac9`; cap `USD 0.25`; internal cost status `UNKNOWN/REQUIRED`; immutable |
