@@ -95,13 +95,11 @@ WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-# The runner is a script over drizzle-orm's migrator, not the drizzle-kit
-# CLI: five staging runs proved the CLI exits with code 1 and no output when
-# a migration fails in a non-interactive container. The script prints every
-# failure in full and reads the applied count back from the journal table.
-# The trailing echo and sleep survive from that hunt — the container must
-# outlive its last log lines or the platform drops them.
-CMD ["/bin/sh", "-c", "node scripts/apply-migrations.mjs 2>&1; code=$?; echo \"migration runner exited with code $code\"; sleep 15; exit $code"]
+# The Node runner requires an explicit maximum migration index and builds an
+# exact Drizzle journal/SQL bundle before invoking the programmatic drizzle-orm
+# migrator. It performs no package-manager or migration-CLI downloads. The
+# bounded runner also keeps the final status visible for Railway log capture.
+CMD ["node", "./scripts/run-bounded-migrations.mjs"]
 
 # Worker stage
 FROM base AS worker
