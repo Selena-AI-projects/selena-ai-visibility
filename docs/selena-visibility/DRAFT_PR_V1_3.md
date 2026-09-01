@@ -49,8 +49,13 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
   `recurring=false`;
 - journal: `TRIGGERED=1`, `PENDING=2`, `READY=1`, `INTERRUPTED=1`;
 - no provider capture was persisted;
-- one-record verified worst-case/list price is `USD 0.0015`; actual billed
-  amount remains `UNKNOWN` and must not be inferred from the estimate;
+- Bright Data Cost explorer attributes exactly one record to `Google AI Mode
+  Search` and displays its cost as `USD 0.00`; the account overview also shows
+  `Consumed USD 0.00`;
+- the unrounded one-record list-price calculation remains `USD 0.0015` and is
+  not represented as a cash charge;
+- the daily `USD 0.02` Web Scraper API total covers 11 records across three
+  APIs; ten non-Google-AI-Mode records are excluded from canary attribution;
 - the once-only reservation prevents a second trigger, and no retry is
   authorized.
 
@@ -83,8 +88,8 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 ### Remaining gates
 
-1. Bright Data terminal lifecycle and actual billing remain
-   `UNKNOWN/HOLD`; no second call or retry is authorized.
+1. Bright Data terminal lifecycle remains `UNKNOWN/HOLD`; billing attribution
+   is closed and no second call or retry is authorized.
 2. Applying staging migration `0053` requires separate owner authorization.
 3. Production, production DB, recurring jobs, billing activation,
    Social/Travel activation and PR merge remain prohibited.
@@ -95,5 +100,5 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 Every push to PR #96 starts the documented GitHub/Blacksmith checks. The owner
 restored the Actions budget and authorized bounded feature-branch pushes. A
-green check suite proves source quality only; it does not close provider-cost,
-hosted-runtime or production gates.
+green check suite proves source quality only; it does not close the provider
+lifecycle or production gates.

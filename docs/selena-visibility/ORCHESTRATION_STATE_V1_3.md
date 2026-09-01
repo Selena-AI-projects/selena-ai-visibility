@@ -42,7 +42,7 @@ and excluded from every commit and archive.
 
 | Stream | Result | Current boundary |
 |---|---|---|
-| Provider | `HOLD_OUTCOME_UNKNOWN` | Exactly one authorized trigger ran. Terminal receipt: `OUTCOME_UNKNOWN` / `LIFECYCLE_OUTCOME_UNKNOWN`; no retry was allowed or performed. The one-record verified worst-case/list price was `USD 0.0015`, while actual billed amount remains `UNKNOWN`. |
+| Provider | `PASS_COST / HOLD_OUTCOME_UNKNOWN` | Exactly one authorized trigger ran. Terminal receipt: `OUTCOME_UNKNOWN` / `LIFECYCLE_OUTCOME_UNKNOWN`; no retry was allowed or performed. Cost explorer attributes one Google AI Mode Search record and displays `USD 0.00`; the account overview displays `Consumed USD 0.00`. |
 | Database/Evidence | `PASS_HOSTED_CORE_CANARY_HOLD` | The durable reservation count is one. Journal lifecycle is `TRIGGERED -> PENDING -> READY -> INTERRUPTED`; no raw capture was persisted and no acceptance evidence was created. |
 | HoReCa Product | `PASS_HOSTED` | Exact active deployment `10b51bd2…` passed authenticated DOM and visual review with projects at left and the six tools across the top. |
 | Orchestrator | `STAGING_CORE_PASS` | Release `5cbb7b25` is integrated into `100d34d8`; exact-source CI and exact staging web reconciliation passed. |
@@ -82,7 +82,7 @@ five replays, `73/73` tests per replay.
 | Pending source migration | `0053`, not authorized and not applied; actual staging `0045` row matches the one reviewed historical hash alias, proved by boolean-only readback |
 | Provider canary | One trigger; receipt `OUTCOME_UNKNOWN` / `LIFECYCLE_OUTCOME_UNKNOWN`; no retry allowed or performed |
 | Canary reservation | One durable reservation; approved cap `USD 0.25` |
-| Canary cost | Verified one-record worst-case/list price `USD 0.0015`; actual billed amount `UNKNOWN` because the Bright Data billing UI requires login |
+| Canary cost | Bright Data Cost explorer: Google AI Mode Search `1 record`, displayed cost `USD 0.00`; account cash consumed `USD 0.00`. Unrounded one-record list-price calculation `USD 0.0015` remains an estimate, not a charge. |
 | Snapshot journal | `TRIGGERED -> PENDING -> READY -> INTERRUPTED`; no capture persistence |
 | Runtime logs | Steady provider path disabled after the canary; recurring scheduler disabled; pg-boss started; handlers ready |
 | Browser | Both health endpoints 200; HoReCa unauth redirect correct; authenticated project-rail/tool-axis DOM and visual review passed; page-origin errors 0 |
@@ -103,10 +103,9 @@ Status: `PASS_ADMIN_BINDING`.
 ## Remaining gates
 
 1. `HOLD_RECONCILIATION`: the one-shot canary ended
-   `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`. No retry is allowed. Actual
-   billed amount remains `UNKNOWN` until an authorized owner checks the Bright
-   Data billing UI; the verified one-record worst-case/list price is not an
-   actual charge.
+   `OUTCOME_UNKNOWN/LIFECYCLE_OUTCOME_UNKNOWN`. No retry is allowed. Billing
+   attribution is closed: one Google AI Mode Search record, displayed cost and
+   account cash consumption both `USD 0.00`.
 2. `HOLD_MIGRATION_0053`: source is ready, but staging application was not
    authorized and was not attempted.
 3. `NO_GO`: production and PR merge while any hold remains open.

@@ -31,8 +31,8 @@ staging web candidate and passed the hosted recheck.
 | Staging web/worker | `PASS_EXACT_WEB / PASS_CONTAINED_WORKER` | Exact archive `100d34d8` is active on staging web; the previously accepted contained worker remains unchanged. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
-| Google/Bright Data canary | `OUTCOME_UNKNOWN / HOLD` | Exactly one `GOOGLE_AI_MODE` trigger was made with `providerCalls=1`, `retries=0`, `recurring=false`. No provider capture was persisted and actual cost remains `UNKNOWN`. |
-| Production/merge | `NO_GO` | The canary lifecycle and actual-cost receipts are unresolved; production is prohibited and PR #96 remains unmerged. |
+| Google/Bright Data canary | `COST_PASS / OUTCOME_UNKNOWN / HOLD` | Exactly one `GOOGLE_AI_MODE` trigger was made with `providerCalls=1`, `retries=0`, `recurring=false`. Bright Data Cost explorer attributes one `Google AI Mode Search` record and displays its cost as `USD 0.00`; no provider capture was persisted and the terminal lifecycle remains unknown. |
+| Production/merge | `NO_GO` | The canary lifecycle remains unresolved; production is prohibited and PR #96 remains unmerged. |
 
 Overall decision: `STAGING_CANARY_HOLD / PRE_PRODUCTION_NO_GO`.
 
@@ -143,16 +143,20 @@ values-suppressed count-only probe after rotation.
 - Provider calls in this hosted loop: exactly `1`
 - Retries: `0`
 - Recurring: `false`
-- Estimated maximum for that trigger: `USD 0.0015` — estimate only
-- Actual first Maps/Bright Data canary price: `UNKNOWN/HOLD`
+- Bright Data usage attribution: `Google AI Mode Search`, exactly `1 record`
+- Billing-surface cost for that record: `USD 0.00`
+- Account cash consumed on the billing overview: `USD 0.00`
+- Unrounded one-record list-price calculation: `USD 0.0015` — estimate only;
+  the billing surface rounds the attributed record to `USD 0.00`
 - Persisted provider capture: none
-- No estimate is represented as an actual charge.
+- The daily Web Scraper API total was `USD 0.02` for 11 records across three
+  APIs. Ten of those records belonged to ChatGPT Search and Gemini Search, so
+  the daily total is not attributed to the one authorized Google AI Mode call.
 
 ## Remaining owner gates
 
-1. Reconcile the single trigger's terminal provider lifecycle and actual billed
-   cost through authoritative provider evidence. No retry or second call is
-   authorized.
+1. Reconcile the single trigger's terminal provider lifecycle. Billing and
+   usage attribution are closed; no retry or second call is authorized.
 2. Migration `0053` is source-only and pending. It was not authorized or
    applied; the staging journal remains at `0052`.
 3. Keep PR #96 unmerged and production untouched while either HOLD remains
@@ -173,4 +177,4 @@ Accepted implementation source `100d34d8` passed every required check:
 
 The final evidence-only commit may advance the PR HEAD beyond `100d34d8` without
 changing the deployed implementation tree. Green CI and the exact hosted web
-receipt do not resolve the provider lifecycle, actual cost or unapplied `0053`.
+receipt does not resolve the provider lifecycle or unapplied `0053`.
