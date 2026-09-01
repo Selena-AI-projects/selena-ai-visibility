@@ -1,73 +1,69 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN_DRAFT_EXACT_HEAD_CI_GREEN`.
+Status: `OPEN_STAGING_CORE_ACCEPTED_OWNER_GATES_REMAIN`.
 
-PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/96`
+PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 
-Base: `release/selena-visibility-mvp` (repository default branch).
+Base: `release/selena-visibility-mvp`.
+
+Accepted runtime/source HEAD:
+`2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
 
 ## Proposed title
 
 `fix(visibility): harden v1.3 pre-production gates`
 
-## Proposed body
+## Proposed PR body
 
 ### Summary
 
-- integrate current release `32945b27` without rewriting feature history;
-- package the migration runner without a runtime Corepack/pnpm download;
-- preserve global provider-stop and Social/Travel fail-closed controls;
-- persist an exact successful Google AI Mode schema-discovery capture privately
-  as `CANARY_ONLY`, without fabricating accepted measurement or cost evidence;
-- bind HoReCa Local-first UI to session, tenant and project scoped safe
-  projections, with a project selector and normalized evidence detail;
-- keep HoReCa runtime source-only until an authoritative acceptance decision and
-  timestamp can be joined; retain UNKNOWN and no composite score;
-- preserve the AVLI/KORA source-only pilot package and protected recovery
-  handoff boundary.
+- integrate release `9e1e9930` without rewriting feature history;
+- provide the registry and 13 canary-ready dataset contracts;
+- harden Google adapters and make generic live provider probes unreachable;
+- keep Social/Travel hidden at server, workflow and UI boundaries;
+- run web/worker with non-owner `selena_app` and owner-managed pg-boss schema;
+- fail closed on recurring, provider, billing and free-dispatch paths;
+- deliver HoReCa Local-first safe read models/UI plus AVLI/KORA pilot templates;
+- preserve the protected untracked recovery handoff boundary.
 
-### Evidence
+### Exact-head evidence
 
-- exact head `fb8363c3`: Build, E2E integration, scheduling policy, deployment
-  smoke, license and CLA all passed;
-- current local Provider delta under Node 24: 20/20 focused lib tests, 2/2
-  worker-output tests, lib/worker typechecks and scoped Biome passed;
-- current local HoReCa delta under Node 24: 16/16 focused tests, web typecheck,
-  scoped Biome and web production build passed;
-- independent Provider and HoReCa repeat reviews: no remaining P0/P1 in the
-  reviewed source slices;
-- exact-head run links are recorded in `ACCEPTANCE_MATRIX_V1_3.md` and PR #96.
+- PR checks: Build, E2E, scheduling, deployment smoke, license and CLA all
+  passed on `2d023470`;
+- local root gates: lint 0 errors, typecheck 13/13, tests 16/16 tasks,
+  Impeccable detect PASS, build 16/16;
+- Bright Data timeout stability 20/20;
+- Local Maps focused stability five replays, 73 tests per replay;
+- independent cross-stream Codex reviews found no remaining P0/P1 in the
+  material source changes.
 
-### Runtime and authorization boundaries
+### Hosted staging evidence
 
-- no Google AI Mode canary has been executed; provider calls in this loop: `0`;
-- no current-source deploy, migration, fixture write, database role switch or
-  billing change occurred;
-- staging web still has a production-like domain binding, affected staging
-  credentials require rotation, current migration journal is `UNKNOWN`, and
-  hosted non-owner RLS is unproven;
-- the auto-deployed staging worker was re-contained and remains stopped;
-- exactly one Bright Data `GOOGLE_AI_MODE` call may occur only after SR-00
-  through SR-09 pass, with USD 0.25 maximum, under 25 minutes, zero retries and
-  `recurring=false`;
-- production, production DB, recurring jobs, additional provider calls,
-  Social/Travel activation and higher cost are not authorized;
-- `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
+- fresh backup `9b961055…` and isolated restored service `a34b2749…` passed;
+- migrations 0043–0051 are present and 0052 remains excluded;
+- actual `selena_app`, `SET LOCAL app.organization_id`, FORCE RLS,
+  cross-tenant/private negatives and rollback passed;
+- replay/concurrency/idempotency passed and cleaned up;
+- exact web `7e7de294…` and worker `586b6e9a…` are running;
+- public health, scoped API and unauthenticated browser gates passed;
+- provider calls 0, cost-event rows 0, managed recurring schedules 0.
 
 ### Remaining gates
 
-- push the reviewed source and obtain a fully green exact-head PR cycle;
-- record immutable build/image and sealed-configuration references;
-- resolve production-like domain ownership and rotate affected credentials;
-- refresh backup/PITR and migration journal evidence before any staging SQL;
-- prove migrations through 0051 and `selena_app` RLS in hosted staging;
-- run zero-call browser/API fixtures before considering the single canary.
+- authenticated owner browser session for HoReCa/Local UI;
+- reconcile the staging Postgres administration credential through Railway's
+  official rotation surface;
+- any paid canary requires a new explicit authorization for migration 0052 and
+  one provider call; current price is UNKNOWN and incurred cost is USD 0.00;
+- production, production DB, recurring jobs, billing, Social/Travel activation
+  and PR merge remain prohibited.
+
+`HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
 
 ## CI side effects
 
-The owner restored the Actions budget and authorized bounded feature-branch
-pushes. A push to PR #96 triggers Build, E2E integration, scheduling policy,
-deployment smoke, license and CLA checks on Blacksmith/GitHub runners. This is
-authorized for the current loop. PR merge and any deployment remain separate
-gates; merge must not occur until current-head CI is fully green and no P0/P1
-remains.
+Each push to PR #96 starts the six documented GitHub/Blacksmith checks. The
+owner restored the Actions budget and authorized bounded feature-branch
+pushes. The documentation reconciliation commit will therefore receive one
+final exact docs-head CI cycle. Merge is a separate gate and must not happen
+while any owner gate remains open.

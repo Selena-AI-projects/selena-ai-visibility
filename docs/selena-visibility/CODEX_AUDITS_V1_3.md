@@ -1,6 +1,31 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_ONLY_WITH_RUNTIME_GATES`.
+Status: `PASS_SOURCE_AND_HOSTED_CORE_WITH_OWNER_GATES`.
+
+## Final exact-head closure — 2026-09-01
+
+Accepted runtime/source HEAD:
+`2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
+
+The three independent streams and their cross-audits found no open P0/P1 in
+the material changes through `8cc0b87b`. The only later source changes were:
+
+- `d4ac606a`: opt the intentionally recurring, stub-only disposable CI worker
+  into the exact recurring gate;
+- `2d023470`: replace a real 5 ms timer in one Bright Data timeout test with
+  deterministic fake time.
+
+Runtime controls, provider timeout, retry cardinality and cost policy were not
+changed by either commit. Exact-head Build, unit, E2E, scheduling, license,
+smoke and CLA checks all passed. Hosted staging then passed backup/restore,
+0051/non-owner RLS, GUC, rollback, API tenant isolation, replay/concurrency/
+idempotency, public browser, web and worker lifecycle gates. Provider calls
+and new cost events remained zero.
+
+Open items are owner/access gates, not unresolved P0/P1 source findings:
+authenticated human browser acceptance, Postgres administration credential
+reconciliation through Railway's official rotation surface, and any future
+paid canary plus migration `0052` authorization.
 
 Three non-overlapping implementation agents performed cross-stream read-only
 reviews after integration. They did not edit files during audit turns and did
@@ -26,8 +51,9 @@ Remediations driven by the review:
 
 ## Database/Evidence review
 
-Final result: `PASS` at source level, no residual P0/P1/P2 in the reviewed
-scope. Runtime result remains `UNKNOWN`.
+Milestone result: `PASS` at source level, no residual P0/P1/P2 in the reviewed
+scope. Runtime was `UNKNOWN` at that audit milestone; the exact-head hosted
+closure above now supplies the runtime evidence.
 
 Remediations driven by the review:
 
@@ -42,9 +68,10 @@ Remediations driven by the review:
   in both migration-before-role and role-before-migration orderings;
 - source snapshots and evidence rows remain append-only.
 
-No migration apply/replay/rollback, role inspection, trigger execution or
-cross-tenant database proof was authorized. Those gates are `UNKNOWN`, not
-promoted from static inspection.
+At that audit milestone no migration apply/replay/rollback, role inspection,
+trigger execution or cross-tenant database proof was authorized. Those claims
+were not promoted from static inspection; they were later proved separately in
+hosted staging as recorded in the closure above.
 
 ## HoReCa Product review
 
@@ -106,9 +133,7 @@ remaining P0/P1 in this slice.
 - `@workspace/web` production build passed. Its existing Node-externalization
   and Sentry telemetry notices remain warnings, not acceptance proof for a
   hosted environment.
-- A historical Impeccable deterministic pass returned an empty finding list
-  before the latest HoReCa integration. The binary is unavailable in the
-  current environment, so no fresh detector PASS is claimed.
+- Exact-head local Impeccable detect passed before the final CI push.
 - The previously registered root build/lint baselines were fixed before green
   anchor `b86540c9`; exact-anchor CI passed the full build/test/clean-tree graph.
 - Post-CI Provider verification under Node 24 passed 20/20 focused lib tests,
@@ -119,11 +144,9 @@ remaining P0/P1 in this slice.
 
 ## Remaining owner gates
 
-- exact PR #96 head `fb8363c3` is fully green; no CI gate remains for this
-  source/evidence snapshot;
-- authoritative HoReCa acceptance provenance and hosted non-owner RLS proof;
-- staging domain isolation, credential rotation and sealed configuration;
-- provider/account hard-cap evidence and the single authorized Google AI Mode
-  call; no other provider call is authorized;
-- production, production DB, billing changes, Social/Travel activation and
-  recurring jobs remain prohibited.
+- authenticated owner browser acceptance for the HoReCa/Local UI;
+- official reconciliation of the staging Postgres administration credential;
+- separate authorization for migration `0052` and any paid Google AI Mode
+  canary; the latest decision currently prohibits the call;
+- production, production DB, billing changes, Social/Travel activation,
+  recurring jobs and PR merge remain prohibited.
