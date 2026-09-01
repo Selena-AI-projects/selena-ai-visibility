@@ -12,10 +12,11 @@
  * it replaced.
  *
  * Usage:
+ *   SELENA_JOURNAL_PUBLISH_ENABLED=true \
  *   DATABASE_URL=postgres://... GITHUB_TOKEN=... \
  *   SELENA_JOURNAL_TENANT=<organization id> \
  *   SELENA_JOURNAL_PROJECTS=korafoodhall \
- *   pnpm -C apps/worker exec tsx src/scripts/publish-journal-detail.ts
+ *   pnpm -C apps/worker exec tsx src/scripts/publish-journal.ts
  */
 
 import { db } from "@workspace/lib/db/db";
@@ -34,6 +35,15 @@ function required(name: string): string {
 	}
 	return value;
 }
+
+function assertJournalPublishEnabled(): void {
+	if (process.env.SELENA_JOURNAL_PUBLISH_ENABLED !== "true") throw new Error("JOURNAL_PUBLISH_DISABLED");
+}
+
+// The wrapper keeps disabled deployments from importing database code; this
+// second check makes the mutation boundary safe even if this file is invoked
+// directly or a platform overrides the image command.
+assertJournalPublishEnabled();
 
 const tenantId = required("SELENA_JOURNAL_TENANT");
 const token = required("GITHUB_TOKEN");
@@ -145,7 +155,6 @@ async function detailFor(slug: string): Promise<Detail | null> {
 		.select({ id: schema.svScenarios.id, text: schema.svScenarios.text })
 		.from(schema.svScenarios)
 		.where(inArray(schema.svScenarios.id, scenarioIds));
-	const textById = new Map(scenarioRows.map((row) => [row.id, row.text]));
 
 	// Column order is the question set's order of systems, visitor first: what
 	// a person is shown belongs before what a model remembers.
@@ -231,6 +240,7 @@ async function github(path: string, init?: RequestInit): Promise<Response> {
 }
 
 async function publish(files: { path: string; content: string }[], branch: string): Promise<string> {
+	assertJournalPublishEnabled();
 	const baseRef = await github(`/repos/${SITE_REPO}/git/ref/heads/${SITE_BASE}`);
 	if (!baseRef.ok) throw new Error(`GITHUB_BASE_REF_FAILED: ${baseRef.status} ${await baseRef.text()}`);
 	const { object } = (await baseRef.json()) as { object: { sha: string } };

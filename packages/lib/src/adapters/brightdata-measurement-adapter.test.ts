@@ -222,6 +222,8 @@ describe("Bright Data measurement adapter", () => {
 	});
 
 	it("bounds a stalled snapshot status request", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
 		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
 			if (String(input).includes("/trigger")) return Promise.resolve(jsonResponse({ snapshot_id: "s_stalled" }));
 			if (String(input).endsWith("/cancel")) return Promise.resolve(new Response(null, { status: 204 }));
@@ -235,20 +237,26 @@ describe("Bright Data measurement adapter", () => {
 		});
 		const fetchImpl = fetchSpy as unknown as typeof fetch;
 
-		const outcome = await adapterWith(fetchImpl, {
-			system: "perplexity",
-			collectionMode: "trigger",
-			snapshotTimeoutMs: 5,
-			snapshotPollMs: 0,
-		}).execute(permitFor({ systemId: "Perplexity" }));
+		try {
+			const outcomePromise = adapterWith(fetchImpl, {
+				system: "perplexity",
+				collectionMode: "trigger",
+				snapshotTimeoutMs: 10,
+				snapshotPollMs: 0,
+			}).execute(permitFor({ systemId: "Perplexity" }));
+			await vi.advanceTimersByTimeAsync(10);
+			const outcome = await outcomePromise;
 
-		expect(outcome).toMatchObject({
-			status: "INVALID",
-			invalidReason: "SNAPSHOT_NOT_READY",
-			rawResponseReference: "brightdata:s_stalled",
-		});
-		expect(fetchImpl).toHaveBeenCalledTimes(3);
-		expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
+			expect(outcome).toMatchObject({
+				status: "INVALID",
+				invalidReason: "SNAPSHOT_NOT_READY",
+				rawResponseReference: "brightdata:s_stalled",
+			});
+			expect(fetchImpl).toHaveBeenCalledTimes(3);
+			expect(String(fetchSpy.mock.calls[2]?.[0])).toContain("/snapshot/s_stalled/cancel");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("uses one overall deadline for the request and its snapshot cleanup", async () => {

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getWebsiteExcerpt } from "./website-excerpt";
 
+vi.mock("node:dns/promises", () => ({
+	lookup: vi.fn(async () => [{ address: "1.1.1.1", family: 4 }]),
+}));
+
 type FakeResponse = {
 	ok: boolean;
 	status: number;

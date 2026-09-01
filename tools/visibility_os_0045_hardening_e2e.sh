@@ -10,6 +10,7 @@ if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ 
 	exit 2
 fi
 migration_0045="$repo_root/packages/lib/src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql"
+migration_0053="$repo_root/packages/lib/src/db/migrations/0053_configuration_lock_legacy_collision_ordinal.sql"
 database_prefix="selena_visibility_0045_$$"
 databases=(
 	"${database_prefix}_positive"
@@ -110,10 +111,12 @@ assert_failed_migration_is_atomic() {
 	run_psql "$database" -At <<'SQL' | grep -qx 't|t|t'
 SELECT
 	EXISTS (SELECT 1 FROM sv_measurement_domains WHERE domain_id = 'LOCAL'),
-	to_regprocedure('sv_prevent_configuration_lock_mutation()') IS NULL,
+	to_regprocedure('sv_prevent_configuration_lock_mutation()') IS NULL
+		AND to_regprocedure('sv_guard_configuration_lock_insert()') IS NULL,
 	NOT EXISTS (
 		SELECT 1 FROM pg_trigger
 		WHERE tgname IN (
+			'sv_guard_configuration_lock_insert',
 			'sv_prevent_configuration_lock_mutation',
 			'sv_prevent_configuration_lock_truncate',
 			'sv_prevent_cost_event_truncate'
@@ -337,6 +340,7 @@ VALUES
 SQL
 
 run_psql "$positive_database" --single-transaction < "$migration_0045" >/dev/null
+run_psql "$positive_database" --single-transaction < "$migration_0053" >/dev/null
 
 run_psql "$positive_database" <<'SQL'
 DO $$
@@ -488,6 +492,7 @@ BEGIN
 		WHERE tgname IN (
 			'sv_prevent_cost_event_mutation',
 			'sv_prevent_cost_event_truncate',
+			'sv_guard_configuration_lock_insert',
 			'sv_prevent_configuration_lock_mutation',
 			'sv_prevent_configuration_lock_truncate'
 		) AND tgenabled <> 'O'
@@ -496,10 +501,11 @@ BEGIN
 		WHERE tgname IN (
 			'sv_prevent_cost_event_mutation',
 			'sv_prevent_cost_event_truncate',
+			'sv_guard_configuration_lock_insert',
 			'sv_prevent_configuration_lock_mutation',
 			'sv_prevent_configuration_lock_truncate'
 		)
-	) <> 4 THEN
+	) <> 5 THEN
 		RAISE EXCEPTION '0045 append-only trigger state mismatch';
 	END IF;
 
@@ -537,6 +543,18 @@ BEGIN
 		);
 		RAISE EXCEPTION 'duplicate configuration-lock version unexpectedly succeeded';
 	EXCEPTION WHEN unique_violation THEN NULL;
+	END;
+	BEGIN
+		INSERT INTO sv_configuration_locks (
+			organization_id, project_id, version, legacy_collision_ordinal,
+			snapshot, engine_sha, expected_runs, budget_cap, created_by
+		) VALUES (
+			'hardening-fixture', '10000000-0000-0000-0000-000000000001', 4, 1,
+			'{"source":"reserved-legacy-ordinal"}', 'hardening-fixture', 1, 10, 'hardening-fixture'
+		);
+		RAISE EXCEPTION 'reserved legacy collision ordinal unexpectedly succeeded';
+	EXCEPTION WHEN OTHERS THEN
+		IF SQLERRM <> 'CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED' THEN RAISE; END IF;
 	END;
 
 	BEGIN
@@ -686,16 +704,20 @@ lock_collision_database="${database_prefix}_lock_collision"
 reset_database "$lock_collision_database"
 apply_through_0044 "$lock_collision_database"
 seed_project_and_lock "$lock_collision_database"
-run_psql "$lock_collision_database" <<'SQL'
-INSERT INTO sv_configuration_locks (
-	organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
-)
-VALUES (
-	'hardening-fixture', '10000000-0000-0000-0000-000000000001', 1,
-	'{"source":"collision"}', 'hardening-fixture', 1, 10, 'hardening-fixture'
-);
+run_psql "$lock_collision_database" --single-transaction < "$migration_0045" >/dev/null
+run_psql "$lock_collision_database" --single-transaction < "$migration_0053" >/dev/null
+run_psql "$lock_collision_database" -At <<'SQL' | grep -qx '1:0|t|t'
+SELECT
+	(SELECT string_agg(version::text || ':' || legacy_collision_ordinal::text, ',' ORDER BY legacy_collision_ordinal)
+	 FROM sv_configuration_locks),
+	to_regprocedure('sv_guard_configuration_lock_insert()') IS NOT NULL,
+	EXISTS (
+		SELECT 1
+		FROM pg_indexes
+		WHERE indexname = 'sv_locks_project_version_unique'
+			AND indexdef LIKE '%(project_id, version, legacy_collision_ordinal)%'
+	);
 SQL
-assert_failed_migration_is_atomic "$lock_collision_database" 'CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION'
 
 scope_mismatch_database="${database_prefix}_scope_mismatch"
 reset_database "$scope_mismatch_database"
@@ -862,4 +884,4 @@ VALUES
 SQL
 assert_failed_migration_is_atomic "$evidence_collision_database" 'LOCAL_MAPS_0045_EVIDENCE_COLLISION'
 
-echo "Visibility OS 0045 hardening gate passed"
+echo "Visibility OS 0045/0053 hardening gate passed"

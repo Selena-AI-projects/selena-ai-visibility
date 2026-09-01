@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svPromptFamilies, svScenarios } from "@workspace/lib/db/schema";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { and, asc, eq } from "drizzle-orm";
@@ -28,19 +29,21 @@ export const listSelenaScenariosFn = createServerFn({ method: "GET" })
 		const context = await resolveSessionAuthContext();
 		const project = await repositories.projects.get(context, data.projectId);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
-		const rows = await db
-			.select({
-				id: svScenarios.id,
-				familyId: svScenarios.familyId,
-				intentType: svPromptFamilies.intentType,
-				text: svScenarios.text,
-				language: svScenarios.language,
-				status: svScenarios.status,
-			})
-			.from(svScenarios)
-			.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
-			.where(and(eq(svPromptFamilies.projectId, data.projectId), eq(svScenarios.organizationId, context.tenantId)))
-			.orderBy(asc(svScenarios.createdAt));
+		const rows = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({
+					id: svScenarios.id,
+					familyId: svScenarios.familyId,
+					intentType: svPromptFamilies.intentType,
+					text: svScenarios.text,
+					language: svScenarios.language,
+					status: svScenarios.status,
+				})
+				.from(svScenarios)
+				.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
+				.where(and(eq(svPromptFamilies.projectId, data.projectId), eq(svScenarios.organizationId, context.tenantId)))
+				.orderBy(asc(svScenarios.createdAt)),
+		);
 		return { scenarios: rows };
 	});
 

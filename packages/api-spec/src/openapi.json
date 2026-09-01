@@ -1163,7 +1163,7 @@
 			"LocalApiEvidenceItem": {
 				"type": "object",
 				"additionalProperties": false,
-				"description": "VALID evidence includes a content SHA-256 and capture time. Non-valid evidence never exposes signed access.",
+				"description": "VALID evidence includes a safe provenance-verification flag and capture time. Private content hashes never flow to clients. Non-valid evidence never exposes signed access.",
 				"properties": {
 					"evidenceId": { "type": "string", "minLength": 1 },
 					"datasetId": { "type": "string", "format": "uuid", "nullable": true },
@@ -1173,15 +1173,11 @@
 						"enum": ["VALID", "INVALID", "UNKNOWN", "BLOCKED"]
 					},
 					"kind": { "type": "string", "minLength": 1 },
-					"contentSha256": {
-						"type": "string",
-						"pattern": "^(?:sha256:)?[a-f0-9]{64}$",
-						"nullable": true
-					},
+					"provenanceVerified": { "type": "boolean" },
 					"capturedAt": { "type": "string", "format": "date-time", "nullable": true },
 					"access": { "$ref": "#/components/schemas/LocalApiEvidenceAccess" }
 				},
-				"required": ["evidenceId", "datasetId", "surface", "status", "kind", "contentSha256", "capturedAt", "access"]
+				"required": ["evidenceId", "datasetId", "surface", "status", "kind", "provenanceVerified", "capturedAt", "access"]
 			},
 			"LocalApiEvidenceResponse": {
 				"type": "object",

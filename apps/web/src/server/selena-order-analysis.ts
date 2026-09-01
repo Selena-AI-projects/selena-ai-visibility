@@ -1,11 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svConfigurationLocks, svOrders } from "@workspace/lib/db/schema";
-import {
-	type AnswerAnalysis,
-	analyzeAnswer,
-	summarizeScenarioSet,
-} from "@workspace/lib/selena-answer-analysis";
+import { type AnswerAnalysis, analyzeAnswer, summarizeScenarioSet } from "@workspace/lib/selena-answer-analysis";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { parseAnalysisSubjects } from "@workspace/selena-visibility-contracts";
 import { and, eq } from "drizzle-orm";
@@ -50,18 +47,22 @@ export function readStoredAnalysis(payload: unknown): AnswerAnalysis | null {
 export async function computeOrderAnalysis(context: SelenaRepositoryContext, orderId: string) {
 	const data = { orderId };
 	{
-		const [order] = await db
-			.select({ id: svOrders.id, lockId: svOrders.lockId })
-			.from(svOrders)
-			.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)))
-			.limit(1);
-		if (!order) throw new Error("Not found: order is outside AuthContext tenant");
-
-		const [lock] = await db
-			.select({ snapshot: svConfigurationLocks.snapshot })
-			.from(svConfigurationLocks)
-			.where(and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)))
-			.limit(1);
+		const lock = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+			const [order] = await tx
+				.select({ id: svOrders.id, lockId: svOrders.lockId })
+				.from(svOrders)
+				.where(and(eq(svOrders.id, data.orderId), eq(svOrders.organizationId, context.tenantId)))
+				.limit(1);
+			if (!order) throw new Error("Not found: order is outside AuthContext tenant");
+			const [lock] = await tx
+				.select({ snapshot: svConfigurationLocks.snapshot })
+				.from(svConfigurationLocks)
+				.where(
+					and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)),
+				)
+				.limit(1);
+			return lock;
+		});
 		// Subjects come from the lock, never from the live profile: the report
 		// answers for the configuration the customer paid against.
 		const subjects = parseAnalysisSubjects(lock?.snapshot);
