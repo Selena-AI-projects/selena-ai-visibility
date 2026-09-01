@@ -16,11 +16,45 @@ LOCK TABLE
 	"sv_recommendations"
 IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
+-- Historical referenced locks can share a version. Preserve that immutable
+-- version and distinguish only the pre-hardening duplicates; new locks are
+-- forced to ordinal zero by the insert guard below.
+ALTER TABLE "sv_configuration_locks"
+	ADD COLUMN "legacy_collision_ordinal" integer DEFAULT 0 NOT NULL;
+--> statement-breakpoint
+WITH ranked_locks AS (
+	SELECT
+		"id",
+		(row_number() OVER (
+			PARTITION BY "project_id", "version"
+			ORDER BY "created_at", "id"
+		) - 1)::integer AS collision_ordinal
+	FROM "sv_configuration_locks"
+)
+UPDATE "sv_configuration_locks" AS configuration_lock
+SET "legacy_collision_ordinal" = ranked_locks.collision_ordinal
+FROM ranked_locks
+WHERE configuration_lock."id" = ranked_locks."id"
+	AND ranked_locks.collision_ordinal > 0;
+--> statement-breakpoint
 CREATE FUNCTION "sv_prevent_configuration_lock_mutation"() RETURNS trigger AS $$
 BEGIN
 	RAISE EXCEPTION 'CONFIGURATION_LOCK_APPEND_ONLY';
 END;
 $$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE FUNCTION "sv_guard_configuration_lock_insert"() RETURNS trigger AS $$
+BEGIN
+	IF NEW."legacy_collision_ordinal" <> 0 THEN
+		RAISE EXCEPTION 'CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED';
+	END IF;
+	RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+--> statement-breakpoint
+CREATE TRIGGER "sv_guard_configuration_lock_insert"
+	BEFORE INSERT ON "sv_configuration_locks"
+	FOR EACH ROW EXECUTE FUNCTION "sv_guard_configuration_lock_insert"();
 --> statement-breakpoint
 CREATE TRIGGER "sv_prevent_configuration_lock_mutation"
 	BEFORE UPDATE OR DELETE ON "sv_configuration_locks"
@@ -79,9 +113,11 @@ BEGIN
 		SELECT 1
 		FROM "sv_configuration_locks"
 		GROUP BY "project_id", "version"
-		HAVING count(*) > 1
+		HAVING min("legacy_collision_ordinal") <> 0
+			OR max("legacy_collision_ordinal") <> count(*) - 1
+			OR count(DISTINCT "legacy_collision_ordinal") <> count(*)
 	) THEN
-		RAISE EXCEPTION 'CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION';
+		RAISE EXCEPTION 'CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED';
 	END IF;
 
 	IF EXISTS (
@@ -211,8 +247,13 @@ BEGIN
 		CHECK ("version" > 0) NOT VALID;
 	ALTER TABLE "sv_configuration_locks"
 		VALIDATE CONSTRAINT "sv_configuration_locks_version_check";
+	ALTER TABLE "sv_configuration_locks"
+		ADD CONSTRAINT "sv_configuration_locks_legacy_collision_ordinal_check"
+		CHECK ("legacy_collision_ordinal" >= 0) NOT VALID;
+	ALTER TABLE "sv_configuration_locks"
+		VALIDATE CONSTRAINT "sv_configuration_locks_legacy_collision_ordinal_check";
 	CREATE UNIQUE INDEX "sv_locks_project_version_unique"
-		ON "sv_configuration_locks" ("project_id", "version");
+		ON "sv_configuration_locks" ("project_id", "version", "legacy_collision_ordinal");
 	DROP INDEX "sv_locks_project_version_idx";
 	CREATE UNIQUE INDEX "sv_projects_id_organization_unique"
 		ON "sv_projects" ("id", "organization_id");

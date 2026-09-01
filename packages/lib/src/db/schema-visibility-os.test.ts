@@ -736,6 +736,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const versionCheck = lockConfig.checks.find(
 			(candidate) => candidate.name === "sv_configuration_locks_version_check",
 		);
+		const legacyCollisionOrdinalCheck = lockConfig.checks.find(
+			(candidate) => candidate.name === "sv_configuration_locks_legacy_collision_ordinal_check",
+		);
 		const localDomainCheck = getTableConfig(schema.svLocalScanCycles).checks.find(
 			(candidate) => candidate.name === "sv_local_scan_cycles_domain_check",
 		);
@@ -744,6 +747,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(projectVersionIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
 			"project_id",
 			"version",
+			"legacy_collision_ordinal",
 		]);
 		expect(projectIdentityIndex?.config.unique).toBe(true);
 		expect(projectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
@@ -818,6 +822,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"organization_id",
 		]);
 		expect(versionCheck && dialect.sqlToQuery(versionCheck.value).sql).toContain('"version" > 0');
+		expect(legacyCollisionOrdinalCheck && dialect.sqlToQuery(legacyCollisionOrdinalCheck.value).sql).toContain(
+			'"legacy_collision_ordinal" >= 0',
+		);
 		expect(localDomainCheck && dialect.sqlToQuery(localDomainCheck.value).sql).toContain(
 			"\"domain_id\" = 'LOCAL_MAPS'",
 		);
@@ -827,9 +834,12 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_cost_events"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_mutation"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_configuration_locks"');
+		expect(migration).toContain('CREATE TRIGGER "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain('BEFORE INSERT ON "sv_configuration_locks"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_truncate"');
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_configuration_locks"');
-		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(migration).toContain("CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(migration).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
@@ -875,7 +885,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION",
 			"CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH",
 			"MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH",
-			"CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION",
+			"CONFIGURATION_LOCK_0045_LEGACY_ORDINAL_POSTCONDITION_FAILED",
 			"LOCAL_MAPS_0045_MEASUREMENT_CYCLE_COLLISION",
 			"LOCAL_MAPS_0045_EVIDENCE_COLLISION",
 			"LOCAL_MAPS_0045_LEGACY_ATTEMPT_IDENTITY",
@@ -890,6 +900,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 		}
 		expect(exclusiveLock).toBeGreaterThan(-1);
 		expect(exclusiveLock).toBe(0);
+		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
+			migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'),
+		);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'));
 		expect(projectLock).toBeLessThan(configurationLock);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf("LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED"));
@@ -928,7 +941,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("apply_through_0044");
 		expect(hardeningGate).toContain("--single-transaction");
 		expect(hardeningGate).toContain("assert_failed_migration_is_atomic");
-		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(hardeningGate).toContain("legacy_collision_ordinal");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
 		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(hardeningGate).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
 		expect(hardeningGate).toContain("LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH");
