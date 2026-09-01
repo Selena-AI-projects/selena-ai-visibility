@@ -26,12 +26,14 @@ snapshot remediation and release-head integration evidence.
   PR [#106](https://github.com/parkourcafe/selena-ai-visibility/pull/106);
   provider capture and journal READY timestamps are separate and idempotent
   replay/dry-run invariants are hardened.
+- Current release-integrated source head: `f4b1418d`; final PR #108 checks are
+  green, including bounded replay through disposable migration `0054`.
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Historical draft PR reference: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Canary-time feature-head required checks: `ALL PASS`
-- Release-integrated exact-head checks: `ALL PASS`; PR `CLEAN/MERGEABLE` at
-  `4a1fd948`; PR #106 functional E2E steps passed but the 30-minute cleanup
-  ceiling canceled the check; timeout patch CI is pending
+- Release-integrated exact-head checks: `ALL PASS` at `f4b1418d`; PR #96 and
+  follow-up PR #108 are `CLEAN/MERGEABLE`; E2E timeout and migration-frontier
+  patches are green
 - Production deploy/DB mutations: `0`
 - Provider triggers: `2`, one for each separately authorized immutable
   identity; retries `0`, recurring `false`
@@ -100,7 +102,7 @@ passed lib typecheck, `1086/1086` lib tests, the same root lint baseline and
 root build `16/16` locally. Snapshot-cap source `4a1fd948` passed its focused
 provider suite `19/19` and targeted Biome check. Current reconciliation focused
 gates are lib `16/16`, worker `23/23`, both check-types, targeted Biome and diff
-check; E2E timeout patch CI is pending.
+check; exact-head CI is green on PR #108.
 
 ## Staging receipts
 

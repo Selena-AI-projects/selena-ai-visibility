@@ -28,6 +28,9 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
   it separates provider `capturedAt` from journal `historicalReadyObservedAt`,
   validates canonical stored evidence/capability/audit rows on replay and
   rolls back idempotent dry-runs.
+- Current release-integrated source head: `f4b1418d`, with the disposable
+  migration replay ceiling aligned to release frontier `0054`; staging remains
+  bounded at `0053`.
 - Original release snapshot retained for lineage: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Protected untracked `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched and excluded.
@@ -44,7 +47,7 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS_LAST_VERIFIED / E2E_TIMEOUT_PATCH_PENDING` | Head `4a1fd948` passed Build, E2E, scheduling, smoke, license and CLA. PR #106 reached all functional E2E steps successfully but was canceled during post-action cleanup at the 30-minute workflow ceiling; the bounded timeout patch is now queued for a fresh exact-head CI cycle. |
+| Exact-head CI | `PASS` | Exact source head `f4b1418d` passed Build, E2E, Scheduling, Smoke, License and CLA. The E2E timeout patch and release `0054` replay ceiling are green in PR #108; PR #96 is also clean/mergeable at the same head. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -55,6 +58,20 @@ finalized.
 Overall decision: `STAGING_PROVIDER_PAYLOAD_PASS / PERSISTENCE_HOLD / PRE_PRODUCTION_NO_GO`.
 
 ## Exact-head CI evidence
+
+Final source-head receipt for `f4b1418d` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
+
+| Check | Result | Evidence |
+|---|---|---|
+| Build | `PASS` | [run 33530605525](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605525) |
+| E2E Integration Tests | `PASS` | [run 33530605559](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605559) |
+| Scheduling Policy Verification | `PASS` | [run 33530605559](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605559) |
+| Dependency License Audit | `PASS` | [run 33530605598](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605598) |
+| Deployment smoke | `PASS` | [run 33530605542](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605542) |
+| CLA | `PASS` | [run 33530605664](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33530605664) |
+
+The scheduling job passed the real-PostgreSQL bounded replay at disposable
+frontier `0054`; this does not authorize applying `0054` to shared staging.
 
 The pull-request workflows below passed against
 `4a1fd94803d1a457ab426ff765e2c1052c423646`, which contains release merge

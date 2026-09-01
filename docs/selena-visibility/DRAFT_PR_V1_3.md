@@ -16,9 +16,10 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
 - Active staging web after drift recovery: `100d34d8`, deployment `a3b0cadd…`
 - Integrated release parent: `5cbb7b25`
 - Current offline reconciliation source patch: `b01a310b` in follow-up [PR
-  #106](https://github.com/parkourcafe/selena-ai-visibility/pull/106); exact
+  #108](https://github.com/parkourcafe/selena-ai-visibility/pull/108); exact
 provider capture/journal timestamps, strict replay checks and idempotent
-  dry-run rollback are covered by focused tests; timeout patch push/CI pending.
+  dry-run rollback are covered by focused tests; final CI is green at
+  `f4b1418d`.
 
 ## Proposed title
 
@@ -134,9 +135,8 @@ provider capture/journal timestamps, strict replay checks and idempotent
   plus CLI migration image tests `2/2` locally;
 - GitHub reported PR #96 mergeable at `4a1fd948`; this source-quality
   result does not override the provider HOLD;
-- PR #106 functional E2E steps passed, but its 30-minute workflow ceiling
-  canceled the job during post-action cleanup; the source-only timeout patch
-  will provide the next exact-head CI receipt;
+- PR #108 final exact-head checks are green at `f4b1418d`; the prior 30-minute
+  cleanup cancellation is superseded by the bounded 35-minute workflow run;
 - the E2E scheduling job now replays the final bounded runner through the
   disposable release frontier `0054` against real PostgreSQL after the journal
   is already complete; shared staging remains bounded at `0053`;
