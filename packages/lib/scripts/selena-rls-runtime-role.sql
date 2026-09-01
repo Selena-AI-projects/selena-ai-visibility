@@ -1,20 +1,187 @@
--- P1-13 step two (owner-run, never part of the migration chain): the runtime
--- role that does not own the tables, so the tenant_isolation policies from
--- migration 0034 actually apply to it. Run by hand, once, with a real
--- password; then point DATABASE_URL at this role ONLY after the application
--- sets app.organization_id in every request transaction — without that GUC
--- every tenant query returns empty, which is the safe direction but is also
--- an outage.
+-- Owner-run staging bootstrap for the non-owner application role. Migration
+-- 0051 must be committed first so this script can grant only known runtime
+-- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
-CREATE ROLE selena_app LOGIN PASSWORD :'role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-GRANT USAGE ON SCHEMA public TO selena_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO selena_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO selena_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO selena_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO selena_app;
 
--- Raw/provider provenance is intentionally not an application-role surface.
--- Server repositories must use an explicitly granted internal role and project
--- only the safe read model; broad table/view grants above never expose it.
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+DO $preflight$
+BEGIN
+	IF to_regclass('public.sv_provider_canary_executions') IS NULL
+		OR to_regclass('public.sv_evidence_index') IS NULL
+		OR to_regclass('public.sv_measurement_cycles') IS NULL
+		OR to_regclass('public.sv_configuration_locks') IS NULL
+		OR to_regclass('public.sv_measurement_datasets') IS NULL
+		OR to_regclass('public.sv_source_snapshots') IS NULL
+		OR to_regclass('public.sv_provider_dataset_capabilities') IS NULL
+		OR to_regclass('public.sv_evidence_acceptance_receipts') IS NULL
+		OR to_regclass('public.sv_evidence_read_model') IS NULL
+		OR to_regprocedure('public.sv_resolve_api_key_context(text)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051';
+	END IF;
+
+	IF to_regnamespace('pgboss') IS NULL
+		OR to_regclass('pgboss.version') IS NULL
+		OR to_regclass('pgboss.bam') IS NULL
+		OR to_regclass('pgboss.job') IS NULL
+		OR to_regclass('pgboss.job_common') IS NULL
+		OR to_regclass('pgboss.job_dependency') IS NULL
+		OR to_regclass('pgboss.queue') IS NULL
+		OR to_regclass('pgboss.queue_stats') IS NULL
+		OR to_regclass('pgboss.schedule') IS NULL
+		OR to_regclass('pgboss.subscription') IS NULL
+		OR to_regclass('pgboss.warning') IS NULL
+		OR to_regprocedure('pgboss.create_queue(text,jsonb)') IS NULL
+		OR to_regprocedure('pgboss.job_table_format(text,text)') IS NULL
+		OR to_regprocedure('pgboss.delete_queue(text)') IS NULL
+		OR to_regprocedure('pgboss.job_table_run(text,text,text)') IS NULL
+		OR to_regprocedure('pgboss.job_table_run_async(text,integer,text,text,text)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA';
+	END IF;
+
+	IF (SELECT count(*) FROM pgboss.version) <> 1
+		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
+	END IF;
+END;
+$preflight$;
+
+SELECT format(
+	'CREATE ROLE selena_app LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
+	:'role_password'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')
+\gexec
+
+ALTER ROLE selena_app LOGIN PASSWORD :'role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+GRANT USAGE ON SCHEMA public TO selena_app;
+
+-- The safe evidence view is security-invoker. Force every tenant policy on its
+-- complete underlying graph so an accidental owner connection cannot bypass
+-- isolation while the runtime role is being accepted or rotated.
+ALTER TABLE sv_evidence_index FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_measurement_cycles FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_configuration_locks FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_measurement_datasets FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_source_snapshots FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_provider_dataset_capabilities FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_evidence_acceptance_receipts FORCE ROW LEVEL SECURITY;
+
+-- Remove privileges left by an older version of this bootstrap before applying
+-- the explicit runtime allowlist. No future table or sequence is auto-granted.
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM selena_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM selena_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM selena_app;
+
+-- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
+-- runtime allowlist: schema state is read-only, queue data is mutable, and only
+-- the non-destructive queue bootstrap functions are callable. Migration/DDL
+-- helpers stay owner-only, including through PUBLIC's default function ACL.
+GRANT USAGE ON SCHEMA pgboss TO selena_app;
+REVOKE CREATE ON SCHEMA pgboss FROM selena_app;
+REVOKE CREATE ON SCHEMA pgboss FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA pgboss FROM selena_app;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgboss FROM PUBLIC;
+REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA pgboss REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+	pgboss.job, pgboss.job_common, pgboss.job_dependency,
+	pgboss.queue, pgboss.schedule, pgboss.subscription
+TO selena_app;
+GRANT SELECT ON pgboss.bam, pgboss.version TO selena_app;
+GRANT EXECUTE ON FUNCTION
+	pgboss.create_queue(text, jsonb)
+TO selena_app;
+
+-- Better Auth and tenant membership bootstrap run before app.organization_id
+-- can be set. These are the only non-Selena identity surfaces used at runtime.
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+	"user", "session", "account", "verification", "organization", "member",
+	"invitation", "sso_provider", "subscription"
+TO selena_app;
+
+-- Core Elmo runtime objects. Reports are never deleted by the application.
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+	brands, prompts, competitors, prompt_runs, prompt_run_hourly_aggregates,
+	citations, brand_opportunities, organization_settings, usage_events, secrets
+TO selena_app;
+GRANT SELECT, INSERT, UPDATE ON reports TO selena_app;
+
+-- Mutable Selena runtime state reached by the web and worker repositories.
+GRANT SELECT, INSERT, UPDATE, DELETE ON
+	sv_api_keys, sv_api_idempotency_records, sv_projects, sv_prompt_families,
+	sv_scenarios, sv_configuration_locks, sv_journal_daily_claims, sv_quotes,
+	sv_orders, sv_cycles, sv_payments, sv_findings, sv_recommendations,
+	sv_project_profiles, sv_website_snapshots, sv_run_permits, sv_runs,
+	sv_response_mentions, sv_citation_gap_snapshots, sv_incidents, sv_cost_events,
+	sv_recommendation_runs, sv_recommendation_manifests,
+	sv_recommendation_evidence, sv_recommendation_findings,
+	sv_recommendation_actions, sv_recommendation_tasks, sv_entities,
+	sv_business_locations, sv_pilot_cycles, sv_capture_tasks,
+	sv_local_observations, sv_observation_mentions,
+	sv_observation_evidence_assets, sv_qc_records, sv_order_requests,
+	sv_measurement_cycles, sv_measurement_attempts, sv_measurement_datasets,
+	sv_local_keywords, sv_grid_definitions, sv_grid_points, sv_local_scan_cycles,
+	sv_measurement_attempt_results, sv_local_rank_observations,
+	sv_local_competitor_observations, sv_local_visibility_metrics
+TO selena_app;
+
+-- Append-only evidence and audit objects expose only the operations used by
+-- runtime repositories. Trigger guards remain the second line of defence.
+GRANT SELECT, INSERT ON
+	sv_audit_events, sv_provider_dataset_capabilities,
+	sv_provider_canary_executions, sv_evidence_index
+TO selena_app;
+SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'
+WHERE to_regclass('public.sv_provider_dataset_snapshot_events') IS NOT NULL
+\gexec
+GRANT INSERT ON sv_source_snapshots TO selena_app;
+REVOKE SELECT (
+	source_ref, content_sha256, snapshot, provider_dataset_ref, environment, raw_reference
+) ON sv_source_snapshots FROM selena_app;
+GRANT SELECT (
+	id, organization_id, source_type, capability_id,
+	input_schema_version, output_schema_version, content_sha256_format_valid,
+	captured_at, immutable, created_at
+) ON sv_source_snapshots TO selena_app;
+
+-- Security-invoker read models also require read access to their safe
+-- underlying relational projections. Raw/provider provenance remains private.
+GRANT SELECT ON
+	sv_evidence_read_model, sv_visibility_map_points, sv_visibility_map_datasets
+TO selena_app;
 REVOKE ALL ON sv_evidence_provenance FROM selena_app;
+REVOKE ALL ON sv_evidence_acceptance_receipts FROM selena_app;
+GRANT SELECT (id, organization_id, evidence_id, accepted_at)
+	ON sv_evidence_acceptance_receipts TO selena_app;
+
+-- Bootstrap only the tenant identifier needed to enter report-table RLS. The
+-- function cannot return report content and ignores unattributed legacy rows.
+CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)
+RETURNS TABLE (organization_id text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+	SELECT "report"."organization_id"
+	FROM "public"."reports" AS "report"
+	WHERE "report"."id" = $1
+		AND "report"."organization_id" IS NOT NULL
+	LIMIT 1
+$$;
+REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION sv_resolve_report_context(uuid) TO selena_app;
+
+-- API-key authentication likewise needs a tenant before the request
+-- transaction can set app.organization_id.
+GRANT EXECUTE ON FUNCTION sv_resolve_api_key_context(text) TO selena_app;
+
+COMMIT;

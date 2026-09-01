@@ -98,5 +98,51 @@ export function createPostgresBrightDataSnapshotJournal(
 					});
 			});
 		},
+
+		async claimResume(entry: BrightDataSnapshotJournalEntry & Readonly<{ phase: "RESUMED" }>): Promise<boolean> {
+			const normalized = normalizeEntry(entry);
+			if (normalized.phase !== "RESUMED") throw new Error("BRIGHTDATA_SNAPSHOT_RESUME_PHASE_REQUIRED");
+			return options.db.transaction(async (tx) => {
+				await tx.execute(sql`select set_config('app.organization_id', ${scope.organizationId}, true)`);
+				await tx.execute(
+					sql`select pg_advisory_xact_lock(hashtextextended(${`${scope.organizationId}:${scope.projectId}:${normalized.snapshotId}`}, 0))`,
+				);
+				const result = await tx.execute(sql`
+					select exists (
+						select 1
+						from ${schema.svProviderDatasetSnapshotEvents}
+						where organization_id = ${scope.organizationId}
+							and project_id = ${scope.projectId}
+							and source = ${normalized.source}
+							and provider_dataset_id = ${normalized.datasetId}
+							and snapshot_id = ${normalized.snapshotId}
+							and phase = 'INTERRUPTED'
+					) as authorized
+				`);
+				const authorized = (result.rows[0] as { authorized?: boolean } | undefined)?.authorized === true;
+				if (!authorized) return false;
+				await tx
+					.insert(schema.svProviderDatasetSnapshotEvents)
+					.values({
+						organizationId: scope.organizationId,
+						projectId: scope.projectId,
+						provider: "BRIGHT_DATA",
+						source: normalized.source,
+						providerDatasetId: normalized.datasetId,
+						snapshotId: normalized.snapshotId,
+						phase: normalized.phase,
+						observedAt: normalized.observedAt,
+						eventHash: eventHash(scope, normalized),
+					})
+					.onConflictDoNothing({
+						target: [
+							schema.svProviderDatasetSnapshotEvents.organizationId,
+							schema.svProviderDatasetSnapshotEvents.projectId,
+							schema.svProviderDatasetSnapshotEvents.eventHash,
+						],
+					});
+				return true;
+			});
+		},
 	});
 }

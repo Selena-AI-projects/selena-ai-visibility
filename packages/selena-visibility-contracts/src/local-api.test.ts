@@ -391,7 +391,7 @@ describe("local API public contracts", () => {
 					surface: "LOCAL_MAPS",
 					status: "VALID",
 					kind: "MAPS_SERP_PROVIDER",
-					contentSha256: `sha256:${"a".repeat(64)}`,
+					provenanceVerified: true,
 					capturedAt: "2026-08-30T00:00:00.000Z",
 					access: {
 						state: "SIGNED",
@@ -406,7 +406,7 @@ describe("local API public contracts", () => {
 					surface: "LOCAL_AI",
 					status: "UNKNOWN",
 					kind: "MANUAL_SCREENSHOT",
-					contentSha256: null,
+					provenanceVerified: false,
 					capturedAt: null,
 					access: {
 						state: "UNAVAILABLE",
@@ -427,6 +427,13 @@ describe("local API public contracts", () => {
 			expiresAt: null,
 			ttlSeconds: 600,
 		});
+		expect(response.items[0]).not.toHaveProperty("contentSha256");
+		expect(
+			localApiEvidenceResponseSchema.safeParse({
+				...response,
+				items: [{ ...response.items[0], contentSha256: `sha256:${"a".repeat(64)}` }],
+			}).success,
+		).toBe(false);
 		expect(
 			localApiEvidenceResponseSchema.safeParse({
 				...response,

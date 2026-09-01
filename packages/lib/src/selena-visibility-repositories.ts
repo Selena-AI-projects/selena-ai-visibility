@@ -20,8 +20,9 @@ import {
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { withOrganizationTransaction } from "./db/organization-transaction";
 import * as schema from "./db/schema";
-import { assertDirectDispatchAllowed, type ControlledCycleState } from "./run-policy";
+import { assertDirectDispatchAllowed, type ControlledCycleState } from "./run-policy/controlled-cycle";
 import { computeCitationGaps } from "./selena-citation-gap";
 import {
 	assertLockExpectedRuns,
@@ -173,16 +174,16 @@ export async function allocateConfigurationLockInTransaction(
 }
 
 export function createSelenaRepositories(db: Db) {
-	const assertProjectOwned = async (ctx: SelenaRepositoryContext, projectId: string) => {
-		const [project] = await db
+	const assertProjectOwned = async (ctx: SelenaRepositoryContext, projectId: string, runner: DbLike = db) => {
+		const [project] = await runner
 			.select({ id: schema.svProjects.id })
 			.from(schema.svProjects)
 			.where(and(eq(schema.svProjects.id, projectId), eq(schema.svProjects.organizationId, ctx.tenantId)))
 			.limit(1);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
 	};
-	const assertLockOwned = async (ctx: SelenaRepositoryContext, lockId: string) => {
-		const [lock] = await db
+	const assertLockOwned = async (ctx: SelenaRepositoryContext, lockId: string, runner: DbLike = db) => {
+		const [lock] = await runner
 			.select({ id: schema.svConfigurationLocks.id })
 			.from(schema.svConfigurationLocks)
 			.where(
@@ -191,24 +192,24 @@ export function createSelenaRepositories(db: Db) {
 			.limit(1);
 		if (!lock) throw new Error("Not found: configuration lock is outside AuthContext tenant");
 	};
-	const assertQuoteOwned = async (ctx: SelenaRepositoryContext, quoteId: string) => {
-		const [quote] = await db
+	const assertQuoteOwned = async (ctx: SelenaRepositoryContext, quoteId: string, runner: DbLike = db) => {
+		const [quote] = await runner
 			.select({ id: schema.svQuotes.id })
 			.from(schema.svQuotes)
 			.where(and(eq(schema.svQuotes.id, quoteId), eq(schema.svQuotes.organizationId, ctx.tenantId)))
 			.limit(1);
 		if (!quote) throw new Error("Not found: quote is outside AuthContext tenant");
 	};
-	const assertOrderOwned = async (ctx: SelenaRepositoryContext, orderId: string) => {
-		const [order] = await db
+	const assertOrderOwned = async (ctx: SelenaRepositoryContext, orderId: string, runner: DbLike = db) => {
+		const [order] = await runner
 			.select({ id: schema.svOrders.id })
 			.from(schema.svOrders)
 			.where(and(eq(schema.svOrders.id, orderId), eq(schema.svOrders.organizationId, ctx.tenantId)))
 			.limit(1);
 		if (!order) throw new Error("Not found: order is outside AuthContext tenant");
 	};
-	const getOrderOwned = async (ctx: SelenaRepositoryContext, orderId: string) => {
-		const [order] = await db
+	const getOrderOwned = async (ctx: SelenaRepositoryContext, orderId: string, runner: DbLike = db) => {
+		const [order] = await runner
 			.select()
 			.from(schema.svOrders)
 			.where(and(eq(schema.svOrders.id, orderId), eq(schema.svOrders.organizationId, ctx.tenantId)))
@@ -216,8 +217,8 @@ export function createSelenaRepositories(db: Db) {
 		if (!order) throw new Error("Not found: order is outside AuthContext tenant");
 		return order;
 	};
-	const getLockOwned = async (ctx: SelenaRepositoryContext, lockId: string) => {
-		const [lock] = await db
+	const getLockOwned = async (ctx: SelenaRepositoryContext, lockId: string, runner: DbLike = db) => {
+		const [lock] = await runner
 			.select()
 			.from(schema.svConfigurationLocks)
 			.where(
@@ -227,9 +228,9 @@ export function createSelenaRepositories(db: Db) {
 		if (!lock) throw new Error("Not found: configuration lock is outside AuthContext tenant");
 		return lock;
 	};
-	const latestQcRecordForOrder = async (ctx: SelenaRepositoryContext, orderId: string) =>
+	const latestQcRecordForOrder = async (ctx: SelenaRepositoryContext, orderId: string, runner: DbLike = db) =>
 		(
-			await db
+			await runner
 				.select()
 				.from(schema.svQcRecords)
 				.where(and(eq(schema.svQcRecords.orderId, orderId), eq(schema.svQcRecords.organizationId, ctx.tenantId)))
@@ -261,14 +262,16 @@ export function createSelenaRepositories(db: Db) {
 	 * sv_cycles, and a pilot cycle is not one of those.
 	 */
 	const recordPilotOverflow = async (ctx: SelenaRepositoryContext, pilotCycleId: string, reason: string) => {
-		await db.insert(schema.svIncidents).values({
-			organizationId: ctx.tenantId,
-			kind: "PILOT_CARDINALITY_OVERFLOW",
-			detail: `${reason}: pilot cycle ${pilotCycleId}`,
+		await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+			await tx.insert(schema.svIncidents).values({
+				organizationId: ctx.tenantId,
+				kind: "PILOT_CARDINALITY_OVERFLOW",
+				detail: `${reason}: pilot cycle ${pilotCycleId}`,
+			});
 		});
 	};
-	const lockBlockFor = async (ctx: SelenaRepositoryContext, lockId: string) => {
-		const [lock] = await db
+	const lockBlockFor = async (ctx: SelenaRepositoryContext, lockId: string, runner: DbLike = db) => {
+		const [lock] = await runner
 			.select()
 			.from(schema.svConfigurationLocks)
 			.where(
@@ -282,8 +285,8 @@ export function createSelenaRepositories(db: Db) {
 		if (!parsed.success) throw new Error("LOCK_LOCAL_AI_DISCOVERY_BLOCK_MISSING");
 		return { lock, block: parsed.data };
 	};
-	const getPilotCycleOwned = async (ctx: SelenaRepositoryContext, pilotCycleId: string) => {
-		const [cycle] = await db
+	const getPilotCycleOwned = async (ctx: SelenaRepositoryContext, pilotCycleId: string, runner: DbLike = db) => {
+		const [cycle] = await runner
 			.select()
 			.from(schema.svPilotCycles)
 			.where(and(eq(schema.svPilotCycles.id, pilotCycleId), eq(schema.svPilotCycles.organizationId, ctx.tenantId)))
@@ -291,8 +294,8 @@ export function createSelenaRepositories(db: Db) {
 		if (!cycle) throw new Error("Not found: pilot cycle is outside AuthContext tenant");
 		return cycle;
 	};
-	const getObservationOwned = async (ctx: SelenaRepositoryContext, observationId: string) => {
-		const [observation] = await db
+	const getObservationOwned = async (ctx: SelenaRepositoryContext, observationId: string, runner: DbLike = db) => {
+		const [observation] = await runner
 			.select()
 			.from(schema.svLocalObservations)
 			.where(
@@ -313,9 +316,10 @@ export function createSelenaRepositories(db: Db) {
 	const ledgerForCycle = async (
 		ctx: SelenaRepositoryContext,
 		cycleId: string,
+		runner: DbLike = db,
 	): Promise<{ rows: LedgerRow[]; mentions: LedgerMention[] }> => {
 		const [rows, mentions] = await Promise.all([
-			db
+			runner
 				.select({
 					runId: schema.svRuns.id,
 					scenarioId: schema.svRuns.scenarioId,
@@ -330,7 +334,7 @@ export function createSelenaRepositories(db: Db) {
 				})
 				.from(schema.svRuns)
 				.where(and(eq(schema.svRuns.cycleId, cycleId), eq(schema.svRuns.organizationId, ctx.tenantId))),
-			db
+			runner
 				.select({
 					runId: schema.svResponseMentions.runId,
 					entityType: schema.svResponseMentions.entityType,
@@ -351,46 +355,59 @@ export function createSelenaRepositories(db: Db) {
 	return {
 		projects: {
 			list: (ctx: SelenaRepositoryContext) =>
-				db
-					.select()
-					.from(schema.svProjects)
-					.where(eq(schema.svProjects.organizationId, ctx.tenantId))
-					.orderBy(desc(schema.svProjects.createdAt)),
-			get: async (ctx: SelenaRepositoryContext, id: string) =>
-				(
-					await db
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
 						.select()
 						.from(schema.svProjects)
-						.where(and(eq(schema.svProjects.id, id), eq(schema.svProjects.organizationId, ctx.tenantId)))
-						.limit(1)
+						.where(eq(schema.svProjects.organizationId, ctx.tenantId))
+						.orderBy(desc(schema.svProjects.createdAt)),
+				),
+			get: async (ctx: SelenaRepositoryContext, id: string) =>
+				(
+					await withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+						tx
+							.select()
+							.from(schema.svProjects)
+							.where(and(eq(schema.svProjects.id, id), eq(schema.svProjects.organizationId, ctx.tenantId)))
+							.limit(1),
+					)
 				)[0],
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svProjects.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				return (
-					await db
-						.insert(schema.svProjects)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(
+					db,
+					ctx.tenantId,
+					async (tx) =>
+						(
+							await tx
+								.insert(schema.svProjects)
+								.values({ ...value, organizationId: ctx.tenantId })
+								.returning()
+						)[0],
+				);
 			},
 		},
 		locks: {
 			allocate: async (ctx: SelenaRepositoryContext, value: ConfigurationLockAllocation) => {
-				return db.transaction((tx) => allocateConfigurationLockInTransaction(tx, ctx, value));
+				return withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					allocateConfigurationLockInTransaction(tx, ctx, value),
+				);
 			},
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
-				db
-					.select(configurationLockProjection)
-					.from(schema.svConfigurationLocks)
-					.where(
-						and(
-							eq(schema.svConfigurationLocks.projectId, projectId),
-							eq(schema.svConfigurationLocks.organizationId, ctx.tenantId),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select(configurationLockProjection)
+						.from(schema.svConfigurationLocks)
+						.where(
+							and(
+								eq(schema.svConfigurationLocks.projectId, projectId),
+								eq(schema.svConfigurationLocks.organizationId, ctx.tenantId),
+							),
 						),
-					),
+				),
 		},
 		quotes: {
 			create: async (
@@ -398,20 +415,24 @@ export function createSelenaRepositories(db: Db) {
 				value: Omit<typeof schema.svQuotes.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				await assertLockOwned(ctx, value.lockId);
-				return (
-					await db
-						.insert(schema.svQuotes)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					await assertLockOwned(ctx, value.lockId, tx);
+					return (
+						await tx
+							.insert(schema.svQuotes)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
-				db
-					.select()
-					.from(schema.svQuotes)
-					.where(and(eq(schema.svQuotes.projectId, projectId), eq(schema.svQuotes.organizationId, ctx.tenantId))),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svQuotes)
+						.where(and(eq(schema.svQuotes.projectId, projectId), eq(schema.svQuotes.organizationId, ctx.tenantId))),
+				),
 		},
 		orders: {
 			create: async (
@@ -419,18 +440,22 @@ export function createSelenaRepositories(db: Db) {
 				value: Omit<typeof schema.svOrders.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				await assertLockOwned(ctx, value.lockId);
-				await assertQuoteOwned(ctx, value.quoteId);
-				return (
-					await db
-						.insert(schema.svOrders)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					await assertLockOwned(ctx, value.lockId, tx);
+					await assertQuoteOwned(ctx, value.quoteId, tx);
+					return (
+						await tx
+							.insert(schema.svOrders)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 			list: (ctx: SelenaRepositoryContext) =>
-				db.select().from(schema.svOrders).where(eq(schema.svOrders.organizationId, ctx.tenantId)),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx.select().from(schema.svOrders).where(eq(schema.svOrders.organizationId, ctx.tenantId)),
+				),
 			/**
 			 * Hand a published order to the client. The QC record is read inside
 			 * the same transaction that flips the status, so an approval cannot be
@@ -438,7 +463,7 @@ export function createSelenaRepositories(db: Db) {
 			 */
 			deliver: async (ctx: SelenaRepositoryContext, orderId: string) => {
 				writable(ctx);
-				return db.transaction(async (tx) => {
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 					const [order] = await tx
 						.select()
 						.from(schema.svOrders)
@@ -467,81 +492,93 @@ export function createSelenaRepositories(db: Db) {
 		profiles: {
 			get: async (ctx: SelenaRepositoryContext, projectId: string) =>
 				(
-					await db
-						.select()
-						.from(schema.svProjectProfiles)
-						.where(
-							and(
-								eq(schema.svProjectProfiles.projectId, projectId),
-								eq(schema.svProjectProfiles.organizationId, ctx.tenantId),
-							),
-						)
-						.limit(1)
+					await withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+						tx
+							.select()
+							.from(schema.svProjectProfiles)
+							.where(
+								and(
+									eq(schema.svProjectProfiles.projectId, projectId),
+									eq(schema.svProjectProfiles.organizationId, ctx.tenantId),
+								),
+							)
+							.limit(1),
+					)
 				)[0],
 			confirm: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svProjectProfiles.$inferInsert, "organizationId" | "confirmedAt" | "confirmedBy">,
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				const [profile] = await db
-					.insert(schema.svProjectProfiles)
-					.values({ ...value, organizationId: ctx.tenantId, confirmedAt: new Date(), confirmedBy: ctx.actorId })
-					.onConflictDoUpdate({
-						target: schema.svProjectProfiles.projectId,
-						set: {
-							...value,
-							organizationId: ctx.tenantId,
-							confirmedAt: new Date(),
-							confirmedBy: ctx.actorId,
-							updatedAt: new Date(),
-						},
-					})
-					.returning();
-				if (!profile) throw new Error("Unable to confirm project profile");
-				return profile;
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					const [profile] = await tx
+						.insert(schema.svProjectProfiles)
+						.values({ ...value, organizationId: ctx.tenantId, confirmedAt: new Date(), confirmedBy: ctx.actorId })
+						.onConflictDoUpdate({
+							target: schema.svProjectProfiles.projectId,
+							set: {
+								...value,
+								organizationId: ctx.tenantId,
+								confirmedAt: new Date(),
+								confirmedBy: ctx.actorId,
+								updatedAt: new Date(),
+							},
+						})
+						.returning();
+					if (!profile) throw new Error("Unable to confirm project profile");
+					return profile;
+				});
 			},
 		},
 		families: {
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
-				db
-					.select()
-					.from(schema.svPromptFamilies)
-					.where(
-						and(
-							eq(schema.svPromptFamilies.projectId, projectId),
-							eq(schema.svPromptFamilies.organizationId, ctx.tenantId),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svPromptFamilies)
+						.where(
+							and(
+								eq(schema.svPromptFamilies.projectId, projectId),
+								eq(schema.svPromptFamilies.organizationId, ctx.tenantId),
+							),
 						),
-					),
+				),
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svPromptFamilies.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				return (
-					await db
-						.insert(schema.svPromptFamilies)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					return (
+						await tx
+							.insert(schema.svPromptFamilies)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 		},
 		scenarios: {
 			list: (ctx: SelenaRepositoryContext, familyId: string) =>
-				db
-					.select()
-					.from(schema.svScenarios)
-					.where(and(eq(schema.svScenarios.familyId, familyId), eq(schema.svScenarios.organizationId, ctx.tenantId))),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svScenarios)
+						.where(and(eq(schema.svScenarios.familyId, familyId), eq(schema.svScenarios.organizationId, ctx.tenantId))),
+				),
 			// A permit carries a scenario id, not the question, and measurement
 			// adapters hold no database access on purpose — this is the single
 			// tenant-scoped read they are handed instead.
 			textFor: async (ctx: SelenaRepositoryContext, scenarioId: string): Promise<string> => {
-				const [row] = await db
-					.select({ text: schema.svScenarios.text })
-					.from(schema.svScenarios)
-					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
-					.limit(1);
+				const [row] = await withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select({ text: schema.svScenarios.text })
+						.from(schema.svScenarios)
+						.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
+						.limit(1),
+				);
 				if (!row) throw new Error("Not found: scenario is outside AuthContext tenant");
 				return row.text;
 			},
@@ -550,23 +587,25 @@ export function createSelenaRepositories(db: Db) {
 				value: Omit<typeof schema.svScenarios.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				const [family] = await db
-					.select({ id: schema.svPromptFamilies.id })
-					.from(schema.svPromptFamilies)
-					.where(
-						and(
-							eq(schema.svPromptFamilies.id, value.familyId),
-							eq(schema.svPromptFamilies.organizationId, ctx.tenantId),
-						),
-					)
-					.limit(1);
-				if (!family) throw new Error("Not found: prompt family is outside AuthContext tenant");
-				return (
-					await db
-						.insert(schema.svScenarios)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [family] = await tx
+						.select({ id: schema.svPromptFamilies.id })
+						.from(schema.svPromptFamilies)
+						.where(
+							and(
+								eq(schema.svPromptFamilies.id, value.familyId),
+								eq(schema.svPromptFamilies.organizationId, ctx.tenantId),
+							),
+						)
+						.limit(1);
+					if (!family) throw new Error("Not found: prompt family is outside AuthContext tenant");
+					return (
+						await tx
+							.insert(schema.svScenarios)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 			/**
 			 * The one path a question changes status — customer screen and
@@ -582,80 +621,89 @@ export function createSelenaRepositories(db: Db) {
 				value: { decision: "APPROVED" | "REJECTED"; text?: string },
 			) => {
 				writable(ctx);
-				const [scenario] = await db
-					.select()
-					.from(schema.svScenarios)
-					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
-					.limit(1);
-				if (!scenario) throw new Error("Not found: scenario is outside AuthContext tenant");
-				if (scenario.status !== "PROPOSED") throw new Error("SELENA_SCENARIO_NOT_REVIEWABLE");
-				const editedText = value.text?.trim();
-				if (editedText !== undefined && editedText === "") throw new Error("SELENA_SCENARIO_TEXT_EMPTY");
-				const [updated] = await db
-					.update(schema.svScenarios)
-					.set({
-						status: value.decision,
-						...(editedText === undefined ? {} : { text: editedText }),
-						updatedAt: new Date(),
-					})
-					.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
-					.returning();
-				await recordAudit(
-					db,
-					ctx,
-					value.decision === "APPROVED" ? "SCENARIO_APPROVED" : "SCENARIO_REJECTED",
-					"sv_scenarios",
-					scenarioId,
-					{ familyId: scenario.familyId, textEdited: editedText !== undefined && editedText !== scenario.text },
-				);
-				return updated;
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [scenario] = await tx
+						.select()
+						.from(schema.svScenarios)
+						.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
+						.limit(1);
+					if (!scenario) throw new Error("Not found: scenario is outside AuthContext tenant");
+					if (scenario.status !== "PROPOSED") throw new Error("SELENA_SCENARIO_NOT_REVIEWABLE");
+					const editedText = value.text?.trim();
+					if (editedText !== undefined && editedText === "") throw new Error("SELENA_SCENARIO_TEXT_EMPTY");
+					const [updated] = await tx
+						.update(schema.svScenarios)
+						.set({
+							status: value.decision,
+							...(editedText === undefined ? {} : { text: editedText }),
+							updatedAt: new Date(),
+						})
+						.where(and(eq(schema.svScenarios.id, scenarioId), eq(schema.svScenarios.organizationId, ctx.tenantId)))
+						.returning();
+					await recordAudit(
+						tx,
+						ctx,
+						value.decision === "APPROVED" ? "SCENARIO_APPROVED" : "SCENARIO_REJECTED",
+						"sv_scenarios",
+						scenarioId,
+						{ familyId: scenario.familyId, textEdited: editedText !== undefined && editedText !== scenario.text },
+					);
+					return updated;
+				});
 			},
 		},
 		entities: {
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
-				db
-					.select()
-					.from(schema.svEntities)
-					.where(and(eq(schema.svEntities.projectId, projectId), eq(schema.svEntities.organizationId, ctx.tenantId)))
-					.orderBy(desc(schema.svEntities.createdAt)),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svEntities)
+						.where(and(eq(schema.svEntities.projectId, projectId), eq(schema.svEntities.organizationId, ctx.tenantId)))
+						.orderBy(desc(schema.svEntities.createdAt)),
+				),
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svEntities.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				const parent = value.parentEntityId
-					? (
-							await db
-								.select({
-									id: schema.svEntities.id,
-									organizationId: schema.svEntities.organizationId,
-									projectId: schema.svEntities.projectId,
-								})
-								.from(schema.svEntities)
-								.where(eq(schema.svEntities.id, value.parentEntityId))
-								.limit(1)
-						)[0]
-					: undefined;
-				validateEntityParent({ ...value, organizationId: ctx.tenantId }, parent);
-				if (value.parentEntityId) {
-					const siblings = await db
-						.select({ id: schema.svEntities.id, parentEntityId: schema.svEntities.parentEntityId })
-						.from(schema.svEntities)
-						.where(
-							and(eq(schema.svEntities.projectId, value.projectId), eq(schema.svEntities.organizationId, ctx.tenantId)),
-						);
-					detectEntityCycle(siblings, {
-						id: value.id ?? globalThis.crypto.randomUUID(),
-						parentEntityId: value.parentEntityId,
-					});
-				}
-				return (
-					await db
-						.insert(schema.svEntities)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					const parent = value.parentEntityId
+						? (
+								await tx
+									.select({
+										id: schema.svEntities.id,
+										organizationId: schema.svEntities.organizationId,
+										projectId: schema.svEntities.projectId,
+									})
+									.from(schema.svEntities)
+									.where(eq(schema.svEntities.id, value.parentEntityId))
+									.limit(1)
+							)[0]
+						: undefined;
+					validateEntityParent({ ...value, organizationId: ctx.tenantId }, parent);
+					if (value.parentEntityId) {
+						const siblings = await tx
+							.select({ id: schema.svEntities.id, parentEntityId: schema.svEntities.parentEntityId })
+							.from(schema.svEntities)
+							.where(
+								and(
+									eq(schema.svEntities.projectId, value.projectId),
+									eq(schema.svEntities.organizationId, ctx.tenantId),
+								),
+							);
+						detectEntityCycle(siblings, {
+							id: value.id ?? globalThis.crypto.randomUUID(),
+							parentEntityId: value.parentEntityId,
+						});
+					}
+					return (
+						await tx
+							.insert(schema.svEntities)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 			setConfirmation: async (
 				ctx: SelenaRepositoryContext,
@@ -663,64 +711,74 @@ export function createSelenaRepositories(db: Db) {
 				status: (typeof schema.svEntityConfirmationEnum.enumValues)[number],
 			) => {
 				writable(ctx);
-				const [entity] = await db
-					.update(schema.svEntities)
-					.set({ confirmationStatus: status, updatedAt: new Date() })
-					.where(and(eq(schema.svEntities.id, entityId), eq(schema.svEntities.organizationId, ctx.tenantId)))
-					.returning();
+				const [entity] = await withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.update(schema.svEntities)
+						.set({ confirmationStatus: status, updatedAt: new Date() })
+						.where(and(eq(schema.svEntities.id, entityId), eq(schema.svEntities.organizationId, ctx.tenantId)))
+						.returning(),
+				);
 				if (!entity) throw new Error("Not found: entity is outside AuthContext tenant");
 				return entity;
 			},
 		},
 		locations: {
 			list: (ctx: SelenaRepositoryContext, entityId: string) =>
-				db
-					.select()
-					.from(schema.svBusinessLocations)
-					.where(
-						and(
-							eq(schema.svBusinessLocations.entityId, entityId),
-							eq(schema.svBusinessLocations.organizationId, ctx.tenantId),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svBusinessLocations)
+						.where(
+							and(
+								eq(schema.svBusinessLocations.entityId, entityId),
+								eq(schema.svBusinessLocations.organizationId, ctx.tenantId),
+							),
 						),
-					),
+				),
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svBusinessLocations.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				const [entity] = await db
-					.select({ id: schema.svEntities.id })
-					.from(schema.svEntities)
-					.where(and(eq(schema.svEntities.id, value.entityId), eq(schema.svEntities.organizationId, ctx.tenantId)))
-					.limit(1);
-				if (!entity) throw new Error("Not found: entity is outside AuthContext tenant");
-				return (
-					await db
-						.insert(schema.svBusinessLocations)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [entity] = await tx
+						.select({ id: schema.svEntities.id })
+						.from(schema.svEntities)
+						.where(and(eq(schema.svEntities.id, value.entityId), eq(schema.svEntities.organizationId, ctx.tenantId)))
+						.limit(1);
+					if (!entity) throw new Error("Not found: entity is outside AuthContext tenant");
+					return (
+						await tx
+							.insert(schema.svBusinessLocations)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 		},
 		cycles: {
 			list: (ctx: SelenaRepositoryContext, orderId: string) =>
-				db
-					.select()
-					.from(schema.svCycles)
-					.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svCycles.organizationId, ctx.tenantId))),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svCycles)
+						.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svCycles.organizationId, ctx.tenantId))),
+				),
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: Omit<typeof schema.svCycles.$inferInsert, "organizationId">,
 			) => {
 				writable(ctx);
-				await assertOrderOwned(ctx, value.orderId);
-				await assertLockOwned(ctx, value.lockId);
-				return (
-					await db
-						.insert(schema.svCycles)
-						.values({ ...value, organizationId: ctx.tenantId })
-						.returning()
-				)[0];
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertOrderOwned(ctx, value.orderId, tx);
+					await assertLockOwned(ctx, value.lockId, tx);
+					return (
+						await tx
+							.insert(schema.svCycles)
+							.values({ ...value, organizationId: ctx.tenantId })
+							.returning()
+					)[0];
+				});
 			},
 		},
 		// Order dispatch mints run permits: permission records that a later,
@@ -728,20 +786,22 @@ export function createSelenaRepositories(db: Db) {
 		// adapter, a queue, or the network — planning an order can never run it.
 		dispatch: {
 			listPermits: async (ctx: SelenaRepositoryContext, orderId: string) => {
-				await assertOrderOwned(ctx, orderId);
-				const cycleIds = (
-					await db
-						.select({ id: schema.svCycles.id })
-						.from(schema.svCycles)
-						.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svCycles.organizationId, ctx.tenantId)))
-				).map((cycle) => cycle.id);
-				if (cycleIds.length === 0) return [];
-				return db
-					.select()
-					.from(schema.svRunPermits)
-					.where(
-						and(inArray(schema.svRunPermits.cycleId, cycleIds), eq(schema.svRunPermits.organizationId, ctx.tenantId)),
-					);
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertOrderOwned(ctx, orderId, tx);
+					const cycleIds = (
+						await tx
+							.select({ id: schema.svCycles.id })
+							.from(schema.svCycles)
+							.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svCycles.organizationId, ctx.tenantId)))
+					).map((cycle) => cycle.id);
+					if (cycleIds.length === 0) return [];
+					return tx
+						.select()
+						.from(schema.svRunPermits)
+						.where(
+							and(inArray(schema.svRunPermits.cycleId, cycleIds), eq(schema.svRunPermits.organizationId, ctx.tenantId)),
+						);
+				});
 			},
 			createPermits: async (
 				ctx: SelenaRepositoryContext,
@@ -793,15 +853,17 @@ export function createSelenaRepositories(db: Db) {
 					// §9.2: the transaction that hit the boundary rolls back, so the
 					// incident is written outside it — the overflow must survive the
 					// rollback that contained it.
-					await db.insert(schema.svIncidents).values({
-						organizationId: ctx.tenantId,
-						orderId,
-						kind: "CARDINALITY_OVERFLOW",
-						detail,
+					await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+						await tx.insert(schema.svIncidents).values({
+							organizationId: ctx.tenantId,
+							orderId,
+							kind: "CARDINALITY_OVERFLOW",
+							detail,
+						});
 					});
 				};
 				try {
-					return await db.transaction(async (tx) => {
+					return await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 						// The order row was read before the lock; approving inside the
 						// transaction moves it, and everything below has to act on where
 						// it is now rather than where it was.
@@ -928,7 +990,7 @@ export function createSelenaRepositories(db: Db) {
 			claim: async (ctx: SelenaRepositoryContext, permitId: string, opts?: { now?: Date; journalClaimId?: string }) => {
 				writable(ctx);
 				const now = opts?.now ?? new Date();
-				return db.transaction(async (tx) => {
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 					const [permit] = await tx
 						.select()
 						.from(schema.svRunPermits)
@@ -1006,7 +1068,7 @@ export function createSelenaRepositories(db: Db) {
 				writable(ctx);
 				const parsed = runOutcomeSchema.parse(outcome);
 				const now = opts?.now ?? new Date();
-				return db.transaction(async (tx) => {
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 					const [run] = await tx
 						.select()
 						.from(schema.svRuns)
@@ -1183,7 +1245,8 @@ export function createSelenaRepositories(db: Db) {
 					return completed;
 				});
 			},
-			ledgerForCycle,
+			ledgerForCycle: (ctx: SelenaRepositoryContext, cycleId: string) =>
+				withOrganizationTransaction(db, ctx.tenantId, (tx) => ledgerForCycle(ctx, cycleId, tx)),
 			/**
 			 * The one way to reach a run's raw answer. Addendum §7: a client viewer
 			 * never receives an object-storage URL, and tenant authorization is
@@ -1192,42 +1255,46 @@ export function createSelenaRepositories(db: Db) {
 			 * reference it did not return. Every access leaves an audit row.
 			 */
 			rawEvidenceFor: async (ctx: SelenaRepositoryContext, runId: string) => {
-				const [run] = await db
-					.select({
-						runId: schema.svRuns.id,
-						cycleId: schema.svRuns.cycleId,
-						dispatchKey: schema.svRuns.dispatchKey,
-						rawResponseReference: schema.svRuns.rawResponseReference,
-						extractorVersion: schema.svRuns.extractorVersion,
-						finishedAt: schema.svRuns.finishedAt,
-					})
-					.from(schema.svRuns)
-					.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
-					.limit(1);
-				if (!run) throw new Error("Not found: run is outside AuthContext tenant");
-				await recordAudit(db, ctx, "RAW_EVIDENCE_ACCESSED", "sv_runs", runId, { dispatchKey: run.dispatchKey });
-				return run;
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [run] = await tx
+						.select({
+							runId: schema.svRuns.id,
+							cycleId: schema.svRuns.cycleId,
+							dispatchKey: schema.svRuns.dispatchKey,
+							rawResponseReference: schema.svRuns.rawResponseReference,
+							extractorVersion: schema.svRuns.extractorVersion,
+							finishedAt: schema.svRuns.finishedAt,
+						})
+						.from(schema.svRuns)
+						.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
+						.limit(1);
+					if (!run) throw new Error("Not found: run is outside AuthContext tenant");
+					await recordAudit(tx, ctx, "RAW_EVIDENCE_ACCESSED", "sv_runs", runId, { dispatchKey: run.dispatchKey });
+					return run;
+				});
 			},
 			/** Every terminal run of an order, newest cycle first. */
 			listForOrder: async (ctx: SelenaRepositoryContext, orderId: string) => {
-				await assertOrderOwned(ctx, orderId);
-				return db
-					.select({
-						id: schema.svRuns.id,
-						cycleId: schema.svRuns.cycleId,
-						scenarioId: schema.svRuns.scenarioId,
-						systemId: schema.svRuns.systemId,
-						channel: schema.svRuns.channel,
-						captureMode: schema.svRuns.captureMode,
-						status: schema.svRuns.status,
-						validity: schema.svRuns.validity,
-						canonicalPayload: schema.svRuns.canonicalPayload,
-						finishedAt: schema.svRuns.finishedAt,
-					})
-					.from(schema.svRuns)
-					.innerJoin(schema.svCycles, eq(schema.svRuns.cycleId, schema.svCycles.id))
-					.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svRuns.organizationId, ctx.tenantId)))
-					.orderBy(desc(schema.svRuns.finishedAt));
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertOrderOwned(ctx, orderId, tx);
+					return tx
+						.select({
+							id: schema.svRuns.id,
+							cycleId: schema.svRuns.cycleId,
+							scenarioId: schema.svRuns.scenarioId,
+							systemId: schema.svRuns.systemId,
+							channel: schema.svRuns.channel,
+							captureMode: schema.svRuns.captureMode,
+							status: schema.svRuns.status,
+							validity: schema.svRuns.validity,
+							canonicalPayload: schema.svRuns.canonicalPayload,
+							finishedAt: schema.svRuns.finishedAt,
+						})
+						.from(schema.svRuns)
+						.innerJoin(schema.svCycles, eq(schema.svRuns.cycleId, schema.svCycles.id))
+						.where(and(eq(schema.svCycles.orderId, orderId), eq(schema.svRuns.organizationId, ctx.tenantId)))
+						.orderBy(desc(schema.svRuns.finishedAt));
+				});
 			},
 			/**
 			 * Attach findings to a completed run, beside the answer they were read
@@ -1237,55 +1304,64 @@ export function createSelenaRepositories(db: Db) {
 			 */
 			saveAnalysis: async (ctx: SelenaRepositoryContext, runId: string, analysis: unknown) => {
 				writable(ctx);
-				const [run] = await db
-					.select({ id: schema.svRuns.id, canonicalPayload: schema.svRuns.canonicalPayload })
-					.from(schema.svRuns)
-					.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
-					.limit(1);
-				if (!run) throw new Error("Not found: run is outside AuthContext tenant");
-				const payload = (run.canonicalPayload ?? {}) as Record<string, unknown>;
-				const [updated] = await db
-					.update(schema.svRuns)
-					.set({ canonicalPayload: { ...payload, analysis } })
-					.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
-					.returning({ id: schema.svRuns.id });
-				return updated;
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [run] = await tx
+						.select({ id: schema.svRuns.id, canonicalPayload: schema.svRuns.canonicalPayload })
+						.from(schema.svRuns)
+						.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
+						.for("update")
+						.limit(1);
+					if (!run) throw new Error("Not found: run is outside AuthContext tenant");
+					const payload = (run.canonicalPayload ?? {}) as Record<string, unknown>;
+					const [updated] = await tx
+						.update(schema.svRuns)
+						.set({ canonicalPayload: { ...payload, analysis } })
+						.where(and(eq(schema.svRuns.id, runId), eq(schema.svRuns.organizationId, ctx.tenantId)))
+						.returning({ id: schema.svRuns.id });
+					return updated;
+				});
 			},
 		},
 		incidents: {
 			list: (ctx: SelenaRepositoryContext, opts?: { status?: "OPEN" | "RESOLVED" }) =>
-				db
-					.select()
-					.from(schema.svIncidents)
-					.where(
-						and(
-							eq(schema.svIncidents.organizationId, ctx.tenantId),
-							...(opts?.status ? [eq(schema.svIncidents.status, opts.status)] : []),
-						),
-					)
-					.orderBy(desc(schema.svIncidents.createdAt)),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svIncidents)
+						.where(
+							and(
+								eq(schema.svIncidents.organizationId, ctx.tenantId),
+								...(opts?.status ? [eq(schema.svIncidents.status, opts.status)] : []),
+							),
+						)
+						.orderBy(desc(schema.svIncidents.createdAt)),
+				),
 			resolve: async (ctx: SelenaRepositoryContext, incidentId: string, opts?: { now?: Date }) => {
 				writable(ctx);
 				const now = opts?.now ?? new Date();
-				const [resolved] = await db
-					.update(schema.svIncidents)
-					.set({ status: "RESOLVED", resolvedAt: now })
-					.where(and(eq(schema.svIncidents.id, incidentId), eq(schema.svIncidents.organizationId, ctx.tenantId)))
-					.returning();
-				if (!resolved) throw new Error("Not found: incident is outside AuthContext tenant");
-				await recordAudit(db, ctx, "INCIDENT_RESOLVED", "sv_incidents", incidentId, { kind: resolved.kind });
-				return resolved;
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [resolved] = await tx
+						.update(schema.svIncidents)
+						.set({ status: "RESOLVED", resolvedAt: now })
+						.where(and(eq(schema.svIncidents.id, incidentId), eq(schema.svIncidents.organizationId, ctx.tenantId)))
+						.returning();
+					if (!resolved) throw new Error("Not found: incident is outside AuthContext tenant");
+					await recordAudit(tx, ctx, "INCIDENT_RESOLVED", "sv_incidents", incidentId, { kind: resolved.kind });
+					return resolved;
+				});
 			},
 		},
 		// Read-only on purpose: the ledger is appended where the charge happens
 		// (run completion) and nowhere else.
 		costEvents: {
 			listForCycle: (ctx: SelenaRepositoryContext, cycleId: string) =>
-				db
-					.select()
-					.from(schema.svCostEvents)
-					.where(and(eq(schema.svCostEvents.cycleId, cycleId), eq(schema.svCostEvents.organizationId, ctx.tenantId)))
-					.orderBy(desc(schema.svCostEvents.createdAt)),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svCostEvents)
+						.where(and(eq(schema.svCostEvents.cycleId, cycleId), eq(schema.svCostEvents.organizationId, ctx.tenantId)))
+						.orderBy(desc(schema.svCostEvents.createdAt)),
+				),
 		},
 		// Addendum §5.4 / §8: the Source Opportunity Map and the Citation Gaps on
 		// it are one aggregation, so every cited source is stored, not only the
@@ -1293,123 +1369,129 @@ export function createSelenaRepositories(db: Db) {
 		// does turn up alongside the brand" unprovable after the fact.
 		citationGaps: {
 			listForCycle: (ctx: SelenaRepositoryContext, cycleId: string) =>
-				db
-					.select()
-					.from(schema.svCitationGapSnapshots)
-					.where(
-						and(
-							eq(schema.svCitationGapSnapshots.cycleId, cycleId),
-							eq(schema.svCitationGapSnapshots.organizationId, ctx.tenantId),
-						),
-					)
-					.orderBy(desc(schema.svCitationGapSnapshots.competitorCitationCount)),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svCitationGapSnapshots)
+						.where(
+							and(
+								eq(schema.svCitationGapSnapshots.cycleId, cycleId),
+								eq(schema.svCitationGapSnapshots.organizationId, ctx.tenantId),
+							),
+						)
+						.orderBy(desc(schema.svCitationGapSnapshots.competitorCitationCount)),
+				),
 			listForProject: (ctx: SelenaRepositoryContext, projectId: string, opts?: { gapsOnly?: boolean }) =>
-				db
-					.select()
-					.from(schema.svCitationGapSnapshots)
-					.where(
-						and(
-							eq(schema.svCitationGapSnapshots.projectId, projectId),
-							eq(schema.svCitationGapSnapshots.organizationId, ctx.tenantId),
-							...(opts?.gapsOnly ? [isNotNull(schema.svCitationGapSnapshots.gapType)] : []),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svCitationGapSnapshots)
+						.where(
+							and(
+								eq(schema.svCitationGapSnapshots.projectId, projectId),
+								eq(schema.svCitationGapSnapshots.organizationId, ctx.tenantId),
+								...(opts?.gapsOnly ? [isNotNull(schema.svCitationGapSnapshots.gapType)] : []),
+							),
+						)
+						.orderBy(
+							desc(schema.svCitationGapSnapshots.createdAt),
+							desc(schema.svCitationGapSnapshots.competitorCitationCount),
 						),
-					)
-					.orderBy(
-						desc(schema.svCitationGapSnapshots.createdAt),
-						desc(schema.svCitationGapSnapshots.competitorCitationCount),
-					),
+				),
 			snapshot: async (ctx: SelenaRepositoryContext, cycleId: string) => {
 				writable(ctx);
-				const [context] = await db
-					.select({
-						projectId: schema.svProjects.id,
-						lockId: schema.svCycles.lockId,
-						lockSnapshot: schema.svConfigurationLocks.snapshot,
-					})
-					.from(schema.svCycles)
-					.innerJoin(schema.svOrders, eq(schema.svOrders.id, schema.svCycles.orderId))
-					.innerJoin(schema.svProjects, eq(schema.svProjects.id, schema.svOrders.projectId))
-					.innerJoin(schema.svConfigurationLocks, eq(schema.svConfigurationLocks.id, schema.svCycles.lockId))
-					.where(and(eq(schema.svCycles.id, cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
-					.limit(1);
-				if (!context) throw new Error("Not found: cycle is outside AuthContext tenant");
-				// Same precedence as extraction: the lock is what the cycle was sold
-				// against, so a profile edited afterwards cannot redefine which
-				// domains counted as the brand's own while these runs were measured.
-				const [live] = await db
-					.select({
-						brandName: schema.svProjectProfiles.brandName,
-						primaryDomain: schema.svProjectProfiles.primaryDomain,
-						competitorSnapshot: schema.svProjectProfiles.competitorSnapshot,
-					})
-					.from(schema.svProjectProfiles)
-					.where(
-						and(
-							eq(schema.svProjectProfiles.projectId, context.projectId),
-							eq(schema.svProjectProfiles.organizationId, ctx.tenantId),
-						),
-					)
-					.limit(1);
-				const profile = parseLockedProfile(context.lockSnapshot) ?? live;
-				if (!profile) throw new Error("SELENA_PROJECT_PROFILE_NOT_FOUND");
-				const { rows, mentions } = await ledgerForCycle(ctx, cycleId);
-				const report = computeCitationGaps({ rows, mentions, ownedDomains: ownedDomainsFromProfile(profile) });
-				if (report.sources.length === 0) return [];
-				const stored = await db
-					.insert(schema.svCitationGapSnapshots)
-					.values(
-						report.sources.map((source) => ({
-							organizationId: ctx.tenantId,
-							projectId: context.projectId,
-							cycleId,
-							configurationLockId: context.lockId,
-							sourceDomain: source.domain,
-							sourceUrls: source.urls,
-							ownedCitationCount: source.ownedCitationCount,
-							competitorCitationCount: source.competitorCitationCount,
-							competitorNames: source.competitorNames,
-							engineCount: source.engineCount,
-							scenarioCount: source.scenarioCount,
-							repeatStability: source.repeatStability === null ? null : String(source.repeatStability),
-							firstSeen: source.firstSeen,
-							lastSeen: source.lastSeen,
-							gapType: source.gapType,
-							priorityBand: source.priorityBand,
-							formulaVersion: report.formulaVersion,
-							evidenceRunIds: source.evidenceRunIds,
-						})),
-					)
-					// Recomputing the same formula over the same immutable runs must
-					// land on the same row rather than a second opinion beside it.
-					.onConflictDoUpdate({
-						target: [
-							schema.svCitationGapSnapshots.cycleId,
-							schema.svCitationGapSnapshots.sourceDomain,
-							schema.svCitationGapSnapshots.formulaVersion,
-						],
-						set: {
-							sourceUrls: sql`excluded.source_urls`,
-							ownedCitationCount: sql`excluded.owned_citation_count`,
-							competitorCitationCount: sql`excluded.competitor_citation_count`,
-							competitorNames: sql`excluded.competitor_names`,
-							engineCount: sql`excluded.engine_count`,
-							scenarioCount: sql`excluded.scenario_count`,
-							repeatStability: sql`excluded.repeat_stability`,
-							firstSeen: sql`excluded.first_seen`,
-							lastSeen: sql`excluded.last_seen`,
-							gapType: sql`excluded.gap_type`,
-							priorityBand: sql`excluded.priority_band`,
-							evidenceRunIds: sql`excluded.evidence_run_ids`,
-						},
-					})
-					.returning();
-				await recordAudit(db, ctx, "CITATION_GAP_SNAPSHOT", "sv_cycles", cycleId, {
-					formulaVersion: report.formulaVersion,
-					measuredRuns: report.measuredRuns,
-					sources: report.sources.length,
-					gaps: report.gaps.length,
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [context] = await tx
+						.select({
+							projectId: schema.svProjects.id,
+							lockId: schema.svCycles.lockId,
+							lockSnapshot: schema.svConfigurationLocks.snapshot,
+						})
+						.from(schema.svCycles)
+						.innerJoin(schema.svOrders, eq(schema.svOrders.id, schema.svCycles.orderId))
+						.innerJoin(schema.svProjects, eq(schema.svProjects.id, schema.svOrders.projectId))
+						.innerJoin(schema.svConfigurationLocks, eq(schema.svConfigurationLocks.id, schema.svCycles.lockId))
+						.where(and(eq(schema.svCycles.id, cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
+						.limit(1);
+					if (!context) throw new Error("Not found: cycle is outside AuthContext tenant");
+					// Same precedence as extraction: the lock is what the cycle was sold
+					// against, so a profile edited afterwards cannot redefine which
+					// domains counted as the brand's own while these runs were measured.
+					const [live] = await tx
+						.select({
+							brandName: schema.svProjectProfiles.brandName,
+							primaryDomain: schema.svProjectProfiles.primaryDomain,
+							competitorSnapshot: schema.svProjectProfiles.competitorSnapshot,
+						})
+						.from(schema.svProjectProfiles)
+						.where(
+							and(
+								eq(schema.svProjectProfiles.projectId, context.projectId),
+								eq(schema.svProjectProfiles.organizationId, ctx.tenantId),
+							),
+						)
+						.limit(1);
+					const profile = parseLockedProfile(context.lockSnapshot) ?? live;
+					if (!profile) throw new Error("SELENA_PROJECT_PROFILE_NOT_FOUND");
+					const { rows, mentions } = await ledgerForCycle(ctx, cycleId, tx);
+					const report = computeCitationGaps({ rows, mentions, ownedDomains: ownedDomainsFromProfile(profile) });
+					if (report.sources.length === 0) return [];
+					const stored = await tx
+						.insert(schema.svCitationGapSnapshots)
+						.values(
+							report.sources.map((source) => ({
+								organizationId: ctx.tenantId,
+								projectId: context.projectId,
+								cycleId,
+								configurationLockId: context.lockId,
+								sourceDomain: source.domain,
+								sourceUrls: source.urls,
+								ownedCitationCount: source.ownedCitationCount,
+								competitorCitationCount: source.competitorCitationCount,
+								competitorNames: source.competitorNames,
+								engineCount: source.engineCount,
+								scenarioCount: source.scenarioCount,
+								repeatStability: source.repeatStability === null ? null : String(source.repeatStability),
+								firstSeen: source.firstSeen,
+								lastSeen: source.lastSeen,
+								gapType: source.gapType,
+								priorityBand: source.priorityBand,
+								formulaVersion: report.formulaVersion,
+								evidenceRunIds: source.evidenceRunIds,
+							})),
+						)
+						// Recomputing the same formula over the same immutable runs must
+						// land on the same row rather than a second opinion beside it.
+						.onConflictDoUpdate({
+							target: [
+								schema.svCitationGapSnapshots.cycleId,
+								schema.svCitationGapSnapshots.sourceDomain,
+								schema.svCitationGapSnapshots.formulaVersion,
+							],
+							set: {
+								sourceUrls: sql`excluded.source_urls`,
+								ownedCitationCount: sql`excluded.owned_citation_count`,
+								competitorCitationCount: sql`excluded.competitor_citation_count`,
+								competitorNames: sql`excluded.competitor_names`,
+								engineCount: sql`excluded.engine_count`,
+								scenarioCount: sql`excluded.scenario_count`,
+								repeatStability: sql`excluded.repeat_stability`,
+								firstSeen: sql`excluded.first_seen`,
+								lastSeen: sql`excluded.last_seen`,
+								gapType: sql`excluded.gap_type`,
+								priorityBand: sql`excluded.priority_band`,
+								evidenceRunIds: sql`excluded.evidence_run_ids`,
+							},
+						})
+						.returning();
+					await recordAudit(tx, ctx, "CITATION_GAP_SNAPSHOT", "sv_cycles", cycleId, {
+						formulaVersion: report.formulaVersion,
+						measuredRuns: report.measuredRuns,
+						sources: report.sources.length,
+						gaps: report.gaps.length,
+					});
+					return stored;
 				});
-				return stored;
 			},
 		},
 		// RC7 Phase E — manual pilot. These writers are the only path into the
@@ -1418,112 +1500,129 @@ export function createSelenaRepositories(db: Db) {
 		// happens off-system by a human, the backend only records and reviews it.
 		pilotCycles: {
 			list: (ctx: SelenaRepositoryContext) =>
-				db
-					.select()
-					.from(schema.svPilotCycles)
-					.where(eq(schema.svPilotCycles.organizationId, ctx.tenantId))
-					.orderBy(desc(schema.svPilotCycles.createdAt)),
-			get: (ctx: SelenaRepositoryContext, pilotCycleId: string) => getPilotCycleOwned(ctx, pilotCycleId),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svPilotCycles)
+						.where(eq(schema.svPilotCycles.organizationId, ctx.tenantId))
+						.orderBy(desc(schema.svPilotCycles.createdAt)),
+				),
+			get: (ctx: SelenaRepositoryContext, pilotCycleId: string) =>
+				withOrganizationTransaction(db, ctx.tenantId, (tx) => getPilotCycleOwned(ctx, pilotCycleId, tx)),
 			create: async (
 				ctx: SelenaRepositoryContext,
 				value: { projectId: string; lockId: string; idempotencyKey?: string },
 			) => {
 				writable(ctx);
-				await assertProjectOwned(ctx, value.projectId);
-				const { lock, block } = await lockBlockFor(ctx, value.lockId);
-				if (lock.projectId !== value.projectId)
-					throw new Error("Not found: configuration lock is outside AuthContext tenant");
-				if (value.idempotencyKey) {
-					const [priorCreate] = await db
-						.select({ subjectId: schema.svAuditEvents.subjectId })
-						.from(schema.svAuditEvents)
-						.where(
-							and(
-								eq(schema.svAuditEvents.organizationId, ctx.tenantId),
-								eq(schema.svAuditEvents.event, "PILOT_CYCLE_CREATED"),
-								sql`${schema.svAuditEvents.details} ->> 'idempotencyKey' = ${value.idempotencyKey}`,
-							),
-						)
-						.limit(1);
-					if (priorCreate) return getPilotCycleOwned(ctx, priorCreate.subjectId);
-				}
-				const [cycle] = await db
-					.insert(schema.svPilotCycles)
-					.values({
-						organizationId: ctx.tenantId,
-						projectId: value.projectId,
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertProjectOwned(ctx, value.projectId, tx);
+					const { lock, block } = await lockBlockFor(ctx, value.lockId, tx);
+					if (lock.projectId !== value.projectId)
+						throw new Error("Not found: configuration lock is outside AuthContext tenant");
+					if (value.idempotencyKey) {
+						const [priorCreate] = await tx
+							.select({ subjectId: schema.svAuditEvents.subjectId })
+							.from(schema.svAuditEvents)
+							.where(
+								and(
+									eq(schema.svAuditEvents.organizationId, ctx.tenantId),
+									eq(schema.svAuditEvents.event, "PILOT_CYCLE_CREATED"),
+									sql`${schema.svAuditEvents.details} ->> 'idempotencyKey' = ${value.idempotencyKey}`,
+								),
+							)
+							.limit(1);
+						if (priorCreate) return getPilotCycleOwned(ctx, priorCreate.subjectId, tx);
+					}
+					const [cycle] = await tx
+						.insert(schema.svPilotCycles)
+						.values({
+							organizationId: ctx.tenantId,
+							projectId: value.projectId,
+							lockId: value.lockId,
+							expectedObservations: expectedObservations(block.scenarios, block.observerContexts, block.repeats),
+							captureProtocolVersion: block.captureProtocolVersion,
+						})
+						.returning();
+					await recordAudit(tx, ctx, "PILOT_CYCLE_CREATED", "sv_pilot_cycles", cycle.id, {
 						lockId: value.lockId,
-						expectedObservations: expectedObservations(block.scenarios, block.observerContexts, block.repeats),
-						captureProtocolVersion: block.captureProtocolVersion,
-					})
-					.returning();
-				await recordAudit(db, ctx, "PILOT_CYCLE_CREATED", "sv_pilot_cycles", cycle.id, {
-					lockId: value.lockId,
-					idempotencyKey: value.idempotencyKey ?? null,
+						idempotencyKey: value.idempotencyKey ?? null,
+					});
+					return cycle;
 				});
-				return cycle;
 			},
 		},
 		captureTasks: {
 			list: (ctx: SelenaRepositoryContext, pilotCycleId: string) =>
-				db
-					.select()
-					.from(schema.svCaptureTasks)
-					.where(
-						and(
-							eq(schema.svCaptureTasks.pilotCycleId, pilotCycleId),
-							eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svCaptureTasks)
+						.where(
+							and(
+								eq(schema.svCaptureTasks.pilotCycleId, pilotCycleId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+							),
 						),
-					),
+				),
 			generate: async (ctx: SelenaRepositoryContext, pilotCycleId: string, idempotencyKey?: string) => {
 				writable(ctx);
-				const cycle = await getPilotCycleOwned(ctx, pilotCycleId);
-				const { block } = await lockBlockFor(ctx, cycle.lockId);
-				const planned = planCaptureTasks(block);
-				if (planned.length !== cycle.expectedObservations) {
-					// The lock and the cycle disagree about how much work was sold;
-					// that is a configuration incident, not a failed request.
-					await recordPilotOverflow(ctx, pilotCycleId, "OBSERVATION_CARDINALITY_INVALID");
-					throw new Error("OBSERVATION_CARDINALITY_INVALID");
+				try {
+					return await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+						const cycle = await getPilotCycleOwned(ctx, pilotCycleId, tx);
+						const { block } = await lockBlockFor(ctx, cycle.lockId, tx);
+						const planned = planCaptureTasks(block);
+						if (planned.length !== cycle.expectedObservations) {
+							// The lock and the cycle disagree about how much work was sold;
+							// that is a configuration incident, not a failed request.
+							throw new Error("OBSERVATION_CARDINALITY_INVALID");
+						}
+						const scenarioIds = [...new Set(planned.map((task) => task.scenarioId))];
+						const owned = await tx
+							.select({ id: schema.svScenarios.id })
+							.from(schema.svScenarios)
+							.where(
+								and(inArray(schema.svScenarios.id, scenarioIds), eq(schema.svScenarios.organizationId, ctx.tenantId)),
+							);
+						if (owned.length !== scenarioIds.length)
+							throw new Error("Not found: scenario is outside AuthContext tenant");
+						// The matrix unique index makes regeneration idempotent: replays
+						// insert nothing and can never exceed the planned cardinality.
+						const inserted = await tx
+							.insert(schema.svCaptureTasks)
+							.values(
+								planned.map((task) => ({
+									organizationId: ctx.tenantId,
+									pilotCycleId,
+									scenarioId: task.scenarioId,
+									contextHash: task.contextHash,
+									contextSnapshot: task.contextSnapshot,
+									repeatIndex: task.repeatIndex,
+									queryTextSnapshot: task.queryTextSnapshot,
+									targetEntityIdsSnapshot: task.targetEntityIdsSnapshot,
+									idempotencyKey: `${pilotCycleId}:${task.dedupeKey}`,
+								})),
+							)
+							.onConflictDoNothing({
+								target: [
+									schema.svCaptureTasks.pilotCycleId,
+									schema.svCaptureTasks.scenarioId,
+									schema.svCaptureTasks.contextHash,
+									schema.svCaptureTasks.repeatIndex,
+								],
+							})
+							.returning();
+						await recordAudit(tx, ctx, "CAPTURE_TASKS_GENERATED", "sv_pilot_cycles", pilotCycleId, {
+							planned: planned.length,
+							inserted: inserted.length,
+							idempotencyKey: idempotencyKey ?? null,
+						});
+						return inserted;
+					});
+				} catch (error) {
+					if (error instanceof Error && error.message === "OBSERVATION_CARDINALITY_INVALID")
+						await recordPilotOverflow(ctx, pilotCycleId, error.message);
+					throw error;
 				}
-				const scenarioIds = [...new Set(planned.map((task) => task.scenarioId))];
-				const owned = await db
-					.select({ id: schema.svScenarios.id })
-					.from(schema.svScenarios)
-					.where(and(inArray(schema.svScenarios.id, scenarioIds), eq(schema.svScenarios.organizationId, ctx.tenantId)));
-				if (owned.length !== scenarioIds.length) throw new Error("Not found: scenario is outside AuthContext tenant");
-				// The matrix unique index makes regeneration idempotent: replays
-				// insert nothing and can never exceed the planned cardinality.
-				const inserted = await db
-					.insert(schema.svCaptureTasks)
-					.values(
-						planned.map((task) => ({
-							organizationId: ctx.tenantId,
-							pilotCycleId,
-							scenarioId: task.scenarioId,
-							contextHash: task.contextHash,
-							contextSnapshot: task.contextSnapshot,
-							repeatIndex: task.repeatIndex,
-							queryTextSnapshot: task.queryTextSnapshot,
-							targetEntityIdsSnapshot: task.targetEntityIdsSnapshot,
-							idempotencyKey: `${pilotCycleId}:${task.dedupeKey}`,
-						})),
-					)
-					.onConflictDoNothing({
-						target: [
-							schema.svCaptureTasks.pilotCycleId,
-							schema.svCaptureTasks.scenarioId,
-							schema.svCaptureTasks.contextHash,
-							schema.svCaptureTasks.repeatIndex,
-						],
-					})
-					.returning();
-				await recordAudit(db, ctx, "CAPTURE_TASKS_GENERATED", "sv_pilot_cycles", pilotCycleId, {
-					planned: planned.length,
-					inserted: inserted.length,
-					idempotencyKey: idempotencyKey ?? null,
-				});
-				return inserted;
 			},
 		},
 		observations: {
@@ -1552,19 +1651,22 @@ export function createSelenaRepositories(db: Db) {
 				},
 			) => {
 				writable(ctx);
-				const [task] = await db
-					.select()
-					.from(schema.svCaptureTasks)
-					.where(
-						and(
-							eq(schema.svCaptureTasks.id, input.captureTaskId),
-							eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
-						),
-					)
-					.limit(1);
-				if (!task) throw new Error("Not found: capture task is outside AuthContext tenant");
-				const cycle = await getPilotCycleOwned(ctx, task.pilotCycleId);
-				const { block } = await lockBlockFor(ctx, cycle.lockId);
+				const { task, cycle, block } = await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const [task] = await tx
+						.select()
+						.from(schema.svCaptureTasks)
+						.where(
+							and(
+								eq(schema.svCaptureTasks.id, input.captureTaskId),
+								eq(schema.svCaptureTasks.organizationId, ctx.tenantId),
+							),
+						)
+						.limit(1);
+					if (!task) throw new Error("Not found: capture task is outside AuthContext tenant");
+					const cycle = await getPilotCycleOwned(ctx, task.pilotCycleId, tx);
+					const { block } = await lockBlockFor(ctx, cycle.lockId, tx);
+					return { task, cycle, block };
+				});
 				assertObservationSubmission(
 					{
 						queryText: input.queryText,
@@ -1596,19 +1698,21 @@ export function createSelenaRepositories(db: Db) {
 					context,
 				});
 				if (contextHash(context) !== task.contextHash) throw new Error("OBSERVATION_CONTEXT_MISMATCH");
-				const [existing] = await db
-					.select()
-					.from(schema.svLocalObservations)
-					.where(
-						and(
-							eq(schema.svLocalObservations.captureTaskId, task.id),
-							eq(schema.svLocalObservations.organizationId, ctx.tenantId),
-						),
-					)
-					.limit(1);
+				const [existing] = await withOrganizationTransaction(db, ctx.tenantId, (tx) =>
+					tx
+						.select()
+						.from(schema.svLocalObservations)
+						.where(
+							and(
+								eq(schema.svLocalObservations.captureTaskId, task.id),
+								eq(schema.svLocalObservations.organizationId, ctx.tenantId),
+							),
+						)
+						.limit(1),
+				);
 				if (existing) return existing;
 				try {
-					return await db.transaction(async (tx) => {
+					return await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 						// The counter update and cardinality check share the row lock, so
 						// concurrent submits cannot mint observation expected+1.
 						const [lockedCycle] = await tx
@@ -1686,7 +1790,7 @@ export function createSelenaRepositories(db: Db) {
 				writable(ctx);
 				if (!observationReviewDecisions.includes(input.decision))
 					throw new Error("OBSERVATION_REVIEW_DECISION_INVALID");
-				return db.transaction(async (tx) => {
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 					const [observation] = await tx
 						.select()
 						.from(schema.svLocalObservations)
@@ -1799,39 +1903,44 @@ export function createSelenaRepositories(db: Db) {
 				},
 			) => {
 				writable(ctx);
-				const observation = await getObservationOwned(ctx, value.observationId);
-				assertMentionMatch({ matchStatus: value.matchStatus, matchedEntityId: value.matchedEntityId });
-				const explicitPosition = resolveExplicitPosition(observation.orderingState, value.explicitPosition);
-				if (value.matchedEntityId) {
-					const [entity] = await db
-						.select({ id: schema.svEntities.id })
-						.from(schema.svEntities)
-						.where(
-							and(eq(schema.svEntities.id, value.matchedEntityId), eq(schema.svEntities.organizationId, ctx.tenantId)),
-						)
-						.limit(1);
-					if (!entity) throw new Error("Not found: entity is outside AuthContext tenant");
-				}
-				const [mention] = await db
-					.insert(schema.svObservationMentions)
-					.values({
-						organizationId: ctx.tenantId,
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const observation = await getObservationOwned(ctx, value.observationId, tx);
+					assertMentionMatch({ matchStatus: value.matchStatus, matchedEntityId: value.matchedEntityId });
+					const explicitPosition = resolveExplicitPosition(observation.orderingState, value.explicitPosition);
+					if (value.matchedEntityId) {
+						const [entity] = await tx
+							.select({ id: schema.svEntities.id })
+							.from(schema.svEntities)
+							.where(
+								and(
+									eq(schema.svEntities.id, value.matchedEntityId),
+									eq(schema.svEntities.organizationId, ctx.tenantId),
+								),
+							)
+							.limit(1);
+						if (!entity) throw new Error("Not found: entity is outside AuthContext tenant");
+					}
+					const [mention] = await tx
+						.insert(schema.svObservationMentions)
+						.values({
+							organizationId: ctx.tenantId,
+							observationId: value.observationId,
+							rawMentionText: value.rawMentionText,
+							matchedEntityId: value.matchedEntityId ?? null,
+							mentionRole: value.mentionRole,
+							matchStatus: value.matchStatus,
+							matchConfidence: value.matchConfidence == null ? null : String(value.matchConfidence),
+							explicitPosition,
+							orderingBasis: value.orderingBasis ?? null,
+							factualError: value.factualError ?? false,
+							evidenceLocator: value.evidenceLocator ?? null,
+						})
+						.returning();
+					await recordAudit(tx, ctx, "MENTION_ADDED", "sv_observation_mentions", mention.id, {
 						observationId: value.observationId,
-						rawMentionText: value.rawMentionText,
-						matchedEntityId: value.matchedEntityId ?? null,
-						mentionRole: value.mentionRole,
-						matchStatus: value.matchStatus,
-						matchConfidence: value.matchConfidence == null ? null : String(value.matchConfidence),
-						explicitPosition,
-						orderingBasis: value.orderingBasis ?? null,
-						factualError: value.factualError ?? false,
-						evidenceLocator: value.evidenceLocator ?? null,
-					})
-					.returning();
-				await recordAudit(db, ctx, "MENTION_ADDED", "sv_observation_mentions", mention.id, {
-					observationId: value.observationId,
+					});
+					return mention;
 				});
-				return mention;
 			},
 		},
 		evidenceAssets: {
@@ -1849,26 +1958,28 @@ export function createSelenaRepositories(db: Db) {
 				},
 			) => {
 				writable(ctx);
-				await getObservationOwned(ctx, value.observationId);
-				const [asset] = await db
-					.insert(schema.svObservationEvidenceAssets)
-					.values({
-						organizationId: ctx.tenantId,
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await getObservationOwned(ctx, value.observationId, tx);
+					const [asset] = await tx
+						.insert(schema.svObservationEvidenceAssets)
+						.values({
+							organizationId: ctx.tenantId,
+							observationId: value.observationId,
+							assetType: value.assetType,
+							mimeType: value.mimeType,
+							sizeBytes: value.sizeBytes,
+							sha256: value.sha256,
+							sequenceIndex: value.sequenceIndex,
+							privateObjectReference: value.privateObjectReference,
+							uploadedBy: ctx.actorId,
+							capturedAt: new Date(value.capturedAt),
+						})
+						.returning();
+					await recordAudit(tx, ctx, "EVIDENCE_ASSET_ADDED", "sv_observation_evidence_assets", asset.id, {
 						observationId: value.observationId,
-						assetType: value.assetType,
-						mimeType: value.mimeType,
-						sizeBytes: value.sizeBytes,
-						sha256: value.sha256,
-						sequenceIndex: value.sequenceIndex,
-						privateObjectReference: value.privateObjectReference,
-						uploadedBy: ctx.actorId,
-						capturedAt: new Date(value.capturedAt),
-					})
-					.returning();
-				await recordAudit(db, ctx, "EVIDENCE_ASSET_ADDED", "sv_observation_evidence_assets", asset.id, {
-					observationId: value.observationId,
+					});
+					return asset;
 				});
-				return asset;
 			},
 		},
 		// Human QC sign-off ledger: assertExpertVerified's storage. Publication
@@ -1889,22 +2000,24 @@ export function createSelenaRepositories(db: Db) {
 			) => {
 				writable(ctx);
 				assertQcDecision(input.decision);
-				await assertOrderOwned(ctx, input.orderId);
-				if (input.cycleId) {
-					const [cycle] = await db
-						.select({ id: schema.svCycles.id, orderId: schema.svCycles.orderId })
-						.from(schema.svCycles)
-						.where(and(eq(schema.svCycles.id, input.cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
-						.limit(1);
-					if (!cycle || cycle.orderId !== input.orderId)
-						throw new Error("Not found: cycle is outside AuthContext tenant");
-				}
+				await withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					await assertOrderOwned(ctx, input.orderId, tx);
+					if (input.cycleId) {
+						const [cycle] = await tx
+							.select({ id: schema.svCycles.id, orderId: schema.svCycles.orderId })
+							.from(schema.svCycles)
+							.where(and(eq(schema.svCycles.id, input.cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
+							.limit(1);
+						if (!cycle || cycle.orderId !== input.orderId)
+							throw new Error("Not found: cycle is outside AuthContext tenant");
+					}
+				});
 				// The sign-off and the publication it authorizes commit together: a
 				// stored approval next to an order still sitting in QC_REQUIRED
 				// reads as a deliverable nobody released, and a released order
 				// with no record behind it is the Expert Verified label without
 				// the expert.
-				return db.transaction(async (tx) => {
+				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
 					const [order] = await tx
 						.select()
 						.from(schema.svOrders)

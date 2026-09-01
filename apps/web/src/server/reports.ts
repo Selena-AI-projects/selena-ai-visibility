@@ -4,9 +4,10 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { type NewReport, reports } from "@workspace/lib/db/schema";
 import { cleanOnboardingUrl } from "@workspace/lib/onboarding";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { hasReportAccess, isAdmin, listUserOrganizations, requireAuthSession } from "@/lib/auth/helpers";
 import { sendReportJob } from "@/lib/job-scheduler";
@@ -41,35 +42,27 @@ async function requireAdminForLegacyReports() {
 export const getReportsFn = createServerFn({ method: "GET" }).handler(async () => {
 	const { organizationId } = await requireReportAccess();
 
-	return db
-		.select({
-			id: reports.id,
-			brandName: reports.brandName,
-			brandWebsite: reports.brandWebsite,
-			status: reports.status,
-			createdAt: reports.createdAt,
-			completedAt: reports.completedAt,
-			updatedAt: reports.updatedAt,
-		})
-		.from(reports)
-		.where(eq(reports.organizationId, organizationId))
-		.orderBy(desc(reports.createdAt));
+	return withOrganizationTransaction(db, organizationId, (tx) =>
+		tx
+			.select({
+				id: reports.id,
+				brandName: reports.brandName,
+				brandWebsite: reports.brandWebsite,
+				status: reports.status,
+				createdAt: reports.createdAt,
+				completedAt: reports.completedAt,
+				updatedAt: reports.updatedAt,
+			})
+			.from(reports)
+			.where(eq(reports.organizationId, organizationId))
+			.orderBy(desc(reports.createdAt)),
+	);
 });
 
 /** Admin-only read of unattributed legacy rows — deliberately not the customer path. */
 export const getLegacyReportsFn = createServerFn({ method: "GET" }).handler(async () => {
 	await requireAdminForLegacyReports();
-	return db
-		.select({
-			id: reports.id,
-			brandName: reports.brandName,
-			brandWebsite: reports.brandWebsite,
-			status: reports.status,
-			createdAt: reports.createdAt,
-		})
-		.from(reports)
-		.where(isNull(reports.organizationId))
-		.orderBy(desc(reports.createdAt));
+	throw new Error("LEGACY_REPORT_OWNER_ROLE_REQUIRED");
 });
 
 /**
@@ -80,14 +73,16 @@ export const getReportByIdFn = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const { organizationId } = await requireReportAccess();
 
-		const result = await db
-			.select()
-			.from(reports)
-			.where(and(eq(reports.id, data.reportId), eq(reports.organizationId, organizationId)))
-			.limit(1);
+		const result = await withOrganizationTransaction(db, organizationId, (tx) =>
+			tx
+				.select()
+				.from(reports)
+				.where(and(eq(reports.id, data.reportId), eq(reports.organizationId, organizationId)))
+				.limit(1),
+		);
 		if (result.length === 0) throw new Error("Report not found");
 		const report = result[0];
-		return { ...report, rawOutput: report.rawOutput as {} | null };
+		return { ...report, rawOutput: report.rawOutput as object | null };
 	});
 
 /**
@@ -130,7 +125,9 @@ export const createReportFn = createServerFn({ method: "POST" })
 			status: "pending",
 		};
 
-		const result = await db.insert(reports).values(newReport).returning();
+		const result = await withOrganizationTransaction(db, organizationId, (tx) =>
+			tx.insert(reports).values(newReport).returning(),
+		);
 		const createdReport = result[0];
 		if (!createdReport) throw new Error("Failed to create report");
 
@@ -143,10 +140,15 @@ export const createReportFn = createServerFn({ method: "POST" })
 				parsedManualPrompts.length > 0 ? parsedManualPrompts : undefined,
 			);
 			if (!success) throw new Error("Failed to send report job");
-		} catch (error) {
-			await db.update(reports).set({ status: "failed", updatedAt: new Date() }).where(eq(reports.id, createdReport.id));
+		} catch {
+			await withOrganizationTransaction(db, organizationId, async (tx) => {
+				await tx
+					.update(reports)
+					.set({ status: "failed", updatedAt: new Date() })
+					.where(and(eq(reports.id, createdReport.id), eq(reports.organizationId, organizationId)));
+			});
 			throw new Error("Failed to queue report generation");
 		}
 
-		return { ...createdReport, rawOutput: createdReport.rawOutput as {} | null };
+		return { ...createdReport, rawOutput: createdReport.rawOutput as object | null };
 	});

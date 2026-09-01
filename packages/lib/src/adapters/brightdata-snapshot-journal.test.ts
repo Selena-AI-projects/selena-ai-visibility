@@ -6,7 +6,7 @@ import { createPostgresBrightDataSnapshotJournal } from "./brightdata-snapshot-j
 
 function createDatabase() {
 	const values: Array<Record<string, unknown>> = [];
-	const execute = vi.fn(async () => undefined);
+	const execute = vi.fn(async (): Promise<unknown> => undefined);
 	const onConflictDoNothing = vi.fn(async () => undefined);
 	const insert = vi.fn(() => ({
 		values: vi.fn((value: Record<string, unknown>) => {
@@ -81,6 +81,43 @@ describe("Postgres Bright Data snapshot journal adapter", () => {
 		await journal.record({ ...delivered, observedAt: "2026-09-01T08:00:00+08:00" });
 
 		expect(state.values[1]?.eventHash).toBe(state.values[0]?.eventHash);
+	});
+
+	it("claims resume only after a same-scope interrupted snapshot is found", async () => {
+		const state = createDatabase();
+		state.execute
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce({
+				rows: [{ authorized: true }],
+			});
+		const journal = createPostgresBrightDataSnapshotJournal({
+			db: state.db,
+			organizationId: "tenant-a",
+			projectId: "d827d967-41c1-43d3-b729-61ddd4eafad8",
+		});
+
+		await expect(journal.claimResume({ ...delivered, phase: "RESUMED", recordCount: undefined })).resolves.toBe(true);
+		expect(state.execute).toHaveBeenCalledTimes(3);
+		expect(state.values.at(-1)).toMatchObject({ phase: "RESUMED", snapshotId: "snapshot-1" });
+	});
+
+	it("rejects an unowned resume without inserting an event", async () => {
+		const state = createDatabase();
+		state.execute
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce(undefined)
+			.mockResolvedValueOnce({
+				rows: [{ authorized: false }],
+			});
+		const journal = createPostgresBrightDataSnapshotJournal({
+			db: state.db,
+			organizationId: "tenant-b",
+			projectId: "d827d967-41c1-43d3-b729-61ddd4eafad8",
+		});
+
+		await expect(journal.claimResume({ ...delivered, phase: "RESUMED", recordCount: undefined })).resolves.toBe(false);
+		expect(state.values).toHaveLength(0);
 	});
 
 	it("rejects malformed scope and lifecycle metadata before opening a transaction", async () => {

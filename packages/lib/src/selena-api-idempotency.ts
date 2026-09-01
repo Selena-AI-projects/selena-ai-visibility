@@ -12,7 +12,6 @@ import * as schema from "./db/schema";
 
 type Db = NodePgDatabase<typeof schema>;
 export type SelenaApiIdempotencyTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
-export type SelenaApiIdempotencyDb = Db | SelenaApiIdempotencyTransaction;
 
 function toContractRecord(row: typeof schema.svApiIdempotencyRecords.$inferSelect): LocalApiIdempotencyRecord {
 	return localApiIdempotencyRecordSchema.parse({
@@ -29,8 +28,8 @@ function toContractRecord(row: typeof schema.svApiIdempotencyRecords.$inferSelec
 	});
 }
 
-async function findRecord(db: SelenaApiIdempotencyDb, identity: LocalApiIdempotencyIdentity) {
-	const [row] = await db
+async function findRecord(tx: SelenaApiIdempotencyTransaction, identity: LocalApiIdempotencyIdentity) {
+	const [row] = await tx
 		.select()
 		.from(schema.svApiIdempotencyRecords)
 		.where(
@@ -47,12 +46,12 @@ async function findRecord(db: SelenaApiIdempotencyDb, identity: LocalApiIdempote
 
 /** Reads the durable response cache. Call this inside the mutation transaction. */
 export async function readSelenaApiIdempotency(
-	db: SelenaApiIdempotencyDb,
+	tx: SelenaApiIdempotencyTransaction,
 	identity: LocalApiIdempotencyIdentity,
 	now: Date = new Date(),
 ): Promise<LocalApiIdempotencyDecision> {
 	const parsedIdentity = localApiIdempotencyIdentitySchema.parse(identity);
-	return resolveLocalApiIdempotency(parsedIdentity, await findRecord(db, parsedIdentity), now);
+	return resolveLocalApiIdempotency(parsedIdentity, await findRecord(tx, parsedIdentity), now);
 }
 
 /**
@@ -61,7 +60,7 @@ export async function readSelenaApiIdempotency(
  * and this insert commit or roll back together.
  */
 export async function saveSelenaApiIdempotency(
-	db: SelenaApiIdempotencyDb,
+	tx: SelenaApiIdempotencyTransaction,
 	record: LocalApiIdempotencyRecord,
 	now: Date = new Date(),
 ): Promise<LocalApiIdempotencyDecision> {
@@ -73,7 +72,7 @@ export async function saveSelenaApiIdempotency(
 		idempotencyKey: parsedRecord.idempotencyKey,
 		bodyHash: parsedRecord.bodyHash,
 	});
-	await db
+	await tx
 		.delete(schema.svApiIdempotencyRecords)
 		.where(
 			and(
@@ -84,7 +83,7 @@ export async function saveSelenaApiIdempotency(
 				lte(schema.svApiIdempotencyRecords.expiresAt, now),
 			),
 		);
-	await db
+	await tx
 		.insert(schema.svApiIdempotencyRecords)
 		.values({
 			organizationId: parsedRecord.tenantId,
@@ -105,5 +104,5 @@ export async function saveSelenaApiIdempotency(
 				schema.svApiIdempotencyRecords.idempotencyKey,
 			],
 		});
-	return resolveLocalApiIdempotency(identity, await findRecord(db, identity), now);
+	return resolveLocalApiIdempotency(identity, await findRecord(tx, identity), now);
 }

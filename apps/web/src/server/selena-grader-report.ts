@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svConfigurationLocks,
 	svCycles,
@@ -87,32 +88,34 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 				}
 			: null;
 
-		const [websiteSnapshot, recommendationRun] = await Promise.all([
-			db
-				.select({ website: svWebsiteSnapshots.website, capturedAt: svWebsiteSnapshots.capturedAt })
-				.from(svWebsiteSnapshots)
-				.where(
-					and(
-						eq(svWebsiteSnapshots.projectId, data.projectId),
-						eq(svWebsiteSnapshots.organizationId, context.tenantId),
-					),
-				)
-				.orderBy(desc(svWebsiteSnapshots.capturedAt))
-				.limit(1)
-				.then((rows) => rows[0] ?? null),
-			db
-				.select({ actionPlan: svRecommendationRuns.actionPlan })
-				.from(svRecommendationRuns)
-				.where(
-					and(
-						eq(svRecommendationRuns.projectId, data.projectId),
-						eq(svRecommendationRuns.organizationId, context.tenantId),
-					),
-				)
-				.orderBy(desc(svRecommendationRuns.createdAt))
-				.limit(1)
-				.then((rows) => rows[0] ?? null),
-		]);
+		const [websiteSnapshot, recommendationRun] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			Promise.all([
+				tx
+					.select({ website: svWebsiteSnapshots.website, capturedAt: svWebsiteSnapshots.capturedAt })
+					.from(svWebsiteSnapshots)
+					.where(
+						and(
+							eq(svWebsiteSnapshots.projectId, data.projectId),
+							eq(svWebsiteSnapshots.organizationId, context.tenantId),
+						),
+					)
+					.orderBy(desc(svWebsiteSnapshots.capturedAt))
+					.limit(1)
+					.then((rows) => rows[0] ?? null),
+				tx
+					.select({ actionPlan: svRecommendationRuns.actionPlan })
+					.from(svRecommendationRuns)
+					.where(
+						and(
+							eq(svRecommendationRuns.projectId, data.projectId),
+							eq(svRecommendationRuns.organizationId, context.tenantId),
+						),
+					)
+					.orderBy(desc(svRecommendationRuns.createdAt))
+					.limit(1)
+					.then((rows) => rows[0] ?? null),
+			]),
+		);
 		const parsedPlan = actionPlanSchema.safeParse(recommendationRun?.actionPlan);
 		const priorityRank: Record<string, number> = { NOW: 0, NEXT: 1, LATER: 2 };
 		const ruleByFinding = new Map(parsedPlan.success ? parsedPlan.data.findings.map((f) => [f.id, f.ruleId]) : []);
@@ -170,19 +173,25 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			freeAudit,
 		};
 
-		const [order] = await db
-			.select({ id: svOrders.id, lockId: svOrders.lockId })
-			.from(svOrders)
-			.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
-			.orderBy(desc(svOrders.createdAt))
-			.limit(1);
+		const [order] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({ id: svOrders.id, lockId: svOrders.lockId })
+				.from(svOrders)
+				.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
+				.orderBy(desc(svOrders.createdAt))
+				.limit(1),
+		);
 		if (!order) return view;
 
-		const [lock] = await db
-			.select({ snapshot: svConfigurationLocks.snapshot })
-			.from(svConfigurationLocks)
-			.where(and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)))
-			.limit(1);
+		const [lock] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({ snapshot: svConfigurationLocks.snapshot })
+				.from(svConfigurationLocks)
+				.where(
+					and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)),
+				)
+				.limit(1),
+		);
 		const snapshot = (lock?.snapshot ?? null) as Record<string, unknown> | null;
 		const subjects = parseAnalysisSubjects(lock?.snapshot);
 		const scope = measurementScopeSchema.safeParse(snapshot?.measurementScope);
@@ -194,33 +203,37 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			const monthStart = new Date();
 			monthStart.setUTCDate(1);
 			monthStart.setUTCHours(0, 0, 0, 0);
-			const [usage] = await db
-				.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
-				.from(svCycles)
-				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-				.where(
-					and(
-						eq(svOrders.projectId, data.projectId),
-						eq(svOrders.organizationId, context.tenantId),
-						gte(svCycles.createdAt, monthStart),
-						notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
-						notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
+			const [usage] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+				tx
+					.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
+					.from(svCycles)
+					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+					.where(
+						and(
+							eq(svOrders.projectId, data.projectId),
+							eq(svOrders.organizationId, context.tenantId),
+							gte(svCycles.createdAt, monthStart),
+							notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
+							notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
+						),
 					),
-				);
+			);
 			view.monthUsage = { used: Number(usage?.used ?? 0), allowance: planForAllowance };
 		}
 
-		const [cycle] = await db
-			.select({
-				status: svCycles.status,
-				expectedRuns: svCycles.expectedRuns,
-				completedRuns: svCycles.completedRuns,
-				createdAt: svCycles.createdAt,
-			})
-			.from(svCycles)
-			.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
-			.orderBy(desc(svCycles.createdAt))
-			.limit(1);
+		const [cycle] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({
+					status: svCycles.status,
+					expectedRuns: svCycles.expectedRuns,
+					completedRuns: svCycles.completedRuns,
+					createdAt: svCycles.createdAt,
+				})
+				.from(svCycles)
+				.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
+				.orderBy(desc(svCycles.createdAt))
+				.limit(1),
+		);
 		if (cycle) {
 			view.cycle = { status: cycle.status, expectedRuns: cycle.expectedRuns, completedRuns: cycle.completedRuns };
 			view.measuredAt = cycle.createdAt.toISOString();
@@ -231,12 +244,14 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		// The report speaks for the newest cycle: mixing runs from an order's
 		// earlier cycles would double-count questions and misstate the counts.
 		const latestCycleId = (
-			await db
-				.select({ id: svCycles.id })
-				.from(svCycles)
-				.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
-				.orderBy(desc(svCycles.createdAt))
-				.limit(1)
+			await withOrganizationTransaction(db, context.tenantId, (tx) =>
+				tx
+					.select({ id: svCycles.id })
+					.from(svCycles)
+					.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
+					.orderBy(desc(svCycles.createdAt))
+					.limit(1),
+			)
 		)[0]?.id;
 		const runs = latestCycleId ? allRuns.filter((run) => run.cycleId === latestCycleId) : allRuns;
 
@@ -244,10 +259,12 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		const scenarioRows =
 			scenarioIds.length === 0
 				? []
-				: await db
-						.select({ id: svScenarios.id, text: svScenarios.text, language: svScenarios.language })
-						.from(svScenarios)
-						.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, context.tenantId)));
+				: await withOrganizationTransaction(db, context.tenantId, (tx) =>
+						tx
+							.select({ id: svScenarios.id, text: svScenarios.text, language: svScenarios.language })
+							.from(svScenarios)
+							.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, context.tenantId))),
+					);
 		const scenarioById = new Map(scenarioRows.map((row) => [row.id, row]));
 
 		// A run that predates systemId stamping still belongs to a channel; the

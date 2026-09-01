@@ -147,7 +147,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["npx", "tsx", "src/scripts/publish-journal-detail.ts"]
+CMD ["npx", "tsx", "src/scripts/publish-journal.ts"]
 
 # The service name selects the final runtime stage: web or worker.
 FROM ${RAILWAY_SERVICE_NAME} AS final

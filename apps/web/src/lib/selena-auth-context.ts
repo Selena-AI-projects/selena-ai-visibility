@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { getRequestHeaders } from "@tanstack/react-start/server";
+import { resolveSelenaApiKeyBootstrap } from "@workspace/lib/db/api-key-bootstrap";
 import { db } from "@workspace/lib/db/db";
-import { member, organization, svApiKeys } from "@workspace/lib/db/schema";
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { member, organization } from "@workspace/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 export type SelenaRole = "owner" | "member" | "viewer";
 export type AuthContext = {
@@ -48,21 +49,10 @@ export async function resolveApiKeyAuthContext(request: Request): Promise<AuthCo
 	const raw = request.headers.get("authorization")?.replace(/^Bearer\s+/, "");
 	if (!raw) throw new Error("Unauthorized: API key required");
 	const digest = hashApiKey(raw);
-	const rows = await db
-		.select()
-		.from(svApiKeys)
-		.where(
-			and(
-				eq(svApiKeys.keyHash, digest.toString("hex")),
-				isNull(svApiKeys.revokedAt),
-				or(isNull(svApiKeys.expiresAt), gt(svApiKeys.expiresAt, new Date())),
-			),
-		)
-		.limit(1);
-	const key = rows[0];
+	const key = await resolveSelenaApiKeyBootstrap(db, digest.toString("hex"));
 	if (!key) throw new Error("Unauthorized: invalid or expired API key");
 	return {
-		actorId: `api-key:${key.id}`,
+		actorId: `api-key:${key.apiKeyId}`,
 		tenantId: key.organizationId,
 		role: "owner",
 		authType: "api_key",

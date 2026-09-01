@@ -31,13 +31,21 @@ const access: ProviderDatasetAccessRequest = {
 	redactionPolicyApproved: true,
 	privacyReviewApproved: true,
 	retentionReviewApproved: true,
+	deletionPropagationApproved: true,
+	legalHoldPolicyApproved: true,
+	sourceTermsApproved: true,
 };
 
-const datasetEnvironment = Object.freeze(
-	Object.fromEntries(
-		Object.values(brightDataSocialDatasetRegistry).map((dataset) => [dataset.envKey, dataset.datasetId]),
-	) as Partial<Record<ProviderDatasetEnvKey, string>>,
-);
+const datasetEnvironment = Object.freeze({
+	SELENA_BRIGHTDATA_DATASET_INSTAGRAM_PROFILES: "gd_fixtureigprofiles",
+	SELENA_BRIGHTDATA_DATASET_INSTAGRAM_POSTS: "gd_fixtureigposts",
+	SELENA_BRIGHTDATA_DATASET_INSTAGRAM_REELS: "gd_fixtureigreels",
+	SELENA_BRIGHTDATA_DATASET_INSTAGRAM_COMMENTS: "gd_fixtureigcomments",
+	SELENA_BRIGHTDATA_DATASET_TIKTOK_PROFILES: "gd_fixturettprofiles",
+	SELENA_BRIGHTDATA_DATASET_TIKTOK_POSTS: "gd_fixturettposts",
+	SELENA_BRIGHTDATA_DATASET_REDDIT_POSTS: "gd_fixtureredditposts",
+	SELENA_BRIGHTDATA_DATASET_YOUTUBE_VIDEOS: "gd_fixtureyoutubevideos",
+} satisfies Partial<Record<ProviderDatasetEnvKey, string>>);
 
 function createHarness(fetchImpl: typeof fetch) {
 	let nowMs = Date.parse("2026-08-31T00:00:00.000Z");
@@ -54,7 +62,20 @@ function createHarness(fetchImpl: typeof fetch) {
 	});
 	const client = createBrightDataDatasetClient({
 		transport,
-		journal: { record: async (entry) => void entries.push(entry) },
+		journal: {
+			record: async (entry) => void entries.push(entry),
+			claimResume: async (entry) => {
+				const authorized = entries.some(
+					(candidate) =>
+						candidate.source === entry.source &&
+						candidate.datasetId === entry.datasetId &&
+						candidate.snapshotId === entry.snapshotId &&
+						candidate.phase !== "RESUMED",
+				);
+				if (authorized) entries.push(entry);
+				return authorized;
+			},
+		},
 		lifecycle: {
 			timeoutMs: 1_000,
 			pollIntervalMs: 10,
@@ -75,15 +96,14 @@ describe("Bright Data social registry", () => {
 		expect(brightDataSocialDatasetKeys).toHaveLength(8);
 		expect(Object.keys(brightDataSocialDatasetRegistry)).toEqual(brightDataSocialDatasetKeys);
 		expect(brightDataSocialDatasetRegistry.instagram_reels).toMatchObject({
-			datasetId: "gd_lyclm20il4r5helnj",
 			triggerQuery: { type: "discover_new", discover_by: "url" },
 			rawRetention: "disabled",
 		});
 		expect(brightDataSocialDatasetRegistry.instagram_comments).toMatchObject({
-			datasetId: "gd_ltppn085pokosxh13",
 			runtimeStatus: "blocked_cost_and_pii",
 			expectedMaxOutputRecords: 0,
 		});
+		expect(JSON.stringify(brightDataSocialDatasetRegistry)).not.toContain("gd_");
 		expect(proposedBrightDataSocialWorkflowMapping).toEqual({
 			SOCIAL_INTELLIGENCE: ["instagram_profiles", "tiktok_profiles"],
 			REPUTATION: ["reddit_posts"],
@@ -171,8 +191,8 @@ describe("shared client with the social transport", () => {
 		const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
 			const url = String(input);
 			calls.push({ url, init });
-			if (url.endsWith("/datasets/gd_lu702nij2f790tmv9h/metadata"))
-				return json({ id: "gd_lu702nij2f790tmv9h", fields: { post_id: {}, account_id: {}, url: {} } });
+			if (url.endsWith("/datasets/gd_fixturettposts/metadata"))
+				return json({ id: "gd_fixturettposts", fields: { post_id: {}, account_id: {}, url: {} } });
 			if (url.includes("/datasets/v3/trigger?")) return json({ snapshot_id: "sd_test_1" });
 			if (url.endsWith("/datasets/v3/progress/sd_test_1")) {
 				expect(entries.some((entry) => entry.phase === "TRIGGERED")).toBe(true);
@@ -213,7 +233,7 @@ describe("shared client with the social transport", () => {
 
 		expect(calls.filter((call) => call.url.includes("/trigger?"))).toHaveLength(1);
 		const trigger = calls.find((call) => call.url.includes("/trigger?"));
-		expect(trigger?.url).toContain("dataset_id=gd_lu702nij2f790tmv9h");
+		expect(trigger?.url).toContain("dataset_id=gd_fixturettposts");
 		expect(JSON.parse(String(trigger?.init?.body))).toEqual([
 			{ url: "https://www.tiktok.com/@example/video/6718335390845095173" },
 		]);
@@ -227,14 +247,14 @@ describe("shared client with the social transport", () => {
 
 	it("rejects a swapped metadata signature before a paid trigger", async () => {
 		const fetchImpl = vi.fn<typeof fetch>(async () =>
-			json({ id: "gd_lyclm20il4r5helnj", fields: { comment_id: {}, comment_text: {}, comment_date: {} } }),
+			json({ id: "gd_fixtureigreels", fields: { comment_id: {}, comment_text: {}, comment_date: {} } }),
 		);
 		const transport = createBrightDataSocialTransport({ apiToken: "fixture", fetchImpl });
 		await expect(
 			transport.preflight(
 				{
 					source: "INSTAGRAM_REELS",
-					datasetId: "gd_lyclm20il4r5helnj",
+					datasetId: "gd_fixtureigreels",
 					input: {
 						schemaVersion: "schema-discovery-input-v1",
 						provider: "BRIGHT_DATA",
@@ -252,7 +272,7 @@ describe("shared client with the social transport", () => {
 		let calls = 0;
 		const fetchImpl = vi.fn<typeof fetch>(async () => {
 			calls += 1;
-			if (calls === 1) return json({ id: "gd_l1villgoiiidt09ci", fields: { account_id: {}, secu_id: {}, url: {} } });
+			if (calls === 1) return json({ id: "gd_fixturettprofiles", fields: { account_id: {}, secu_id: {}, url: {} } });
 			return new Response("token=test-token-that-must-not-leak https://private.example/user", { status: 400 });
 		});
 		const harness = createHarness(fetchImpl);
@@ -285,14 +305,21 @@ describe("shared client with the social transport", () => {
 		const fetchImpl = vi.fn<typeof fetch>(async (input) => {
 			const url = String(input);
 			urls.push(url);
-			if (url.endsWith("/datasets/gd_lvz8ah06191smkebj4/metadata"))
-				return json({ id: "gd_lvz8ah06191smkebj4", fields: { post_id: {}, community_name: {}, url: {} } });
+			if (url.endsWith("/datasets/gd_fixtureredditposts/metadata"))
+				return json({ id: "gd_fixtureredditposts", fields: { post_id: {}, community_name: {}, url: {} } });
 			if (url.endsWith("/datasets/v3/progress/sd_reddit_resume")) return json({ status: "ready" });
 			if (url.includes("/datasets/v3/snapshot/sd_reddit_resume?"))
 				return json([{ post_id: "reddit-post", title: "Recovered", num_upvotes: 1 }]);
 			throw new Error(`unexpected test request: ${url}`);
 		});
 		const harness = createHarness(fetchImpl);
+		harness.entries.push({
+			source: "REDDIT_POSTS",
+			datasetId: "gd_fixtureredditposts",
+			snapshotId: "sd_reddit_resume",
+			phase: "INTERRUPTED",
+			observedAt: "2026-08-31T00:00:00.000Z",
+		});
 		const collector = createBrightDataSocialCollector({
 			client: harness.client,
 			datasetEnvironment,
@@ -310,13 +337,24 @@ describe("shared client with the social transport", () => {
 
 		expect(urls.some((url) => url.includes("/trigger"))).toBe(false);
 		expect(result.snapshotId).toBe("sd_reddit_resume");
-		expect(harness.entries.map((entry) => entry.phase)).toEqual(["RESUMED", "READY", "DELIVERED"]);
+		expect(harness.entries.map((entry) => entry.phase)).toEqual(["INTERRUPTED", "RESUMED", "READY", "DELIVERED"]);
 	});
 
 	it("exposes redacted machine-readable transport errors", () => {
 		const error = new BrightDataSocialTransportError("CODE", 400);
 		expect(error).toMatchObject({ code: "CODE", status: 400, message: "CODE:400" });
 	});
+
+	it.each(["https://attacker.example", "https://user:pass@api.brightdata.com", "https://api.brightdata.com:444"])(
+		"rejects a non-canonical API origin before sending credentials: %s",
+		(apiBaseUrl) => {
+			const fetchImpl = vi.fn<typeof fetch>();
+			expect(() => createBrightDataSocialTransport({ apiToken: "fixture", fetchImpl, apiBaseUrl })).toThrow(
+				"BRIGHTDATA_API_ORIGIN_NOT_ALLOWED",
+			);
+			expect(fetchImpl).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("dataset response normalizers", () => {
@@ -364,6 +402,19 @@ describe("dataset response normalizers", () => {
 			{ ...context, datasetKey: "instagram_posts" },
 		);
 		expect(entities.find((entity) => entity.entityType === "social_content")).not.toHaveProperty("publishedAt");
+	});
+
+	it("suppresses nested comment payloads until the separate personal-data gate is approved", () => {
+		const instagram = brightDataSocialNormalizers.instagram_reels(
+			[{ post_id: "ig-reel", top_comments: Array.from({ length: 1_000 }, (_, index) => ({ comment_id: index })) }],
+			{ ...context, datasetKey: "instagram_reels" },
+		);
+		const reddit = brightDataSocialNormalizers.reddit_posts(
+			[{ post_id: "reddit-post", comments: Array.from({ length: 1_000 }, (_, index) => ({ comment_id: index })) }],
+			{ ...context, datasetKey: "reddit_posts" },
+		);
+
+		expect([...instagram, ...reddit].some((entity) => entity.entityType === "social_comment")).toBe(false);
 	});
 });
 

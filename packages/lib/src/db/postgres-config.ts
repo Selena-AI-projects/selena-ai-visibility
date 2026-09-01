@@ -1,6 +1,7 @@
 export interface RuntimeDatabaseEnvironment {
 	DATABASE_URL?: string;
 	SELENA_RUNTIME_DATABASE_CA_PEM?: string;
+	SELENA_PGBOSS_OWNER_MANAGED_SCHEMA?: string;
 }
 
 export interface RuntimeDatabaseConnection {
@@ -9,6 +10,11 @@ export interface RuntimeDatabaseConnection {
 		ca: string;
 		rejectUnauthorized: true;
 	};
+}
+
+export interface RuntimePgBossSchemaLifecycle {
+	createSchema: boolean;
+	migrate: boolean;
 }
 
 const CERTIFICATE_BLOCK = /-----BEGIN CERTIFICATE-----\n[A-Za-z0-9+/=\n]+-----END CERTIFICATE-----/g;
@@ -67,4 +73,19 @@ export function runtimeDatabaseConnection(env: RuntimeDatabaseEnvironment = proc
 			rejectUnauthorized: true,
 		},
 	};
+}
+
+/**
+ * Keep clean local/self-hosted installs compatible with pg-boss' normal
+ * bootstrap. Hosted non-owner runtimes must opt into an owner-provisioned
+ * schema explicitly so a missing or misspelled flag cannot silently change
+ * the lifecycle contract.
+ */
+export function runtimePgBossSchemaLifecycle(
+	env: RuntimeDatabaseEnvironment = process.env,
+): RuntimePgBossSchemaLifecycle {
+	const ownerManaged = env.SELENA_PGBOSS_OWNER_MANAGED_SCHEMA;
+	if (ownerManaged === undefined || ownerManaged === "false") return { createSchema: true, migrate: true };
+	if (ownerManaged === "true") return { createSchema: false, migrate: false };
+	throw new Error("SELENA_PGBOSS_OWNER_MANAGED_SCHEMA_INVALID");
 }

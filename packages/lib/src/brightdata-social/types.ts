@@ -23,7 +23,6 @@ export type BrightDataSocialDatasetConfig = {
 	key: BrightDataSocialDatasetKey;
 	platform: BrightDataSocialPlatform;
 	envKey: string;
-	datasetId: string;
 	mode: "collect_by_url" | "discover_by_profile_url";
 	inputContract: BrightDataDatasetInputContract;
 	triggerQuery: Readonly<Record<string, string>>;

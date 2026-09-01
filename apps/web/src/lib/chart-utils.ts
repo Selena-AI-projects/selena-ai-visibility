@@ -1,6 +1,6 @@
-import type { PerPromptVisibilityPoint, PerPromptDailyCitationStats } from "@/lib/postgres-read";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
-import { type CitationCategory, CITATION_CATEGORIES } from "@/lib/domain-categories";
+import { CITATION_CATEGORIES, type CitationCategory } from "@/lib/domain-categories";
+import type { PerPromptDailyCitationStats, PerPromptVisibilityPoint } from "@/lib/postgres-read";
 
 export type LookbackPeriod = "1w" | "1m" | "3m" | "6m" | "1y" | "all";
 
@@ -26,11 +26,12 @@ export function getDefaultLookbackPeriod(earliestDataDate: string | null | undef
 	const earliestDate = new Date(earliestDataDate);
 	const now = new Date();
 	const diffInMs = now.getTime() - earliestDate.getTime();
-	const diffInDays = diffInMs / (1000 * 60 * 60 * 24);
+	const completedDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
 
-	// If brand has more than 7 days of data, default to 1 month
+	// Compare completed days so millisecond drift around the exact seven-day
+	// boundary cannot switch a new brand to the one-month view.
 	// Otherwise, default to 1 week (for new brands)
-	return diffInDays > 7 ? "1m" : "1w";
+	return completedDays > 7 ? "1m" : "1w";
 }
 
 export function getDaysFromLookback(lookback: LookbackPeriod): number {
@@ -280,7 +281,7 @@ export interface ChartDataPoint {
 	[key: string]: number | string | boolean | null; // Dynamic keys for brand/competitor IDs and _extended_ flags
 }
 
-import type { PromptRun, Brand, Competitor } from "@workspace/lib/db/schema";
+import type { Brand, Competitor, PromptRun } from "@workspace/lib/db/schema";
 
 /**
  * Calculate visibility percentages for brand vs competitors from prompt runs

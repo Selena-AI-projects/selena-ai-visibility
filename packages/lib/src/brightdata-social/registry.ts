@@ -7,15 +7,14 @@ const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 /**
- * The eight contracts observed in staging on 2026-08-31. Dataset ids are
- * configuration, not activation: importing this registry starts no jobs.
+ * The eight contracts observed in staging on 2026-08-31. Dataset ids remain
+ * sealed environment configuration: importing this registry starts no jobs.
  */
 export const brightDataSocialDatasetRegistry = {
 	instagram_profiles: {
 		key: "instagram_profiles",
 		platform: "instagram",
 		envKey: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_PROFILES",
-		datasetId: "gd_l1vikfch901nx3by4",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -38,7 +37,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "instagram_posts",
 		platform: "instagram",
 		envKey: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_POSTS",
-		datasetId: "gd_lk5ns7kz21pck8jpis",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -61,7 +59,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "instagram_reels",
 		platform: "instagram",
 		envKey: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_REELS",
-		datasetId: "gd_lyclm20il4r5helnj",
 		mode: "discover_by_profile_url",
 		inputContract: { required: ["url", "num_of_posts"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: { type: "discover_new", discover_by: "url" },
@@ -85,7 +82,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "instagram_comments",
 		platform: "instagram",
 		envKey: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_COMMENTS",
-		datasetId: "gd_ltppn085pokosxh13",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -108,7 +104,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "tiktok_profiles",
 		platform: "tiktok",
 		envKey: "SELENA_BRIGHTDATA_DATASET_TIKTOK_PROFILES",
-		datasetId: "gd_l1villgoiiidt09ci",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -131,7 +126,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "tiktok_posts",
 		platform: "tiktok",
 		envKey: "SELENA_BRIGHTDATA_DATASET_TIKTOK_POSTS",
-		datasetId: "gd_lu702nij2f790tmv9h",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -154,7 +148,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "reddit_posts",
 		platform: "reddit",
 		envKey: "SELENA_BRIGHTDATA_DATASET_REDDIT_POSTS",
-		datasetId: "gd_lvz8ah06191smkebj4",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
@@ -185,7 +178,6 @@ export const brightDataSocialDatasetRegistry = {
 		key: "youtube_videos",
 		platform: "youtube",
 		envKey: "SELENA_BRIGHTDATA_DATASET_YOUTUBE_VIDEOS",
-		datasetId: "gd_lk56epmy2i5g7lzu0k",
 		mode: "collect_by_url",
 		inputContract: { required: ["url"], optional: [], maxInputsPerRun: 1 },
 		triggerQuery: {},
