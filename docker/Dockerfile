@@ -103,7 +103,11 @@ WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
+# The trailing echo and sleep exist because four crashed runs produced logs
+# that end mid-spinner: the container exits faster than the platform collects
+# its last lines, so whatever drizzle printed while dying was lost every time.
+# The pause costs fifteen seconds on a one-shot job and buys the actual error.
+CMD ["/bin/sh", "-c", "./node_modules/.bin/drizzle-kit migrate 2>&1; code=$?; echo \"drizzle-kit migrate exited with code $code\"; sleep 15; exit $code"]
 
 # Worker stage
 FROM base AS worker
