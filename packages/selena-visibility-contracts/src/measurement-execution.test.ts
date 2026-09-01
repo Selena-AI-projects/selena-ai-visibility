@@ -3,6 +3,7 @@ import {
 	assertAdapterAllowed,
 	assertAdaptersConfigured,
 	assertMeasurementAllowed,
+	isAffirmativeEnvValue,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	resolveMeasurementAdapterName,
@@ -13,12 +14,12 @@ describe("Selena measurement execution boundary", () => {
 	it("ships inert: measurement is off and the adapter is the noop one", () => {
 		expect(measurementConfigFromEnv({})).toEqual({ enabled: false, adapter: "noop" });
 		expect(() => assertMeasurementAllowed(measurementConfigFromEnv({}))).toThrow("SELENA_MEASUREMENT_DISABLED");
-		expect(() => assertMeasurementAllowed(measurementConfigFromEnv({ SELENA_MEASUREMENT_ENABLED: "1" }))).toThrow(
-			"SELENA_MEASUREMENT_DISABLED",
-		);
-		expect(() =>
-			assertMeasurementAllowed(measurementConfigFromEnv({ SELENA_MEASUREMENT_ENABLED: "true" })),
-		).not.toThrow();
+		for (const value of ["1", "true", "yes", " true "])
+			expect(() =>
+				assertMeasurementAllowed(measurementConfigFromEnv({ SELENA_MEASUREMENT_ENABLED: value })),
+			).not.toThrow();
+		for (const value of [undefined, "", " ", "0", "false", "no", "TRUE", "enabled"])
+			expect(isAffirmativeEnvValue(value)).toBe(false);
 	});
 
 	it("refuses an unregistered adapter and refuses a live one the owner has not approved", () => {

@@ -40,6 +40,11 @@ describe("Visibility OS surfaces", () => {
 				LOCAL_AI_DISCOVERY_ENABLED: "true",
 			}),
 		).not.toThrow();
+		expect(() =>
+			assertSurfaceCaptureAllowed("AI_ANSWER_ENGINE", "VISITOR_SCRAPE", {
+				SELENA_MEASUREMENT_ENABLED: " yes ",
+			}),
+		).not.toThrow();
 	});
 
 	it("keeps unfinished Search, Reputation and Local provider surfaces fail-closed", () => {

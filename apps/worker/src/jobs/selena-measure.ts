@@ -1,7 +1,7 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
-import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
+import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
 import { createNoopMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
@@ -134,7 +134,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 			store: repositories.runs,
 			adapters,
 			config,
-			cycleState: { globalEmergencyStop: process.env.SELENA_EMERGENCY_STOP === "true" },
+			cycleState: { globalEmergencyStop: isGlobalProviderStopEngaged(process.env) },
 		});
 		// A failure is already recorded as a terminal run; rethrowing would only
 		// buy a retry, and a retry cannot re-execute a permit that is spent.
