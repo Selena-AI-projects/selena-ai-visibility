@@ -925,7 +925,7 @@ export function createSelenaRepositories(db: Db) {
 		// row; completing records the adapter's validated outcome. No provider
 		// transport lives here — the adapter is injected in the executor.
 		runs: {
-			claim: async (ctx: SelenaRepositoryContext, permitId: string, opts?: { now?: Date }) => {
+			claim: async (ctx: SelenaRepositoryContext, permitId: string, opts?: { now?: Date; journalClaimId?: string }) => {
 				writable(ctx);
 				const now = opts?.now ?? new Date();
 				return db.transaction(async (tx) => {
@@ -941,6 +941,21 @@ export function createSelenaRepositories(db: Db) {
 						.where(and(eq(schema.svCycles.id, permit.cycleId), eq(schema.svCycles.organizationId, ctx.tenantId)))
 						.limit(1);
 					if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
+					if (opts?.journalClaimId) {
+						const [lease] = await tx
+							.update(schema.svJournalDailyClaims)
+							.set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+							.where(
+								and(
+									eq(schema.svJournalDailyClaims.id, opts.journalClaimId),
+									eq(schema.svJournalDailyClaims.organizationId, ctx.tenantId),
+									eq(schema.svJournalDailyClaims.configurationLockId, cycle.lockId),
+									eq(schema.svJournalDailyClaims.status, "EXECUTING"),
+								),
+							)
+							.returning({ id: schema.svJournalDailyClaims.id });
+						if (!lease) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+					}
 					const runFor = async (dispatchKey: string) =>
 						(
 							await tx

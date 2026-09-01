@@ -30,7 +30,7 @@ describe("database migration image", () => {
 
 	it("pins the generated compose service to the reviewed migration ceiling", () => {
 		const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-		expect(source).toContain('"    - SELENA_MIGRATION_MAX_INDEX=51"');
-		expect(source).not.toContain('"    - SELENA_MIGRATION_MAX_INDEX=52"');
+		expect(source).toContain('"    - SELENA_MIGRATION_MAX_INDEX=54"');
+		expect(source).not.toContain('"    - SELENA_MIGRATION_MAX_INDEX=55"');
 	});
 });

@@ -283,10 +283,11 @@ describe("Selena measurement runner", () => {
 	});
 
 	it("claims, executes and records the outcome", async () => {
-		const { store, complete } = storeFor();
+		const { store, claim, complete } = storeFor();
 		const { adapter } = spyAdapter();
 		const result = await runMeasurementForPermit({
 			permitId: "permit-1",
+			journalClaimId: "claim-1",
 			ctx,
 			store,
 			adapters: { noop: adapter },
@@ -294,9 +295,30 @@ describe("Selena measurement runner", () => {
 			now,
 		});
 		expect(result).toMatchObject({ status: "completed", runId: "run-1" });
+		expect(claim).toHaveBeenCalledWith(ctx, "permit-1", { now, journalClaimId: "claim-1" });
 		expect(complete).toHaveBeenCalledWith(ctx, "run-1", expect.objectContaining({ status: "SUCCEEDED" }), {
 			now: expect.any(Date),
 		});
+	});
+
+	it("does not reach an adapter when the journal lease is lost before permit consumption", async () => {
+		const { store, claim, complete } = storeFor();
+		claim.mockRejectedValueOnce(new Error("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST"));
+		const { adapter, execute } = spyAdapter();
+
+		await expect(
+			runMeasurementForPermit({
+				permitId: "permit-1",
+				journalClaimId: "claim-1",
+				ctx,
+				store,
+				adapters: { noop: adapter },
+				config: { enabled: true, adapter: "noop" },
+				now,
+			}),
+		).rejects.toThrow("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+		expect(execute).not.toHaveBeenCalled();
+		expect(complete).not.toHaveBeenCalled();
 	});
 
 	it("records completion time after provider execution instead of reusing the claim time", async () => {

@@ -7,15 +7,16 @@ const scriptUrl = new URL("../../../apps/worker/src/scripts/measure-journal.ts",
 const scriptPath = fileURLToPath(scriptUrl);
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const source = readFileSync(scriptUrl, "utf8");
+const repositorySource = readFileSync(new URL("./selena-visibility-repositories.ts", import.meta.url), "utf8");
 
 describe("journal provider stop", () => {
-	it("refuses the direct entrypoint before credentials, database, or provider access", () => {
+	it("refuses affirmative operator stop values before credentials, database, or provider access", () => {
 		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
 			cwd: repositoryRoot,
 			encoding: "utf8",
 			env: {
 				PATH: process.env.PATH,
-				SELENA_EMERGENCY_STOP: "true",
+				SELENA_EMERGENCY_STOP: " yes ",
 			},
 			timeout: 10_000,
 		});
@@ -47,23 +48,38 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain('["CLAIMED", "EXECUTING", "HOLD"]');
 		expect(allocator).toContain('kind: "HOLD"');
 		expect(allocator).toContain('eq(schema.svJournalDailyClaims.status, "COMPLETED")');
-		expect(allocator).toContain("if (completed && !FORCE)");
-		expect(allocator.indexOf("if (completed && !FORCE)")).toBeLessThan(allocator.indexOf("const [prior]"));
+		expect(allocator).toContain("if (completed && !FORCE && abandonedAttempt === undefined)");
+		expect(allocator.indexOf("if (completed && !FORCE && abandonedAttempt === undefined)")).toBeLessThan(
+			allocator.indexOf("const [prior]"),
+		);
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_CLAIMED"');
+		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_ABANDONED"');
+		expect(allocator).toContain("interval '45 minutes'");
+		expect(allocator).toContain("recordedCostUsd");
 		expect(allocator).toContain("forced: FORCE");
 		expect(claimLifecycle).not.toContain("new Date()");
-		expect(claimLifecycle.match(/updatedAt: sql`CURRENT_TIMESTAMP`/g)).toHaveLength(2);
+		expect(claimLifecycle.match(/updatedAt: sql`CURRENT_TIMESTAMP`/g)?.length).toBeGreaterThanOrEqual(4);
 		expect(claimLifecycle).toContain('completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null');
 		expect(measurement.indexOf("await acquireDailyClaim")).toBeLessThan(
 			measurement.indexOf("repositories.locks.allocate"),
 		);
 		expect(measurement).toContain("await linkDailyClaim(claim.id, lock.id)");
 		expect(measurement).toContain('await transitionDailyClaim(claim.id, "CLAIMED", "EXECUTING")');
+		expect(measurement).toContain("journalClaimId: claim.id");
+		expect(source).toContain("isAffirmativeEnvValue(process.env.SELENA_JOURNAL_FORCE)");
 		expect(measurement).toContain('outcome.outcome.status !== "SUCCEEDED"');
 		expect(measurement).toContain("terminalCycle.completedRuns !== terminalCycle.expectedRuns");
 		expect(measurement).toContain('providerBoundaryCrossed ? "HOLD" : "NO_SPEND"');
 		expect(measurement).toContain('await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED")');
 		expect(source).toContain("JOURNAL_DAILY_CLAIM_" + "$" + "{status}");
 		expect(source).toContain("select set_config('app.organization_id'");
+		const runClaim = repositorySource.slice(
+			repositorySource.indexOf("claim: async ("),
+			repositorySource.indexOf("complete: async", repositorySource.indexOf("claim: async (")),
+		);
+		expect(runClaim).toContain("opts?.journalClaimId");
+		expect(runClaim).toContain('eq(schema.svJournalDailyClaims.status, "EXECUTING")');
+		expect(runClaim).toContain("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+		expect(runClaim.indexOf("opts?.journalClaimId")).toBeLessThan(runClaim.indexOf('status: "consumed"'));
 	});
 });
