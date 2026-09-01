@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { toHorecaApplicationEvidence } from "../../server/selena-horeca";
+import { toCustomerHorecaWorkspaceModel, toHorecaApplicationEvidence } from "../../server/selena-horeca";
+import { buildHorecaLocalFirstPreview } from "../selena-horeca-local-first";
 
 const row = {
 	organizationId: "tenant-a",
@@ -56,5 +57,17 @@ describe("HoReCa application evidence mapping", () => {
 		expect(mapped).toMatchObject({ acceptanceStatus: "UNKNOWN", acceptedAt: null });
 		expect(mapped).not.toHaveProperty("acceptedBy");
 		expect(mapped).not.toHaveProperty("contentSha256");
+	});
+
+	it("removes gated Social and Travel module names from the customer server projection", () => {
+		const preview = buildHorecaLocalFirstPreview(false, "2026-09-01T00:00:00.000Z");
+		const customerModel = toCustomerHorecaWorkspaceModel(preview);
+
+		const serialized = JSON.stringify(customerModel);
+		expect(customerModel.modules.map((module) => module.moduleId)).not.toContain("SOCIAL");
+		expect(customerModel.modules.map((module) => module.moduleId)).not.toContain("TRAVEL");
+		expect(customerModel.modules.map((module) => module.moduleId)).toContain("LOCAL_MAPS");
+		expect(customerModel.navigation).toEqual(preview.navigation);
+		expect(serialized).not.toMatch(/social|travel/i);
 	});
 });

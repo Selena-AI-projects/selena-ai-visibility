@@ -5,20 +5,15 @@
  * Validates text content, citations, and rawOutput round-trip re-extraction.
  *
  * Usage:
- *   pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online"
- *   pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online,gemini:olostep:online"
- *   pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online" --output-json result.json
+ *   SELENA_PROVIDER_TEST_SPEND_AUTHORIZED=true SELENA_MEASUREMENT_ENABLED=true \
+ *   SELENA_EMERGENCY_STOP=false pnpm tsx scripts/test-provider.ts \
+ *   --target "chatgpt:olostep:online" --output-json result.json
  */
 
-import {
-	parseScrapeTargets,
-	getProvider,
-	getModelMeta,
-	STATUS_TARGETS,
-	type ScrapeResult,
-} from "@workspace/lib/providers";
-import { extractTextContent, extractCitations } from "@workspace/lib/text-extraction";
-import { appendFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { getModelMeta } from "@workspace/config/models";
+import { getProvider, type Provider, parseScrapeTargets, type ScrapeResult } from "@workspace/lib/providers";
+import { extractCitations, extractTextContent } from "@workspace/lib/text-extraction";
 import { escapeGitHubSummaryTableCell } from "./github-summary";
 
 const colors = {
@@ -37,13 +32,30 @@ function log(message: string, color?: string) {
 }
 
 interface ParsedArgs {
+	target?: string;
+	outputJson?: string;
+	dump?: string;
+}
+
+export interface AuthorizedProviderTestRun {
 	target: string;
 	outputJson?: string;
 	dump?: string;
 }
 
-function parseArgs(): ParsedArgs {
-	const argv = process.argv.slice(2);
+type ProviderTestEnvironment = Record<string, string | undefined>;
+type ProviderResolver = (id: string) => Pick<Provider, "run">;
+
+const PROVIDER_TEST_SPEND_AUTH_ENV = "SELENA_PROVIDER_TEST_SPEND_AUTHORIZED";
+
+function assertProviderTestEnvironment(environment: ProviderTestEnvironment): void {
+	if (environment[PROVIDER_TEST_SPEND_AUTH_ENV] !== "true")
+		throw new Error("PROVIDER_TEST_SPEND_AUTHORIZATION_REQUIRED");
+	if (environment.SELENA_MEASUREMENT_ENABLED !== "true") throw new Error("PROVIDER_TEST_MEASUREMENT_GATE_REQUIRED");
+	if (environment.SELENA_EMERGENCY_STOP !== "false") throw new Error("PROVIDER_TEST_EMERGENCY_STOP_MUST_BE_FALSE");
+}
+
+function parseArgs(argv: readonly string[]): ParsedArgs {
 	let target: string | undefined;
 	let outputJson: string | undefined;
 	let dump: string | undefined;
@@ -61,29 +73,26 @@ function parseArgs(): ParsedArgs {
 			dump = argv[++i];
 			continue;
 		}
-		if (argv[i] === "--help" || argv[i] === "-h") {
-			console.log(`
-Usage: pnpm tsx --env-file=.env scripts/test-provider.ts --target <scrape-targets> [--output-json <path>] [--dump <path>]
-
-  <scrape-targets>  Comma-separated SCRAPE_TARGETS entries, e.g. "chatgpt:olostep:online,gemini:olostep:online"
-                    When multiple targets are provided, they are all tested in parallel.
-                    Omit --target to test the full monitored set (STATUS_TARGETS).
-  --output-json     Write results as JSON to the given path (for CI artifact collection)
-  --dump            Write full raw output for each target to the given directory
-
-Examples:
-  pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online"
-  pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online,gemini:olostep:online"
-  pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:olostep:online" --output-json result.json
-  pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:brightdata:online" --dump ./dumps
-  pnpm tsx --env-file=.env scripts/test-provider.ts --target "chatgpt:oxylabs:online"
-`);
-			process.exit(0);
-		}
+		throw new Error(`PROVIDER_TEST_ARGUMENT_INVALID:${argv[i]}`);
 	}
-	// No --target means the scheduled run: test the full monitored set.
-	if (!target) target = STATUS_TARGETS.join(",");
 	return { target, outputJson, dump };
+}
+
+/** Authorize one manual, one-attempt provider probe before resolving a provider or credential. */
+export function authorizeProviderTestRun(
+	argv: readonly string[],
+	environment: ProviderTestEnvironment = process.env,
+): AuthorizedProviderTestRun {
+	assertProviderTestEnvironment(environment);
+
+	const { target, outputJson, dump } = parseArgs(argv);
+	const targets = target
+		?.split(",")
+		.map((value) => value.trim())
+		.filter(Boolean);
+	if (targets?.length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
+	if (parseScrapeTargets(target).length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
+	return { target: targets[0], outputJson, dump };
 }
 
 function formatLatency(ms: number): string {
@@ -95,18 +104,8 @@ function formatLatency(ms: number): string {
 	return `${minutes}m${seconds.toString().padStart(2, "0")}s`;
 }
 
-// These probe prompts serve every target, so they need to both force the
-// chatbots to web-search (recency — a model can't answer "this week" or "in
-// 2026" from training) and trigger Google's AI Overview (commercial/
-// informational "best X" queries; live-data queries like stock prices or scores
-// get a widget, not an overview). runTarget retries down this list until one
-// yields citations, so the mix covers both kinds of target.
-const TEST_PROMPTS = [
-	"What is a well-reviewed speaker that was released last month?",
-	"What were the biggest tech news stories this week?",
-	"What are the best running shoes for beginners in 2026?",
-	"What are the best noise cancelling headphones in 2026?",
-];
+// One prompt is one provider attempt. Quality failure never authorizes another call.
+const TEST_PROMPT = "What is a well-reviewed speaker that was released last month?";
 const MIN_TEXT_LENGTH = 50;
 
 // Provider/model combos where web queries aren't reported even though web search happens
@@ -205,7 +204,7 @@ function validateResult(result: ScrapeResult, providerId: string, webSearch: boo
 	}
 
 	for (const [i, cit] of result.citations.entries()) {
-		if (!cit.url || !cit.url.startsWith("http")) {
+		if (!cit.url?.startsWith("http")) {
 			issues.push({ field: `citations[${i}].url`, message: `Invalid URL: "${cit.url}"`, severity: "error" });
 		}
 		if (!cit.domain) {
@@ -216,7 +215,14 @@ function validateResult(result: ScrapeResult, providerId: string, webSearch: boo
 	return issues;
 }
 
-async function runTarget(target: string, dumpDir?: string): Promise<{ result: TargetResult; logs: string }> {
+export async function runProviderTargetOnce(
+	target: string,
+	dumpDir?: string,
+	resolveProvider: ProviderResolver = getProvider,
+	environment: ProviderTestEnvironment = process.env,
+): Promise<{ result: TargetResult; logs: string }> {
+	assertProviderTestEnvironment(environment);
+	if (parseScrapeTargets(target).length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
 	const buffered: string[] = [];
 	const tlog = (message: string, color?: string) => {
 		buffered.push(`${color || ""}${message}${colors.reset}`);
@@ -224,20 +230,20 @@ async function runTarget(target: string, dumpDir?: string): Promise<{ result: Ta
 
 	const [config] = parseScrapeTargets(target);
 	const providerId = config.provider;
-	const provider = getProvider(providerId);
+	const provider = resolveProvider(providerId);
 	const meta = getModelMeta(config.model);
 	const versionStr = config.version ? ` (${config.version})` : "";
 
 	tlog(`\nTesting: ${meta.label} via ${providerId}${versionStr}`, colors.bright);
 	tlog(`Web search: ${config.webSearch ? "enabled" : "disabled"}`, colors.dim);
-	tlog(`Test prompt: "${TEST_PROMPTS[0]}"`, colors.dim);
+	tlog(`Test prompt: "${TEST_PROMPT}"`, colors.dim);
 	tlog(`Validating: text content (${MIN_TEXT_LENGTH}+ chars), citations, rawOutput re-extraction\n`, colors.dim);
 
-	let attemptStart = Date.now();
+	const attemptStart = Date.now();
 	let result: ScrapeResult;
-	let retries = 0;
+	const retries = 0;
 	try {
-		result = await provider.run(config.model, TEST_PROMPTS[0], {
+		result = await provider.run(config.model, TEST_PROMPT, {
 			webSearch: config.webSearch,
 			version: config.version,
 		});
@@ -264,30 +270,6 @@ async function runTarget(target: string, dumpDir?: string): Promise<{ result: Ta
 			},
 			logs: buffered.join("\n"),
 		};
-	}
-
-	// Retry with different prompts if web search was expected but no citations/queries came back
-	if (config.webSearch && result.citations.length === 0 && !hasRealWebQueries(result.webQueries)) {
-		for (let i = 1; i < TEST_PROMPTS.length; i++) {
-			tlog(
-				`No citations or web queries — retrying with prompt ${i + 1}/${TEST_PROMPTS.length}: "${TEST_PROMPTS[i]}"`,
-				colors.yellow,
-			);
-			retries++;
-			try {
-				attemptStart = Date.now();
-				const retry = await provider.run(config.model, TEST_PROMPTS[i], {
-					webSearch: config.webSearch,
-					version: config.version,
-				});
-				if (retry.citations.length > 0 || hasRealWebQueries(retry.webQueries)) {
-					result = retry;
-					break;
-				}
-			} catch {
-				/* keep previous result */
-			}
-		}
 	}
 
 	const latency = Date.now() - attemptStart;
@@ -368,7 +350,7 @@ function writeGitHubSummary(results: TargetResult[]) {
 	for (const r of results) {
 		const status = r.status === "pass" ? ":white_check_mark:" : ":x:";
 		const error = r.error ? escapeGitHubSummaryTableCell(r.error.slice(0, 100)) : "";
-		const rawKB = (r.rawOutputBytes / 1024).toFixed(1) + " KB";
+		const rawKB = `${(r.rawOutputBytes / 1024).toFixed(1)} KB`;
 		const sample = r.sampleOutput
 			? `<details><summary>Show</summary><pre>${escapeGitHubSummaryTableCell(r.sampleOutput)}</pre></details>`
 			: "";
@@ -395,34 +377,31 @@ function writeGitHubSummary(results: TargetResult[]) {
 	appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n"));
 }
 
-async function main() {
-	const { target: targetArg, outputJson, dump } = parseArgs();
-	const targets = targetArg
-		.split(",")
-		.map((t) => t.trim())
-		.filter(Boolean);
+function printUsage(): void {
+	console.log(`
+Usage: pnpm tsx scripts/test-provider.ts --target <model:provider[:version][:online]> [--output-json <path>] [--dump <path>]
 
-	// Run all targets in parallel. Each is almost entirely waiting on an external
-	// HTTP call, so there's no benefit to throttling. Logs are buffered per target
-	// and flushed as a coherent block when that target finishes, so output from
-	// concurrent targets doesn't interleave.
-	const pending = targets.map(async (target) => {
-		const { result, logs } = await runTarget(target, dump);
-		process.stdout.write(`${logs}\n`);
-		return result;
-	});
-	const results = await Promise.all(pending);
+Runs exactly one target and one provider attempt. Execution also requires:
+  SELENA_PROVIDER_TEST_SPEND_AUTHORIZED=true
+  SELENA_MEASUREMENT_ENABLED=true
+  SELENA_EMERGENCY_STOP=false
+`);
+}
+
+async function main() {
+	const argv = process.argv.slice(2);
+	if (argv.includes("--help") || argv.includes("-h")) {
+		printUsage();
+		return;
+	}
+	const { target, outputJson, dump } = authorizeProviderTestRun(argv);
+	const { result, logs } = await runProviderTargetOnce(target, dump);
+	process.stdout.write(`${logs}\n`);
+	const results = [result];
 
 	const passed = results.filter((r) => r.status === "pass").length;
 	const failed = results.filter((r) => r.status === "fail").length;
-
-	if (targets.length > 1) {
-		log(`\n${"=".repeat(40)}`, colors.bright);
-		log(
-			`Results: ${passed} passed, ${failed} failed out of ${targets.length} targets`,
-			failed > 0 ? colors.red : colors.green,
-		);
-	}
+	log(`Result: ${passed} passed, ${failed} failed`, failed > 0 ? colors.red : colors.green);
 
 	if (outputJson) {
 		writeFileSync(outputJson, JSON.stringify(results, null, 2));
@@ -432,7 +411,10 @@ async function main() {
 	if (failed > 0) process.exit(1);
 }
 
-main().catch((err) => {
-	console.error(err);
-	process.exit(1);
-});
+const isDirectRun = process.argv[1]?.endsWith("/test-provider.ts") || process.argv[1]?.endsWith("/test-provider.js");
+if (isDirectRun) {
+	main().catch((err) => {
+		console.error(err instanceof Error ? err.message : err);
+		process.exit(1);
+	});
+}

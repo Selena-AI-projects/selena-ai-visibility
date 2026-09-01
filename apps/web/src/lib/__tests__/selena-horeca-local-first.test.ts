@@ -258,7 +258,10 @@ describe("HoReCa local-first customer preview", () => {
 		};
 
 		const html = renderToStaticMarkup(SelenaHorecaLocalFirst({ locale: "en", model }));
+		const russianHtml = renderToStaticMarkup(SelenaHorecaLocalFirst({ locale: "ru", model }));
 		expect(html).not.toContain("Hidden social source");
 		expect(html).not.toContain("Hidden travel comparison");
+		expect(visibleText(html)).not.toMatch(/social|travel/i);
+		expect(visibleText(russianHtml)).not.toMatch(/социальн|турист/i);
 	});
 });

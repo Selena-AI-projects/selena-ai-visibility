@@ -23,11 +23,11 @@ const boss = new PgBoss({
 /** Start only after all managed recurring schedules have been reconciled. */
 export function createRecurringSchedulerBoss(): PgBoss {
 	const recurringSchemaLifecycle = runtimePgBossSchemaLifecycle();
-	if (
-		isOwnerManagedPgBossRuntime(recurringSchemaLifecycle) &&
-		process.env.SELENA_PGBOSS_RECURRING_RUNTIME_ENABLED !== "true"
-	) {
-		throw new Error("PGBOSS_RECURRING_OWNER_GATE_REQUIRED");
+	if (isOwnerManagedPgBossRuntime(recurringSchemaLifecycle)) {
+		// The non-owner runtime role intentionally has SELECT-only access to the
+		// pg-boss version marker, while Timekeeper requires cron_on updates. A
+		// separate owner-approved scheduler role is a future runtime gate.
+		throw new Error("PGBOSS_RECURRING_OWNER_PRIVILEGE_GATE_UNAVAILABLE");
 	}
 	return new PgBoss({
 		...runtimeDatabaseConnection(),

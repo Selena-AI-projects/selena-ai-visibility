@@ -121,7 +121,6 @@ async function main() {
 			answerRetentionEnabled: process.env.SELENA_ANSWER_RETENTION_ENABLED,
 			deploymentMode: process.env.DEPLOYMENT_MODE,
 			ownerManaged: isOwnerManagedPgBossRuntime(runtimePgBossSchemaLifecycle()),
-			ownerManagedRecurringRuntimeEnabled: process.env.SELENA_PGBOSS_RECURRING_RUNTIME_ENABLED,
 		},
 		async () => {
 			const scheduler = createRecurringSchedulerBoss();

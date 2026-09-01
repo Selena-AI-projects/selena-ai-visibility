@@ -16,6 +16,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
+const MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '5s'";
+// One database-wide lock for every bounded Selena migration ceiling. Keeping
+// the key independent of the requested ceiling prevents adjacent release
+// candidates from migrating the same journal concurrently.
+const MIGRATION_LOCK_SQL = "select pg_advisory_lock(1397050446, 1095587150)";
+const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock(1397050446, 1095587150) as unlocked";
+
 export async function expectedJournalRows(migrationsFolder) {
 	const journal = JSON.parse(await readFile(resolve(migrationsFolder, "meta/_journal.json"), "utf8"));
 	if (!Array.isArray(journal.entries) || journal.entries.length === 0)
@@ -41,6 +48,50 @@ async function journalState(pool) {
 	} catch {
 		return null;
 	}
+}
+
+export async function runMigrationCycleWithLock({
+	client,
+	expectedRows,
+	migrationsFolder,
+	createDatabase = drizzle,
+	migrateDatabase = migrate,
+	log = console.log,
+}) {
+	await client.query(MIGRATION_LOCK_TIMEOUT_SQL);
+	let lockAcquired = false;
+	let migrationError;
+	try {
+		await client.query(MIGRATION_LOCK_SQL);
+		lockAcquired = true;
+
+		const before = await journalState(client);
+		log(
+			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
+		);
+		if (before) assertJournalPrefix(before, expectedRows);
+
+		await migrateDatabase(createDatabase(client), { migrationsFolder });
+
+		const after = await journalState(client);
+		log(`journal after: ${after ? `${after.length}/${after.at(-1)?.createdAt ?? "empty"}` : "unknown"}`);
+		assertJournalPostcondition(after, expectedRows);
+		log("migrations complete");
+	} catch (error) {
+		migrationError = error;
+	}
+
+	let unlockError;
+	if (lockAcquired) {
+		try {
+			const result = await client.query(MIGRATION_UNLOCK_SQL);
+			if (result.rows[0]?.unlocked !== true) unlockError = new Error("SELENA_MIGRATION_ADVISORY_UNLOCK_FAILED");
+		} catch (error) {
+			unlockError = error;
+		}
+	}
+	if (migrationError) throw migrationError;
+	if (unlockError) throw unlockError;
 }
 
 export function assertJournalPrefix(actualRows, expectedRows) {
@@ -75,20 +126,14 @@ export async function main() {
 		max: 1,
 		options: "-c lock_timeout=5000 -c statement_timeout=1200000",
 	});
+	let client;
 	try {
-		const before = await journalState(pool);
-		console.log(
-			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
-		);
-		if (before) assertJournalPrefix(before, expectedRows);
-
-		await migrate(drizzle(pool), { migrationsFolder });
-
-		const after = await journalState(pool);
-		console.log(`journal after: ${after ? `${after.length}/${after.at(-1)?.createdAt ?? "empty"}` : "unknown"}`);
-		assertJournalPostcondition(after, expectedRows);
-		console.log("migrations complete");
+		client = await pool.connect();
+		await runMigrationCycleWithLock({ client, expectedRows, migrationsFolder });
 	} finally {
+		// Destroy this dedicated session even after a successful explicit unlock so
+		// an unlock failure can never return a lock-holding client to the pool.
+		client?.release(true);
 		await pool.end().catch(() => {});
 	}
 }

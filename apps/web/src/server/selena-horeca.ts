@@ -4,6 +4,11 @@ import { withOrganizationTransaction } from "@workspace/lib/db/organization-tran
 import { svEvidenceReadModel } from "@workspace/lib/db/schema";
 import { type EvidenceProjection, toEvidenceReadModel } from "@workspace/lib/selena-evidence-read-models";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
+import {
+	customerVisibleHorecaModules,
+	type HorecaLocalFirstReadModel,
+	horecaLocalFirstReadModelSchema,
+} from "@workspace/selena-visibility-contracts";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -28,6 +33,13 @@ export function toHorecaApplicationEvidence(row: EvidenceProjection, scope: { te
 		projectId: row.projectId,
 		snapshotLinked: row.sourceSnapshotId !== null,
 	};
+}
+
+export function toCustomerHorecaWorkspaceModel(model: HorecaLocalFirstReadModel): HorecaLocalFirstReadModel {
+	return horecaLocalFirstReadModelSchema.parse({
+		...model,
+		modules: customerVisibleHorecaModules(model.modules),
+	});
 }
 
 async function readApplicationEvidence(tenantId: string, projectId: string) {
@@ -110,7 +122,7 @@ export const getSelenaHorecaWorkspaceFn = createServerFn({ method: "GET" })
 		return {
 			projects: projects.map((item) => ({ id: item.id, name: item.name })),
 			selectedProjectId: project.id,
-			model,
+			model: model ? toCustomerHorecaWorkspaceModel(model) : null,
 			evidenceDetail,
 			fallbackReason: model ? null : ("NO_ACCEPTED_LINKED_DATA" as const),
 		};

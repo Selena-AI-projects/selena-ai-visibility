@@ -325,8 +325,8 @@ export function SelenaHorecaLocalFirst({
 				<p className="mt-2 max-w-3xl text-sm leading-6 text-[#6e6258]">
 					{tr(
 						locale,
-						"Business facts, website and menu, reviews, social sources and travel sources remain separate records. A configured source is never shown as collected proof.",
-						"Данные о бизнесе, сайт и меню, отзывы, социальные и туристические источники остаются отдельными записями. Настроенный источник не показывается как собранное доказательство.",
+						"Business facts, website and menu, reviews, and approved connected sources remain separate records. A configured source is never shown as collected proof.",
+						"Данные о бизнесе, сайт и меню, отзывы и разрешённые подключённые источники остаются отдельными записями. Настроенный источник не показывается как собранное доказательство.",
 					)}
 				</p>
 				<ul className="mt-4">

@@ -1,14 +1,17 @@
 name: Test Providers
 
 on:
-  schedule:
-    - cron: "0 0,6,12,18 * * *"
   workflow_dispatch:
     inputs:
       target:
-        description: 'Comma-separated scrape targets to test (e.g. "chatgpt:olostep:online,gemini:olostep:online"). Leave empty to test all.'
-        required: false
+        description: 'Exactly one target (for example "chatgpt:olostep:online").'
+        required: true
         type: string
+      spend_authorized:
+        description: "I authorize one paid provider attempt for this target."
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,8 +20,6 @@ jobs:
   test:
     name: Test Providers
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    # All targets run in parallel on a single runner (they're I/O-bound waiting
-    # on external provider APIs), so the job wall-clock is ~the slowest target.
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -44,15 +45,11 @@ jobs:
           DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
           DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          # Empty on the schedule (script tests the full monitored set);
-          # workflow_dispatch can pass a comma-separated subset to override.
-          TARGET_OVERRIDE: ${{ inputs.target }}
-        run: |
-          if [ -n "$TARGET_OVERRIDE" ]; then
-            pnpm tsx apps/worker/scripts/test-provider.ts --target "$TARGET_OVERRIDE" --output-json result.json
-          else
-            pnpm tsx apps/worker/scripts/test-provider.ts --output-json result.json
-          fi
+          SELENA_PROVIDER_TEST_SPEND_AUTHORIZED: ${{ inputs.spend_authorized }}
+          SELENA_MEASUREMENT_ENABLED: ${{ vars.SELENA_MEASUREMENT_ENABLED }}
+          SELENA_EMERGENCY_STOP: ${{ vars.SELENA_EMERGENCY_STOP }}
+          TARGET: ${{ inputs.target }}
+        run: pnpm tsx apps/worker/scripts/test-provider.ts --target "$TARGET" --output-json result.json
       - name: Push results to Upstash Redis
         if: always() && hashFiles('result.json') != ''
         env:

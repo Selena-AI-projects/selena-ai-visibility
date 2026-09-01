@@ -41,7 +41,6 @@ const allEnabled: RecurringScheduleOptions = {
 	answerRetentionEnabled: "true",
 	deploymentMode: "whitelabel",
 	ownerManaged: false,
-	ownerManagedRecurringRuntimeEnabled: undefined,
 };
 
 test("web and worker processing clients cannot start a Timekeeper", () => {
@@ -121,7 +120,7 @@ test("the master opt-in does not bypass individual recurring gates", async () =>
 	assert.deepEqual(unscheduled, ["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"]);
 });
 
-test("owner-managed recurring activation needs a separate exact runtime privilege gate", async () => {
+test("owner-managed Timekeeper stays fail-closed until a scheduler role is approved", async () => {
 	const events: string[] = [];
 	const { scheduler, scheduled, unscheduled } = fakeScheduler(events);
 	let schedulerStarts = 0;
@@ -131,25 +130,12 @@ test("owner-managed recurring activation needs a separate exact runtime privileg
 			schedulerStarts += 1;
 			return "started";
 		}),
-		/PGBOSS_RECURRING_OWNER_GATE_REQUIRED/,
+		/PGBOSS_RECURRING_OWNER_PRIVILEGE_GATE_UNAVAILABLE/,
 	);
 
 	assert.equal(schedulerStarts, 0);
 	assert.deepEqual(scheduled, []);
 	assert.deepEqual(unscheduled, ["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"]);
-});
-
-test("owner-managed Timekeeper starts only when both recurring gates are exact", async () => {
-	const events: string[] = [];
-	const { scheduler } = fakeScheduler(events);
-
-	const started = await reconcileAndStartRecurringSchedules(
-		scheduler,
-		{ ...allEnabled, ownerManaged: true, ownerManagedRecurringRuntimeEnabled: "true" },
-		async () => "started",
-	);
-
-	assert.equal(started, "started");
 });
 
 test("unknown schedule rows deny Timekeeper startup", async () => {

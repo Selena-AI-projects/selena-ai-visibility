@@ -12,7 +12,6 @@ export interface RecurringScheduleOptions {
 	answerRetentionEnabled: string | undefined;
 	deploymentMode: string | undefined;
 	ownerManaged: boolean;
-	ownerManagedRecurringRuntimeEnabled: string | undefined;
 }
 
 type Scheduler = Pick<PgBoss, "schedule" | "unschedule" | "getSchedules">;
@@ -42,20 +41,22 @@ async function assertNoUnknownSchedules(scheduler: Scheduler): Promise<void> {
 
 async function reconcileRecurringSchedules(scheduler: Scheduler, options: RecurringScheduleOptions): Promise<boolean> {
 	const recurringRequested = isRecurringJobsEnabled(options.recurringEnabled);
-	const ownerManagedRuntimeEnabled = options.ownerManagedRecurringRuntimeEnabled === "true";
-	const recurringEnabled = recurringRequested && (!options.ownerManaged || ownerManagedRuntimeEnabled);
 
-	if (!recurringEnabled) {
+	if (!recurringRequested) {
 		await removeManagedSchedules(scheduler);
 		await assertNoUnknownSchedules(scheduler);
-		if (recurringRequested && options.ownerManaged) throw new Error("PGBOSS_RECURRING_OWNER_GATE_REQUIRED");
 		return false;
+	}
+	if (options.ownerManaged) {
+		await removeManagedSchedules(scheduler);
+		await assertNoUnknownSchedules(scheduler);
+		throw new Error("PGBOSS_RECURRING_OWNER_PRIVILEGE_GATE_UNAVAILABLE");
 	}
 
 	await assertNoUnknownSchedules(scheduler);
-	const maintenanceEnabled = recurringEnabled && options.legacyProviderExecutionEnabled && options.maintenanceEnabled;
-	const answerRetentionEnabled = recurringEnabled && options.answerRetentionEnabled === "true";
-	const auth0SyncEnabled = recurringEnabled && options.deploymentMode === "whitelabel";
+	const maintenanceEnabled = options.legacyProviderExecutionEnabled && options.maintenanceEnabled;
+	const answerRetentionEnabled = options.answerRetentionEnabled === "true";
+	const auth0SyncEnabled = options.deploymentMode === "whitelabel";
 
 	if (maintenanceEnabled) {
 		await scheduler.schedule(MAINTENANCE_QUEUE, "*/5 * * * *", { source: "scheduled" }, { tz: "UTC" });
