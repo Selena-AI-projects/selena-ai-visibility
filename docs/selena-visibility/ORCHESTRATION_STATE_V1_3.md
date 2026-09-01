@@ -89,8 +89,8 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 - Hosted deployment equality: `PASS_RESTORED`; exact git archive `100d34d8`
   replaced automatic release drift.
 - The E2E scheduling workflow now requires a real-PostgreSQL no-op replay through
-  the final bounded migration runner at journal frontier `54/0053`; the current
-  PR-head E2E check is its authoritative receipt.
+  the current disposable release frontier `54/0054`; shared staging remains
+  bounded at `0053`. The current PR-head E2E check is its authoritative receipt.
 
 Previously recorded local source gates: lint `0 errors / 129 warnings / 12 infos`, typecheck
 `13/13`, tests `16/16` tasks, Impeccable detect `PASS`, build `16/16`.

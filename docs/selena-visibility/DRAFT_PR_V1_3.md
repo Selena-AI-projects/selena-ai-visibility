@@ -137,8 +137,9 @@ provider capture/journal timestamps, strict replay checks and idempotent
 - PR #106 functional E2E steps passed, but its 30-minute workflow ceiling
   canceled the job during post-action cleanup; the source-only timeout patch
   will provide the next exact-head CI receipt;
-- the E2E scheduling job now replays the final bounded runner through `0053`
-  against disposable real PostgreSQL after the journal is already complete;
+- the E2E scheduling job now replays the final bounded runner through the
+  disposable release frontier `0054` against real PostgreSQL after the journal
+  is already complete; shared staging remains bounded at `0053`;
   the current-head E2E check is the authoritative no-op/advisory-lock receipt;
 - local focused gates after the release merge: migration/repository tests
   `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
