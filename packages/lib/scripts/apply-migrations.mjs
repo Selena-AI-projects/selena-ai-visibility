@@ -43,8 +43,12 @@ try {
 	console.log("migrations complete");
 	process.exitCode = 0;
 } catch (error) {
-	console.error("migration failed:");
-	console.error(error);
+	// One short line per fact, most important first: the platform drops log
+	// lines beyond 500/sec, and a full DrizzleQueryError dump of a large
+	// migration flooded exactly the line that named the failure.
+	console.error(`migration failed: ${String(error?.message ?? error).split("\n")[0]}`);
+	const cause = error?.cause;
+	if (cause) console.error(`cause: ${String(cause?.message ?? cause).split("\n")[0]}`);
 	process.exitCode = 1;
 } finally {
 	await pool?.end().catch(() => {});
