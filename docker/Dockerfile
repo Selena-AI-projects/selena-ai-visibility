@@ -89,20 +89,21 @@ ENV HOST="0.0.0.0"
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
 
-# Migration stage — runs drizzle-kit migrate then exits
 # Migration stage — applies pending migrations, then exits.
 #
-# `pnpm exec`, not `npx`: drizzle-kit ships inside the deploy, so the runner
-# must use the copy that is already there. `npx` silently downloads a fresh
-# one from the registry at container start, which turns a migration into a
-# network operation — it died mid-download once and exited zero without
-# applying anything once.
+# The binary is invoked by path, with no launcher in front of it. Both
+# launchers reach the network before they reach the database, and both failed
+# here: `npx` downloads drizzle-kit at container start (killed mid-download
+# once, exited zero having applied nothing once), and `pnpm exec` runs a
+# dependency check that decided to reinstall and aborted for want of a TTY.
+# drizzle-kit is a dependency of the library, so `pnpm deploy` already put it
+# in ./node_modules/.bin.
 FROM base AS migrate
 WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-CMD ["pnpm", "exec", "drizzle-kit", "migrate"]
+CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
 
 # Worker stage
 FROM base AS worker
