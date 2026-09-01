@@ -3,6 +3,7 @@ import type { BrightDataDatasetTransport } from "./brightdata-dataset-client";
 import type { ProviderDatasetAccessRequest } from "./dataset-registry";
 import {
 	createBrightDataGoogleAiModeTransport,
+	GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 	type GoogleAiModeCanaryReservationResult,
 	type GoogleAiModeCostPreflightEvidence,
 	runGoogleAiModeOneShotCanary,
@@ -56,6 +57,10 @@ const costEvidence = (
 });
 
 describe("GOOGLE_AI_MODE one-shot canary", () => {
+	it("binds this authorized run to the diagnostic-2 immutable identity", () => {
+		expect(GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY).toBe("selena-v1-3-google-ai-mode-diagnostic-2");
+	});
+
 	beforeEach(() => {
 		vi.unstubAllEnvs();
 	});

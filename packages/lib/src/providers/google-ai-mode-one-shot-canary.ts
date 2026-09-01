@@ -14,7 +14,7 @@ import {
 } from "./dataset-registry";
 
 export const GOOGLE_AI_MODE_CANARY_MAX_COST_USD = 0.25;
-export const GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY = "selena-v1-3-google-ai-mode-canary" as const;
+export const GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY = "selena-v1-3-google-ai-mode-diagnostic-2" as const;
 export const GOOGLE_AI_MODE_COST_PREFLIGHT_MAX_AGE_MS = 15 * 60 * 1_000;
 export const GOOGLE_AI_MODE_CANARY_LIFECYCLE = Object.freeze({
 	// Cancellation gets its own 10-second ceiling, keeping wall time below 25m.
