@@ -15,6 +15,8 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `2e21ef04e3a0a87d0bd103b15603a23775dad6ab`
   (`Bound migrations to the reviewed release ceiling`)
+- Release integration merge: `34d864176c831a78741f504e0f9eda8d69d1e0fc`
+  (parents `3b1118e9` and `2e21ef04`)
 - Original release snapshot retained for lineage: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Draft PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Protected untracked `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched and excluded.
@@ -30,7 +32,7 @@ an exact `100d34d8` archive deployment before this matrix was finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. Release `5cbb7b25` is merged and the applied-`0045` hash transition is bounded to one reviewed timestamp/hash pair. |
-| Exact-head CI | `PASS_SOURCE / HOLD_PR_AGGREGATION` | Build, E2E, scheduling, smoke and license completed successfully on diagnostic source `a9d1f373`. PR #96 has no automatic exact-head check aggregation and remains `mergeable_state=dirty`; no merge is allowed. |
+| Exact-head CI | `PASS_DIAGNOSTIC / PENDING_MERGE_HEAD` | Build, E2E, scheduling, smoke and license completed successfully on diagnostic source `a9d1f373`. Release integration `34d86417` resolved the two migration-runner conflicts and passed 12 targeted tests locally; final exact-head workflows must complete after push. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web. Worker was temporarily deployed from `a9d1f373` for diagnostic-2 and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -175,9 +177,8 @@ values-suppressed count-only probe after rotation.
    retrying either call. Billing and usage attribution are closed.
 2. Keep both reservations immutable. No additional provider call, identity,
    retry or cost-cap increase is authorized.
-3. Review and reconcile current remote release head `2e21ef04` into the feature
-   branch without weakening payment/provider/database hardening, then obtain an
-   exact final-head check aggregation. Production remains prohibited.
+3. Obtain exact final-head CI and refreshed GitHub mergeability after pushing
+   release integration merge `34d86417`. Production remains prohibited.
 
 ## Current diagnostic-head CI
 
@@ -191,10 +192,9 @@ Source `a9d1f373` passed every manually dispatchable exact-head workflow:
 | Dependency License Audit | `PASS` | [run 33502678649 / job 99839403470](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678649/job/99839403470) |
 | Deployment smoke | `PASS` | [run 33502678500 / job 99839403464](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33502678500/job/99839403464) |
 
-GitHub API evidence for PR #96 at this snapshot: `head=a9d1f373`, cached PR
-`base=5cbb7b25`, `state=open`, `mergeable=false`, `mergeable_state=dirty`.
-The base ref itself resolves to `2e21ef04`, so the PR snapshot is stale relative
-to the current release branch and must not be merged. The evidence-only commit
-will advance the feature head without changing the deployed implementation
-tree. Green source workflows and exact hosted receipts do not resolve the
-provider lifecycle or the dirty merge state.
+GitHub API evidence before the release integration merge: `head=a9d1f373`,
+cached PR `base=5cbb7b25`, `state=open`, `mergeable=false`,
+`mergeable_state=dirty`, while the base ref itself resolved to `2e21ef04`.
+Merge commit `34d86417` now integrates that exact release head, preserves the
+feature-side reviewed `0045` hash alias, and adopts the release-side advisory
+lock ordering. GitHub mergeability and final CI must be read back after push.

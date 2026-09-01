@@ -4,8 +4,9 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
-- Current remote base head: `2e21ef04`; PR API snapshot still reports
-  `5cbb7b25` and `mergeable_state=dirty`
+- Current remote base head: `2e21ef04`; integrated by merge commit `34d86417`
+- Pre-merge PR API snapshot: cached base `5cbb7b25`,
+  `mergeable_state=dirty`; refresh pending after push
 - Accepted staging implementation source: `100d34d8`
 - Diagnostic-2 source / current PR HEAD before this evidence update: `a9d1f373`
 - Canary-time feature HEAD: `3872a396`
@@ -103,8 +104,11 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 - diagnostic source `a9d1f373` passed exact-head Build, E2E Integration,
   Scheduling Policy Verification, Deployment Smoke and License workflows;
   exact run links are in `ACCEPTANCE_MATRIX_V1_3.md`;
-- the CLA workflow is not manually dispatchable; PR #96 currently reports
-  `mergeable=false`, `mergeable_state=dirty`, so no merge gate is claimed;
+- release integration `34d86417` preserved the feature historical-hash gate,
+  adopted release advisory-lock ordering and passed lib migration tests `10/10`
+  plus CLI migration image tests `2/2` locally;
+- the CLA workflow is not manually dispatchable; refreshed PR mergeability and
+  final exact-head CI are required after push, so no merge gate is claimed;
 - local focused gates after the release merge: migration/repository tests
   `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
   shell syntax PASS and diff check clean;
@@ -114,7 +118,8 @@ Status: `OPEN / STAGING_CANARY_HOLD / DO_NOT_MERGE`.
 
 1. Both Bright Data terminal outcomes remain `UNKNOWN/HOLD`; first-party cost
    and usage attribution is closed and neither execution may be retried.
-2. PR #96 remains `dirty` and lacks automatic exact-head check aggregation.
+2. Final exact-head CI and refreshed PR mergeability are required after release
+   integration merge `34d86417` is pushed.
 3. Production, production DB, recurring jobs, billing activation,
    Social/Travel activation, additional provider calls and PR merge remain
    prohibited.

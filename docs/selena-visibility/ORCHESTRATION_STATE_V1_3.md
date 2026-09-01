@@ -5,7 +5,7 @@ drift recovery and first-party Bright Data cost reconciliation.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_TWO_CANARY_OUTCOMES_UNKNOWN_ACCEPTANCE_HOLD`
+- State: `STAGING_CORE_PASS_TWO_CANARY_OUTCOMES_UNKNOWN_MERGE_HEAD_CI_PENDING`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Accepted staging implementation source: `100d34d8`
@@ -18,6 +18,7 @@ drift recovery and first-party Bright Data cost reconciliation.
   `SUCCESS`
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `2e21ef04e3a0a87d0bd103b15603a23775dad6ab`
+- Release integration merge: `34d864176c831a78741f504e0f9eda8d69d1e0fc`
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
 - Historical draft PR reference: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Canary-time feature-head required checks: `ALL PASS`
@@ -50,7 +51,7 @@ and excluded from every commit and archive.
 | Provider | `PASS_COST / HOLD_TWO_OUTCOMES_UNKNOWN` | Historical and diagnostic-2 identities each made one call. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
 | Database/Evidence | `PASS_0053_CANARY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Both reservations remain immutable. |
 | HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `2e21ef04` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / MERGE_HOLD` | Exact staging implementation and diagnostic CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. PR #96 remains `dirty` and unmerged. |
+| Orchestrator | `STAGING_CORE_PASS / FINAL_CI_PENDING` | Exact staging implementation and diagnostic CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Release `2e21ef04` is integrated by merge `34d86417`; PR merge is not executed. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -68,7 +69,10 @@ its manually dispatchable exact-head workflows passed.
 - Exact-head manually dispatchable workflows: Build, E2E, Scheduling, Smoke,
   License `ALL PASS`
 - PR merge aggregation: `HOLD`; PR #96 is `open`, `mergeable=false`,
-  `mergeable_state=dirty`
+  `mergeable_state=dirty` in the pre-merge API snapshot; refresh pending after
+  pushing merge `34d86417`
+- Merge-resolution tests: lib migration runner `10/10`; CLI migration image
+  contract `2/2`
 - Hosted deployment equality: `PASS_RESTORED`; exact git archive `100d34d8`
   replaced automatic release drift.
 
@@ -115,9 +119,9 @@ Status: `PASS_ADMIN_BINDING`.
 1. `HOLD_PROVIDER_TERMINAL`: both immutable calls have unknown terminal
    provider outcomes. Neither call may be retried. Billing attribution is
    closed at one Google AI Mode record and `USD 0.0015` total for the day.
-2. `HOLD_PR_DIRTY`: PR #96 is not mergeable and has no automatic exact-head
-   check aggregation. The remote release ref is `2e21ef04`, while the PR API
-   still reports cached base `5cbb7b25`. No merge is executed.
+2. `HOLD_FINAL_CI`: release head `2e21ef04` is integrated by merge `34d86417`.
+   Exact-head CI and the refreshed PR mergeability result remain required. No
+   PR merge is executed.
 3. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 
