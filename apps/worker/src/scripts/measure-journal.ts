@@ -53,12 +53,13 @@ const PRICE_PER_ANSWER_USD = 0.0015;
 const API_PRICE_PER_ANSWER_USD = 0.005;
 
 /** The collector is the bottleneck and it is patient, so many can wait at once. */
-// Bright Data's own scrape call can take well past a minute per question, and
-// under concurrent load a snapshot has been observed not to become ready
-// within the adapter's 5-minute default poll window — every permit sent that
-// way was recorded as MALFORMED_RESPONSE (2026-08-29 run: 0 valid of 200).
-// A gentler pace keeps each call inside that window.
-const CONCURRENCY = 3;
+// The pace that lost the 2026-08-29 run — 0 valid of 200, every permit
+// MALFORMED_RESPONSE — was concurrency against a 5-minute poll window: the
+// snapshots were produced and billed, and the adapter gave up before they were
+// ready. The window is 15 minutes below, and no observed answer has come close
+// to it, so the ceiling rises by one step rather than to whatever the account
+// might bear. Raise it again only against a run that stayed valid at this one.
+const CONCURRENCY = 6;
 
 const BRIGHTDATA_ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const BRIGHTDATA_SURFACES = ["chatgpt", "gemini", "perplexity"] as const;
@@ -131,12 +132,13 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 			fetchImpl: fetch,
 			resolveScenarioText: resolvers.resolveScenarioText,
 			resolveExtractionContext: resolvers.resolveExtractionContext,
-			// ChatGPT and Gemini stay capped at 10 minutes for this bounded journal
-			// run. Perplexity is exempt: its collector has taken ~16 minutes on this
-			// account, so it keeps the adapter's 25-minute surface deadline —
-			// clamping it to 10 minutes here times out a produced (and billed)
-			// answer, and one non-succeeded Perplexity run stops the whole cycle.
-			...(surface === "perplexity" ? {} : { snapshotTimeoutMs: 10 * 60 * 1000 }),
+			// ChatGPT and Gemini wait 15 minutes for this bounded journal run: a
+			// snapshot slowed by the wider concurrency above is still a produced and
+			// billed answer, and timing it out buys nothing back. Perplexity is
+			// exempt: its collector has taken ~16 minutes on this account, so it
+			// keeps the adapter's 25-minute surface deadline — and one non-succeeded
+			// Perplexity run stops the whole cycle.
+			...(surface === "perplexity" ? {} : { snapshotTimeoutMs: 15 * 60 * 1000 }),
 		}),
 	]),
 );
@@ -221,11 +223,23 @@ async function scenarioRowsFor(projectId: string, slug: string) {
 	return rows;
 }
 
+/**
+ * A slot frees the moment its own answer lands, not when its neighbours do.
+ * In fixed batches one Perplexity call — routinely a quarter of an hour — held
+ * the other slots idle until it returned, so the run moved at the speed of its
+ * slowest answer rather than its own concurrency.
+ */
 async function inPool<T, R>(items: T[], size: number, worker: (item: T) => Promise<R>): Promise<R[]> {
-	const results: R[] = [];
-	for (let index = 0; index < items.length; index += size) {
-		results.push(...(await Promise.all(items.slice(index, index + size).map(worker))));
+	const results = new Array<R>(items.length);
+	let next = 0;
+	async function drain(): Promise<void> {
+		for (let index = next++; index < items.length; index = next++) {
+			const item = items[index];
+			if (item === undefined) return;
+			results[index] = await worker(item);
+		}
 	}
+	await Promise.all(Array.from({ length: Math.min(size, items.length) }, drain));
 	return results;
 }
 
