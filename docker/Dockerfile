@@ -90,24 +90,18 @@ ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
 
 # Migration stage — applies pending migrations, then exits.
-#
-# The binary is invoked by path, with no launcher in front of it. Both
-# launchers reach the network before they reach the database, and both failed
-# here: `npx` downloads drizzle-kit at container start (killed mid-download
-# once, exited zero having applied nothing once), and `pnpm exec` runs a
-# dependency check that decided to reinstall and aborted for want of a TTY.
-# drizzle-kit is a dependency of the library, so `pnpm deploy` already put it
-# in ./node_modules/.bin.
 FROM base AS migrate
 WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-# The trailing echo and sleep exist because four crashed runs produced logs
-# that end mid-spinner: the container exits faster than the platform collects
-# its last lines, so whatever drizzle printed while dying was lost every time.
-# The pause costs fifteen seconds on a one-shot job and buys the actual error.
-CMD ["/bin/sh", "-c", "./node_modules/.bin/drizzle-kit migrate 2>&1; code=$?; echo \"drizzle-kit migrate exited with code $code\"; sleep 15; exit $code"]
+# The runner is a script over drizzle-orm's migrator, not the drizzle-kit
+# CLI: five staging runs proved the CLI exits with code 1 and no output when
+# a migration fails in a non-interactive container. The script prints every
+# failure in full and reads the applied count back from the journal table.
+# The trailing echo and sleep survive from that hunt — the container must
+# outlive its last log lines or the platform drops them.
+CMD ["/bin/sh", "-c", "node scripts/apply-migrations.mjs 2>&1; code=$?; echo \"migration runner exited with code $code\"; sleep 15; exit $code"]
 
 # Worker stage
 FROM base AS worker
