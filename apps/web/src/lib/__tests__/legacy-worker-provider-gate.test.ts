@@ -1,21 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { analyzeBrand, boss, dbUpdate, getProvider, listAuth0Accounts, parseScrapeTargets, syncAuth0User } = vi.hoisted(
-	() => ({
-		analyzeBrand: vi.fn(),
-		boss: { send: vi.fn() },
-		dbUpdate: vi.fn(),
-		getProvider: vi.fn(),
-		listAuth0Accounts: vi.fn(),
-		parseScrapeTargets: vi.fn(),
-		syncAuth0User: vi.fn(),
-	}),
-);
+const {
+	analyzeBrand,
+	boss,
+	dbFindBrands,
+	dbFindPrompt,
+	dbUpdate,
+	getProvider,
+	listAuth0Accounts,
+	parseScrapeTargets,
+	syncAuth0User,
+} = vi.hoisted(() => ({
+	analyzeBrand: vi.fn(),
+	boss: { send: vi.fn() },
+	dbFindBrands: vi.fn(),
+	dbFindPrompt: vi.fn(),
+	dbUpdate: vi.fn(),
+	getProvider: vi.fn(),
+	listAuth0Accounts: vi.fn(),
+	parseScrapeTargets: vi.fn(),
+	syncAuth0User: vi.fn(),
+}));
 
 vi.mock("../../../../worker/src/boss", () => ({ default: boss }));
 vi.mock("@workspace/lib/db/db", () => ({
 	db: {
-		query: {},
+		query: {
+			brands: { findMany: dbFindBrands },
+			prompts: { findFirst: dbFindPrompt },
+		},
 		select: vi.fn(),
 		transaction: vi.fn(),
 		update: dbUpdate,
@@ -42,16 +55,22 @@ describe("legacy worker provider gate", () => {
 	});
 
 	it("drops process-prompt jobs before provider resolution or self-rescheduling when execution is off", async () => {
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		vi.stubEnv("SELENA_RECURRING_JOBS_ENABLED", "false");
+
 		await processPromptJob([{ data: { promptId: "prompt-1" } }] as never);
 
 		expect(parseScrapeTargets).not.toHaveBeenCalled();
 		expect(getProvider).not.toHaveBeenCalled();
+		expect(dbFindPrompt).not.toHaveBeenCalled();
 		expect(boss.send).not.toHaveBeenCalled();
 	});
 
 	it("preserves process-prompt handler startup when execution is explicitly enabled", async () => {
 		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
 		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		vi.stubEnv("SELENA_RECURRING_JOBS_ENABLED", "true");
 		parseScrapeTargets.mockReturnValue([]);
 
 		await processPromptJob([]);
@@ -61,12 +80,14 @@ describe("legacy worker provider gate", () => {
 
 	it("drops stale maintenance jobs before database work or process-prompt enqueue while stopped", async () => {
 		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
-		vi.stubEnv("SELENA_EMERGENCY_STOP", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		vi.stubEnv("SELENA_RECURRING_JOBS_ENABLED", "false");
 		vi.stubEnv("SCHEDULE_MAINTENANCE_ENABLED", "true");
 
 		await scheduleMaintenanceJob([{ data: { source: "scheduled" } }] as never);
 
 		expect(parseScrapeTargets).not.toHaveBeenCalled();
+		expect(dbFindBrands).not.toHaveBeenCalled();
 		expect(dbUpdate).not.toHaveBeenCalled();
 		expect(boss.send).not.toHaveBeenCalled();
 	});

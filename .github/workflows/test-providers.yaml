@@ -2,25 +2,15 @@ name: Test Providers
 
 on:
   workflow_dispatch:
-    inputs:
-      target:
-        description: 'Exactly one target (for example "chatgpt:olostep:online").'
-        required: true
-        type: string
-      spend_authorized:
-        description: "I authorize one paid provider attempt for this target."
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test Providers
+  source-gates:
+    name: Provider Source Gates
     runs-on: blacksmith-2vcpu-ubuntu-2404
-    timeout-minutes: 40
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -28,83 +18,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --no-frozen-lockfile
-      - name: Test providers
-        id: test
-        timeout-minutes: 35
-        continue-on-error: true
-        env:
-          OLOSTEP_API_KEY: ${{ secrets.OLOSTEP_API_KEY }}
-          BRIGHTDATA_API_TOKEN: ${{ secrets.BRIGHTDATA_API_TOKEN }}
-          OXYLABS_USERNAME: ${{ secrets.OXYLABS_USERNAME }}
-          OXYLABS_PASSWORD: ${{ secrets.OXYLABS_PASSWORD }}
-          CLORO_API_KEY: ${{ secrets.CLORO_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-          DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
-          DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          SELENA_PROVIDER_TEST_SPEND_AUTHORIZED: ${{ inputs.spend_authorized }}
-          SELENA_MEASUREMENT_ENABLED: ${{ vars.SELENA_MEASUREMENT_ENABLED }}
-          SELENA_EMERGENCY_STOP: ${{ vars.SELENA_EMERGENCY_STOP }}
-          TARGET: ${{ inputs.target }}
-        run: pnpm tsx apps/worker/scripts/test-provider.ts --target "$TARGET" --output-json result.json
-      - name: Push results to Upstash Redis
-        if: always() && hashFiles('result.json') != ''
-        env:
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-        run: |
-          node -e '
-          const fs = require("fs");
-          if (!fs.existsSync("result.json")) process.exit(0);
-          const results = JSON.parse(fs.readFileSync("result.json", "utf8"));
-          const url = process.env.UPSTASH_REDIS_REST_URL;
-          const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-          if (!url || !token) { console.log("No Upstash credentials, skipping"); process.exit(0); }
-
-          async function push() {
-            for (const r of Array.isArray(results) ? results : [results]) {
-              const ts = Date.now();
-              const key = `provider-status:${r.target}`;
-              const value = JSON.stringify({
-                ts: r.timestamp || new Date().toISOString(),
-                status: r.status,
-                latency: r.latency,
-                retries: r.retries || 0,
-                textLength: r.textLength,
-                rawOutputBytes: r.rawOutputBytes,
-                citations: r.citations,
-                webQueries: r.webQueries,
-                webSearch: r.webSearch,
-                error: r.error || null,
-              });
-              // ZADD with timestamp score
-              const res = await fetch(`${url}/zadd/${encodeURIComponent(key)}/${ts}/${encodeURIComponent(value)}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-              if (!res.ok) console.error(`Failed to push ${r.target}:`, await res.text());
-              else console.log(`Pushed ${r.target} to Redis`);
-
-              // Trim to last 30 days (remove entries older than 30d)
-              const cutoff = ts - 30 * 24 * 60 * 60 * 1000;
-              await fetch(`${url}/zremrangebyscore/${encodeURIComponent(key)}/0/${cutoff}`, {
-                headers: { Authorization: `Bearer ${token}` },
-              });
-            }
-          }
-          push().catch(e => { console.error(e); process.exit(1); });
-          '
-      - name: Upload results artifact
-        if: always() && hashFiles('result.json') != ''
-        uses: actions/upload-artifact@v7
-        with:
-          name: provider-results
-          path: result.json
-          retention-days: 7
-      - name: Fail job if any target failed
-        if: always() && steps.test.outcome == 'failure'
-        run: |
-          echo "One or more provider targets failed — see the summary for details."
-          exit 1
+      - run: pnpm install --frozen-lockfile
+      - name: Test provider source gates
+        run: pnpm --dir apps/worker test
+      - name: Typecheck provider worker
+        run: pnpm --dir apps/worker check-types

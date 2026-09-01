@@ -58,11 +58,7 @@ export function formatScrapeTarget(config: ModelConfig): string {
 	return parts.join(":");
 }
 
-/**
- * The provider:model targets shown on the public status page and exercised by
- * the scheduled test-providers workflow. Both the page and the workflow read
- * this one list so the "what we display" and "what we test" sets can't drift.
- */
+/** Provider:model targets shown on the public status page. */
 export const STATUS_TARGETS = [
 	"chatgpt:olostep:online",
 	"google-ai-mode:olostep:online",

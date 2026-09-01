@@ -31,6 +31,7 @@ import { estimateRunCostUsd } from "@workspace/lib/usage";
 import { and, eq, gt, sql } from "drizzle-orm";
 import type { Job } from "pg-boss";
 import boss from "../boss";
+import { isRecurringJobsEnabled } from "../recurring-schedules";
 import { trackWorkerEvent } from "../telemetry";
 
 export interface ProcessPromptData {
@@ -77,6 +78,10 @@ interface PromptContext {
  * along on the job so the next failure can lengthen it again.
  */
 async function scheduleNextRun(promptId: string, cadenceHours: number, consecutiveFailures: number): Promise<void> {
+	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
+		console.log(`Skipped next run for prompt ${promptId}: recurring execution is disabled`);
+		return;
+	}
 	const delayHours = failureBackoffHours(consecutiveFailures, cadenceHours);
 	const startAfterSeconds = Math.round(delayHours * 60 * 60);
 
@@ -557,6 +562,10 @@ async function processPrompt(
  * on a backoff when nothing did.
  */
 export async function processPromptJob(jobs: Job<ProcessPromptData>[]): Promise<void> {
+	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
+		console.log(`[process-prompt] Skipped ${jobs.length} job(s): recurring execution is disabled`);
+		return;
+	}
 	if (!isLegacyProviderExecutionEnabled()) {
 		console.log(`[process-prompt] Skipped ${jobs.length} job(s): legacy provider execution is disabled`);
 		return;

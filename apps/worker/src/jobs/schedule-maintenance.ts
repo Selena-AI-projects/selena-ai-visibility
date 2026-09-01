@@ -19,6 +19,7 @@ import {
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Job } from "pg-boss";
 import boss from "../boss";
+import { isRecurringJobsEnabled } from "../recurring-schedules";
 import { PROMPT_JOB_OPTIONS } from "./process-prompt";
 
 export interface ScheduleMaintenanceData {
@@ -39,6 +40,10 @@ let lastOverdueAlertMs = 0;
  * this job only gathers state and executes the decisions.
  */
 export async function scheduleMaintenanceJob(jobs: Job<ScheduleMaintenanceData>[]): Promise<void> {
+	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
+		console.log("[schedule-maintenance] Skipped because recurring execution is disabled");
+		return;
+	}
 	if (!isLegacyProviderExecutionEnabled()) {
 		console.log("[schedule-maintenance] Skipped because legacy provider execution is disabled");
 		return;

@@ -1,13 +1,11 @@
 #!/usr/bin/env tsx
 /**
- * Integration test for scraping provider targets.
- * Exercises the same code paths as the worker against real provider APIs.
- * Validates text content, citations, and rawOutput round-trip re-extraction.
+ * Non-network smoke test for the provider contract.
+ * Live and paid provider targets are deliberately rejected before resolution.
  *
  * Usage:
- *   SELENA_PROVIDER_TEST_SPEND_AUTHORIZED=true SELENA_MEASUREMENT_ENABLED=true \
- *   SELENA_EMERGENCY_STOP=false pnpm tsx scripts/test-provider.ts \
- *   --target "chatgpt:olostep:online" --output-json result.json
+ *   SELENA_MEASUREMENT_ENABLED=true SELENA_EMERGENCY_STOP=false \
+ *   pnpm tsx scripts/test-provider.ts --target "chatgpt:stub" --output-json result.json
  */
 
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -46,13 +44,16 @@ export interface AuthorizedProviderTestRun {
 type ProviderTestEnvironment = Record<string, string | undefined>;
 type ProviderResolver = (id: string) => Pick<Provider, "run">;
 
-const PROVIDER_TEST_SPEND_AUTH_ENV = "SELENA_PROVIDER_TEST_SPEND_AUTHORIZED";
-
-function assertProviderTestEnvironment(environment: ProviderTestEnvironment): void {
-	if (environment[PROVIDER_TEST_SPEND_AUTH_ENV] !== "true")
-		throw new Error("PROVIDER_TEST_SPEND_AUTHORIZATION_REQUIRED");
+function assertProviderTestRuntimeEnvironment(environment: ProviderTestEnvironment): void {
 	if (environment.SELENA_MEASUREMENT_ENABLED !== "true") throw new Error("PROVIDER_TEST_MEASUREMENT_GATE_REQUIRED");
 	if (environment.SELENA_EMERGENCY_STOP !== "false") throw new Error("PROVIDER_TEST_EMERGENCY_STOP_MUST_BE_FALSE");
+}
+
+function parseNonLiveProviderTarget(target: string) {
+	const configs = parseScrapeTargets(target);
+	if (configs.length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
+	if (configs[0].provider !== "stub") throw new Error("PROVIDER_TEST_LIVE_TARGET_FORBIDDEN");
+	return configs[0];
 }
 
 function parseArgs(argv: readonly string[]): ParsedArgs {
@@ -78,20 +79,15 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
 	return { target, outputJson, dump };
 }
 
-/** Authorize one manual, one-attempt provider probe before resolving a provider or credential. */
-export function authorizeProviderTestRun(
-	argv: readonly string[],
-	environment: ProviderTestEnvironment = process.env,
-): AuthorizedProviderTestRun {
-	assertProviderTestEnvironment(environment);
-
+/** Authorize exactly one non-network stub target before resolving a provider. */
+export function authorizeProviderTestRun(argv: readonly string[]): AuthorizedProviderTestRun {
 	const { target, outputJson, dump } = parseArgs(argv);
 	const targets = target
 		?.split(",")
 		.map((value) => value.trim())
 		.filter(Boolean);
 	if (targets?.length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
-	if (parseScrapeTargets(target).length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
+	parseNonLiveProviderTarget(targets[0]);
 	return { target: targets[0], outputJson, dump };
 }
 
@@ -104,7 +100,7 @@ function formatLatency(ms: number): string {
 	return `${minutes}m${seconds.toString().padStart(2, "0")}s`;
 }
 
-// One prompt is one provider attempt. Quality failure never authorizes another call.
+// The non-network stub is exercised once. Generic live provider targets are forbidden.
 const TEST_PROMPT = "What is a well-reviewed speaker that was released last month?";
 const MIN_TEXT_LENGTH = 50;
 
@@ -221,14 +217,13 @@ export async function runProviderTargetOnce(
 	resolveProvider: ProviderResolver = getProvider,
 	environment: ProviderTestEnvironment = process.env,
 ): Promise<{ result: TargetResult; logs: string }> {
-	assertProviderTestEnvironment(environment);
-	if (parseScrapeTargets(target).length !== 1) throw new Error("PROVIDER_TEST_EXACTLY_ONE_TARGET_REQUIRED");
+	const config = parseNonLiveProviderTarget(target);
+	assertProviderTestRuntimeEnvironment(environment);
 	const buffered: string[] = [];
 	const tlog = (message: string, color?: string) => {
 		buffered.push(`${color || ""}${message}${colors.reset}`);
 	};
 
-	const [config] = parseScrapeTargets(target);
 	const providerId = config.provider;
 	const provider = resolveProvider(providerId);
 	const meta = getModelMeta(config.model);
@@ -381,8 +376,8 @@ function printUsage(): void {
 	console.log(`
 Usage: pnpm tsx scripts/test-provider.ts --target <model:provider[:version][:online]> [--output-json <path>] [--dump <path>]
 
-Runs exactly one target and one provider attempt. Execution also requires:
-  SELENA_PROVIDER_TEST_SPEND_AUTHORIZED=true
+Runs exactly one non-network stub target. Live and paid providers are forbidden.
+The guarded stub registry execution also requires:
   SELENA_MEASUREMENT_ENABLED=true
   SELENA_EMERGENCY_STOP=false
 `);
