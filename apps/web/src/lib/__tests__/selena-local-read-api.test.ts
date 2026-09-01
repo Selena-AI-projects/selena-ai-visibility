@@ -190,7 +190,7 @@ function aiEvidenceRow(): LocalReadAiEvidenceRow {
 	return {
 		id: ids.aiEvidence,
 		assetType: "SCREENSHOT",
-		sha256: "b".repeat(64),
+		digestFormatValid: true,
 		capturedAt: new Date("2026-08-30T02:05:00.000Z"),
 	};
 }
@@ -206,7 +206,7 @@ function mapRow(
 		evidenceId,
 		sourceSnapshotImmutable: true,
 		sourceType: "MAPS_SERP_PROVIDER",
-		sourceContentSha256: "a".repeat(64),
+		sourceDigestFormatValid: true,
 		sourceCapturedAt: new Date(capturedAt),
 		datasetId: ids.dataset,
 		measurementCycleId: ids.measurementCycle,
@@ -253,7 +253,7 @@ function evidenceRow(overrides: Partial<LocalReadEvidenceRow> = {}): LocalReadEv
 		sourceSnapshotId: ids.snapshot,
 		sourceSnapshotImmutable: true,
 		sourceType: "MAPS_SERP_PROVIDER",
-		sourceContentSha256: "a".repeat(64),
+		sourceDigestFormatValid: true,
 		sourceCapturedAt: new Date("2026-08-30T02:00:00.000Z"),
 		...overrides,
 	};
@@ -689,7 +689,7 @@ describe("Selena local read API core", () => {
 	it("does not report a measured rank when immutable source provenance is missing", async () => {
 		const row = mapRow(ids.observation1, ids.evidence1, "2026-08-30T02:00:00.000Z", {
 			sourceSnapshotImmutable: null,
-			sourceContentSha256: null,
+			sourceDigestFormatValid: null,
 			sourceCapturedAt: null,
 		});
 		const api = createSelenaLocalReadApi(store({ listMapResults: vi.fn(async () => [row]) }));
@@ -707,7 +707,7 @@ describe("Selena local read API core", () => {
 		const row = mapRow(ids.observation1, null, "2026-08-30T02:00:00.000Z", {
 			sourceSnapshotImmutable: null,
 			sourceType: null,
-			sourceContentSha256: null,
+			sourceDigestFormatValid: null,
 			sourceCapturedAt: null,
 		});
 		const api = createSelenaLocalReadApi(store({ listMapResults: vi.fn(async () => [row]) }));
@@ -760,7 +760,7 @@ describe("Selena local read API core", () => {
 		});
 	});
 
-	it("exposes dataset and source provenance without a raw reference or signed URL", async () => {
+	it("exposes safe dataset provenance without a raw reference, content hash, or signed URL", async () => {
 		const source = store({ listEvidence: vi.fn(async () => [evidenceRow()]) });
 		const api = createSelenaLocalReadApi(source);
 
@@ -778,7 +778,7 @@ describe("Selena local read API core", () => {
 			surface: "LOCAL_MAPS",
 			status: "VALID",
 			kind: "MAPS_SERP_PROVIDER",
-			contentSha256: "a".repeat(64),
+			provenanceVerified: true,
 			capturedAt: "2026-08-30T02:00:00.000Z",
 			access: {
 				state: "UNAVAILABLE",
@@ -788,7 +788,7 @@ describe("Selena local read API core", () => {
 				ttlSeconds: 600,
 			},
 		});
-		expect(JSON.stringify(result)).not.toContain("raw");
+		expect(JSON.stringify(result)).not.toMatch(/raw|contentSha256|sha256/i);
 	});
 
 	it("anchors evidence cursors to the full evidence high-water mark before page slicing", async () => {

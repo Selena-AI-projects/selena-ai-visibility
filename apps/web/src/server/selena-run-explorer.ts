@@ -21,7 +21,6 @@ export type RunDetail = RunListItem & {
 	language: string | null;
 	/** Null when never stored; a marker object when deleted by retention. */
 	answer: { state: "present"; text: string } | { state: "deleted"; deletedAt: string } | { state: "absent" };
-	rawResponseReference: string | null;
 	mentions: { entityType: string; name: string; ordinalPosition: number | null }[];
 	citations: { url: string; domain: string }[];
 	/** What the Visitor View surface displayed, when the adapter carried it. */
@@ -144,7 +143,6 @@ export const getSelenaRunDetailFn = createServerFn({ method: "GET" })
 				scenarioText: scenario?.text ?? null,
 				language: run.language,
 				answer: readAnswer(run.canonicalPayload),
-				rawResponseReference: run.rawResponseReference,
 				mentions,
 				citations: readCitations(run.citations),
 				sources: readSources(run.canonicalPayload),

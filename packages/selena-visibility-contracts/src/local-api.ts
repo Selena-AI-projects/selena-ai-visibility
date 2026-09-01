@@ -327,16 +327,16 @@ export const localApiEvidenceItemSchema = z
 		surface: z.enum(["LOCAL_MAPS", "LOCAL_AI"]),
 		status: localApiTruthStatusSchema,
 		kind: z.string().trim().min(1),
-		contentSha256: z
-			.string()
-			.regex(/^(?:sha256:)?[a-f0-9]{64}$/)
-			.nullable(),
+		provenanceVerified: z.boolean(),
 		capturedAt: z.iso.datetime().nullable(),
 		access: localApiEvidenceAccessSchema,
 	})
 	.superRefine((item, context) => {
-		if (item.status === "VALID" && (item.contentSha256 === null || item.capturedAt === null)) {
+		if (item.status === "VALID" && (!item.provenanceVerified || item.capturedAt === null)) {
 			context.addIssue({ code: "custom", message: "LOCAL_API_VALID_EVIDENCE_PROVENANCE_REQUIRED" });
+		}
+		if (item.status !== "VALID" && item.provenanceVerified) {
+			context.addIssue({ code: "custom", message: "LOCAL_API_NONVALID_EVIDENCE_PROVENANCE_FORBIDDEN" });
 		}
 		if (item.status !== "VALID" && item.access.state === "SIGNED") {
 			context.addIssue({ code: "custom", message: "LOCAL_API_NONVALID_EVIDENCE_SIGNING_FORBIDDEN", path: ["access"] });

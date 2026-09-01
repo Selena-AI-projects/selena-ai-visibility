@@ -42,4 +42,13 @@ describe("Selena Dataset Gateway", () => {
 		const dataset = createSelenaDataset("tenant-a", "dataset-1", [row]);
 		expect(() => assertDatasetTenant(dataset, "tenant-b")).toThrow("TENANT_ISOLATION_BLOCKED");
 	});
+
+	it("keeps raw response locators out of public rows and evidence", () => {
+		const dataset = createSelenaDataset("tenant-a", "dataset-1", [
+			{ ...row, rawResponseReference: "private://raw/answer-1" },
+		]);
+		expect(dataset.rows[0]?.rawResponseReference).toBeNull();
+		expect(dataset.evidence[0]?.sourceRef).toBe("evidence-ledger://run-1");
+		expect(JSON.stringify(dataset)).not.toContain("private://raw/answer-1");
+	});
 });

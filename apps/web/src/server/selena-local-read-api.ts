@@ -72,7 +72,7 @@ export type LocalReadMapRow = {
 	evidenceId: string | null;
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 	datasetId: string;
 	measurementCycleId: string;
@@ -116,7 +116,7 @@ export type LocalReadEvidenceRow = {
 	sourceSnapshotId: string | null;
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 };
 
@@ -154,7 +154,7 @@ export type LocalReadAiTaskAssetRow = {
 export type LocalReadAiEvidenceRow = {
 	id: string;
 	assetType: string;
-	sha256: string;
+	digestFormatValid: boolean;
 	capturedAt: Date;
 };
 
@@ -214,14 +214,13 @@ function finiteNumber(value: string | number): number {
 function hasImmutableSourceProvenance(input: {
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 }): boolean {
 	return Boolean(
 		input.sourceSnapshotImmutable === true &&
 			input.sourceType === "MAPS_SERP_PROVIDER" &&
-			input.sourceContentSha256 &&
-			/^(?:sha256:)?[a-f0-9]{64}$/.test(input.sourceContentSha256) &&
+			input.sourceDigestFormatValid === true &&
 			input.sourceCapturedAt,
 	);
 }
@@ -893,15 +892,14 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 				snapshotVersion,
 				items: page.items.map((entry) => {
 					if (entry.kind === "AI") {
-						const hasProvenance =
-							/^(?:sha256:)?[a-f0-9]{64}$/.test(entry.row.sha256) && !Number.isNaN(entry.row.capturedAt.getTime());
+						const hasProvenance = entry.row.digestFormatValid && !Number.isNaN(entry.row.capturedAt.getTime());
 						return {
 							evidenceId: entry.row.id,
 							datasetId: null,
 							surface: "LOCAL_AI" as const,
 							status: hasProvenance ? ("VALID" as const) : ("UNKNOWN" as const),
 							kind: entry.row.assetType,
-							contentSha256: hasProvenance ? entry.row.sha256 : null,
+							provenanceVerified: hasProvenance,
 							capturedAt: hasProvenance ? safeIso(entry.row.capturedAt) : null,
 							access: {
 								state: "UNAVAILABLE" as const,
@@ -920,7 +918,7 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 						surface: "LOCAL_MAPS" as const,
 						status: hasSourceProvenance ? ("VALID" as const) : ("UNKNOWN" as const),
 						kind: row.sourceType ?? `${row.domainId}_OBSERVATION`,
-						contentSha256: hasSourceProvenance ? row.sourceContentSha256 : null,
+						provenanceVerified: hasSourceProvenance,
 						capturedAt: hasSourceProvenance && row.sourceCapturedAt ? safeIso(row.sourceCapturedAt) : null,
 						access: {
 							state: "UNAVAILABLE" as const,
@@ -1065,7 +1063,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 				.select({
 					id: svObservationEvidenceAssets.id,
 					assetType: svObservationEvidenceAssets.assetType,
-					sha256: svObservationEvidenceAssets.sha256,
+					digestFormatValid: sql<boolean>`${svObservationEvidenceAssets.sha256} ~ '^(sha256:)?[a-f0-9]{64}$'`,
 					capturedAt: svObservationEvidenceAssets.capturedAt,
 				})
 				.from(svObservationEvidenceAssets)
@@ -1107,9 +1105,9 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 		const [counts] = await withOrganizationTransaction(db, tenantId, (tx) =>
 			tx
 				.select({
-					valid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and ${svSourceSnapshots.sourceType} = 'MAPS_SERP_PROVIDER' and ${svSourceSnapshots.immutable} is true and ${svSourceSnapshots.contentSha256} ~ '^(sha256:)?[a-f0-9]{64}$' and ${svSourceSnapshots.capturedAt} is not null)::integer`,
+					valid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and ${svSourceSnapshots.sourceType} = 'MAPS_SERP_PROVIDER' and ${svSourceSnapshots.immutable} is true and ${svSourceSnapshots.contentSha256FormatValid} is true and ${svSourceSnapshots.capturedAt} is not null)::integer`,
 					invalid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'INVALID')::integer`,
-					unknown: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'UNKNOWN' or (${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and (${svSourceSnapshots.sourceType} is distinct from 'MAPS_SERP_PROVIDER' or ${svSourceSnapshots.immutable} is not true or ${svSourceSnapshots.contentSha256} is null or ${svSourceSnapshots.contentSha256} !~ '^(sha256:)?[a-f0-9]{64}$' or ${svSourceSnapshots.capturedAt} is null)))::integer`,
+					unknown: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'UNKNOWN' or (${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and (${svSourceSnapshots.sourceType} is distinct from 'MAPS_SERP_PROVIDER' or ${svSourceSnapshots.immutable} is not true or ${svSourceSnapshots.contentSha256FormatValid} is not true or ${svSourceSnapshots.capturedAt} is null)))::integer`,
 				})
 				.from(svVisibilityMapPoints)
 				.leftJoin(
@@ -1172,7 +1170,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 					evidenceId: svEvidenceIndex.id,
 					sourceSnapshotImmutable: svSourceSnapshots.immutable,
 					sourceType: svSourceSnapshots.sourceType,
-					sourceContentSha256: svSourceSnapshots.contentSha256,
+					sourceDigestFormatValid: svSourceSnapshots.contentSha256FormatValid,
 					sourceCapturedAt: svSourceSnapshots.capturedAt,
 					datasetId: svVisibilityMapPoints.datasetId,
 					measurementCycleId: svVisibilityMapPoints.measurementCycleId,
@@ -1265,7 +1263,7 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 					sourceSnapshotId: svSourceSnapshots.id,
 					sourceSnapshotImmutable: svSourceSnapshots.immutable,
 					sourceType: svSourceSnapshots.sourceType,
-					sourceContentSha256: svSourceSnapshots.contentSha256,
+					sourceDigestFormatValid: svSourceSnapshots.contentSha256FormatValid,
 					sourceCapturedAt: svSourceSnapshots.capturedAt,
 				})
 				.from(svEvidenceIndex)

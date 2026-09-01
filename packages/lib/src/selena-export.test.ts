@@ -31,4 +31,10 @@ describe("canonical ledger export", () => {
 		expect(() => assertCanonicalDataset([row], 2)).toThrow("DATASET_CARDINALITY_MISMATCH");
 		expect(ledgerToCsv([row])).toContain('"What is Brand, really?"');
 	});
+
+	it("never exports private raw response locators", () => {
+		const csv = ledgerToCsv([{ ...row, rawResponseReference: "private://raw/answer-1" }]);
+		expect(csv).not.toContain("raw_response_reference");
+		expect(csv).not.toContain("private://raw/answer-1");
+	});
 });
