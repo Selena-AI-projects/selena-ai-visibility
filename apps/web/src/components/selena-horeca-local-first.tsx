@@ -244,7 +244,8 @@ export function SelenaHorecaLocalFirst({
 
 	return (
 		<div className="space-y-6">
-			<nav aria-label={tr(locale, "HoReCa workspace", "HoReCa кабинет")} className="overflow-x-auto">
+			<nav aria-label={tr(locale, "Workspace tools", "Инструменты кабинета")} className="overflow-x-auto">
+				<p className="mb-2 text-xs font-bold tracking-[0.08em] text-[#6e6258]">{tr(locale, "TOOLS", "ИНСТРУМЕНТЫ")}</p>
 				<ul className="flex min-w-max gap-2 pb-1">
 					{HORECA_PREVIEW_AREAS.map((area) => (
 						<li key={area.id}>

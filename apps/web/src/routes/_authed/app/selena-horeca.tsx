@@ -76,38 +76,51 @@ function SelenaHorecaPage() {
 				</div>
 			</header>
 
-			<main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8">
-				{workspace.projects.length > 0 && (
-					<nav className="mb-5" aria-label={locale === "ru" ? "Проекты HoReCa" : "HoReCa projects"}>
-						<p className="mb-2 text-xs font-bold tracking-[0.08em] text-[#6e6258]">
-							{locale === "ru" ? "ВЫБЕРИТЕ ПРОЕКТ" : "SELECT PROJECT"}
+			<main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:py-12">
+				<aside className="lg:sticky lg:top-8 lg:self-start">
+					<nav aria-label={locale === "ru" ? "Проекты HoReCa" : "HoReCa projects"}>
+						<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#6e6258]">
+							{locale === "ru" ? "ПРОЕКТЫ" : "PROJECTS"}
 						</p>
-						<ul className="flex flex-wrap gap-2">
-							{workspace.projects.map((project) => (
-								<li key={project.id}>
-									<Link
-										to="/app/selena-horeca"
-										search={{ locale, project: project.id }}
-										className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-[#8f5c34] ${
-											project.id === workspace.selectedProjectId
-												? "border-[#8f5c34] bg-[#181614] text-[#fffdf8]"
-												: "border-[#d9cfc2] bg-[#fffdf8] text-[#181614] hover:border-[#b9825b]"
-										}`}
-									>
-										{project.name}
-									</Link>
-								</li>
-							))}
-						</ul>
+						{workspace.projects.length > 0 ? (
+							<ul className="selena-project-nav-list space-y-2">
+								{workspace.projects.map((project) => {
+									const selected = project.id === workspace.selectedProjectId;
+									return (
+										<li key={project.id}>
+											<Link
+												to="/app/selena-horeca"
+												search={{ locale, project: project.id }}
+												className="selena-project-link"
+												data-selected={selected || undefined}
+												aria-current={selected ? "page" : undefined}
+											>
+												<span className="truncate font-medium">{project.name}</span>
+												<span className="text-xs text-[#6e6258]">
+													{locale === "ru" ? "Открыть кабинет" : "Open workspace"}
+												</span>
+											</Link>
+										</li>
+									);
+								})}
+							</ul>
+						) : (
+							<p className="rounded-xl border border-dashed border-[#d9cfc2] p-4 text-sm leading-6 text-[#6e6258]">
+								{locale === "ru" ? "Проекты HoReCa пока не доступны." : "No HoReCa projects are available yet."}
+							</p>
+						)}
 					</nav>
-				)}
-				<SelenaHorecaLocalFirst
-					locale={locale}
-					model={model}
-					sourceOnlyPreview={workspace.model === null}
-					evidenceDetail={workspace.evidenceDetail}
-					evidenceDetailHref={workspace.model ? evidenceDetailHref : undefined}
-				/>
+				</aside>
+
+				<div className="min-w-0">
+					<SelenaHorecaLocalFirst
+						locale={locale}
+						model={model}
+						sourceOnlyPreview={workspace.model === null}
+						evidenceDetail={workspace.evidenceDetail}
+						evidenceDetailHref={workspace.model ? evidenceDetailHref : undefined}
+					/>
+				</div>
 			</main>
 		</div>
 	);

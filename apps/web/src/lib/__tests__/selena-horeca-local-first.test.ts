@@ -23,6 +23,14 @@ describe("HoReCa local-first customer preview", () => {
 		]);
 	});
 
+	it("labels the top navigation as workspace tools, separate from project selection", () => {
+		const preview = buildHorecaLocalFirstPreview(false, "2026-08-31T05:00:00.000Z");
+		const html = renderToStaticMarkup(SelenaHorecaLocalFirst({ locale: "en", model: preview }));
+
+		expect(html).toContain('aria-label="Workspace tools"');
+		expect(visibleText(html)).toContain("TOOLS Overview Visibility Evidence Competitors Actions Outcomes");
+	});
+
 	it("does not unlock Local AI when Local Maps is enabled", () => {
 		const modules = buildHorecaLocalFirstPreview(true, "2026-08-31T05:00:00.000Z").modules;
 		expect(modules.find((module) => module.moduleId === "LOCAL_MAPS")?.state).toBe("UNKNOWN");
