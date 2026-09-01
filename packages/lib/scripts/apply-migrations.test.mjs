@@ -129,14 +129,14 @@ describe("bounded migration journal acceptance", () => {
 
 		expect(maximumActiveMigrations).toBe(1);
 		expect(events).toEqual([
-			"runner-a:timeout",
-			"runner-b:timeout",
 			"runner-a:lock",
+			"runner-a:timeout",
 			"runner-a:journal:0",
 			"runner-a:migrate",
 			`runner-a:journal:${expected.length}`,
 			"runner-a:unlock",
 			"runner-b:lock",
+			"runner-b:timeout",
 			`runner-b:journal:${expected.length}`,
 			"runner-b:migrate",
 			`runner-b:journal:${expected.length}`,

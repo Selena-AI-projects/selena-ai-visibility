@@ -76,12 +76,12 @@ export async function runMigrationCycleWithLock({
 	migrateDatabase = migrate,
 	log = console.log,
 }) {
-	await client.query(MIGRATION_LOCK_TIMEOUT_SQL);
 	let lockAcquired = false;
 	let migrationError;
 	try {
 		await client.query(MIGRATION_LOCK_SQL);
 		lockAcquired = true;
+		await client.query(MIGRATION_LOCK_TIMEOUT_SQL);
 
 		const before = await journalState(client);
 		log(
@@ -144,7 +144,7 @@ export async function main() {
 		connectionString: connection.connectionString,
 		ssl: connection.ssl,
 		max: 1,
-		options: "-c lock_timeout=5000 -c statement_timeout=1200000",
+		options: "-c statement_timeout=1200000",
 	});
 	let client;
 	try {
