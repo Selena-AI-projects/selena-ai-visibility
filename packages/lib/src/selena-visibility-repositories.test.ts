@@ -71,7 +71,12 @@ function allocationDb(options: { latest?: number; projectOwned?: boolean; insert
 					conflictTargets.push(options.target);
 					return insertQuery;
 				},
-				returning: async () => (options.insertWins === false ? [] : [{ id: "lock-1", createdAt: new Date(0), ...row }]),
+				returning: async (selection?: Record<string, unknown>) => {
+					if (options.insertWins === false) return [];
+					const result: Record<string, unknown> = { id: "lock-1", createdAt: new Date(0), ...row };
+					if (!selection) return [result];
+					return [Object.fromEntries(Object.keys(selection).map((key) => [key, result[key]]))];
+				},
 			};
 			return insertQuery;
 		}),
@@ -256,17 +261,20 @@ describe("configuration lock allocation", () => {
 		expect(statement && new PgDialect().sqlToQuery(statement as SQL).sql).toContain("pg_advisory_xact_lock");
 		expect(lock.version).toBe(5);
 		expect(fake.inserted).toEqual([
-			expect.objectContaining({
-				projectId: input.projectId,
-				organizationId: context.tenantId,
-				createdBy: context.actorId,
-				version: 5,
-			}),
+				expect.objectContaining({
+					projectId: input.projectId,
+					organizationId: context.tenantId,
+					createdBy: context.actorId,
+					version: 5,
+					legacyCollisionOrdinal: 0,
+				}),
 		]);
 		expect(fake.inserted[0]).not.toHaveProperty("expectedVersion");
+		expect(lock).not.toHaveProperty("legacyCollisionOrdinal");
 		expect(fake.conflictTargets[0]).toEqual([
 			schema.svConfigurationLocks.projectId,
 			schema.svConfigurationLocks.version,
+			schema.svConfigurationLocks.legacyCollisionOrdinal,
 		]);
 	});
 

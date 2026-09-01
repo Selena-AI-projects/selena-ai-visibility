@@ -102,9 +102,22 @@ function writable(ctx: SelenaRepositoryContext) {
 
 type ConfigurationLockAllocation = Omit<
 	typeof schema.svConfigurationLocks.$inferInsert,
-	"organizationId" | "createdBy" | "version"
+	"organizationId" | "createdBy" | "version" | "legacyCollisionOrdinal"
 > & {
 	expectedVersion?: number;
+};
+
+const configurationLockProjection = {
+	id: schema.svConfigurationLocks.id,
+	organizationId: schema.svConfigurationLocks.organizationId,
+	projectId: schema.svConfigurationLocks.projectId,
+	version: schema.svConfigurationLocks.version,
+	snapshot: schema.svConfigurationLocks.snapshot,
+	engineSha: schema.svConfigurationLocks.engineSha,
+	expectedRuns: schema.svConfigurationLocks.expectedRuns,
+	budgetCap: schema.svConfigurationLocks.budgetCap,
+	createdBy: schema.svConfigurationLocks.createdBy,
+	createdAt: schema.svConfigurationLocks.createdAt,
 };
 
 export async function allocateConfigurationLockInTransaction(
@@ -141,11 +154,21 @@ export async function allocateConfigurationLockInTransaction(
 	const { expectedVersion: _expectedVersion, ...lockValue } = value;
 	const [lock] = await tx
 		.insert(schema.svConfigurationLocks)
-		.values({ ...lockValue, version, organizationId: ctx.tenantId, createdBy: ctx.actorId })
-		.onConflictDoNothing({
-			target: [schema.svConfigurationLocks.projectId, schema.svConfigurationLocks.version],
+		.values({
+			...lockValue,
+			version,
+			legacyCollisionOrdinal: 0,
+			organizationId: ctx.tenantId,
+			createdBy: ctx.actorId,
 		})
-		.returning();
+		.onConflictDoNothing({
+			target: [
+				schema.svConfigurationLocks.projectId,
+				schema.svConfigurationLocks.version,
+				schema.svConfigurationLocks.legacyCollisionOrdinal,
+			],
+		})
+		.returning(configurationLockProjection);
 	if (!lock) throw new Error("SELENA_CONFIGURATION_LOCK_VERSION_CONFLICT");
 	return lock;
 }
@@ -376,7 +399,7 @@ export function createSelenaRepositories(db: Db) {
 			list: (ctx: SelenaRepositoryContext, projectId: string) =>
 				withOrganizationTransaction(db, ctx.tenantId, (tx) =>
 					tx
-						.select()
+						.select(configurationLockProjection)
 						.from(schema.svConfigurationLocks)
 						.where(
 							and(
