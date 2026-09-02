@@ -108,6 +108,46 @@ INSERT INTO sv_runs (
 	('60000000-0000-4000-8000-000000000077', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000073', '0060-legacy-unfenced-4', 'VISITOR', 'legacy-q4', 'ChatGPT', 'RUNNING', clock_timestamp() - interval '2 hours');
 UPDATE sv_journal_daily_claims SET status = 'HOLD', updated_at = clock_timestamp() - interval '2 hours'
 WHERE id = '60000000-0000-4000-8000-000000000014';
+
+-- Historical circuit-breaker cancellation is a distinct terminal, unspent
+-- state. The staging upgrade path contains exactly this shape and 0060 must
+-- preserve it without laundering the provenance into owner revocation.
+INSERT INTO sv_configuration_locks (
+	id, organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+) VALUES (
+	'60000000-0000-4000-8001-000000000080', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', 2, '{}'::jsonb,
+	'historical-cancelled-0060', 11, 0, 'disposable-0060'
+);
+INSERT INTO sv_quotes (
+	id, organization_id, project_id, lock_id, status, price_amount, currency, expected_runs, expires_at
+) VALUES (
+	'60000000-0000-4000-8001-000000000081', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', '60000000-0000-4000-8001-000000000080',
+	'ACCEPTED', 0, 'USD', 11, clock_timestamp() + interval '1 day'
+);
+INSERT INTO sv_orders (id, organization_id, project_id, quote_id, lock_id, status, order_cap) VALUES (
+	'60000000-0000-4000-8001-000000000082', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', '60000000-0000-4000-8001-000000000081',
+	'60000000-0000-4000-8001-000000000080', 'CANCELLED', 0
+);
+INSERT INTO sv_cycles (
+	id, organization_id, order_id, lock_id, status, expected_runs, created_runs, completed_runs
+) VALUES (
+	'60000000-0000-4000-8001-000000000083', 'journal-hold-0060',
+	'60000000-0000-4000-8001-000000000082', '60000000-0000-4000-8001-000000000080',
+	'STOPPED', 11, 11, 0
+);
+INSERT INTO sv_run_permits (
+	id, organization_id, cycle_id, dispatch_key, channel, scenario_id, system_id, status, expires_at, consumed_at
+)
+SELECT
+	('60000000-0000-4000-8001-' || lpad(ordinal::text, 12, '0'))::uuid,
+	'journal-hold-0060', '60000000-0000-4000-8001-000000000083',
+	'0060-historical-cancelled-' || ordinal::text, 'VISITOR',
+	'historical-cancelled-q' || ordinal::text, 'Perplexity', 'cancelled',
+	clock_timestamp() + interval '1 day', NULL
+FROM generate_series(201, 211) AS cancelled(ordinal);
 SQL
 
 for migration in \
@@ -118,6 +158,21 @@ done
 "${psql[@]}" -c 'CREATE ROLE selena_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;' >/dev/null
 "${psql[@]}" --single-transaction \
 	< "$repo_root/packages/lib/src/db/migrations/0060_journal_hold_owner_reconciliation.sql" >/dev/null
+
+legacy_cancelled_shape="$("${psql[@]}" -qAtc "SELECT concat_ws(':', count(*), count(*) FILTER (WHERE consumed_at IS NULL), count(*) FILTER (WHERE status='cancelled')) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8001-000000000083';")"
+if [[ "$legacy_cancelled_shape" != '11:11:11' ]]; then
+	printf 'JOURNAL_0060_LEGACY_CANCELLED_NOT_PRESERVED:%s\n' "$legacy_cancelled_shape" >&2
+	exit 1
+fi
+invalid_permit_status=''
+if invalid_permit_status="$("${psql[@]}" -c "UPDATE sv_run_permits SET status='unknown' WHERE id='60000000-0000-4000-8001-000000000201';" 2>&1)"; then
+	printf 'JOURNAL_0060_INVALID_PERMIT_STATUS_ALLOWED\n' >&2
+	exit 1
+fi
+if [[ "$invalid_permit_status" != *"sv_run_permits_status_check"* ]]; then
+	printf 'JOURNAL_0060_INVALID_PERMIT_STATUS_WRONG_FAILURE\n' >&2
+	exit 1
+fi
 
 "${psql[@]}" <<'SQL' >/dev/null
 INSERT INTO sv_projects (id, organization_id, name, category, country, languages, status) VALUES (
@@ -517,6 +572,16 @@ if [[ "$inconsistent_execution" != *"JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVAR
 	exit 1
 fi
 
+cancelled_with_run=''
+if cancelled_with_run="$("${psql[@]}" -c "BEGIN; SELECT set_config('app.organization_id', 'journal-hold-0060', true); UPDATE sv_run_permits SET status='cancelled' WHERE id='60000000-0000-4000-8000-000000000031'; INSERT INTO sv_runs (id, organization_id, cycle_id, permit_id, dispatch_key, channel, scenario_id, system_id, status, started_at) VALUES ('60000000-0000-4000-8000-000000000035', 'journal-hold-0060', '60000000-0000-4000-8000-000000000023', '60000000-0000-4000-8000-000000000031', '0060-issued', 'VISITOR', 'avli-q2', 'Gemini', 'RUNNING', clock_timestamp()); SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000010', 'disposable-0060', 'owner-decision-disposable-0060', true, true); ROLLBACK;" 2>&1)"; then
+	printf 'JOURNAL_0060_CANCELLED_WITH_RUN_ALLOWED\n' >&2
+	exit 1
+fi
+if [[ "$cancelled_with_run" != *"JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT"* ]]; then
+	printf 'JOURNAL_0060_CANCELLED_WITH_RUN_WRONG_FAILURE\n' >&2
+	exit 1
+fi
+
 direct_update=''
 if direct_update="$("${psql[@]}" -c "SELECT set_config('app.organization_id', 'journal-hold-0060', false); UPDATE sv_journal_daily_claims SET status='RECONCILED', reconciled_at=clock_timestamp(), reconciliation_reason='direct-update', reconciled_by='direct-owner', updated_at=clock_timestamp() WHERE id='60000000-0000-4000-8000-000000000010';" 2>&1)"; then
 	printf 'JOURNAL_0060_DIRECT_UPDATE_ALLOWED\n' >&2
@@ -591,4 +656,4 @@ INSERT INTO sv_journal_daily_claims (
 );
 SQL
 
-printf 'JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved legacyPermits=75 legacyIssuedRevoked=71 legacyConsumed=4 boundaryUpperBound=1 legacyUnfencedUpperBound=4 unmatchedNullCostUpperBound=+1 legacyLinkedCost=not-double-counted legacyInvariantMismatch=rejected legacyReceipt=UNKNOWN_WITHIN_UPPER_BOUND legacyDryRun=rolled-back legacyReplay=idempotent legacyAudit=exact revoked=1 settled=1 replay=idempotent costRows=0 providerInvocationsDuringTest=0 nextAttempt=allowed\n'
+printf 'JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved historicalCancelled=11 historicalCancelledPreserved=true cancelledWithRun=rejected legacyPermits=75 legacyIssuedRevoked=71 legacyConsumed=4 boundaryUpperBound=1 legacyUnfencedUpperBound=4 unmatchedNullCostUpperBound=+1 legacyLinkedCost=not-double-counted legacyInvariantMismatch=rejected legacyReceipt=UNKNOWN_WITHIN_UPPER_BOUND legacyDryRun=rolled-back legacyReplay=idempotent legacyAudit=exact revoked=1 settled=1 replay=idempotent costRows=0 providerInvocationsDuringTest=0 nextAttempt=allowed\n'

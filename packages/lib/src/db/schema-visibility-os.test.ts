@@ -1515,6 +1515,8 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		);
 		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
 		const claim = getTableConfig(schema.svJournalDailyClaims);
+		const permit = getTableConfig(schema.svRunPermits);
+		const permitStatusCheck = permit.checks.find((candidate) => candidate.name === "sv_run_permits_status_check");
 
 		expect(claim.columns.find((column) => column.name === "reconciled_at")).toBeDefined();
 		expect(claim.columns.find((column) => column.name === "reconciliation_reason")).toBeDefined();
@@ -1539,6 +1541,10 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).toContain("'unmatchedCostEventCount', unmatched_cost_event_count");
 		expect(migration).toContain("'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'");
 		expect(migration).toContain("SET \"status\" = 'revoked'");
+		expect(migration).toContain("CHECK (\"status\" IN ('issued', 'consumed', 'revoked', 'cancelled')) NOT VALID");
+		expect(permitStatusCheck && new PgDialect().sqlToQuery(permitStatusCheck.value).sql).toContain(
+			"'issued', 'consumed', 'revoked', 'cancelled'",
+		);
 		expect(migration).toContain("'UNKNOWN_WITHIN_UPPER_BOUND'");
 		expect(migration).toContain('"resolved_at"');
 		expect(migration).toContain("'recurring', false");
