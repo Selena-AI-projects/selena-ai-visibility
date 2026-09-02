@@ -33,6 +33,12 @@ Reviewed implementation source:
   motivated the source-frontier regression test in `b9d967b6`.
 - The owner merged PR #96 at `2026-09-02T06:31:55Z`; GitHub recorded squash
   merge commit `a8b151162a849eec899382b550a948edb40b399c` on the release branch.
+- Railway read-only review found automatic staging web deployment `638ec631…`
+  at the exact merge commit in `SUCCESS`, with both public setup-status endpoints
+  returning 200 and no bounded error-level web logs. Automatic staging measure
+  deployment `99d1717e…` stopped at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`; the execution guard remained
+  closed. Worker deployment remained `9cf426fe…`.
 - No shared staging migration/deploy, provider call, production action, billing,
   recurring job or PR merge was performed for this overlay.
 

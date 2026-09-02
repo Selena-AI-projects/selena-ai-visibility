@@ -39,14 +39,21 @@
   on the preceding PR head failed only because the disposable replay ceiling
   was stale at `54`; `b9d967b6` raises that CI-only ceiling to source index `56`
   and locks the invariant with a test.
+- Post-merge Railway read-only receipt: staging web deployment `638ec631…` at
+  exact release `a8b15116` is `SUCCESS`; app and staging setup-status endpoints
+  return HTTP 200 and bounded error logs are empty. Automatic measure deployment
+  `99d1717e…` stopped fail-closed at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. Worker remains `9cf426fe…`.
 - Shared staging mutation/deploy/provider execution in this source closure:
-  `0`; production, recurring, billing and Social/Travel remain prohibited. The
-  source merge was completed by the owner.
+  no orchestrator-issued mutation or deploy and no provider execution path;
+  Railway auto-deploys caused by the owner merge are recorded above. Production,
+  recurring, billing and Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
-Next gate: a documentation-only post-merge follow-up PR. After its CI receipt,
-return to the owner before any shared-staging `0054–0056` action.
+Next gate: documentation-only PR #114 CI, then authenticated browser recheck and
+owner-gated shared-staging `0054–0056` preconditions. No database mutation is
+authorized by this ledger.
 
 ## Historical orchestration ledger
 

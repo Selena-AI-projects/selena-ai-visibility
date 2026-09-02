@@ -24,6 +24,15 @@ dated historical ledger and do not prove deployment of this source head.
   exposed a stale disposable-only migration ceiling (`54` versus source `56`);
   `b9d967b6` aligns it and adds a journal/workflow regression test. That failed
   run is diagnostic evidence, not acceptance.
+- Read-only Railway verification after the owner merge found automatic staging
+  web deployment `638ec631-bafe-4e60-9378-1d2fe6d36291` at exact release
+  `a8b15116` in terminal `SUCCESS`. Both public setup-status endpoints returned
+  HTTP 200 and the bounded error-level web log query returned no rows.
+- The release hook also created staging measure deployment
+  `99d1717e-af17-4b27-8acf-bbea4b1e2066`; its bounded runtime log stopped at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. The source guard therefore
+  remained closed and no provider execution path was opened. Staging worker
+  deployment remains `9cf426fe-98ae-4c73-8ec9-a7fd7358504e`.
 - Local gates: root test `16/16` tasks, build `16/16`, lint `0 errors` with the
   registered baseline `129 warnings / 12 infos`, focused final suite `74/74`,
   lib/web typecheck `PASS`, disposable PostgreSQL migration/RLS proof `PASS`,
@@ -36,11 +45,11 @@ dated historical ledger and do not prove deployment of this source head.
 | Provider registry and 13 dataset contracts | `PASS_SOURCE` | Existing source plus local/CI-gated contract suites; no new provider execution. |
 | Google adapters and gates | `PASS_SOURCE / NO_CALL` | Timeout/retry and immutable-identity controls remain fail-closed; provider calls in this change: `0`. |
 | Social/Travel | `PASS_HIDDEN` | Activation remains prohibited and hidden at customer boundaries. |
-| HoReCa Local-first UI | `PASS_SOURCE / HOLD_HOSTED` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. Exact `b9d967b6` is not deployed. |
+| HoReCa Local-first UI | `PASS_SOURCE / PASS_DEPLOYMENT / HOLD_AUTH_BROWSER_RECHECK` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. The tree-equivalent release `a8b15116` is active on staging web and public health is 200; authenticated UI receipt was not replayed after this deploy. |
 | Runtime least privilege | `PASS_SOURCE` | `selena_app` retains metadata-only access and cannot read private payload/provider references or forge formal acceptance. |
 | Formal evidence acceptance | `PASS_SOURCE / HOLD_STAGING_0056` | Only a direct table-owner session with RLS bypass may accept. Receipt and formal audit are reciprocal, immutable and atomic. Migration preflight rejects legacy rows before DDL. |
 | CI | `PASS` | [Build 33596500999](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999), [E2E and Scheduling 33596501001](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001), [License 33596501017](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017), [Smoke 33596501053](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053), [CLA 33596500997](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997). |
-| Shared staging / production | `NO_GO` | No `0056` apply, deploy, provider call or production action is authorized here. The owner completed the source merge separately. |
+| Shared staging database / production | `NO_GO` | No `0056` apply, database mutation, provider call or production action is authorized here. Automatic release web/measure deployments are recorded above; measure failed closed. |
 
 Chosen architecture: reconciliation and formal acceptance use a separate
 owner/control-plane connection. Ordinary `selena_app` cannot perform private

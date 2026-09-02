@@ -31,12 +31,19 @@
   that ceiling to source index `56` and adds a regression test.
 - No shared-staging mutation, deploy, provider call, production action, billing
   or recurring job is part of this post-merge documentation update.
+- Read-only post-merge runtime verification records automatic staging web
+  deployment `638ec631…` at exact release `a8b15116` as `SUCCESS`, both public
+  setup-status endpoints as HTTP 200, and automatic measure deployment
+  `99d1717e…` as fail-closed at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. No orchestrator deploy or
+  provider call was issued.
 
 Status: `SOURCE_CI_MERGE_PASS / FOLLOW_UP_DOCS_PENDING / STAGING_0056_HOLD`.
 
 ## Current follow-up PR summary
 
 - record the exact owner merge commit and green PR receipts;
+- record automatic staging web/measure side effects and the measurement guard;
 - preserve `b9d967b6` as the exact implementation anchor and `a8b15116` as the
   accepted release anchor;
 - keep shared staging `0056`, production, Social/Travel, recurring execution,
