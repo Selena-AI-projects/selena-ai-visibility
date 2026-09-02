@@ -29,13 +29,13 @@ describe("bounded migration runner", () => {
 		expect(workflow).toContain(`SELENA_MIGRATION_MAX_INDEX: "${sourceFrontier}"`);
 	});
 
-	it("builds an exact Drizzle bundle through the reviewed owner HOLD reconciliation", () => {
+	it("builds an exact Drizzle bundle through both reviewed owner reconciliations", () => {
 		const targetDirectory = mkdtempSync(resolve(tmpdir(), "selena-bounded-migrations-"));
 		temporaryDirectories.push(targetDirectory);
 		const result = spawnSync(process.execPath, [runner, "--prepare-only"], {
 			env: {
 				...process.env,
-				SELENA_MIGRATION_MAX_INDEX: "59",
+				SELENA_MIGRATION_MAX_INDEX: "60",
 				SELENA_BOUNDED_MIGRATIONS_DIR: targetDirectory,
 			},
 			encoding: "utf8",
@@ -43,8 +43,9 @@ describe("bounded migration runner", () => {
 
 		expect(result.status).toBe(0);
 		const journal = JSON.parse(readFileSync(resolve(targetDirectory, "meta/_journal.json"), "utf8"));
-		expect(journal.entries.at(-1)).toMatchObject({ idx: 59, tag: "0059_journal_hold_owner_reconciliation" });
-		expect(readdirSync(targetDirectory)).toContain("0059_journal_hold_owner_reconciliation.sql");
+		expect(journal.entries.at(-1)).toMatchObject({ idx: 60, tag: "0060_journal_hold_owner_reconciliation" });
+		expect(readdirSync(targetDirectory)).toContain("0059_journal_no_spend_reconciliation.sql");
+		expect(readdirSync(targetDirectory)).toContain("0060_journal_hold_owner_reconciliation.sql");
 		expect(readdirSync(targetDirectory)).not.toContain("0059_placeholder.sql");
 	});
 

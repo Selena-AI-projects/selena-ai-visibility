@@ -256,11 +256,14 @@ jobs:
           # Replay the complete source frontier after drizzle-kit has applied
           # it. This is a disposable CI database only.
           # Shared staging remains explicitly bounded at 0058.
-          SELENA_MIGRATION_MAX_INDEX: "59"
+          SELENA_MIGRATION_MAX_INDEX: "60"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
 
-      - name: Verify owner-only journal HOLD reconciliation
+      - name: Verify owner-only journal no-spend reconciliation
         run: bash tools/visibility_os_disposable_rehearsal.sh --run 0059
+
+      - name: Verify owner-only ambiguous journal HOLD reconciliation
+        run: bash tools/visibility_os_disposable_rehearsal.sh --run 0060
 
       - name: Seed local fixtures
         run: pnpm -C e2e exec tsx seed.ts

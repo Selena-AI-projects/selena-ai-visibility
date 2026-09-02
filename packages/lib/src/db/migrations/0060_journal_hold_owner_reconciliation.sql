@@ -1,3 +1,15 @@
+DO $migration_preflight$
+BEGIN
+	IF to_regclass('public.sv_journal_no_spend_reconciliations') IS NULL
+		OR to_regprocedure('public.sv_owner_reconcile_journal_no_spend(uuid,uuid[],text,text,text[],timestamp with time zone,timestamp with time zone,timestamp with time zone,timestamp with time zone,text,text)') IS NULL
+		OR pg_catalog.pg_get_functiondef('public.sv_guard_journal_daily_claim_mutation()'::pg_catalog.regprocedure)
+			NOT LIKE '%JOURNAL_DAILY_CLAIM_NO_SPEND_CERTIFICATE_REQUIRED%'
+	THEN
+		RAISE EXCEPTION 'JOURNAL_HOLD_RECONCILIATION_REQUIRES_MIGRATION_0059';
+	END IF;
+END;
+$migration_preflight$;
+--> statement-breakpoint
 ALTER TABLE "sv_journal_daily_claims"
 	ADD COLUMN "reconciled_at" timestamptz;
 --> statement-breakpoint
@@ -98,6 +110,33 @@ BEGIN
 			AND configuration_lock."snapshot"#>>'{journalClaim,attempt}' = NEW."attempt"::text
 	) THEN
 		RAISE EXCEPTION 'JOURNAL_DAILY_CLAIM_LOCK_PROVENANCE_MISMATCH';
+	END IF;
+
+	-- Preserve 0059's certificate-backed owner-only HOLD -> NO_SPEND path.
+	-- 0060 adds an explicitly ambiguous RECONCILED outcome beside it; it must
+	-- never weaken or shadow the proven-zero transition.
+	IF OLD."status" = 'HOLD' AND NEW."status" = 'NO_SPEND' THEN
+		IF NEW."configuration_lock_id" IS NULL
+			OR NEW."completed_at" IS NOT NULL
+			OR NEW."abandoned_at" IS NOT NULL
+			OR NEW."reconciled_at" IS NOT NULL
+			OR NEW."reconciliation_reason" IS NOT NULL
+			OR NEW."reconciled_by" IS NOT NULL
+			OR NOT EXISTS (
+				SELECT 1
+				FROM "public"."sv_journal_no_spend_reconciliations" AS reconciliation
+				WHERE reconciliation."claim_id" = NEW."id"
+					AND reconciliation."organization_id" = NEW."organization_id"
+					AND reconciliation."project_id" = NEW."project_id"
+					AND reconciliation."configuration_lock_id" = NEW."configuration_lock_id"
+					AND reconciliation."prior_claim_status" = 'HOLD'
+					AND reconciliation."current_claim_status" = 'NO_SPEND'
+					AND reconciliation."reconciled_at" = NEW."updated_at"
+			)
+		THEN
+			RAISE EXCEPTION 'JOURNAL_DAILY_CLAIM_NO_SPEND_CERTIFICATE_REQUIRED';
+		END IF;
+		RETURN NEW;
 	END IF;
 
 	IF OLD."status" = 'HOLD' AND NEW."status" = 'RECONCILED' THEN
@@ -451,3 +490,11 @@ END;
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "sv_reconcile_journal_hold"(uuid, text, text, boolean, boolean) FROM PUBLIC;
+--> statement-breakpoint
+DO $runtime_revoke$
+BEGIN
+	IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'selena_app') THEN
+		EXECUTE 'REVOKE ALL ON FUNCTION "public"."sv_reconcile_journal_hold"(uuid, text, text, boolean, boolean) FROM selena_app';
+	END IF;
+END;
+$runtime_revoke$;
