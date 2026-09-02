@@ -1,5 +1,5 @@
 -- Owner-run staging bootstrap for the non-owner application role. Migrations
--- through 0057 must be committed first so this script can grant only known runtime
+-- through 0058 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -142,6 +142,29 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA';
 	END IF;
 
+	IF to_regclass('public.sv_journal_provider_boundaries') IS NULL
+		OR to_regprocedure('public.sv_journal_claim_recovery_state(uuid)') IS NULL
+		OR to_regprocedure('public.sv_recover_journal_daily_claim(uuid,text)') IS NULL
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_class
+			WHERE oid = 'public.sv_journal_provider_boundaries'::regclass
+				AND relrowsecurity AND relforcerowsecurity
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_runs'::regclass
+				AND tgname = 'sv_require_journal_provider_boundary'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_journal_provider_boundaries'::regclass
+				AND tgname = 'sv_prevent_journal_provider_boundary_mutation'
+				AND tgenabled = 'O'
+		) THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -169,6 +192,8 @@ ALTER TABLE sv_measurement_datasets FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_source_snapshots FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_provider_dataset_capabilities FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_evidence_acceptance_receipts FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_journal_daily_claims FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_journal_provider_boundaries FORCE ROW LEVEL SECURITY;
 
 -- Remove privileges left by an older version of this bootstrap before applying
 -- the explicit runtime allowlist. No future table or sequence is auto-granted.
@@ -239,6 +264,9 @@ GRANT SELECT, INSERT ON
 	sv_audit_events, sv_provider_dataset_capabilities,
 	sv_provider_canary_executions, sv_evidence_index
 TO selena_app;
+GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_journal_claim_recovery_state(uuid) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text) TO selena_app;
 SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'
 WHERE to_regclass('public.sv_provider_dataset_snapshot_events') IS NOT NULL
 \gexec

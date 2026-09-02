@@ -366,6 +366,10 @@ describe("Visibility OS provider evidence provenance", () => {
 		);
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058");
+		expect(roleBootstrap).toContain("GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app");
+		expect(roleBootstrap).toContain("GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text)");
+		expect(roleBootstrap).not.toMatch(/GRANT[^;]*UPDATE[^;]*sv_journal_provider_boundaries/);
 		expect(roleBootstrap).toContain("sv_provider_dataset_capabilities_owner_insert_guard");
 		expect(roleBootstrap).toContain("sv_source_snapshots_runtime_promotion_guard");
 		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_owner_guard");
@@ -1462,6 +1466,32 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).toContain("OLD.\"status\" IN ('NO_SPEND', 'HOLD', 'COMPLETED', 'ABANDONED')");
 		expect(migration).toContain("WHERE \"status\" IN ('CLAIMED', 'EXECUTING', 'HOLD')");
 	});
+
+	it("fences every journal provider call with an immutable tenant-scoped boundary", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0058_journal_provider_boundary_recovery.sql", import.meta.url),
+			"utf8",
+		);
+		const config = getTableConfig(schema.svJournalProviderBoundaries);
+		const claimPermit = config.indexes.find(
+			(index) => index.config.name === "sv_journal_provider_boundaries_claim_permit_unique",
+		);
+		const run = config.indexes.find((index) => index.config.name === "sv_journal_provider_boundaries_run_unique");
+
+		expect(config.enableRLS).toBe(true);
+		expect(claimPermit?.config.unique).toBe(true);
+		expect(run?.config.unique).toBe(true);
+		expect(migration).toContain("clock_timestamp()");
+		expect(migration).toContain("JOURNAL_EXECUTING_ABANDONMENT_BLOCKED");
+		expect(migration).toContain("JOURNAL_CLAIM_NO_SPEND_PROOF_REQUIRED");
+		expect(migration).toContain("JOURNAL_PROVIDER_BOUNDARY_REQUIRED");
+		expect(migration).toContain("providerCalls");
+		expect(migration).toContain("'providerCalls', 0");
+		expect(migration).toContain("pg_try_advisory_xact_lock");
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_journal_provider_boundaries"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_journal_provider_boundaries"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_journal_provider_boundaries"');
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -1631,7 +1661,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-20)).toEqual([
+		expect(journal.entries.slice(-21)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1740,6 +1770,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940019000,
 				tag: "0057_evidence_project_identity_hardening",
+				breakpoints: true,
+			},
+			{
+				idx: 58,
+				version: "7",
+				when: 1787940020000,
+				tag: "0058_journal_provider_boundary_recovery",
 				breakpoints: true,
 			},
 		]);

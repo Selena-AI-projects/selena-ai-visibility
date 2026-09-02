@@ -60,9 +60,7 @@ describe("journal publisher opt-in", () => {
 	});
 
 	it("routes the measurement image through its deployment approval wrapper", () => {
-		expect(dockerfile).toContain(
-			'CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal-entrypoint.ts"]',
-		);
+		expect(dockerfile).toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal-entrypoint.ts"]');
 		expect(dockerfile).not.toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal.ts"]');
 	});
 
@@ -139,7 +137,7 @@ describe("journal durable daily claim", () => {
 		const advisoryStart = allocator.indexOf("pg_advisory_xact_lock");
 		const advisory = allocator.slice(advisoryStart, allocator.indexOf(";", advisoryStart));
 		expect(allocator).toContain("db.transaction");
-		expect(allocator).toContain("CURRENT_TIMESTAMP AT TIME ZONE 'UTC'");
+		expect(allocator).toContain("clock_timestamp() AT TIME ZONE 'UTC'");
 		expect(allocator).not.toContain(".from(schema.svMeasurementDomains)");
 		expect(allocator).toContain("pg_advisory_xact_lock");
 		expect(advisory).not.toContain("utcDay");
@@ -147,19 +145,19 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain('["CLAIMED", "EXECUTING", "HOLD"]');
 		expect(allocator).toContain('kind: "HOLD"');
 		expect(allocator).toContain('eq(schema.svJournalDailyClaims.status, "COMPLETED")');
-		expect(allocator).toContain("if (completed && !FORCE && abandonedAttempt === undefined)");
-		expect(allocator.indexOf("if (completed && !FORCE && abandonedAttempt === undefined)")).toBeLessThan(
-			allocator.indexOf("const [prior]"),
-		);
+		expect(allocator).toContain("if (completed && !FORCE)");
+		expect(allocator.indexOf("if (completed && !FORCE)")).toBeLessThan(allocator.indexOf("const [prior]"));
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_CLAIMED"');
-		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_ABANDONED"');
-		expect(allocator).toContain("interval '45 minutes'");
-		expect(allocator).not.toContain("eq(schema.svJournalDailyClaims.updatedAt, unresolved.updatedAt)");
-		expect(allocator).toContain("recordedCostUsd");
+		expect(allocator).toContain("recoverJournalDailyClaim");
+		expect(allocator).toContain('recovery === "COMPLETED"');
+		expect(allocator).toContain("unresolved.questionSetVersion === version && unresolved.utcDay === utcDay");
+		expect(allocator).toContain('recovery === "ABANDONED"');
+		expect(allocator).not.toContain('status: "ABANDONED"');
+		expect(allocator).not.toContain("providerSpendAmbiguous");
 		expect(allocator).toContain("forced: FORCE");
 		expect(claimLifecycle).not.toContain("new Date()");
-		expect(claimLifecycle.match(/updatedAt: sql`CURRENT_TIMESTAMP`/g)?.length).toBeGreaterThanOrEqual(4);
-		expect(claimLifecycle).toContain('completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null');
+		expect(claimLifecycle.match(/updatedAt: sql`clock_timestamp\(\)`/g)?.length).toBeGreaterThanOrEqual(3);
+		expect(claimLifecycle).toContain('completedAt: status === "COMPLETED" ? sql`clock_timestamp()` : null');
 		expect(measurement.indexOf("await acquireDailyClaim")).toBeLessThan(
 			measurement.indexOf("repositories.locks.allocate"),
 		);
@@ -181,5 +179,7 @@ describe("journal durable daily claim", () => {
 		expect(runClaim).toContain('eq(schema.svJournalDailyClaims.status, "EXECUTING")');
 		expect(runClaim).toContain("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
 		expect(runClaim.indexOf("opts?.journalClaimId")).toBeLessThan(runClaim.indexOf('status: "consumed"'));
+		expect(runClaim).toContain("schema.svJournalProviderBoundaries");
+		expect(runClaim.indexOf("schema.svJournalProviderBoundaries")).toBeLessThan(runClaim.indexOf("RUN_CLAIMED"));
 	});
 });

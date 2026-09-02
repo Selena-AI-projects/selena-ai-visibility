@@ -356,122 +356,657 @@ export const svProjectStatusEnum = pgEnum("sv_project_status", ["DRAFT", "ACTIVE
 export const svScenarioStatusEnum = pgEnum("sv_scenario_status", ["PROPOSED", "APPROVED", "REJECTED"]);
 export const svQuoteStatusEnum = pgEnum("sv_quote_status", ["DRAFT", "ISSUED", "EXPIRED", "ACCEPTED", "CANCELLED"]);
 export const svOrderStatusEnum = pgEnum("sv_order_status", [
-	"DRAFT", "CONFIGURING", "QUOTED", "AWAITING_PAYMENT", "PAID_REVIEW_REQUIRED", "APPROVED", "QUEUED", "RUNNING",
-	"ANALYZING", "QC_REQUIRED", "READY", "DELIVERED", "PAYMENT_FAILED", "PREFLIGHT_BLOCKED", "BUDGET_BLOCKED",
-	"PROVIDER_BLOCKED", "CARDINALITY_INCIDENT", "PARTIAL_FAILURE", "CANCELLED", "REFUND_REVIEW",
+	"DRAFT",
+	"CONFIGURING",
+	"QUOTED",
+	"AWAITING_PAYMENT",
+	"PAID_REVIEW_REQUIRED",
+	"APPROVED",
+	"QUEUED",
+	"RUNNING",
+	"ANALYZING",
+	"QC_REQUIRED",
+	"READY",
+	"DELIVERED",
+	"PAYMENT_FAILED",
+	"PREFLIGHT_BLOCKED",
+	"BUDGET_BLOCKED",
+	"PROVIDER_BLOCKED",
+	"CARDINALITY_INCIDENT",
+	"PARTIAL_FAILURE",
+	"CANCELLED",
+	"REFUND_REVIEW",
 ]);
-export const svCycleStatusEnum = pgEnum("sv_cycle_status", ["CREATED", "APPROVED", "QUEUED", "RUNNING", "ANALYZING", "QC_REQUIRED", "READY", "STOPPED", "FAILED", "CARDINALITY_INCIDENT"]);
+export const svCycleStatusEnum = pgEnum("sv_cycle_status", [
+	"CREATED",
+	"APPROVED",
+	"QUEUED",
+	"RUNNING",
+	"ANALYZING",
+	"QC_REQUIRED",
+	"READY",
+	"STOPPED",
+	"FAILED",
+	"CARDINALITY_INCIDENT",
+]);
 export const svScanStatusEnum = pgEnum("sv_scan_status", ["PENDING", "COMPLETED", "FAILED"]);
 export const svFindingStatusEnum = pgEnum("sv_finding_status", ["OPEN", "ACCEPTED", "DISMISSED"]);
 export const svPaymentStatusEnum = pgEnum("sv_payment_status", ["PENDING", "SUCCEEDED", "FAILED", "CANCELLED"]);
-export const svApiKeys = pgTable("sv_api_keys", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id),
-	name: text("name").notNull(), keyHash: text("key_hash").notNull().unique(), permissions: text("permissions").array().notNull().default([]), expiresAt: timestamp("expires_at", { withTimezone: true }), revokedAt: timestamp("revoked_at", { withTimezone: true }), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgIdx: index("sv_api_keys_org_idx").on(table.organizationId), activeIdx: index("sv_api_keys_active_idx").on(table.organizationId, table.revokedAt) })).enableRLS();
+export const svApiKeys = pgTable(
+	"sv_api_keys",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		name: text("name").notNull(),
+		keyHash: text("key_hash").notNull().unique(),
+		permissions: text("permissions").array().notNull().default([]),
+		expiresAt: timestamp("expires_at", { withTimezone: true }),
+		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgIdx: index("sv_api_keys_org_idx").on(table.organizationId),
+		activeIdx: index("sv_api_keys_active_idx").on(table.organizationId, table.revokedAt),
+	}),
+).enableRLS();
 
 /** Immutable response cache for mutating Local API requests. Rows are retained
  * for seven days so retries can replay the exact response without repeating a
  * write; expired rows may be purged by a bounded cleanup job. */
-export const svApiIdempotencyRecords = pgTable("sv_api_idempotency_records", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(),
-	organizationId: text("organization_id").notNull().references(() => organization.id),
-	operation: text("operation").notNull(),
-	resourceId: text("resource_id").notNull(),
-	idempotencyKey: text("idempotency_key").notNull(),
-	bodyHash: text("body_hash").notNull(),
-	responseStatus: smallint("response_status").notNull(),
-	responseBody: jsonb("response_body").notNull(),
-	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-}, (table) => ({
-	identityUnique: uniqueIndex("sv_api_idempotency_identity_unique").on(table.organizationId, table.operation, table.resourceId, table.idempotencyKey),
-	expiresIdx: index("sv_api_idempotency_expires_idx").on(table.organizationId, table.expiresAt),
-	operationCheck: check("sv_api_idempotency_operation_check", sql`${table.operation} ~ '^[a-z][a-z0-9-]{1,63}$'`),
-	bodyHashCheck: check("sv_api_idempotency_body_hash_check", sql`${table.bodyHash} ~ '^sha256:[a-f0-9]{64}$'`),
-	keyLengthCheck: check("sv_api_idempotency_key_length_check", sql`length(${table.idempotencyKey}) BETWEEN 8 AND 128 AND ${table.idempotencyKey} = btrim(${table.idempotencyKey})`),
-	responseStatusCheck: check("sv_api_idempotency_response_status_check", sql`${table.responseStatus} BETWEEN 200 AND 299`),
-	expiryCheck: check("sv_api_idempotency_expiry_check", sql`${table.expiresAt} > ${table.createdAt} AND ${table.expiresAt} <= ${table.createdAt} + interval '7 days'`),
-})).enableRLS();
+export const svApiIdempotencyRecords = pgTable(
+	"sv_api_idempotency_records",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		operation: text("operation").notNull(),
+		resourceId: text("resource_id").notNull(),
+		idempotencyKey: text("idempotency_key").notNull(),
+		bodyHash: text("body_hash").notNull(),
+		responseStatus: smallint("response_status").notNull(),
+		responseBody: jsonb("response_body").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	},
+	(table) => ({
+		identityUnique: uniqueIndex("sv_api_idempotency_identity_unique").on(
+			table.organizationId,
+			table.operation,
+			table.resourceId,
+			table.idempotencyKey,
+		),
+		expiresIdx: index("sv_api_idempotency_expires_idx").on(table.organizationId, table.expiresAt),
+		operationCheck: check("sv_api_idempotency_operation_check", sql`${table.operation} ~ '^[a-z][a-z0-9-]{1,63}$'`),
+		bodyHashCheck: check("sv_api_idempotency_body_hash_check", sql`${table.bodyHash} ~ '^sha256:[a-f0-9]{64}$'`),
+		keyLengthCheck: check(
+			"sv_api_idempotency_key_length_check",
+			sql`length(${table.idempotencyKey}) BETWEEN 8 AND 128 AND ${table.idempotencyKey} = btrim(${table.idempotencyKey})`,
+		),
+		responseStatusCheck: check(
+			"sv_api_idempotency_response_status_check",
+			sql`${table.responseStatus} BETWEEN 200 AND 299`,
+		),
+		expiryCheck: check(
+			"sv_api_idempotency_expiry_check",
+			sql`${table.expiresAt} > ${table.createdAt} AND ${table.expiresAt} <= ${table.createdAt} + interval '7 days'`,
+		),
+	}),
+).enableRLS();
 
-export const svProjects = pgTable("sv_projects", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(),
-	organizationId: text("organization_id").notNull().references(() => organization.id),
-	name: text("name").notNull(), category: text("category").notNull(), country: text("country").notNull(), region: text("region"),
-	languages: text("languages").array().notNull().default([]), status: svProjectStatusEnum().notNull().default("DRAFT"),
-	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-	}, (table) => ({ orgIdx: index("sv_projects_org_idx").on(table.organizationId), orgNameUnique: uniqueIndex("sv_projects_org_name_unique").on(table.organizationId, table.name), idOrganizationUnique: uniqueIndex("sv_projects_id_organization_unique").on(table.id, table.organizationId) })).enableRLS();
+export const svProjects = pgTable(
+	"sv_projects",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		name: text("name").notNull(),
+		category: text("category").notNull(),
+		country: text("country").notNull(),
+		region: text("region"),
+		languages: text("languages").array().notNull().default([]),
+		status: svProjectStatusEnum().notNull().default("DRAFT"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgIdx: index("sv_projects_org_idx").on(table.organizationId),
+		orgNameUnique: uniqueIndex("sv_projects_org_name_unique").on(table.organizationId, table.name),
+		idOrganizationUnique: uniqueIndex("sv_projects_id_organization_unique").on(table.id, table.organizationId),
+	}),
+).enableRLS();
 
-export const svPromptFamilies = pgTable("sv_prompt_families", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id),
-	intentType: text("intent_type").notNull(), source: text("source").notNull(), status: svScenarioStatusEnum().notNull().default("PROPOSED"),
-	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ projectIdx: index("sv_prompt_families_project_idx").on(table.projectId) })).enableRLS();
+export const svPromptFamilies = pgTable(
+	"sv_prompt_families",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		intentType: text("intent_type").notNull(),
+		source: text("source").notNull(),
+		status: svScenarioStatusEnum().notNull().default("PROPOSED"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({ projectIdx: index("sv_prompt_families_project_idx").on(table.projectId) }),
+).enableRLS();
 
-export const svScenarios = pgTable("sv_scenarios", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), familyId: uuid("family_id").notNull().references(() => svPromptFamilies.id), text: text("text").notNull(), language: text("language").notNull(), status: svScenarioStatusEnum().notNull().default("PROPOSED"),
-	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ familyIdx: index("sv_scenarios_family_idx").on(table.familyId), orgIdx: index("sv_scenarios_org_idx").on(table.organizationId) })).enableRLS();
+export const svScenarios = pgTable(
+	"sv_scenarios",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		familyId: uuid("family_id")
+			.notNull()
+			.references(() => svPromptFamilies.id),
+		text: text("text").notNull(),
+		language: text("language").notNull(),
+		status: svScenarioStatusEnum().notNull().default("PROPOSED"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		familyIdx: index("sv_scenarios_family_idx").on(table.familyId),
+		orgIdx: index("sv_scenarios_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
 
-export const svConfigurationLocks = pgTable("sv_configuration_locks", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), version: integer("version").notNull(), legacyCollisionOrdinal: integer("legacy_collision_ordinal").notNull().default(0), snapshot: jsonb("snapshot").notNull(), engineSha: text("engine_sha").notNull(), expectedRuns: integer("expected_runs").notNull(), budgetCap: numeric("budget_cap", { precision: 12, scale: 6 }).notNull(), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ projectVersionUnique: uniqueIndex("sv_locks_project_version_unique").on(table.projectId, table.version, table.legacyCollisionOrdinal), idOrganizationUnique: uniqueIndex("sv_configuration_locks_id_organization_unique").on(table.id, table.organizationId), idProjectOrganizationUnique: uniqueIndex("sv_configuration_locks_id_project_org_unique").on(table.id, table.projectId, table.organizationId), projectOrganizationReference: foreignKey({ columns: [table.projectId, table.organizationId], foreignColumns: [svProjects.id, svProjects.organizationId], name: "sv_configuration_locks_project_organization_fk" }), versionCheck: check("sv_configuration_locks_version_check", sql`${table.version} > 0`), legacyCollisionOrdinalCheck: check("sv_configuration_locks_legacy_collision_ordinal_check", sql`${table.legacyCollisionOrdinal} >= 0`) })).enableRLS();
+export const svConfigurationLocks = pgTable(
+	"sv_configuration_locks",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		version: integer("version").notNull(),
+		legacyCollisionOrdinal: integer("legacy_collision_ordinal").notNull().default(0),
+		snapshot: jsonb("snapshot").notNull(),
+		engineSha: text("engine_sha").notNull(),
+		expectedRuns: integer("expected_runs").notNull(),
+		budgetCap: numeric("budget_cap", { precision: 12, scale: 6 }).notNull(),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectVersionUnique: uniqueIndex("sv_locks_project_version_unique").on(
+			table.projectId,
+			table.version,
+			table.legacyCollisionOrdinal,
+		),
+		idOrganizationUnique: uniqueIndex("sv_configuration_locks_id_organization_unique").on(
+			table.id,
+			table.organizationId,
+		),
+		idProjectOrganizationUnique: uniqueIndex("sv_configuration_locks_id_project_org_unique").on(
+			table.id,
+			table.projectId,
+			table.organizationId,
+		),
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_configuration_locks_project_organization_fk",
+		}),
+		versionCheck: check("sv_configuration_locks_version_check", sql`${table.version} > 0`),
+		legacyCollisionOrdinalCheck: check(
+			"sv_configuration_locks_legacy_collision_ordinal_check",
+			sql`${table.legacyCollisionOrdinal} >= 0`,
+		),
+	}),
+).enableRLS();
 
 /** Durable fail-closed spend serialization for the manually-invoked owner journal. */
-export const svJournalDailyClaims = pgTable("sv_journal_daily_claims", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull(), configurationLockId: uuid("configuration_lock_id"), questionSetVersion: text("question_set_version").notNull(), utcDay: date("utc_day", { mode: "string" }).notNull(), attempt: integer("attempt").notNull(), status: text("status").notNull().default("CLAIMED"), claimedAt: timestamp("claimed_at", { withTimezone: true }).defaultNow().notNull(), completedAt: timestamp("completed_at", { withTimezone: true }), abandonedAt: timestamp("abandoned_at", { withTimezone: true }), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ identityUnique: uniqueIndex("sv_journal_daily_claims_identity_unique").on(table.organizationId, table.projectId, table.questionSetVersion, table.utcDay, table.attempt), unresolvedUnique: uniqueIndex("sv_journal_daily_claims_unresolved_unique").on(table.organizationId, table.projectId).where(sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'HOLD')`), lockUnique: uniqueIndex("sv_journal_daily_claims_lock_unique").on(table.configurationLockId).where(sql`${table.configurationLockId} IS NOT NULL`), projectOrganizationReference: foreignKey({ columns: [table.projectId, table.organizationId], foreignColumns: [svProjects.id, svProjects.organizationId], name: "sv_journal_daily_claims_project_organization_fk" }), lockProjectOrganizationReference: foreignKey({ columns: [table.configurationLockId, table.projectId, table.organizationId], foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.projectId, svConfigurationLocks.organizationId], name: "sv_journal_daily_claims_lock_project_org_fk" }), attemptCheck: check("sv_journal_daily_claims_attempt_check", sql`${table.attempt} > 0`), statusCheck: check("sv_journal_daily_claims_status_check", sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD', 'COMPLETED', 'ABANDONED')`), utcDayCheck: check("sv_journal_daily_claims_utc_day_check", sql`${table.utcDay} = (${table.claimedAt} AT TIME ZONE 'UTC')::date`), executionLinkCheck: check("sv_journal_daily_claims_execution_link_check", sql`${table.status} IN ('CLAIMED', 'NO_SPEND', 'ABANDONED') OR ${table.configurationLockId} IS NOT NULL`), completionCheck: check("sv_journal_daily_claims_completion_check", sql`((${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD') AND ${table.completedAt} IS NULL AND ${table.abandonedAt} IS NULL) OR (${table.status} = 'COMPLETED' AND ${table.completedAt} IS NOT NULL AND ${table.completedAt} >= ${table.claimedAt} AND ${table.abandonedAt} IS NULL) OR (${table.status} = 'ABANDONED' AND ${table.completedAt} IS NULL AND ${table.abandonedAt} IS NOT NULL AND ${table.abandonedAt} >= ${table.claimedAt}))`) })).enableRLS();
+export const svJournalDailyClaims = pgTable(
+	"sv_journal_daily_claims",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
+		configurationLockId: uuid("configuration_lock_id"),
+		questionSetVersion: text("question_set_version").notNull(),
+		utcDay: date("utc_day", { mode: "string" }).notNull(),
+		attempt: integer("attempt").notNull(),
+		status: text("status").notNull().default("CLAIMED"),
+		claimedAt: timestamp("claimed_at", { withTimezone: true }).default(sql`clock_timestamp()`).notNull(),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+		abandonedAt: timestamp("abandoned_at", { withTimezone: true }),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`clock_timestamp()`).notNull(),
+	},
+	(table) => ({
+		identityUnique: uniqueIndex("sv_journal_daily_claims_identity_unique").on(
+			table.organizationId,
+			table.projectId,
+			table.questionSetVersion,
+			table.utcDay,
+			table.attempt,
+		),
+		unresolvedUnique: uniqueIndex("sv_journal_daily_claims_unresolved_unique")
+			.on(table.organizationId, table.projectId)
+			.where(sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'HOLD')`),
+		lockUnique: uniqueIndex("sv_journal_daily_claims_lock_unique")
+			.on(table.configurationLockId)
+			.where(sql`${table.configurationLockId} IS NOT NULL`),
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_journal_daily_claims_project_organization_fk",
+		}),
+		lockProjectOrganizationReference: foreignKey({
+			columns: [table.configurationLockId, table.projectId, table.organizationId],
+			foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.projectId, svConfigurationLocks.organizationId],
+			name: "sv_journal_daily_claims_lock_project_org_fk",
+		}),
+		attemptCheck: check("sv_journal_daily_claims_attempt_check", sql`${table.attempt} > 0`),
+		statusCheck: check(
+			"sv_journal_daily_claims_status_check",
+			sql`${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD', 'COMPLETED', 'ABANDONED')`,
+		),
+		utcDayCheck: check(
+			"sv_journal_daily_claims_utc_day_check",
+			sql`${table.utcDay} = (${table.claimedAt} AT TIME ZONE 'UTC')::date`,
+		),
+		executionLinkCheck: check(
+			"sv_journal_daily_claims_execution_link_check",
+			sql`${table.status} IN ('CLAIMED', 'NO_SPEND', 'ABANDONED') OR ${table.configurationLockId} IS NOT NULL`,
+		),
+		completionCheck: check(
+			"sv_journal_daily_claims_completion_check",
+			sql`((${table.status} IN ('CLAIMED', 'EXECUTING', 'NO_SPEND', 'HOLD') AND ${table.completedAt} IS NULL AND ${table.abandonedAt} IS NULL) OR (${table.status} = 'COMPLETED' AND ${table.completedAt} IS NOT NULL AND ${table.completedAt} >= ${table.claimedAt} AND ${table.abandonedAt} IS NULL) OR (${table.status} = 'ABANDONED' AND ${table.completedAt} IS NULL AND ${table.abandonedAt} IS NOT NULL AND ${table.abandonedAt} >= ${table.claimedAt}))`,
+		),
+	}),
+).enableRLS();
 
-export const svQuotes = pgTable("sv_quotes", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), lockId: uuid("lock_id").notNull().references(() => svConfigurationLocks.id), status: svQuoteStatusEnum().notNull().default("DRAFT"), priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(), currency: text("currency").notNull(), expectedRuns: integer("expected_runs").notNull(), expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgIdx: index("sv_quotes_org_idx").on(table.organizationId), projectIdx: index("sv_quotes_project_idx").on(table.projectId) })).enableRLS();
+/**
+ * A committed pre-transport fence for a journal permit. Presence means provider
+ * spend is possible, never that a response or a charge was observed.
+ */
+export const svJournalProviderBoundaries = pgTable(
+	"sv_journal_provider_boundaries",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
+		journalClaimId: uuid("journal_claim_id")
+			.notNull()
+			.references(() => svJournalDailyClaims.id),
+		configurationLockId: uuid("configuration_lock_id").notNull(),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		permitId: uuid("permit_id")
+			.notNull()
+			.references(() => svRunPermits.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRuns.id),
+		dispatchKey: text("dispatch_key").notNull(),
+		channel: text("channel").notNull(),
+		systemId: text("system_id"),
+		boundaryKind: text("boundary_kind").notNull().default("PRE_TRANSPORT"),
+		providerCallUpperBound: integer("provider_call_upper_bound").notNull().default(1),
+		crossedAt: timestamp("crossed_at", { withTimezone: true }).default(sql`clock_timestamp()`).notNull(),
+	},
+	(table) => ({
+		claimPermitUnique: uniqueIndex("sv_journal_provider_boundaries_claim_permit_unique").on(
+			table.journalClaimId,
+			table.permitId,
+		),
+		runUnique: uniqueIndex("sv_journal_provider_boundaries_run_unique").on(table.runId),
+		organizationClaimIdx: index("sv_journal_provider_boundaries_org_claim_idx").on(
+			table.organizationId,
+			table.journalClaimId,
+		),
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_journal_provider_boundaries_project_org_fk",
+		}),
+		lockProjectOrganizationReference: foreignKey({
+			columns: [table.configurationLockId, table.projectId, table.organizationId],
+			foreignColumns: [svConfigurationLocks.id, svConfigurationLocks.projectId, svConfigurationLocks.organizationId],
+			name: "sv_journal_provider_boundaries_lock_project_org_fk",
+		}),
+		boundaryKindCheck: check("sv_journal_provider_boundaries_kind_check", sql`${table.boundaryKind} = 'PRE_TRANSPORT'`),
+		providerCallUpperBoundCheck: check(
+			"sv_journal_provider_boundaries_call_bound_check",
+			sql`${table.providerCallUpperBound} = 1`,
+		),
+	}),
+).enableRLS();
 
-export const svOrders = pgTable("sv_orders", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), quoteId: uuid("quote_id").notNull().references(() => svQuotes.id), lockId: uuid("lock_id").notNull().references(() => svConfigurationLocks.id), status: svOrderStatusEnum().notNull().default("DRAFT"), orderCap: numeric("order_cap", { precision: 12, scale: 6 }).notNull(), paidAt: timestamp("paid_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgIdx: index("sv_orders_org_idx").on(table.organizationId), statusIdx: index("sv_orders_status_idx").on(table.status) })).enableRLS();
+export const svQuotes = pgTable(
+	"sv_quotes",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		lockId: uuid("lock_id")
+			.notNull()
+			.references(() => svConfigurationLocks.id),
+		status: svQuoteStatusEnum().notNull().default("DRAFT"),
+		priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(),
+		currency: text("currency").notNull(),
+		expectedRuns: integer("expected_runs").notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgIdx: index("sv_quotes_org_idx").on(table.organizationId),
+		projectIdx: index("sv_quotes_project_idx").on(table.projectId),
+	}),
+).enableRLS();
 
-export const svCycles = pgTable("sv_cycles", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), orderId: uuid("order_id").notNull().references(() => svOrders.id), lockId: uuid("lock_id").notNull().references(() => svConfigurationLocks.id), status: svCycleStatusEnum().notNull().default("CREATED"), expectedRuns: integer("expected_runs").notNull(), createdRuns: integer("created_runs").notNull().default(0), completedRuns: integer("completed_runs").notNull().default(0), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orderIdx: index("sv_cycles_order_idx").on(table.orderId), orgIdx: index("sv_cycles_org_idx").on(table.organizationId) })).enableRLS();
+export const svOrders = pgTable(
+	"sv_orders",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		quoteId: uuid("quote_id")
+			.notNull()
+			.references(() => svQuotes.id),
+		lockId: uuid("lock_id")
+			.notNull()
+			.references(() => svConfigurationLocks.id),
+		status: svOrderStatusEnum().notNull().default("DRAFT"),
+		orderCap: numeric("order_cap", { precision: 12, scale: 6 }).notNull(),
+		paidAt: timestamp("paid_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgIdx: index("sv_orders_org_idx").on(table.organizationId),
+		statusIdx: index("sv_orders_status_idx").on(table.status),
+	}),
+).enableRLS();
 
-export const svPublicScans = pgTable("sv_public_scans", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), projectId: uuid("project_id").references(() => svProjects.id), website: text("website").notNull(), status: svScanStatusEnum().notNull().default("PENDING"), result: jsonb("result"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), completedAt: timestamp("completed_at", { withTimezone: true }),
-}, (table) => ({ projectIdx: index("sv_public_scans_project_idx").on(table.projectId), createdIdx: index("sv_public_scans_created_idx").on(table.createdAt) })).enableRLS();
-export const svPayments = pgTable("sv_payments", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), orderId: uuid("order_id").notNull().references(() => svOrders.id), provider: text("provider").notNull().default("test"), providerEventId: text("provider_event_id").notNull(), status: svPaymentStatusEnum().notNull().default("PENDING"), amount: numeric("amount", { precision: 12, scale: 2 }).notNull(), currency: text("currency").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ eventUnique: uniqueIndex("sv_payments_provider_event_unique").on(table.provider, table.providerEventId), orgIdx: index("sv_payments_org_idx").on(table.organizationId) })).enableRLS();
-export const svFindings = pgTable("sv_findings", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), domainId: text("domain_id"), locationId: uuid("location_id"), severity: text("severity").notNull(), category: text("category").notNull(), title: text("title").notNull(), detail: text("detail").notNull(), status: svFindingStatusEnum().notNull().default("OPEN"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ cycleIdx: index("sv_findings_cycle_idx").on(table.cycleId), orgIdx: index("sv_findings_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendations = pgTable("sv_recommendations", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), findingId: uuid("finding_id").references(() => svFindings.id), domainId: text("domain_id"), locationId: uuid("location_id"), priority: text("priority").notNull(), title: text("title").notNull(), action: text("action").notNull(), rationale: text("rationale").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ cycleIdx: index("sv_recommendations_cycle_idx").on(table.cycleId), orgIdx: index("sv_recommendations_org_idx").on(table.organizationId) })).enableRLS();
-export const svProjectProfiles = pgTable("sv_project_profiles", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), brandName: text("brand_name").notNull(), primaryDomain: text("primary_domain").notNull(), publicProfiles: jsonb("public_profiles").notNull().default([]), competitorSnapshot: jsonb("competitor_snapshot").notNull().default([]), scenarioSnapshot: jsonb("scenario_snapshot").notNull().default([]), mapsLocation: jsonb("maps_location"), confirmedAt: timestamp("confirmed_at", { withTimezone: true }), confirmedBy: text("confirmed_by"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ projectUnique: uniqueIndex("sv_project_profiles_project_unique").on(table.projectId), orgIdx: index("sv_project_profiles_org_idx").on(table.organizationId) })).enableRLS();
-export const svWebsiteSnapshots = pgTable("sv_website_snapshots", {
-	id: text("id").primaryKey().notNull(),
-	organizationId: text("organization_id").notNull().references(() => organization.id),
-	projectId: uuid("project_id").notNull().references(() => svProjects.id),
-	website: text("website").notNull(),
-	contentHash: text("content_hash").notNull(),
-	capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
-	snapshot: jsonb("snapshot").notNull(),
-	immutable: boolean("immutable").notNull().default(true),
-	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ hashUnique: uniqueIndex("sv_website_snapshots_project_hash_unique").on(table.projectId, table.contentHash), orgIdx: index("sv_website_snapshots_org_idx").on(table.organizationId), projectIdx: index("sv_website_snapshots_project_idx").on(table.projectId) })).enableRLS();
-export const svRunPermits = pgTable("sv_run_permits", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), dispatchKey: text("dispatch_key").notNull(), channel: text("channel").notNull(), scenarioId: text("scenario_id").notNull(), systemId: text("system_id"), status: text("status").notNull().default("issued"), expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(), consumedAt: timestamp("consumed_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ dispatchUnique: uniqueIndex("sv_run_permits_dispatch_key_unique").on(table.dispatchKey), orgCycleIdx: index("sv_run_permits_org_cycle_idx").on(table.organizationId, table.cycleId) })).enableRLS();
-export const svRuns = pgTable("sv_runs", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), permitId: uuid("permit_id").notNull().references(() => svRunPermits.id), dispatchKey: text("dispatch_key").notNull(), channel: text("channel").notNull(), scenarioId: text("scenario_id").notNull(), systemId: text("system_id"), status: text("status").notNull().default("queued"), validity: text("validity"), invalidReason: text("invalid_reason"), costUsd: numeric("cost_usd", { precision: 12, scale: 6 }), costBasis: text("cost_basis"), tokenInput: integer("token_input"), tokenOutput: integer("token_output"), system: text("system"), model: text("model"), language: text("language"), region: text("region"), mention: boolean("mention"), position: smallint("position"), ownedCitation: boolean("owned_citation"), citations: jsonb("citations"), competitors: jsonb("competitors"), factualErrors: jsonb("factual_errors"), extractorVersion: text("extractor_version"), captureMode: text("capture_mode"), rawResponseReference: text("raw_response_reference"), canonicalPayload: jsonb("canonical_payload"), startedAt: timestamp("started_at", { withTimezone: true }), finishedAt: timestamp("finished_at", { withTimezone: true }), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ dispatchUnique: uniqueIndex("sv_runs_dispatch_key_unique").on(table.dispatchKey), orgCycleIdx: index("sv_runs_org_cycle_idx").on(table.organizationId, table.cycleId) })).enableRLS();
+export const svCycles = pgTable(
+	"sv_cycles",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		orderId: uuid("order_id")
+			.notNull()
+			.references(() => svOrders.id),
+		lockId: uuid("lock_id")
+			.notNull()
+			.references(() => svConfigurationLocks.id),
+		status: svCycleStatusEnum().notNull().default("CREATED"),
+		expectedRuns: integer("expected_runs").notNull(),
+		createdRuns: integer("created_runs").notNull().default(0),
+		completedRuns: integer("completed_runs").notNull().default(0),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orderIdx: index("sv_cycles_order_idx").on(table.orderId),
+		orgIdx: index("sv_cycles_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+
+export const svPublicScans = pgTable(
+	"sv_public_scans",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		projectId: uuid("project_id").references(() => svProjects.id),
+		website: text("website").notNull(),
+		status: svScanStatusEnum().notNull().default("PENDING"),
+		result: jsonb("result"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+	},
+	(table) => ({
+		projectIdx: index("sv_public_scans_project_idx").on(table.projectId),
+		createdIdx: index("sv_public_scans_created_idx").on(table.createdAt),
+	}),
+).enableRLS();
+export const svPayments = pgTable(
+	"sv_payments",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		orderId: uuid("order_id")
+			.notNull()
+			.references(() => svOrders.id),
+		provider: text("provider").notNull().default("test"),
+		providerEventId: text("provider_event_id").notNull(),
+		status: svPaymentStatusEnum().notNull().default("PENDING"),
+		amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+		currency: text("currency").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		eventUnique: uniqueIndex("sv_payments_provider_event_unique").on(table.provider, table.providerEventId),
+		orgIdx: index("sv_payments_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svFindings = pgTable(
+	"sv_findings",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		domainId: text("domain_id"),
+		locationId: uuid("location_id"),
+		severity: text("severity").notNull(),
+		category: text("category").notNull(),
+		title: text("title").notNull(),
+		detail: text("detail").notNull(),
+		status: svFindingStatusEnum().notNull().default("OPEN"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		cycleIdx: index("sv_findings_cycle_idx").on(table.cycleId),
+		orgIdx: index("sv_findings_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendations = pgTable(
+	"sv_recommendations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		findingId: uuid("finding_id").references(() => svFindings.id),
+		domainId: text("domain_id"),
+		locationId: uuid("location_id"),
+		priority: text("priority").notNull(),
+		title: text("title").notNull(),
+		action: text("action").notNull(),
+		rationale: text("rationale").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		cycleIdx: index("sv_recommendations_cycle_idx").on(table.cycleId),
+		orgIdx: index("sv_recommendations_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svProjectProfiles = pgTable(
+	"sv_project_profiles",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		brandName: text("brand_name").notNull(),
+		primaryDomain: text("primary_domain").notNull(),
+		publicProfiles: jsonb("public_profiles").notNull().default([]),
+		competitorSnapshot: jsonb("competitor_snapshot").notNull().default([]),
+		scenarioSnapshot: jsonb("scenario_snapshot").notNull().default([]),
+		mapsLocation: jsonb("maps_location"),
+		confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+		confirmedBy: text("confirmed_by"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectUnique: uniqueIndex("sv_project_profiles_project_unique").on(table.projectId),
+		orgIdx: index("sv_project_profiles_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svWebsiteSnapshots = pgTable(
+	"sv_website_snapshots",
+	{
+		id: text("id").primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		website: text("website").notNull(),
+		contentHash: text("content_hash").notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		snapshot: jsonb("snapshot").notNull(),
+		immutable: boolean("immutable").notNull().default(true),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		hashUnique: uniqueIndex("sv_website_snapshots_project_hash_unique").on(table.projectId, table.contentHash),
+		orgIdx: index("sv_website_snapshots_org_idx").on(table.organizationId),
+		projectIdx: index("sv_website_snapshots_project_idx").on(table.projectId),
+	}),
+).enableRLS();
+export const svRunPermits = pgTable(
+	"sv_run_permits",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		dispatchKey: text("dispatch_key").notNull(),
+		channel: text("channel").notNull(),
+		scenarioId: text("scenario_id").notNull(),
+		systemId: text("system_id"),
+		status: text("status").notNull().default("issued"),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		consumedAt: timestamp("consumed_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		dispatchUnique: uniqueIndex("sv_run_permits_dispatch_key_unique").on(table.dispatchKey),
+		orgCycleIdx: index("sv_run_permits_org_cycle_idx").on(table.organizationId, table.cycleId),
+	}),
+).enableRLS();
+export const svRuns = pgTable(
+	"sv_runs",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		permitId: uuid("permit_id")
+			.notNull()
+			.references(() => svRunPermits.id),
+		dispatchKey: text("dispatch_key").notNull(),
+		channel: text("channel").notNull(),
+		scenarioId: text("scenario_id").notNull(),
+		systemId: text("system_id"),
+		status: text("status").notNull().default("queued"),
+		validity: text("validity"),
+		invalidReason: text("invalid_reason"),
+		costUsd: numeric("cost_usd", { precision: 12, scale: 6 }),
+		costBasis: text("cost_basis"),
+		tokenInput: integer("token_input"),
+		tokenOutput: integer("token_output"),
+		system: text("system"),
+		model: text("model"),
+		language: text("language"),
+		region: text("region"),
+		mention: boolean("mention"),
+		position: smallint("position"),
+		ownedCitation: boolean("owned_citation"),
+		citations: jsonb("citations"),
+		competitors: jsonb("competitors"),
+		factualErrors: jsonb("factual_errors"),
+		extractorVersion: text("extractor_version"),
+		captureMode: text("capture_mode"),
+		rawResponseReference: text("raw_response_reference"),
+		canonicalPayload: jsonb("canonical_payload"),
+		startedAt: timestamp("started_at", { withTimezone: true }),
+		finishedAt: timestamp("finished_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		dispatchUnique: uniqueIndex("sv_runs_dispatch_key_unique").on(table.dispatchKey),
+		orgCycleIdx: index("sv_runs_org_cycle_idx").on(table.organizationId, table.cycleId),
+	}),
+).enableRLS();
 
 // Addendum §5.3 (P0-08): one row per entity seen in one answer, normalized so
 // Brand Position by engine and Citation Gap can be queried instead of dug out
 // of jsonb. Written in the same transaction as the run it belongs to.
-export const svResponseMentions = pgTable("sv_response_mentions", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), runId: uuid("run_id").notNull().references(() => svRuns.id), entityType: text("entity_type").notNull(), name: text("name").notNull(), ordinalPosition: smallint("ordinal_position"), matchMethod: text("match_method").notNull().default("exact_term"), extractorVersion: text("extractor_version").notNull(), captureMode: text("capture_mode"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ runIdx: index("sv_response_mentions_run_idx").on(table.runId), orgCycleIdx: index("sv_response_mentions_org_cycle_idx").on(table.organizationId, table.cycleId) })).enableRLS();
+export const svResponseMentions = pgTable(
+	"sv_response_mentions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRuns.id),
+		entityType: text("entity_type").notNull(),
+		name: text("name").notNull(),
+		ordinalPosition: smallint("ordinal_position"),
+		matchMethod: text("match_method").notNull().default("exact_term"),
+		extractorVersion: text("extractor_version").notNull(),
+		captureMode: text("capture_mode"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		runIdx: index("sv_response_mentions_run_idx").on(table.runId),
+		orgCycleIdx: index("sv_response_mentions_org_cycle_idx").on(table.organizationId, table.cycleId),
+	}),
+).enableRLS();
 
 // Addendum §5.4: a derived metric is only reproducible next to the rule that
 // produced it, so each source is stored per cycle with its formula version.
@@ -480,112 +1015,575 @@ export const svResponseMentions = pgTable("sv_response_mentions", {
 // domain and by URL. competitorNames rather than competitorIds: an approved
 // competitor is a name on the confirmed profile and has no id to reference.
 // topicId stays empty until §5.1 topics exist.
-export const svCitationGapSnapshots = pgTable("sv_citation_gap_snapshots", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), cycleId: uuid("cycle_id").notNull().references(() => svCycles.id), configurationLockId: uuid("configuration_lock_id").notNull().references(() => svConfigurationLocks.id), topicId: uuid("topic_id"), sourceDomain: text("source_domain").notNull(), sourceUrls: text("source_urls").array().notNull().default([]), ownedCitationCount: integer("owned_citation_count").notNull(), competitorCitationCount: integer("competitor_citation_count").notNull(), competitorNames: text("competitor_names").array().notNull().default([]), engineCount: integer("engine_count").notNull(), scenarioCount: integer("scenario_count").notNull(), repeatStability: numeric("repeat_stability", { precision: 6, scale: 4 }), firstSeen: timestamp("first_seen", { withTimezone: true }), lastSeen: timestamp("last_seen", { withTimezone: true }), gapType: text("gap_type"), priorityBand: text("priority_band").notNull(), formulaVersion: text("formula_version").notNull(), evidenceRunIds: uuid("evidence_run_ids").array().notNull().default([]), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ cycleSourceUnique: uniqueIndex("sv_citation_gap_cycle_source_unique").on(table.cycleId, table.sourceDomain, table.formulaVersion), orgCycleIdx: index("sv_citation_gap_org_cycle_idx").on(table.organizationId, table.cycleId), projectIdx: index("sv_citation_gap_project_idx").on(table.projectId) })).enableRLS();
+export const svCitationGapSnapshots = pgTable(
+	"sv_citation_gap_snapshots",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		cycleId: uuid("cycle_id")
+			.notNull()
+			.references(() => svCycles.id),
+		configurationLockId: uuid("configuration_lock_id")
+			.notNull()
+			.references(() => svConfigurationLocks.id),
+		topicId: uuid("topic_id"),
+		sourceDomain: text("source_domain").notNull(),
+		sourceUrls: text("source_urls").array().notNull().default([]),
+		ownedCitationCount: integer("owned_citation_count").notNull(),
+		competitorCitationCount: integer("competitor_citation_count").notNull(),
+		competitorNames: text("competitor_names").array().notNull().default([]),
+		engineCount: integer("engine_count").notNull(),
+		scenarioCount: integer("scenario_count").notNull(),
+		repeatStability: numeric("repeat_stability", { precision: 6, scale: 4 }),
+		firstSeen: timestamp("first_seen", { withTimezone: true }),
+		lastSeen: timestamp("last_seen", { withTimezone: true }),
+		gapType: text("gap_type"),
+		priorityBand: text("priority_band").notNull(),
+		formulaVersion: text("formula_version").notNull(),
+		evidenceRunIds: uuid("evidence_run_ids").array().notNull().default([]),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		cycleSourceUnique: uniqueIndex("sv_citation_gap_cycle_source_unique").on(
+			table.cycleId,
+			table.sourceDomain,
+			table.formulaVersion,
+		),
+		orgCycleIdx: index("sv_citation_gap_org_cycle_idx").on(table.organizationId, table.cycleId),
+		projectIdx: index("sv_citation_gap_project_idx").on(table.projectId),
+	}),
+).enableRLS();
 
 // §9.2: an overflow or stop is isolated and recorded, never silently absorbed
 // — a safeguard whose firing leaves no trace is indistinguishable from one
 // that never fired.
-export const svIncidents = pgTable("sv_incidents", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), orderId: uuid("order_id").references(() => svOrders.id), cycleId: uuid("cycle_id").references(() => svCycles.id), kind: text("kind").notNull(), severity: text("severity").notNull().default("high"), detail: text("detail").notNull(), dispatchKey: text("dispatch_key"), status: text("status").notNull().default("OPEN"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), resolvedAt: timestamp("resolved_at", { withTimezone: true }),
-}, (table) => ({ orgCreatedIdx: index("sv_incidents_org_created_idx").on(table.organizationId, table.createdAt), orderIdx: index("sv_incidents_order_idx").on(table.orderId) })).enableRLS();
+export const svIncidents = pgTable(
+	"sv_incidents",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		orderId: uuid("order_id").references(() => svOrders.id),
+		cycleId: uuid("cycle_id").references(() => svCycles.id),
+		kind: text("kind").notNull(),
+		severity: text("severity").notNull().default("high"),
+		detail: text("detail").notNull(),
+		dispatchKey: text("dispatch_key"),
+		status: text("status").notNull().default("OPEN"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+	},
+	(table) => ({
+		orgCreatedIdx: index("sv_incidents_org_created_idx").on(table.organizationId, table.createdAt),
+		orderIdx: index("sv_incidents_order_idx").on(table.orderId),
+	}),
+).enableRLS();
 
 // §10.2: the append-only spend ledger. One row per charge, each declaring
 // whether the amount is the provider's actual figure or our estimate; cap
 // alerts read sums from here rather than trusting run rows to be complete.
-export const svCostEvents = pgTable("sv_cost_events", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), cycleId: uuid("cycle_id").references(() => svCycles.id), measurementCycleId: uuid("measurement_cycle_id"), domainId: text("domain_id").notNull().default("AI"), runId: uuid("run_id").references(() => svRuns.id), provider: text("provider").notNull(), amountUsd: numeric("amount_usd", { precision: 12, scale: 6 }).notNull(), basis: text("basis").notNull(), kind: text("kind").notNull().default("measurement"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ idOrganizationCycleDomainUnique: uniqueIndex("sv_cost_events_id_org_cycle_domain_unique").on(table.id, table.organizationId, table.measurementCycleId, table.domainId), orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId), orgDomainIdx: index("sv_cost_events_org_domain_idx").on(table.organizationId, table.domainId), measurementCycleIdx: index("sv_cost_events_measurement_cycle_idx").on(table.measurementCycleId), runIdx: index("sv_cost_events_run_idx").on(table.runId), domainShapeCheck: check("sv_cost_events_domain_shape_check", sql`${table.domainId} = 'AI' OR (${table.measurementCycleId} IS NOT NULL AND ${table.cycleId} IS NULL AND ${table.runId} IS NULL)`) })).enableRLS();
+export const svCostEvents = pgTable(
+	"sv_cost_events",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		cycleId: uuid("cycle_id").references(() => svCycles.id),
+		measurementCycleId: uuid("measurement_cycle_id"),
+		domainId: text("domain_id").notNull().default("AI"),
+		runId: uuid("run_id").references(() => svRuns.id),
+		provider: text("provider").notNull(),
+		amountUsd: numeric("amount_usd", { precision: 12, scale: 6 }).notNull(),
+		basis: text("basis").notNull(),
+		kind: text("kind").notNull().default("measurement"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		idOrganizationCycleDomainUnique: uniqueIndex("sv_cost_events_id_org_cycle_domain_unique").on(
+			table.id,
+			table.organizationId,
+			table.measurementCycleId,
+			table.domainId,
+		),
+		orgCycleIdx: index("sv_cost_events_org_cycle_idx").on(table.organizationId, table.cycleId),
+		orgDomainIdx: index("sv_cost_events_org_domain_idx").on(table.organizationId, table.domainId),
+		measurementCycleIdx: index("sv_cost_events_measurement_cycle_idx").on(table.measurementCycleId),
+		runIdx: index("sv_cost_events_run_idx").on(table.runId),
+		domainShapeCheck: check(
+			"sv_cost_events_domain_shape_check",
+			sql`${table.domainId} = 'AI' OR (${table.measurementCycleId} IS NOT NULL AND ${table.cycleId} IS NULL AND ${table.runId} IS NULL)`,
+		),
+	}),
+).enableRLS();
 
 export const svRecommendationRunStatusEnum = pgEnum("sv_recommendation_run_status", ["RUNNING", "READY", "FAILED"]);
-export const svRecommendationRuns = pgTable("sv_recommendation_runs", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), idempotencyKey: text("idempotency_key").notNull(), datasetId: text("dataset_id").notNull(), inputHash: text("input_hash").notNull(), rulepackVersion: text("rulepack_version").notNull(), status: svRecommendationRunStatusEnum().notNull().default("RUNNING"), groundingStatus: text("grounding_status").notNull().default("PENDING"), actionPlan: jsonb("action_plan"), createdBy: text("created_by").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), completedAt: timestamp("completed_at", { withTimezone: true }),
-}, (table) => ({ idempotencyUnique: uniqueIndex("sv_recommendation_runs_org_idempotency_unique").on(table.organizationId, table.idempotencyKey), projectIdx: index("sv_recommendation_runs_project_idx").on(table.projectId), orgIdx: index("sv_recommendation_runs_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendationManifests = pgTable("sv_recommendation_manifests", {
-	id: text("id").primaryKey().notNull(), runId: uuid("run_id").notNull().references(() => svRecommendationRuns.id), organizationId: text("organization_id").notNull().references(() => organization.id), datasetId: text("dataset_id").notNull(), inputHash: text("input_hash").notNull(), snapshotIds: text("snapshot_ids").array().notNull().default([]), evidenceIds: text("evidence_ids").array().notNull().default([]), rulepackVersion: text("rulepack_version").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ runUnique: uniqueIndex("sv_recommendation_manifests_run_unique").on(table.runId), orgIdx: index("sv_recommendation_manifests_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendationEvidence = pgTable("sv_recommendation_evidence", {
-	id: text("id").notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), runId: uuid("run_id").notNull().references(() => svRecommendationRuns.id), snapshotId: text("snapshot_id").notNull(), kind: text("kind").notNull(), accessClass: text("access_class").notNull(), sourceRef: text("source_ref").notNull(), capturedAt: text("captured_at").notNull(), subject: text("subject").notNull(), text: text("text").notNull(), metadata: jsonb("metadata").notNull().default({}),
-}, (table) => ({ pk: uniqueIndex("sv_recommendation_evidence_run_id_unique").on(table.runId, table.id), orgIdx: index("sv_recommendation_evidence_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendationFindings = pgTable("sv_recommendation_findings", {
-	id: text("id").notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), runId: uuid("run_id").notNull().references(() => svRecommendationRuns.id), category: text("category").notNull(), statement: text("statement").notNull(), evidenceIds: text("evidence_ids").array().notNull(), confidence: text("confidence").notNull(), confidenceScore: numeric("confidence_score", { precision: 5, scale: 4 }).notNull(), severity: text("severity").notNull(), unknown: boolean("unknown").notNull(), ruleId: text("rule_id").notNull(),
-}, (table) => ({ pk: uniqueIndex("sv_recommendation_findings_run_id_unique").on(table.runId, table.id), orgIdx: index("sv_recommendation_findings_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendationActions = pgTable("sv_recommendation_actions", {
-	id: text("id").notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), runId: uuid("run_id").notNull().references(() => svRecommendationRuns.id), findingId: text("finding_id").notNull(), title: text("title").notNull(), action: text("action").notNull(), rationale: text("rationale").notNull(), evidenceIds: text("evidence_ids").array().notNull(), priority: text("priority").notNull(), effort: text("effort").notNull(), confidence: text("confidence").notNull(), blocked: boolean("blocked").notNull(), blockReason: text("block_reason"),
-}, (table) => ({ pk: uniqueIndex("sv_recommendation_actions_run_id_unique").on(table.runId, table.id), orgIdx: index("sv_recommendation_actions_org_idx").on(table.organizationId) })).enableRLS();
-export const svRecommendationTasks = pgTable("sv_recommendation_tasks", {
-	id: text("id").notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), runId: uuid("run_id").notNull().references(() => svRecommendationRuns.id), recommendationId: text("recommendation_id").notNull(), title: text("title").notNull(), horizon: text("horizon").notNull(), owner: text("owner").notNull(), steps: text("steps").array().notNull(), evidenceIds: text("evidence_ids").array().notNull(), verificationPlan: text("verification_plan").array().notNull(),
-}, (table) => ({ pk: uniqueIndex("sv_recommendation_tasks_run_id_unique").on(table.runId, table.id), orgIdx: index("sv_recommendation_tasks_org_idx").on(table.organizationId) })).enableRLS();
+export const svRecommendationRuns = pgTable(
+	"sv_recommendation_runs",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		idempotencyKey: text("idempotency_key").notNull(),
+		datasetId: text("dataset_id").notNull(),
+		inputHash: text("input_hash").notNull(),
+		rulepackVersion: text("rulepack_version").notNull(),
+		status: svRecommendationRunStatusEnum().notNull().default("RUNNING"),
+		groundingStatus: text("grounding_status").notNull().default("PENDING"),
+		actionPlan: jsonb("action_plan"),
+		createdBy: text("created_by").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		completedAt: timestamp("completed_at", { withTimezone: true }),
+	},
+	(table) => ({
+		idempotencyUnique: uniqueIndex("sv_recommendation_runs_org_idempotency_unique").on(
+			table.organizationId,
+			table.idempotencyKey,
+		),
+		projectIdx: index("sv_recommendation_runs_project_idx").on(table.projectId),
+		orgIdx: index("sv_recommendation_runs_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendationManifests = pgTable(
+	"sv_recommendation_manifests",
+	{
+		id: text("id").primaryKey().notNull(),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRecommendationRuns.id),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		datasetId: text("dataset_id").notNull(),
+		inputHash: text("input_hash").notNull(),
+		snapshotIds: text("snapshot_ids").array().notNull().default([]),
+		evidenceIds: text("evidence_ids").array().notNull().default([]),
+		rulepackVersion: text("rulepack_version").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		runUnique: uniqueIndex("sv_recommendation_manifests_run_unique").on(table.runId),
+		orgIdx: index("sv_recommendation_manifests_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendationEvidence = pgTable(
+	"sv_recommendation_evidence",
+	{
+		id: text("id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRecommendationRuns.id),
+		snapshotId: text("snapshot_id").notNull(),
+		kind: text("kind").notNull(),
+		accessClass: text("access_class").notNull(),
+		sourceRef: text("source_ref").notNull(),
+		capturedAt: text("captured_at").notNull(),
+		subject: text("subject").notNull(),
+		text: text("text").notNull(),
+		metadata: jsonb("metadata").notNull().default({}),
+	},
+	(table) => ({
+		pk: uniqueIndex("sv_recommendation_evidence_run_id_unique").on(table.runId, table.id),
+		orgIdx: index("sv_recommendation_evidence_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendationFindings = pgTable(
+	"sv_recommendation_findings",
+	{
+		id: text("id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRecommendationRuns.id),
+		category: text("category").notNull(),
+		statement: text("statement").notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		confidence: text("confidence").notNull(),
+		confidenceScore: numeric("confidence_score", { precision: 5, scale: 4 }).notNull(),
+		severity: text("severity").notNull(),
+		unknown: boolean("unknown").notNull(),
+		ruleId: text("rule_id").notNull(),
+	},
+	(table) => ({
+		pk: uniqueIndex("sv_recommendation_findings_run_id_unique").on(table.runId, table.id),
+		orgIdx: index("sv_recommendation_findings_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendationActions = pgTable(
+	"sv_recommendation_actions",
+	{
+		id: text("id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRecommendationRuns.id),
+		findingId: text("finding_id").notNull(),
+		title: text("title").notNull(),
+		action: text("action").notNull(),
+		rationale: text("rationale").notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		priority: text("priority").notNull(),
+		effort: text("effort").notNull(),
+		confidence: text("confidence").notNull(),
+		blocked: boolean("blocked").notNull(),
+		blockReason: text("block_reason"),
+	},
+	(table) => ({
+		pk: uniqueIndex("sv_recommendation_actions_run_id_unique").on(table.runId, table.id),
+		orgIdx: index("sv_recommendation_actions_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svRecommendationTasks = pgTable(
+	"sv_recommendation_tasks",
+	{
+		id: text("id").notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		runId: uuid("run_id")
+			.notNull()
+			.references(() => svRecommendationRuns.id),
+		recommendationId: text("recommendation_id").notNull(),
+		title: text("title").notNull(),
+		horizon: text("horizon").notNull(),
+		owner: text("owner").notNull(),
+		steps: text("steps").array().notNull(),
+		evidenceIds: text("evidence_ids").array().notNull(),
+		verificationPlan: text("verification_plan").array().notNull(),
+	},
+	(table) => ({
+		pk: uniqueIndex("sv_recommendation_tasks_run_id_unique").on(table.runId, table.id),
+		orgIdx: index("sv_recommendation_tasks_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
 
 // Local AI discovery (RC7): entity hierarchies and business locations are
 // client-confirmed configuration only — the backend never resolves them
 // against Google surfaces.
 export const svEntityKindEnum = pgEnum("sv_entity_kind", ["MASTER_BRAND", "SUBBRAND", "CONCEPT", "LOCATION_BRAND"]);
-export const svParentRelationEnum = pgEnum("sv_parent_relation", ["SUBBRAND_OF", "CONCEPT_WITHIN", "LOCATION_OF", "UNSPECIFIED"]);
-export const svEntityConfirmationEnum = pgEnum("sv_entity_confirmation", ["PROPOSED", "CLIENT_CONFIRMED", "ANALYST_CONFIRMED", "REJECTED"]);
+export const svParentRelationEnum = pgEnum("sv_parent_relation", [
+	"SUBBRAND_OF",
+	"CONCEPT_WITHIN",
+	"LOCATION_OF",
+	"UNSPECIFIED",
+]);
+export const svEntityConfirmationEnum = pgEnum("sv_entity_confirmation", [
+	"PROPOSED",
+	"CLIENT_CONFIRMED",
+	"ANALYST_CONFIRMED",
+	"REJECTED",
+]);
 export const svGeoPrecisionEnum = pgEnum("sv_geo_precision", ["CITY", "ADDRESS", "COORDINATE", "UNKNOWN"]);
 export const svReferenceOriginEnum = pgEnum("sv_reference_origin", ["USER_PROVIDED", "PUBLIC_SITE", "ANALYST_ENTERED"]);
 export const svLocationRoleEnum = pgEnum("sv_location_role", ["PRIMARY", "SECONDARY", "WITHIN"]);
 export const svLocationConfirmationEnum = pgEnum("sv_location_confirmation", ["PROPOSED", "CONFIRMED", "REJECTED"]);
-export const svEntities = pgTable("sv_entities", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), parentEntityId: uuid("parent_entity_id").references((): AnyPgColumn => svEntities.id), entityKind: svEntityKindEnum("entity_kind").notNull(), parentRelation: svParentRelationEnum("parent_relation"), confirmationStatus: svEntityConfirmationEnum("confirmation_status").notNull().default("PROPOSED"), name: text("name").notNull(), aliases: text("aliases").array().notNull().default([]), prelaunch: boolean("prelaunch").notNull().default(false), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgProjectIdx: index("sv_entities_org_project_idx").on(table.organizationId, table.projectId) })).enableRLS();
-export const svBusinessLocations = pgTable("sv_business_locations", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), entityId: uuid("entity_id").notNull().references(() => svEntities.id), displayName: text("display_name").notNull(), countryCode: text("country_code").notNull(), adminArea: text("admin_area"), locality: text("locality"), addressText: text("address_text"), timezone: text("timezone"), latitude: numeric("latitude", { precision: 9, scale: 6 }), longitude: numeric("longitude", { precision: 9, scale: 6 }), geoPrecision: svGeoPrecisionEnum("geo_precision").notNull().default("UNKNOWN"),
-	// Opaque user-supplied strings kept for human cross-checking only: the RC7
-	// MANUAL_ONLY policy forbids the backend from ever resolving them through
-	// Google Maps / Places, so they must never feed an external lookup.
-	googleMapsUrlReference: text("google_maps_url_reference"), googlePlaceIdReference: text("google_place_id_reference"), localProfile: jsonb("local_profile"), localProfileConfirmedAt: timestamp("local_profile_confirmed_at", { withTimezone: true }),
-	referenceOrigin: svReferenceOriginEnum("reference_origin").notNull().default("USER_PROVIDED"), locationRole: svLocationRoleEnum("location_role").notNull().default("PRIMARY"), confirmationStatus: svLocationConfirmationEnum("confirmation_status").notNull().default("PROPOSED"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ entityIdx: index("sv_business_locations_entity_idx").on(table.entityId), orgIdx: index("sv_business_locations_org_idx").on(table.organizationId) })).enableRLS();
+export const svEntities = pgTable(
+	"sv_entities",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		parentEntityId: uuid("parent_entity_id").references((): AnyPgColumn => svEntities.id),
+		entityKind: svEntityKindEnum("entity_kind").notNull(),
+		parentRelation: svParentRelationEnum("parent_relation"),
+		confirmationStatus: svEntityConfirmationEnum("confirmation_status").notNull().default("PROPOSED"),
+		name: text("name").notNull(),
+		aliases: text("aliases").array().notNull().default([]),
+		prelaunch: boolean("prelaunch").notNull().default(false),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({ orgProjectIdx: index("sv_entities_org_project_idx").on(table.organizationId, table.projectId) }),
+).enableRLS();
+export const svBusinessLocations = pgTable(
+	"sv_business_locations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		entityId: uuid("entity_id")
+			.notNull()
+			.references(() => svEntities.id),
+		displayName: text("display_name").notNull(),
+		countryCode: text("country_code").notNull(),
+		adminArea: text("admin_area"),
+		locality: text("locality"),
+		addressText: text("address_text"),
+		timezone: text("timezone"),
+		latitude: numeric("latitude", { precision: 9, scale: 6 }),
+		longitude: numeric("longitude", { precision: 9, scale: 6 }),
+		geoPrecision: svGeoPrecisionEnum("geo_precision").notNull().default("UNKNOWN"),
+		// Opaque user-supplied strings kept for human cross-checking only: the RC7
+		// MANUAL_ONLY policy forbids the backend from ever resolving them through
+		// Google Maps / Places, so they must never feed an external lookup.
+		googleMapsUrlReference: text("google_maps_url_reference"),
+		googlePlaceIdReference: text("google_place_id_reference"),
+		localProfile: jsonb("local_profile"),
+		localProfileConfirmedAt: timestamp("local_profile_confirmed_at", { withTimezone: true }),
+		referenceOrigin: svReferenceOriginEnum("reference_origin").notNull().default("USER_PROVIDED"),
+		locationRole: svLocationRoleEnum("location_role").notNull().default("PRIMARY"),
+		confirmationStatus: svLocationConfirmationEnum("confirmation_status").notNull().default("PROPOSED"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		entityIdx: index("sv_business_locations_entity_idx").on(table.entityId),
+		orgIdx: index("sv_business_locations_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
 
 // RC7 manual pilot (Phase E): every record below is produced by a human
 // observer and reviewed by a human — nothing here is reachable from pg-boss
 // queues, run permits, or provider execution paths.
-export const svCaptureTaskStatusEnum = pgEnum("sv_capture_task_status", ["PENDING_CAPTURE", "AWAITING_MANUAL_CAPTURE", "SUBMITTED_FOR_REVIEW", "ACCEPTED", "REJECTED", "NEEDS_CORRECTION", "INSUFFICIENT_EVIDENCE", "SURFACE_UNAVAILABLE"]);
+export const svCaptureTaskStatusEnum = pgEnum("sv_capture_task_status", [
+	"PENDING_CAPTURE",
+	"AWAITING_MANUAL_CAPTURE",
+	"SUBMITTED_FOR_REVIEW",
+	"ACCEPTED",
+	"REJECTED",
+	"NEEDS_CORRECTION",
+	"INSUFFICIENT_EVIDENCE",
+	"SURFACE_UNAVAILABLE",
+]);
 export const svOrderingStateEnum = pgEnum("sv_ordering_state", ["EXPLICIT_ORDER", "UNORDERED", "UNKNOWN"]);
 export const svMentionRoleEnum = pgEnum("sv_mention_role", ["TARGET", "PARENT", "CHILD", "COMPETITOR", "OTHER"]);
 export const svMatchStatusEnum = pgEnum("sv_match_status", ["EXACT_ALIAS", "REVIEWED_MATCH", "UNRESOLVED"]);
-export const svPilotCycles = pgTable("sv_pilot_cycles", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), lockId: uuid("lock_id").notNull().references(() => svConfigurationLocks.id), status: text("status").notNull().default("CREATED"), expectedObservations: integer("expected_observations").notNull(), createdObservations: integer("created_observations").notNull().default(0), captureProtocolVersion: text("capture_protocol_version").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgIdx: index("sv_pilot_cycles_org_idx").on(table.organizationId), projectIdx: index("sv_pilot_cycles_project_idx").on(table.projectId) })).enableRLS();
-export const svCaptureTasks = pgTable("sv_capture_tasks", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), pilotCycleId: uuid("pilot_cycle_id").notNull().references(() => svPilotCycles.id), scenarioId: uuid("scenario_id").notNull().references(() => svScenarios.id), contextHash: text("context_hash").notNull(), contextSnapshot: jsonb("context_snapshot").notNull(), repeatIndex: integer("repeat_index").notNull(), queryTextSnapshot: text("query_text_snapshot").notNull(), targetEntityIdsSnapshot: jsonb("target_entity_ids_snapshot").notNull().default([]), status: svCaptureTaskStatusEnum().notNull().default("PENDING_CAPTURE"), idempotencyKey: text("idempotency_key"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ matrixUnique: uniqueIndex("sv_capture_tasks_matrix_unique").on(table.pilotCycleId, table.scenarioId, table.contextHash, table.repeatIndex), idempotencyUnique: uniqueIndex("sv_capture_tasks_org_idempotency_unique").on(table.organizationId, table.idempotencyKey), orgIdx: index("sv_capture_tasks_org_idx").on(table.organizationId) })).enableRLS();
-export const svLocalObservations = pgTable("sv_local_observations", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), captureTaskId: uuid("capture_task_id").notNull().references(() => svCaptureTasks.id), capturedBy: text("captured_by").notNull(), capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(), submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(), reviewedBy: text("reviewed_by"), reviewedAt: timestamp("reviewed_at", { withTimezone: true }), reviewStatus: text("review_status").notNull().default("SUBMITTED_FOR_REVIEW"), validity: text("validity"), invalidReason: text("invalid_reason"), orderingState: svOrderingStateEnum("ordering_state").notNull().default("UNKNOWN"), transcript: text("transcript").notNull(), queryText: text("query_text").notNull(), contentSha256: text("content_sha256").notNull(),
-	// Corrections are versioned records superseding the original, never
-	// in-place overwrites — the superseded observation stays auditable.
-	version: integer("version").notNull().default(1), supersedesObservationId: uuid("supersedes_observation_id").references((): AnyPgColumn => svLocalObservations.id), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ taskUnique: uniqueIndex("sv_local_observations_task_unique").on(table.captureTaskId), orgIdx: index("sv_local_observations_org_idx").on(table.organizationId) })).enableRLS();
-export const svObservationMentions = pgTable("sv_observation_mentions", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), observationId: uuid("observation_id").notNull().references(() => svLocalObservations.id), rawMentionText: text("raw_mention_text").notNull(), matchedEntityId: uuid("matched_entity_id").references(() => svEntities.id), mentionRole: svMentionRoleEnum("mention_role").notNull(), matchStatus: svMatchStatusEnum("match_status").notNull(), matchConfidence: numeric("match_confidence", { precision: 5, scale: 4 }), explicitPosition: integer("explicit_position"), orderingBasis: text("ordering_basis"), factualError: boolean("factual_error").notNull().default(false), evidenceLocator: text("evidence_locator"),
-}, (table) => ({ observationIdx: index("sv_observation_mentions_observation_idx").on(table.observationId), orgIdx: index("sv_observation_mentions_org_idx").on(table.organizationId) })).enableRLS();
-export const svObservationEvidenceAssets = pgTable("sv_observation_evidence_assets", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), observationId: uuid("observation_id").notNull().references(() => svLocalObservations.id), assetType: text("asset_type").notNull(), mimeType: text("mime_type").notNull(), sizeBytes: integer("size_bytes").notNull(), sha256: text("sha256").notNull(), sequenceIndex: integer("sequence_index").notNull(),
-	// Opaque locator supplied by the human uploader. The server never fetches
-	// it: dereferencing would be an external call, which the RC7 MANUAL_ONLY
-	// policy forbids for this surface.
-	privateObjectReference: text("private_object_reference").notNull(), uploadedBy: text("uploaded_by").notNull(), capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ observationIdx: index("sv_observation_evidence_assets_observation_idx").on(table.observationId), orgIdx: index("sv_observation_evidence_assets_org_idx").on(table.organizationId) })).enableRLS();
-export const svAuditEvents = pgTable("sv_audit_events", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), actorId: text("actor_id").notNull(), event: text("event").notNull(), subjectKind: text("subject_kind").notNull(), subjectId: text("subject_id").notNull(), details: jsonb("details").notNull().default({}), at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgAtIdx: index("sv_audit_events_org_at_idx").on(table.organizationId, table.at) })).enableRLS();
+export const svPilotCycles = pgTable(
+	"sv_pilot_cycles",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		lockId: uuid("lock_id")
+			.notNull()
+			.references(() => svConfigurationLocks.id),
+		status: text("status").notNull().default("CREATED"),
+		expectedObservations: integer("expected_observations").notNull(),
+		createdObservations: integer("created_observations").notNull().default(0),
+		captureProtocolVersion: text("capture_protocol_version").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		orgIdx: index("sv_pilot_cycles_org_idx").on(table.organizationId),
+		projectIdx: index("sv_pilot_cycles_project_idx").on(table.projectId),
+	}),
+).enableRLS();
+export const svCaptureTasks = pgTable(
+	"sv_capture_tasks",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		pilotCycleId: uuid("pilot_cycle_id")
+			.notNull()
+			.references(() => svPilotCycles.id),
+		scenarioId: uuid("scenario_id")
+			.notNull()
+			.references(() => svScenarios.id),
+		contextHash: text("context_hash").notNull(),
+		contextSnapshot: jsonb("context_snapshot").notNull(),
+		repeatIndex: integer("repeat_index").notNull(),
+		queryTextSnapshot: text("query_text_snapshot").notNull(),
+		targetEntityIdsSnapshot: jsonb("target_entity_ids_snapshot").notNull().default([]),
+		status: svCaptureTaskStatusEnum().notNull().default("PENDING_CAPTURE"),
+		idempotencyKey: text("idempotency_key"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		matrixUnique: uniqueIndex("sv_capture_tasks_matrix_unique").on(
+			table.pilotCycleId,
+			table.scenarioId,
+			table.contextHash,
+			table.repeatIndex,
+		),
+		idempotencyUnique: uniqueIndex("sv_capture_tasks_org_idempotency_unique").on(
+			table.organizationId,
+			table.idempotencyKey,
+		),
+		orgIdx: index("sv_capture_tasks_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svLocalObservations = pgTable(
+	"sv_local_observations",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		captureTaskId: uuid("capture_task_id")
+			.notNull()
+			.references(() => svCaptureTasks.id),
+		capturedBy: text("captured_by").notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		submittedAt: timestamp("submitted_at", { withTimezone: true }).defaultNow().notNull(),
+		reviewedBy: text("reviewed_by"),
+		reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+		reviewStatus: text("review_status").notNull().default("SUBMITTED_FOR_REVIEW"),
+		validity: text("validity"),
+		invalidReason: text("invalid_reason"),
+		orderingState: svOrderingStateEnum("ordering_state").notNull().default("UNKNOWN"),
+		transcript: text("transcript").notNull(),
+		queryText: text("query_text").notNull(),
+		contentSha256: text("content_sha256").notNull(),
+		// Corrections are versioned records superseding the original, never
+		// in-place overwrites — the superseded observation stays auditable.
+		version: integer("version").notNull().default(1),
+		supersedesObservationId: uuid("supersedes_observation_id").references((): AnyPgColumn => svLocalObservations.id),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		taskUnique: uniqueIndex("sv_local_observations_task_unique").on(table.captureTaskId),
+		orgIdx: index("sv_local_observations_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svObservationMentions = pgTable(
+	"sv_observation_mentions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		observationId: uuid("observation_id")
+			.notNull()
+			.references(() => svLocalObservations.id),
+		rawMentionText: text("raw_mention_text").notNull(),
+		matchedEntityId: uuid("matched_entity_id").references(() => svEntities.id),
+		mentionRole: svMentionRoleEnum("mention_role").notNull(),
+		matchStatus: svMatchStatusEnum("match_status").notNull(),
+		matchConfidence: numeric("match_confidence", { precision: 5, scale: 4 }),
+		explicitPosition: integer("explicit_position"),
+		orderingBasis: text("ordering_basis"),
+		factualError: boolean("factual_error").notNull().default(false),
+		evidenceLocator: text("evidence_locator"),
+	},
+	(table) => ({
+		observationIdx: index("sv_observation_mentions_observation_idx").on(table.observationId),
+		orgIdx: index("sv_observation_mentions_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svObservationEvidenceAssets = pgTable(
+	"sv_observation_evidence_assets",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		observationId: uuid("observation_id")
+			.notNull()
+			.references(() => svLocalObservations.id),
+		assetType: text("asset_type").notNull(),
+		mimeType: text("mime_type").notNull(),
+		sizeBytes: integer("size_bytes").notNull(),
+		sha256: text("sha256").notNull(),
+		sequenceIndex: integer("sequence_index").notNull(),
+		// Opaque locator supplied by the human uploader. The server never fetches
+		// it: dereferencing would be an external call, which the RC7 MANUAL_ONLY
+		// policy forbids for this surface.
+		privateObjectReference: text("private_object_reference").notNull(),
+		uploadedBy: text("uploaded_by").notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		observationIdx: index("sv_observation_evidence_assets_observation_idx").on(table.observationId),
+		orgIdx: index("sv_observation_evidence_assets_org_idx").on(table.organizationId),
+	}),
+).enableRLS();
+export const svAuditEvents = pgTable(
+	"sv_audit_events",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		actorId: text("actor_id").notNull(),
+		event: text("event").notNull(),
+		subjectKind: text("subject_kind").notNull(),
+		subjectId: text("subject_id").notNull(),
+		details: jsonb("details").notNull().default({}),
+		at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({ orgAtIdx: index("sv_audit_events_org_at_idx").on(table.organizationId, table.at) }),
+).enableRLS();
 
 // Human expert sign-off per order (assertExpertVerified's storage): decision
 // is free text validated in code ("approved" | "rejected") so new review
 // outcomes never need a migration.
-export const svQcRecords = pgTable("sv_qc_records", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), orderId: uuid("order_id").notNull().references(() => svOrders.id), cycleId: uuid("cycle_id").references(() => svCycles.id), reviewer: text("reviewer").notNull(), reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(), scope: text("scope").notNull(), decision: text("decision").notNull(), notes: text("notes"), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgOrderIdx: index("sv_qc_records_org_order_idx").on(table.organizationId, table.orderId) })).enableRLS();
+export const svQcRecords = pgTable(
+	"sv_qc_records",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		orderId: uuid("order_id")
+			.notNull()
+			.references(() => svOrders.id),
+		cycleId: uuid("cycle_id").references(() => svCycles.id),
+		reviewer: text("reviewer").notNull(),
+		reviewedAt: timestamp("reviewed_at", { withTimezone: true }).notNull(),
+		scope: text("scope").notNull(),
+		decision: text("decision").notNull(),
+		notes: text("notes"),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({ orgOrderIdx: index("sv_qc_records_org_order_idx").on(table.organizationId, table.orderId) }),
+).enableRLS();
 
 // A lead, not an order: the customer asks for a plan and leaves a contact,
 // the operator turns it into a paid order on the admin desk. promo_applied
 // records that a valid promo code made the request free of charge.
-export const svOrderRequests = pgTable("sv_order_requests", {
-	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), planId: text("plan_id").notNull(), contactName: text("contact_name").notNull(), contactChannel: text("contact_channel").notNull(), comment: text("comment"), promoCode: text("promo_code"), promoApplied: boolean("promo_applied").default(false).notNull(), status: text("status").default("NEW").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => ({ orgCreatedIdx: index("sv_order_requests_org_created_idx").on(table.organizationId, table.createdAt) })).enableRLS();
+export const svOrderRequests = pgTable(
+	"sv_order_requests",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id")
+			.notNull()
+			.references(() => svProjects.id),
+		planId: text("plan_id").notNull(),
+		contactName: text("contact_name").notNull(),
+		contactChannel: text("contact_channel").notNull(),
+		comment: text("comment"),
+		promoCode: text("promo_code"),
+		promoApplied: boolean("promo_applied").default(false).notNull(),
+		status: text("status").default("NEW").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({ orgCreatedIdx: index("sv_order_requests_org_created_idx").on(table.organizationId, table.createdAt) }),
+).enableRLS();
 
 export type SvProject = typeof svProjects.$inferSelect;
 export type NewSvProject = typeof svProjects.$inferInsert;

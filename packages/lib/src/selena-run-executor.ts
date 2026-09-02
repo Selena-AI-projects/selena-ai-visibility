@@ -74,6 +74,8 @@ export type MeasurementRunStore<Ctx> = {
 		permit: SelenaExecutablePermit;
 		run: { id: string };
 		cycle: { id: string; status: string };
+		claimed: boolean;
+		providerBoundary?: { journalClaimId: string; runId: string };
 	}>;
 	complete(ctx: Ctx, runId: string, outcome: RunOutcome, opts?: { now?: Date }): Promise<unknown>;
 };
@@ -116,10 +118,17 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
 	const claimTime = input.now ?? input.clock?.() ?? new Date();
 	const completionTime = () => input.clock?.() ?? new Date();
-	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, {
+	const { permit, run, cycle, claimed, providerBoundary } = await input.store.claim(input.ctx, input.permitId, {
 		now: claimTime,
 		...(input.journalClaimId ? { journalClaimId: input.journalClaimId } : {}),
 	});
+	if (
+		input.journalClaimId &&
+		(!providerBoundary || providerBoundary.journalClaimId !== input.journalClaimId || providerBoundary.runId !== run.id)
+	) {
+		throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
+	}
+	if (!claimed) return { status: "skipped", reason: "SELENA_PERMIT_ALREADY_CONSUMED" };
 	// Chosen from the permit, not from the environment: a plan sells several
 	// systems and the surface a customer bought decides which adapter measures
 	// it.
