@@ -47,28 +47,28 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS_PENDING_PR_AGGREGATION` | Documentation/evidence head `778e4aae` passed Build, E2E, Scheduling, Smoke, License and CLA in the branch runs. PR #96 now points to `778e4aae` and remains open/mergeable with aggregation `unstable` while the E2E check is still reported in progress; PR #108 remains on its prior head. No merge executed. |
+| Exact-head CI | `PASS_PENDING_PR_AGGREGATION` | Documentation/evidence head `b4bd7f17` passed Build, Smoke, License and CLA; E2E remains `in_progress` on GitHub runner. PR #96 points to `b4bd7f17`, `mergeable=true`, aggregation `unstable`; no merge executed. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` and restored worker deployment `b583e695-e935-4e2f-b6c5-f13b135964d4`. Worker was temporarily deployed from the diagnostic source (`78de5973…`) and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
 | Google/Bright Data canary | `COST_PASS / READY_PAYLOAD_VALIDATED / PRIVATE_RECONCILED / ACCEPTANCE_HOLD` | Historical capture `sd_mtiflifw2lfu6ne28l` was persisted once in staging as an immutable private `sv_source_snapshots` row plus one reconciliation audit event by deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9`; receipt `PERSISTED_PRIVATE`, `providerCalls=0`, no evidence-index/cost/acceptance rows. A second commit attempt could not complete idempotent verification because non-owner `selena_app` is denied SELECT on private snapshots (RLS boundary); no duplicate write occurred. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN`, added no record and cost `USD 0.0000`; human acceptance remains required. |
-| Production/merge | `NO_GO` | Historical provider identity and payload are privately reconciled in staging, but formal evidence acceptance remains blocked (human acceptance and idempotency verification). Diagnostic-2 remains unresolved. PR #96 is open at `778e4aae` with mergeability aggregation `unstable`; production is prohibited and no merge was executed. |
+| Production/merge | `NO_GO` | Historical provider identity and payload are privately reconciled in staging, but formal evidence acceptance remains blocked (human acceptance and owner-scoped idempotency verification). Diagnostic-2 remains unresolved. PR #96 is open at `b4bd7f17` with mergeability aggregation `unstable`; production is prohibited and no merge was executed. |
 
 Overall decision: `STAGING_PROVIDER_PAYLOAD_PASS / PRIVATE_RECONCILED / IDEMPOTENCY_VERIFY_HOLD / PRE_PRODUCTION_NO_GO`.
 
 ## Exact-head CI evidence
 
-Final documentation/evidence-head receipt for `eb82c826` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
+Current documentation/evidence-head receipt for `b4bd7f17` (PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)):
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750) |
-| E2E Integration Tests | `PASS` | [run 33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710) |
-| Scheduling Policy Verification | `PASS` | [run 33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710) |
-| Dependency License Audit | `PASS` | [run 33574858545](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858545) |
-| Deployment smoke | `PASS` | [run 33574858731](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858731) |
-| CLA | `PASS` | [run 33574858503](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858503) |
+| Build | `PASS` | [run 33577408231](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408231) |
+| E2E Integration Tests | `IN_PROGRESS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
+| Scheduling Policy Verification | `PASS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
+| Dependency License Audit | `PASS` | [run 33577408226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408226) |
+| Deployment smoke | `PASS` | [run 33577408222](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408222) |
+| CLA | `PASS` | [run 33577408217](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408217) |
 
 The scheduling job passed the real-PostgreSQL bounded replay at disposable
 frontier `0054`; this does not authorize applying `0054` to shared staging.
@@ -233,9 +233,9 @@ a values-suppressed TCP probe. No value is retained in this evidence package.
 
 ## Remaining owner gates
 
-1. Historical provider identity, payload and cost are reconciled. Decide
-   separately whether to authorize a no-trigger resume/persistence path for the
-   already-owned snapshot; do not fabricate formal accepted evidence.
+1. Historical provider identity, payload and cost are reconciled. The
+   no-trigger persistence path is complete (`PERSISTED_PRIVATE`); formal
+   evidence acceptance still requires owner-scoped idempotency verification.
 2. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN`; do not retry it. Billing and
    usage attribution are closed.
 3. Keep both reservations immutable. No additional provider call, identity,

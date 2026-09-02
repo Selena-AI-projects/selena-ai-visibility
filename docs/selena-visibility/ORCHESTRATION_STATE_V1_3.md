@@ -87,6 +87,9 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
+- Current documentation/evidence head `b4bd7f17` has Build, Smoke, License and
+  CLA green; E2E run `33577408220` remains `in_progress`, so PR #96 aggregation
+  is `unstable` and no final all-green claim is made.
 - Documentation/evidence commit `eb82c8269724e66662abf3532b2ff15cea54c5e5`
   passed Build [33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750),
   E2E/Scheduling [33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710),
@@ -124,7 +127,7 @@ check; exact-head CI is green on PR #108.
 | Isolated restored service | `a34b2749-130a-47f3-8da3-8f58e3775fe9`, healthy restored copy |
 | Active reconciled web | `835aca8d-2a47-4bad-af75-d7f4920cd35b`, exact archive `100d34d8`, `SUCCESS`; replaces automatic release drift; public app and both setup-status endpoints returned 200 |
 | Superseded external web drift | releases `5cbb7b25`, `2e21ef04` and `4400d435`; all were replaced by exact accepted implementation deployments |
-| Active rollback worker | `9275a824-281d-4afa-8098-1ed7184ffc68`, archive `100d34d8`, `SUCCESS`; temporary diagnostic deployment is `REMOVED` |
+| Active rollback worker | `b583e695-e935-4e2f-b6c5-f13b135964d4`, archive `100d34d8`, `SUCCESS`; temporary reconciliation deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9` completed and was replaced |
 | Runtime DB role | `selena_app`, non-owner, no superuser/createdb/createrole/bypassrls |
 | Migration frontier | `0053`, journal `54/1787940015000`; deployment `76fe0d58…` exited `0` |
 | Migration no-op replay | `b7b7fa33-6da8-49a0-835f-d76b74e9fafb`, sealed max index `53`, journal `54/1787940015000` → `54/1787940015000`, TLS verified, exit `0` |
@@ -135,6 +138,7 @@ check; exact-head CI is green on PR #108.
 | Canary cost | First-party post-diagnostic exports: Google AI Mode Search `1 record`, `USD 0.0015` total for 1 September. Because the same one record existed before diagnostic-2, diagnostic-2 added `0` records and `USD 0.0000` incremental billing. |
 | Historical payload | Read-only download: 1,543,419 bytes, file SHA-256 `bfb2ebcae1b69d20573f62e46aa5b586bacaedf8b9e617753b42a4b7a8d64c5a`; immutable schema-discovery validation passed with canonical hash `sha256:7b465dc14c050742f77fd37ecca4c64c5ff1f92eb30a945a9f60d688a8e3721f`, one record, non-empty answer and four normalized citations. |
 | Reconciliation | Commit receipt `PERSISTED_PRIVATE` (`providerCalls=0`, one source snapshot + one audit row, no evidence/cost/acceptance rows); idempotent replay hit intentional non-owner SELECT denial and produced no duplicate write. |
+| Owner-scoped verification | `BLOCKED_ACCESS` — existing reconciliation service points to a separate disposable database (target rows absent); staging Postgres owner shell exposes credentials but authentication fails after rotation. No `selena_app` grants were changed and no mutation was attempted. |
 | Snapshot journal | Exact raw ID match: `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED`, first event `08:54:47.108Z`; recovery appended `RESUMED -> READY -> DELIVERED` in the same transaction as the private capture; one tenant/project/dataset |
 | Runtime logs | Steady provider path disabled after the canary; recurring scheduler disabled; pg-boss started; handlers ready |
 | Browser | Both health endpoints 200; HoReCa unauth redirect correct; authenticated project-rail/tool-axis DOM and visual review passed; page-origin errors 0 |
