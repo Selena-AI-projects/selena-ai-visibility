@@ -73,7 +73,7 @@ function SSOLogin({ returnTo }: { returnTo?: string }) {
 
 	if (error) {
 		return (
-			<FullPageCard title="Sign in">
+			<FullPageCard title="Sign in" scene="doors">
 				<Alert variant="destructive">
 					<AlertDescription>{error}</AlertDescription>
 				</Alert>
@@ -84,7 +84,7 @@ function SSOLogin({ returnTo }: { returnTo?: string }) {
 		);
 	}
 
-	return <FullPageCard title="Signing in..." subtitle="Redirecting to your identity provider" />;
+	return <FullPageCard title="Signing in..." subtitle="Redirecting to your identity provider" scene="doors" />;
 }
 
 export function EmailPasswordLogin({
@@ -133,7 +133,11 @@ export function EmailPasswordLogin({
 	}
 
 	return (
-		<FullPageCard title="Welcome back" subtitle={isDemo ? undefined : "Sign in to your AI Visibility workspace"}>
+		<FullPageCard
+			title="Welcome back"
+			subtitle={isDemo ? undefined : "Sign in to your AI Visibility workspace"}
+			scene="doors"
+		>
 			{isCloud && (
 				<div className="space-y-4 w-full pb-4">
 					<Button
