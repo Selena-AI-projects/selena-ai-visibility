@@ -1,5 +1,38 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
+## Authoritative reconciliation overlay — 2026-09-02
+
+This overlay supersedes earlier candidate-head and worker-deployment rows below.
+
+- Source acceptance head: `f2c71dfe8eff6b7207463fce0e4d2f1088e3a15f`.
+- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
+  `OPEN`, `mergeable_state=dirty`; no merge was performed. The feature branch
+  has no published PR checks because the merge ref is dirty.
+- Source CI for `f2c71dfe`: Build
+  [33581340784](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581340784),
+  E2E
+  [33581342375](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581342375),
+  License
+  [33581344379](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581344379);
+  all three `SUCCESS`.
+- Chosen architecture: private reconciliation requires a separate owner/admin
+  scoped staging connection. `selena_app` remains metadata-only and is rejected
+  before any private snapshot read with
+  `GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED`.
+- Staging rollback-only dry-run receipt: command returned redacted
+  `GOOGLE_AI_MODE_HISTORICAL_RECONCILIATION_FAILED` under `selena_app`; no
+  `--commit`, provider call, or persistence write occurred. Owner-authenticated
+  staging verification is `BLOCKED_ACCESS` after password rotation, so staging
+  row counts are not promoted to formal evidence.
+- Exact source-test cardinality: first commit `0→1` private snapshot and
+  `0→1` audit row; evidence/cost/acceptance rows `0→0`; replay remains `1/1/0/0/0`;
+  `providerCalls=0`; dry-run performs no writes. The previously persisted
+  staging receipt remains one snapshot plus one audit row with no duplicate.
+- Worker was restored to exact `100d34d8` by deployment
+  `9cf426fe-98ae-4c73-8ec9-a7fd7358504e` (`SUCCESS`).
+- Formal decision: `NO-GO / HOLD_OWNER_READ`; no provider, production, billing,
+  recurring, or merge action is authorized.
+
 Evidence date: `2026-09-02`. This document is the canonical post-hosted
 acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 

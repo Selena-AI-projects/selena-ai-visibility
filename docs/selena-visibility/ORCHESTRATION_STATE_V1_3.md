@@ -1,5 +1,26 @@
 # Selena AI Visibility v1.3 — orchestration state
 
+## Authoritative reconciliation overlay — 2026-09-02
+
+- Exact source head: `f2c71dfe8eff6b7207463fce0e4d2f1088e3a15f`.
+- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) remains
+  open with `mergeable_state=dirty`; no merge was executed. Source CI runs
+  `33581340784`, `33581342375` and `33581344379` are `SUCCESS`.
+- Architecture decision: owner/admin-scoped staging connection for private
+  reconciliation; no `selena_app` grant expansion. The runtime guard fails
+  closed with `GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED`.
+- Rollback-only staging dry-run returned redacted
+  `GOOGLE_AI_MODE_HISTORICAL_RECONCILIATION_FAILED`; it used no `--commit`, made
+  no DB write and made zero provider calls. Owner-scoped staging readback is
+  `BLOCKED_ACCESS` because the rotated owner credential currently fails auth.
+- Test receipt: `0→1` snapshot and `0→1` audit on first commit, then stable
+  `1/1/0/0/0` (snapshot/audit/evidence/cost/acceptance) on replay; dry-run is
+  write-free and `providerCalls=0`.
+- Active staging worker is restored to exact `100d34d8` at deployment
+  `9cf426fe-98ae-4c73-8ec9-a7fd7358504e` (`SUCCESS`).
+- Current state: `NO_GO_HOLD_OWNER_READ`; production, provider, billing,
+  recurring and merge gates remain closed.
+
 Updated: `2026-09-02` after diagnostic-2, mandatory worker rollback, exact-web
 drift recovery, first-party Bright Data payload/cost reconciliation, bounded
 snapshot remediation, release-head integration evidence and private historical
