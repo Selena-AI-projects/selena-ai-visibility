@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svCaptureTasks,
 	svConfigurationLocks,
@@ -71,7 +72,7 @@ export type LocalReadMapRow = {
 	evidenceId: string | null;
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 	datasetId: string;
 	measurementCycleId: string;
@@ -115,7 +116,7 @@ export type LocalReadEvidenceRow = {
 	sourceSnapshotId: string | null;
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 };
 
@@ -153,7 +154,7 @@ export type LocalReadAiTaskAssetRow = {
 export type LocalReadAiEvidenceRow = {
 	id: string;
 	assetType: string;
-	sha256: string;
+	digestFormatValid: boolean;
 	capturedAt: Date;
 };
 
@@ -213,14 +214,13 @@ function finiteNumber(value: string | number): number {
 function hasImmutableSourceProvenance(input: {
 	sourceSnapshotImmutable: boolean | null;
 	sourceType: string | null;
-	sourceContentSha256: string | null;
+	sourceDigestFormatValid: boolean | null;
 	sourceCapturedAt: Date | null;
 }): boolean {
 	return Boolean(
 		input.sourceSnapshotImmutable === true &&
 			input.sourceType === "MAPS_SERP_PROVIDER" &&
-			input.sourceContentSha256 &&
-			/^(?:sha256:)?[a-f0-9]{64}$/.test(input.sourceContentSha256) &&
+			input.sourceDigestFormatValid === true &&
 			input.sourceCapturedAt,
 	);
 }
@@ -892,15 +892,14 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 				snapshotVersion,
 				items: page.items.map((entry) => {
 					if (entry.kind === "AI") {
-						const hasProvenance =
-							/^(?:sha256:)?[a-f0-9]{64}$/.test(entry.row.sha256) && !Number.isNaN(entry.row.capturedAt.getTime());
+						const hasProvenance = entry.row.digestFormatValid && !Number.isNaN(entry.row.capturedAt.getTime());
 						return {
 							evidenceId: entry.row.id,
 							datasetId: null,
 							surface: "LOCAL_AI" as const,
 							status: hasProvenance ? ("VALID" as const) : ("UNKNOWN" as const),
 							kind: entry.row.assetType,
-							contentSha256: hasProvenance ? entry.row.sha256 : null,
+							provenanceVerified: hasProvenance,
 							capturedAt: hasProvenance ? safeIso(entry.row.capturedAt) : null,
 							access: {
 								state: "UNAVAILABLE" as const,
@@ -919,7 +918,7 @@ export function createSelenaLocalReadApi(store: SelenaLocalReadStore) {
 						surface: "LOCAL_MAPS" as const,
 						status: hasSourceProvenance ? ("VALID" as const) : ("UNKNOWN" as const),
 						kind: row.sourceType ?? `${row.domainId}_OBSERVATION`,
-						contentSha256: hasSourceProvenance ? row.sourceContentSha256 : null,
+						provenanceVerified: hasSourceProvenance,
 						capturedAt: hasSourceProvenance && row.sourceCapturedAt ? safeIso(row.sourceCapturedAt) : null,
 						access: {
 							state: "UNAVAILABLE" as const,
@@ -945,181 +944,193 @@ function afterDate(position: LocalReadCursorPosition | null): Date | null {
 
 export const selenaLocalReadStore: SelenaLocalReadStore = {
 	async findCycle({ tenantId, cycleId }) {
-		const [cycle] = await db
-			.select({
-				id: svLocalScanCycles.id,
-				organizationId: svLocalScanCycles.organizationId,
-				measurementCycleId: svLocalScanCycles.measurementCycleId,
-				configurationLockId: svLocalScanCycles.configurationLockId,
-				projectId: svConfigurationLocks.projectId,
-				configurationSnapshot: svConfigurationLocks.snapshot,
-				status: svLocalScanCycles.status,
-				expectedObservations: svLocalScanCycles.expectedObservations,
-				createdObservations: svLocalScanCycles.createdObservations,
-				createdAt: svLocalScanCycles.createdAt,
-				updatedAt: svLocalScanCycles.updatedAt,
-			})
-			.from(svLocalScanCycles)
-			.innerJoin(
-				svConfigurationLocks,
-				and(
-					eq(svConfigurationLocks.id, svLocalScanCycles.configurationLockId),
-					eq(svConfigurationLocks.organizationId, svLocalScanCycles.organizationId),
-				),
-			)
-			.where(and(eq(svLocalScanCycles.id, cycleId), eq(svLocalScanCycles.organizationId, tenantId)))
-			.limit(1);
+		const [cycle] = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					id: svLocalScanCycles.id,
+					organizationId: svLocalScanCycles.organizationId,
+					measurementCycleId: svLocalScanCycles.measurementCycleId,
+					configurationLockId: svLocalScanCycles.configurationLockId,
+					projectId: svConfigurationLocks.projectId,
+					configurationSnapshot: svConfigurationLocks.snapshot,
+					status: svLocalScanCycles.status,
+					expectedObservations: svLocalScanCycles.expectedObservations,
+					createdObservations: svLocalScanCycles.createdObservations,
+					createdAt: svLocalScanCycles.createdAt,
+					updatedAt: svLocalScanCycles.updatedAt,
+				})
+				.from(svLocalScanCycles)
+				.innerJoin(
+					svConfigurationLocks,
+					and(
+						eq(svConfigurationLocks.id, svLocalScanCycles.configurationLockId),
+						eq(svConfigurationLocks.organizationId, svLocalScanCycles.organizationId),
+					),
+				)
+				.where(and(eq(svLocalScanCycles.id, cycleId), eq(svLocalScanCycles.organizationId, tenantId)))
+				.limit(1),
+		);
 		return cycle ?? null;
 	},
 
 	async findAiPilot({ tenantId, projectId, configurationLockId }) {
-		const pilots = await db
-			.select({
-				id: svPilotCycles.id,
-				expectedObservations: svPilotCycles.expectedObservations,
-				createdObservations: svPilotCycles.createdObservations,
-				status: svPilotCycles.status,
-				updatedAt: svPilotCycles.updatedAt,
-			})
-			.from(svPilotCycles)
-			.where(
-				and(
-					eq(svPilotCycles.organizationId, tenantId),
-					eq(svPilotCycles.projectId, projectId),
-					eq(svPilotCycles.lockId, configurationLockId),
-				),
-			)
-			.orderBy(asc(svPilotCycles.id))
-			.limit(2);
+		const pilots = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					id: svPilotCycles.id,
+					expectedObservations: svPilotCycles.expectedObservations,
+					createdObservations: svPilotCycles.createdObservations,
+					status: svPilotCycles.status,
+					updatedAt: svPilotCycles.updatedAt,
+				})
+				.from(svPilotCycles)
+				.where(
+					and(
+						eq(svPilotCycles.organizationId, tenantId),
+						eq(svPilotCycles.projectId, projectId),
+						eq(svPilotCycles.lockId, configurationLockId),
+					),
+				)
+				.orderBy(asc(svPilotCycles.id))
+				.limit(2),
+		);
 		if (pilots.length === 0) return { state: "NONE" };
 		if (pilots.length > 1) return { state: "AMBIGUOUS" };
 		return { state: "ONE", pilot: pilots[0] };
 	},
 
 	async listAiTaskAssets({ tenantId, pilotCycleId }) {
-		return db
-			.select({
-				captureTaskId: svCaptureTasks.id,
-				scenarioId: svCaptureTasks.scenarioId,
-				contextHash: svCaptureTasks.contextHash,
-				repeatIndex: svCaptureTasks.repeatIndex,
-				taskStatus: svCaptureTasks.status,
-				taskCreatedAt: svCaptureTasks.createdAt,
-				taskUpdatedAt: svCaptureTasks.updatedAt,
-				queryTextSnapshot: svCaptureTasks.queryTextSnapshot,
-				contextSnapshot: svCaptureTasks.contextSnapshot,
-				observationId: svLocalObservations.id,
-				observationCapturedAt: svLocalObservations.capturedAt,
-				observationReviewStatus: svLocalObservations.reviewStatus,
-				observationValidity: svLocalObservations.validity,
-				observationInvalidReason: svLocalObservations.invalidReason,
-				evidenceId: svObservationEvidenceAssets.id,
-				evidenceAssetType: svObservationEvidenceAssets.assetType,
-				evidenceSequenceIndex: svObservationEvidenceAssets.sequenceIndex,
-				evidenceSha256: svObservationEvidenceAssets.sha256,
-				evidenceCapturedAt: svObservationEvidenceAssets.capturedAt,
-				evidenceCreatedAt: svObservationEvidenceAssets.createdAt,
-			})
-			.from(svCaptureTasks)
-			.innerJoin(
-				svPilotCycles,
-				and(
-					eq(svPilotCycles.id, svCaptureTasks.pilotCycleId),
-					eq(svPilotCycles.organizationId, svCaptureTasks.organizationId),
+		return withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					captureTaskId: svCaptureTasks.id,
+					scenarioId: svCaptureTasks.scenarioId,
+					contextHash: svCaptureTasks.contextHash,
+					repeatIndex: svCaptureTasks.repeatIndex,
+					taskStatus: svCaptureTasks.status,
+					taskCreatedAt: svCaptureTasks.createdAt,
+					taskUpdatedAt: svCaptureTasks.updatedAt,
+					queryTextSnapshot: svCaptureTasks.queryTextSnapshot,
+					contextSnapshot: svCaptureTasks.contextSnapshot,
+					observationId: svLocalObservations.id,
+					observationCapturedAt: svLocalObservations.capturedAt,
+					observationReviewStatus: svLocalObservations.reviewStatus,
+					observationValidity: svLocalObservations.validity,
+					observationInvalidReason: svLocalObservations.invalidReason,
+					evidenceId: svObservationEvidenceAssets.id,
+					evidenceAssetType: svObservationEvidenceAssets.assetType,
+					evidenceSequenceIndex: svObservationEvidenceAssets.sequenceIndex,
+					evidenceSha256: svObservationEvidenceAssets.sha256,
+					evidenceCapturedAt: svObservationEvidenceAssets.capturedAt,
+					evidenceCreatedAt: svObservationEvidenceAssets.createdAt,
+				})
+				.from(svCaptureTasks)
+				.innerJoin(
+					svPilotCycles,
+					and(
+						eq(svPilotCycles.id, svCaptureTasks.pilotCycleId),
+						eq(svPilotCycles.organizationId, svCaptureTasks.organizationId),
+					),
+				)
+				.leftJoin(
+					svLocalObservations,
+					and(
+						eq(svLocalObservations.captureTaskId, svCaptureTasks.id),
+						eq(svLocalObservations.organizationId, svCaptureTasks.organizationId),
+					),
+				)
+				.leftJoin(
+					svObservationEvidenceAssets,
+					and(
+						eq(svObservationEvidenceAssets.observationId, svLocalObservations.id),
+						eq(svObservationEvidenceAssets.organizationId, svCaptureTasks.organizationId),
+					),
+				)
+				.where(and(eq(svCaptureTasks.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)))
+				.orderBy(
+					asc(svCaptureTasks.createdAt),
+					asc(svCaptureTasks.id),
+					asc(svObservationEvidenceAssets.sequenceIndex),
+					asc(svObservationEvidenceAssets.id),
 				),
-			)
-			.leftJoin(
-				svLocalObservations,
-				and(
-					eq(svLocalObservations.captureTaskId, svCaptureTasks.id),
-					eq(svLocalObservations.organizationId, svCaptureTasks.organizationId),
-				),
-			)
-			.leftJoin(
-				svObservationEvidenceAssets,
-				and(
-					eq(svObservationEvidenceAssets.observationId, svLocalObservations.id),
-					eq(svObservationEvidenceAssets.organizationId, svCaptureTasks.organizationId),
-				),
-			)
-			.where(and(eq(svCaptureTasks.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)))
-			.orderBy(
-				asc(svCaptureTasks.createdAt),
-				asc(svCaptureTasks.id),
-				asc(svObservationEvidenceAssets.sequenceIndex),
-				asc(svObservationEvidenceAssets.id),
-			);
+		);
 	},
 
 	async listAiEvidence({ tenantId, pilotCycleId, limit, after }) {
 		const capturedAt = afterDate(after);
-		return db
-			.select({
-				id: svObservationEvidenceAssets.id,
-				assetType: svObservationEvidenceAssets.assetType,
-				sha256: svObservationEvidenceAssets.sha256,
-				capturedAt: svObservationEvidenceAssets.capturedAt,
-			})
-			.from(svObservationEvidenceAssets)
-			.innerJoin(
-				svLocalObservations,
-				and(
-					eq(svLocalObservations.id, svObservationEvidenceAssets.observationId),
-					eq(svLocalObservations.organizationId, svObservationEvidenceAssets.organizationId),
-				),
-			)
-			.innerJoin(
-				svCaptureTasks,
-				and(
-					eq(svCaptureTasks.id, svLocalObservations.captureTaskId),
-					eq(svCaptureTasks.organizationId, svObservationEvidenceAssets.organizationId),
-				),
-			)
-			.where(
-				and(
-					eq(svObservationEvidenceAssets.organizationId, tenantId),
-					eq(svCaptureTasks.pilotCycleId, pilotCycleId),
-					capturedAt && after
-						? or(
-								gt(svObservationEvidenceAssets.capturedAt, capturedAt),
-								and(
-									eq(svObservationEvidenceAssets.capturedAt, capturedAt),
-									gt(svObservationEvidenceAssets.id, after.tieBreakerId),
-								),
-							)
-						: undefined,
-				),
-			)
-			.orderBy(asc(svObservationEvidenceAssets.capturedAt), asc(svObservationEvidenceAssets.id))
-			.limit(limit);
+		return withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					id: svObservationEvidenceAssets.id,
+					assetType: svObservationEvidenceAssets.assetType,
+					digestFormatValid: sql<boolean>`${svObservationEvidenceAssets.sha256} ~ '^(sha256:)?[a-f0-9]{64}$'`,
+					capturedAt: svObservationEvidenceAssets.capturedAt,
+				})
+				.from(svObservationEvidenceAssets)
+				.innerJoin(
+					svLocalObservations,
+					and(
+						eq(svLocalObservations.id, svObservationEvidenceAssets.observationId),
+						eq(svLocalObservations.organizationId, svObservationEvidenceAssets.organizationId),
+					),
+				)
+				.innerJoin(
+					svCaptureTasks,
+					and(
+						eq(svCaptureTasks.id, svLocalObservations.captureTaskId),
+						eq(svCaptureTasks.organizationId, svObservationEvidenceAssets.organizationId),
+					),
+				)
+				.where(
+					and(
+						eq(svObservationEvidenceAssets.organizationId, tenantId),
+						eq(svCaptureTasks.pilotCycleId, pilotCycleId),
+						capturedAt && after
+							? or(
+									gt(svObservationEvidenceAssets.capturedAt, capturedAt),
+									and(
+										eq(svObservationEvidenceAssets.capturedAt, capturedAt),
+										gt(svObservationEvidenceAssets.id, after.tieBreakerId),
+									),
+								)
+							: undefined,
+					),
+				)
+				.orderBy(asc(svObservationEvidenceAssets.capturedAt), asc(svObservationEvidenceAssets.id))
+				.limit(limit),
+		);
 	},
 
 	async countMapObservations({ tenantId, cycleId }) {
-		const [counts] = await db
-			.select({
-				valid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and ${svSourceSnapshots.sourceType} = 'MAPS_SERP_PROVIDER' and ${svSourceSnapshots.immutable} is true and ${svSourceSnapshots.contentSha256} ~ '^(sha256:)?[a-f0-9]{64}$' and ${svSourceSnapshots.capturedAt} is not null)::integer`,
-				invalid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'INVALID')::integer`,
-				unknown: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'UNKNOWN' or (${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and (${svSourceSnapshots.sourceType} is distinct from 'MAPS_SERP_PROVIDER' or ${svSourceSnapshots.immutable} is not true or ${svSourceSnapshots.contentSha256} is null or ${svSourceSnapshots.contentSha256} !~ '^(sha256:)?[a-f0-9]{64}$' or ${svSourceSnapshots.capturedAt} is null)))::integer`,
-			})
-			.from(svVisibilityMapPoints)
-			.leftJoin(
-				svEvidenceIndex,
-				and(
-					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
-					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
-					eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
-					eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
-					eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),
+		const [counts] = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					valid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and ${svSourceSnapshots.sourceType} = 'MAPS_SERP_PROVIDER' and ${svSourceSnapshots.immutable} is true and ${svSourceSnapshots.contentSha256FormatValid} is true and ${svSourceSnapshots.capturedAt} is not null)::integer`,
+					invalid: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'INVALID')::integer`,
+					unknown: sql<number>`count(*) filter (where ${svVisibilityMapPoints.displayStatus} = 'UNKNOWN' or (${svVisibilityMapPoints.displayStatus} in ('MEASURED', 'MISSING') and (${svSourceSnapshots.sourceType} is distinct from 'MAPS_SERP_PROVIDER' or ${svSourceSnapshots.immutable} is not true or ${svSourceSnapshots.contentSha256FormatValid} is not true or ${svSourceSnapshots.capturedAt} is null)))::integer`,
+				})
+				.from(svVisibilityMapPoints)
+				.leftJoin(
+					svEvidenceIndex,
+					and(
+						eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
+						eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
+						eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
+						eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
+						eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),
+					),
+				)
+				.leftJoin(
+					svSourceSnapshots,
+					and(
+						eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
+						eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
+					),
+				)
+				.where(
+					and(eq(svVisibilityMapPoints.localCycleId, cycleId), eq(svVisibilityMapPoints.organizationId, tenantId)),
 				),
-			)
-			.leftJoin(
-				svSourceSnapshots,
-				and(
-					eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
-					eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
-				),
-			)
-			.where(and(eq(svVisibilityMapPoints.localCycleId, cycleId), eq(svVisibilityMapPoints.organizationId, tenantId)));
+		);
 		return {
 			valid: Number(counts?.valid ?? 0),
 			invalid: Number(counts?.invalid ?? 0),
@@ -1128,203 +1139,213 @@ export const selenaLocalReadStore: SelenaLocalReadStore = {
 	},
 
 	async findMapDatasetId({ tenantId, cycleId }) {
-		const datasets = await db
-			.select({ id: svVisibilityMapDatasets.datasetId, createdAt: svMeasurementDatasets.createdAt })
-			.from(svVisibilityMapDatasets)
-			.innerJoin(
-				svMeasurementDatasets,
-				and(
-					eq(svMeasurementDatasets.id, svVisibilityMapDatasets.datasetId),
-					eq(svMeasurementDatasets.organizationId, svVisibilityMapDatasets.organizationId),
-					eq(svMeasurementDatasets.cycleId, svVisibilityMapDatasets.measurementCycleId),
-				),
-			)
-			.where(
-				and(eq(svVisibilityMapDatasets.organizationId, tenantId), eq(svVisibilityMapDatasets.localCycleId, cycleId)),
-			)
-			.orderBy(asc(svVisibilityMapDatasets.datasetId))
-			.limit(2);
+		const datasets = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({ id: svVisibilityMapDatasets.datasetId, createdAt: svMeasurementDatasets.createdAt })
+				.from(svVisibilityMapDatasets)
+				.innerJoin(
+					svMeasurementDatasets,
+					and(
+						eq(svMeasurementDatasets.id, svVisibilityMapDatasets.datasetId),
+						eq(svMeasurementDatasets.organizationId, svVisibilityMapDatasets.organizationId),
+						eq(svMeasurementDatasets.cycleId, svVisibilityMapDatasets.measurementCycleId),
+					),
+				)
+				.where(
+					and(eq(svVisibilityMapDatasets.organizationId, tenantId), eq(svVisibilityMapDatasets.localCycleId, cycleId)),
+				)
+				.orderBy(asc(svVisibilityMapDatasets.datasetId))
+				.limit(2),
+		);
 		if (datasets.length > 1) throw new Error("LOCAL_MAPS_MULTIPLE_DATASETS");
 		return datasets[0] ?? null;
 	},
 
 	async listMapResults({ tenantId, cycleId, limit, after }) {
 		const capturedAt = afterDate(after);
-		return db
-			.select({
-				observationId: svVisibilityMapPoints.observationId,
-				evidenceId: svEvidenceIndex.id,
-				sourceSnapshotImmutable: svSourceSnapshots.immutable,
-				sourceType: svSourceSnapshots.sourceType,
-				sourceContentSha256: svSourceSnapshots.contentSha256,
-				sourceCapturedAt: svSourceSnapshots.capturedAt,
-				datasetId: svVisibilityMapPoints.datasetId,
-				measurementCycleId: svVisibilityMapPoints.measurementCycleId,
-				localCycleId: svVisibilityMapPoints.localCycleId,
-				locationId: svVisibilityMapPoints.locationId,
-				gridDefinitionId: svVisibilityMapPoints.gridDefinitionId,
-				gridDefinitionVersion: svVisibilityMapPoints.gridDefinitionVersion,
-				gridPointId: svVisibilityMapPoints.gridPointId,
-				pointIndex: svVisibilityMapPoints.pointIndex,
-				latitude: svVisibilityMapPoints.latitude,
-				longitude: svVisibilityMapPoints.longitude,
-				capturedAt: svVisibilityMapPoints.capturedAt,
-				provider: svVisibilityMapPoints.provider,
-				keywordId: svVisibilityMapPoints.keywordId,
-				keyword: svVisibilityMapPoints.keyword,
-				locale: svVisibilityMapPoints.locale,
-				deviceContext: svVisibilityMapPoints.deviceContext,
-				formulaVersion: svVisibilityMapPoints.formulaVersion,
-				repeatIndex: svVisibilityMapPoints.repeatIndex,
-				sourceValidity: svVisibilityMapPoints.sourceValidity,
-				invalidReason: svVisibilityMapPoints.invalidReason,
-				targetRank: svVisibilityMapPoints.targetRank,
-				displayStatus: svVisibilityMapPoints.displayStatus,
-				interpolated: svVisibilityMapPoints.interpolated,
-				datasetStatus: svVisibilityMapPoints.datasetStatus,
-				materializationKind: svVisibilityMapPoints.materializationKind,
-				refreshedAt: svVisibilityMapPoints.refreshedAt,
-				isStale: svVisibilityMapPoints.isStale,
-			})
-			.from(svVisibilityMapPoints)
-			.leftJoin(
-				svMeasurementDatasets,
-				and(
-					eq(svMeasurementDatasets.id, svVisibilityMapPoints.datasetId),
-					eq(svMeasurementDatasets.organizationId, svVisibilityMapPoints.organizationId),
-					eq(svMeasurementDatasets.cycleId, svVisibilityMapPoints.measurementCycleId),
-				),
-			)
-			.leftJoin(
-				svEvidenceIndex,
-				and(
-					eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
-					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
-					eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
-					eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
-					eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),
-				),
-			)
-			.leftJoin(
-				svSourceSnapshots,
-				and(
-					eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
-					eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
-				),
-			)
-			.where(
-				and(
-					eq(svVisibilityMapPoints.organizationId, tenantId),
-					eq(svVisibilityMapPoints.localCycleId, cycleId),
-					capturedAt && after
-						? or(
-								gt(svVisibilityMapPoints.capturedAt, capturedAt),
-								and(
-									eq(svVisibilityMapPoints.capturedAt, capturedAt),
-									gt(svVisibilityMapPoints.observationId, after.tieBreakerId),
-								),
-							)
-						: undefined,
-				),
-			)
-			.orderBy(asc(svVisibilityMapPoints.capturedAt), asc(svVisibilityMapPoints.observationId))
-			.limit(limit);
+		return withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					observationId: svVisibilityMapPoints.observationId,
+					evidenceId: svEvidenceIndex.id,
+					sourceSnapshotImmutable: svSourceSnapshots.immutable,
+					sourceType: svSourceSnapshots.sourceType,
+					sourceDigestFormatValid: svSourceSnapshots.contentSha256FormatValid,
+					sourceCapturedAt: svSourceSnapshots.capturedAt,
+					datasetId: svVisibilityMapPoints.datasetId,
+					measurementCycleId: svVisibilityMapPoints.measurementCycleId,
+					localCycleId: svVisibilityMapPoints.localCycleId,
+					locationId: svVisibilityMapPoints.locationId,
+					gridDefinitionId: svVisibilityMapPoints.gridDefinitionId,
+					gridDefinitionVersion: svVisibilityMapPoints.gridDefinitionVersion,
+					gridPointId: svVisibilityMapPoints.gridPointId,
+					pointIndex: svVisibilityMapPoints.pointIndex,
+					latitude: svVisibilityMapPoints.latitude,
+					longitude: svVisibilityMapPoints.longitude,
+					capturedAt: svVisibilityMapPoints.capturedAt,
+					provider: svVisibilityMapPoints.provider,
+					keywordId: svVisibilityMapPoints.keywordId,
+					keyword: svVisibilityMapPoints.keyword,
+					locale: svVisibilityMapPoints.locale,
+					deviceContext: svVisibilityMapPoints.deviceContext,
+					formulaVersion: svVisibilityMapPoints.formulaVersion,
+					repeatIndex: svVisibilityMapPoints.repeatIndex,
+					sourceValidity: svVisibilityMapPoints.sourceValidity,
+					invalidReason: svVisibilityMapPoints.invalidReason,
+					targetRank: svVisibilityMapPoints.targetRank,
+					displayStatus: svVisibilityMapPoints.displayStatus,
+					interpolated: svVisibilityMapPoints.interpolated,
+					datasetStatus: svVisibilityMapPoints.datasetStatus,
+					materializationKind: svVisibilityMapPoints.materializationKind,
+					refreshedAt: svVisibilityMapPoints.refreshedAt,
+					isStale: svVisibilityMapPoints.isStale,
+				})
+				.from(svVisibilityMapPoints)
+				.leftJoin(
+					svMeasurementDatasets,
+					and(
+						eq(svMeasurementDatasets.id, svVisibilityMapPoints.datasetId),
+						eq(svMeasurementDatasets.organizationId, svVisibilityMapPoints.organizationId),
+						eq(svMeasurementDatasets.cycleId, svVisibilityMapPoints.measurementCycleId),
+					),
+				)
+				.leftJoin(
+					svEvidenceIndex,
+					and(
+						eq(svEvidenceIndex.organizationId, svVisibilityMapPoints.organizationId),
+						eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
+						eq(svEvidenceIndex.cycleId, svVisibilityMapPoints.measurementCycleId),
+						eq(svEvidenceIndex.datasetId, svVisibilityMapPoints.datasetId),
+						eq(svEvidenceIndex.observationRef, sql`${svVisibilityMapPoints.observationId}::text`),
+					),
+				)
+				.leftJoin(
+					svSourceSnapshots,
+					and(
+						eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
+						eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
+					),
+				)
+				.where(
+					and(
+						eq(svVisibilityMapPoints.organizationId, tenantId),
+						eq(svVisibilityMapPoints.localCycleId, cycleId),
+						capturedAt && after
+							? or(
+									gt(svVisibilityMapPoints.capturedAt, capturedAt),
+									and(
+										eq(svVisibilityMapPoints.capturedAt, capturedAt),
+										gt(svVisibilityMapPoints.observationId, after.tieBreakerId),
+									),
+								)
+							: undefined,
+					),
+				)
+				.orderBy(asc(svVisibilityMapPoints.capturedAt), asc(svVisibilityMapPoints.observationId))
+				.limit(limit),
+		);
 	},
 
 	async listEvidence({ tenantId, measurementCycleId, limit, after }) {
 		const capturedAt = afterDate(after);
-		return db
-			.select({
-				id: svEvidenceIndex.id,
-				domainId: svEvidenceIndex.domainId,
-				observationRef: svEvidenceIndex.observationRef,
-				capturedAt: svEvidenceIndex.capturedAt,
-				datasetId: svMeasurementDatasets.id,
-				datasetKey: svMeasurementDatasets.datasetKey,
-				datasetVersion: svMeasurementDatasets.version,
-				datasetImmutable: svMeasurementDatasets.immutable,
-				datasetCreatedAt: svMeasurementDatasets.createdAt,
-				sourceSnapshotId: svSourceSnapshots.id,
-				sourceSnapshotImmutable: svSourceSnapshots.immutable,
-				sourceType: svSourceSnapshots.sourceType,
-				sourceContentSha256: svSourceSnapshots.contentSha256,
-				sourceCapturedAt: svSourceSnapshots.capturedAt,
-			})
-			.from(svEvidenceIndex)
-			.innerJoin(
-				svMeasurementDatasets,
-				and(
-					eq(svMeasurementDatasets.id, svEvidenceIndex.datasetId),
-					eq(svMeasurementDatasets.organizationId, svEvidenceIndex.organizationId),
-					eq(svMeasurementDatasets.cycleId, svEvidenceIndex.cycleId),
-				),
-			)
-			.leftJoin(
-				svSourceSnapshots,
-				and(
-					eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
-					eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
-				),
-			)
-			.where(
-				and(
-					eq(svEvidenceIndex.organizationId, tenantId),
-					eq(svEvidenceIndex.cycleId, measurementCycleId),
-					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
-					eq(svMeasurementDatasets.immutable, true),
-					capturedAt && after
-						? or(
-								gt(svEvidenceIndex.capturedAt, capturedAt),
-								and(eq(svEvidenceIndex.capturedAt, capturedAt), gt(svEvidenceIndex.id, after.tieBreakerId)),
-							)
-						: undefined,
-				),
-			)
-			.orderBy(asc(svEvidenceIndex.capturedAt), asc(svEvidenceIndex.id))
-			.limit(limit);
+		return withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({
+					id: svEvidenceIndex.id,
+					domainId: svEvidenceIndex.domainId,
+					observationRef: svEvidenceIndex.observationRef,
+					capturedAt: svEvidenceIndex.capturedAt,
+					datasetId: svMeasurementDatasets.id,
+					datasetKey: svMeasurementDatasets.datasetKey,
+					datasetVersion: svMeasurementDatasets.version,
+					datasetImmutable: svMeasurementDatasets.immutable,
+					datasetCreatedAt: svMeasurementDatasets.createdAt,
+					sourceSnapshotId: svSourceSnapshots.id,
+					sourceSnapshotImmutable: svSourceSnapshots.immutable,
+					sourceType: svSourceSnapshots.sourceType,
+					sourceDigestFormatValid: svSourceSnapshots.contentSha256FormatValid,
+					sourceCapturedAt: svSourceSnapshots.capturedAt,
+				})
+				.from(svEvidenceIndex)
+				.innerJoin(
+					svMeasurementDatasets,
+					and(
+						eq(svMeasurementDatasets.id, svEvidenceIndex.datasetId),
+						eq(svMeasurementDatasets.organizationId, svEvidenceIndex.organizationId),
+						eq(svMeasurementDatasets.cycleId, svEvidenceIndex.cycleId),
+					),
+				)
+				.leftJoin(
+					svSourceSnapshots,
+					and(
+						eq(svSourceSnapshots.id, svEvidenceIndex.sourceSnapshotId),
+						eq(svSourceSnapshots.organizationId, svEvidenceIndex.organizationId),
+					),
+				)
+				.where(
+					and(
+						eq(svEvidenceIndex.organizationId, tenantId),
+						eq(svEvidenceIndex.cycleId, measurementCycleId),
+						eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
+						eq(svMeasurementDatasets.immutable, true),
+						capturedAt && after
+							? or(
+									gt(svEvidenceIndex.capturedAt, capturedAt),
+									and(eq(svEvidenceIndex.capturedAt, capturedAt), gt(svEvidenceIndex.id, after.tieBreakerId)),
+								)
+							: undefined,
+					),
+				)
+				.orderBy(asc(svEvidenceIndex.capturedAt), asc(svEvidenceIndex.id))
+				.limit(limit),
+		);
 	},
 
 	async findEvidenceHighWater({ tenantId, measurementCycleId, pilotCycleId }) {
-		const [maps] = await db
-			.select({ createdAt: sql<Date | null>`max(${svEvidenceIndex.createdAt})` })
-			.from(svEvidenceIndex)
-			.innerJoin(
-				svMeasurementDatasets,
-				and(
-					eq(svMeasurementDatasets.id, svEvidenceIndex.datasetId),
-					eq(svMeasurementDatasets.organizationId, svEvidenceIndex.organizationId),
-					eq(svMeasurementDatasets.cycleId, svEvidenceIndex.cycleId),
+		const [maps] = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({ createdAt: sql<Date | null>`max(${svEvidenceIndex.createdAt})` })
+				.from(svEvidenceIndex)
+				.innerJoin(
+					svMeasurementDatasets,
+					and(
+						eq(svMeasurementDatasets.id, svEvidenceIndex.datasetId),
+						eq(svMeasurementDatasets.organizationId, svEvidenceIndex.organizationId),
+						eq(svMeasurementDatasets.cycleId, svEvidenceIndex.cycleId),
+					),
+				)
+				.where(
+					and(
+						eq(svEvidenceIndex.organizationId, tenantId),
+						eq(svEvidenceIndex.cycleId, measurementCycleId),
+						eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
+						eq(svMeasurementDatasets.immutable, true),
+					),
 				),
-			)
-			.where(
-				and(
-					eq(svEvidenceIndex.organizationId, tenantId),
-					eq(svEvidenceIndex.cycleId, measurementCycleId),
-					eq(svEvidenceIndex.domainId, "LOCAL_MAPS"),
-					eq(svMeasurementDatasets.immutable, true),
-				),
-			);
+		);
 		if (!pilotCycleId) return maps?.createdAt ?? null;
-		const [ai] = await db
-			.select({ createdAt: sql<Date | null>`max(${svObservationEvidenceAssets.createdAt})` })
-			.from(svObservationEvidenceAssets)
-			.innerJoin(
-				svLocalObservations,
-				and(
-					eq(svLocalObservations.id, svObservationEvidenceAssets.observationId),
-					eq(svLocalObservations.organizationId, svObservationEvidenceAssets.organizationId),
+		const [ai] = await withOrganizationTransaction(db, tenantId, (tx) =>
+			tx
+				.select({ createdAt: sql<Date | null>`max(${svObservationEvidenceAssets.createdAt})` })
+				.from(svObservationEvidenceAssets)
+				.innerJoin(
+					svLocalObservations,
+					and(
+						eq(svLocalObservations.id, svObservationEvidenceAssets.observationId),
+						eq(svLocalObservations.organizationId, svObservationEvidenceAssets.organizationId),
+					),
+				)
+				.innerJoin(
+					svCaptureTasks,
+					and(
+						eq(svCaptureTasks.id, svLocalObservations.captureTaskId),
+						eq(svCaptureTasks.organizationId, svObservationEvidenceAssets.organizationId),
+					),
+				)
+				.where(
+					and(eq(svObservationEvidenceAssets.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)),
 				),
-			)
-			.innerJoin(
-				svCaptureTasks,
-				and(
-					eq(svCaptureTasks.id, svLocalObservations.captureTaskId),
-					eq(svCaptureTasks.organizationId, svObservationEvidenceAssets.organizationId),
-				),
-			)
-			.where(
-				and(eq(svObservationEvidenceAssets.organizationId, tenantId), eq(svCaptureTasks.pilotCycleId, pilotCycleId)),
-			);
+		);
 		const candidates = [maps?.createdAt, ai?.createdAt].filter((value): value is Date => value instanceof Date);
 		return candidates.reduce<Date | null>((latest, value) => (!latest || value > latest ? value : latest), null);
 	},

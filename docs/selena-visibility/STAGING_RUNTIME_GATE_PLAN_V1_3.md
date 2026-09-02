@@ -1,99 +1,93 @@
 # Selena AI Visibility v1.3 — staging/runtime gate plan
 
-Status: `EXECUTION_AUTHORIZED_PARTIAL_RLS_HOLD`
+Updated after execution on `2026-09-01`. Runtime/source anchor:
+`2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
 
-The original anchor is release HEAD
-`0e00df4faa74990e6b696c4249cbb85acf23c693`. Current release HEAD is
-`04700df5de393cb4d7437a5b467ed753a8554928`; follow-up source checkpoint
-`143318c182d3f5f8e9892cd43d1078ccec110dcb` is in draft PR #95, whose final
-head must be resolved at deploy time. The owner has
-authorized one bounded pre-production loop. Production, application recurring
-jobs, Social/Travel activation and any provider call beyond the single named
-Google AI Mode canary remain prohibited.
+## Executed gates
 
-## Evidence anchor
-
-- PR [#92](https://github.com/parkourcafe/selena-ai-visibility/pull/92) is merged.
-- The release tree `8b57645aea201baa38a7e71db423df51d61c9753`
-  equals the tree validated by the successful PR CI runs listed in
-  `ACCEPTANCE_MATRIX_V1_3.md`.
-- Source-only registry, Local Maps rehearsal, Social/Travel fail-closed gates,
-  evidence provenance and HoReCa read models are accepted only at their stated
-  evidence classes.
-- Runtime RLS, migrations, durable stores, credentials and live provider
-  behavior remain unverified.
-
-## Independent authorization boundaries
-
-| Boundary | What may be done after approval | Current state |
+| Gate | Result | Evidence |
 |---|---|---|
-| A — shared staging read-only | Inspect deployment metadata, service revisions, bounded logs and configuration key presence without reading values | `AUTHORIZED_IN_PROGRESS` |
-| B — staging mutation | Backup/PITR, deploy an immutable revision, run pending migrations through 0051, create fixture rows or restart a service | `AUTHORIZED_WITH_RLS_STOP_CONDITION` |
-| C — paid provider canary | One Bright Data `GOOGLE_AI_MODE` request, USD 0.25 maximum, 25-minute hard timeout, zero retries, `recurring=false` | `AUTHORIZED_ONLY_AFTER_SR00_SR08` |
-| D — production | Access or mutate production, attach a database, change billing, deploy or schedule work | `OUT_OF_SCOPE` |
+| SR-00 Exact source identity | `PASS` | Exact Git archive from `2d023470`; protected handoff excluded. |
+| SR-01 Exact-head CI | `PASS` | PR #96 required checks `6/6` green. |
+| SR-02 Names-only credentials | `PASS` | Owner confirmed six rotations; no values read. Application binding works and the repeated values-suppressed Postgres administration TCP probe returned `PASS`. |
+| SR-03 Provider/recurring/billing containment | `PASS` | Worker logs prove provider and recurring scheduler disabled; managed schedules 0; canary/cost rows 0. |
+| SR-04 Backup and isolated restore | `PASS` | Backup `9b961055…`; restored service `a34b2749…` healthy. |
+| SR-05 Migrations/runtime role/RLS | `PASS` | 0043–0051 present, 0052 absent; actual `selena_app`, GUC and RLS proof passed and rolled back. |
+| SR-06 Exact web/worker deploy | `PASS` | Web `7e7de294…`, worker `586b6e9a…`, both running. |
+| SR-07 Zero-call fixture/API | `PASS` | Two scoped API tenants isolated; invalid key 401; fixture cleanup proved. |
+| SR-08 Browser | `PASS` | Public/unauthenticated boundary plus authenticated AVLI/KORA project, Local-first state, hidden Social/Travel and sanitized payload checks passed. |
+| SR-09 Replay/concurrency/idempotency | `PASS` | One concurrent winner, stable replay, cross-tenant fence, immutable active receipt, cleanup. |
+| SR-10 Local Maps stability | `PASS_5_OF_5` | 73 focused tests per replay, five replays, zero calls. |
+| SR-11 Paid canary | `NOT_EXECUTED/HOLD_OWNER` | Latest owner decision prohibits paid calls; 0052 is outside the migration authorization. |
+| SR-12 Production/merge | `NOT_EXECUTED/NO_GO` | Production is prohibited; PR #96 remains open. |
 
-Approval of one boundary does not authorize any later boundary.
+## Runtime configuration contract
 
-## Ordered gates
+The exact staging worker was accepted only with all of these fail-closed
+properties:
 
-| Gate | Required action and evidence | Pass condition | Authorization |
-|---|---|---|---|
-| SR-00 Release lineage | Pin the final PR #95 head and, after authorized merge, its exact release merge commit; record image/build digest and configuration version without secrets | Candidate revision and source commit are immutable and traceable; `0e00df4f` is historical evidence, not the deploy target | Read-only local |
-| SR-01 Baseline disposition | Triage the registered root lint and `apps/www` local build baselines; do not relabel them as PASS | Either fixed in a reviewed follow-up or accepted as a named non-runtime exception with CI evidence | Source-only follow-up |
-| SR-02 Staging topology | Confirm web, worker, migration job and PostgreSQL belong to the intended staging environment; confirm the deployed revisions and that production is not targeted | Inventory receipt contains IDs/revisions only, no credential values; web and worker database binding is consistent | Boundary A |
-| SR-03 Safe configuration | Verify presence, not values, of required auth/encryption/database settings; require telemetry and all schedulers/fan-out disabled; require stub selectors for the zero-call phase | Configuration receipt shows fail-closed provider selection, `SCHEDULE_MAINTENANCE_ENABLED=false` and no recurring trigger | Boundary A |
-| SR-04 Database preflight | Establish staging backup/restore or disposable rollback evidence; enumerate forward migrations `0037` through `0051`; verify the one-shot job has restart policy `NEVER` | Backup/rollback owner, migration order and stop procedure are recorded before any SQL runs | Boundary A, then B |
-| SR-05 Migration and RLS proof | Apply the approved chain once; use a non-owner runtime role; set transaction-local `app.organization_id`; execute positive same-tenant and negative cross-tenant checks | Migration receipt is successful; RLS denies cross-tenant reads/writes; no owner-role result is accepted as proof | Boundary B |
-| SR-06 Runtime boot | Deploy the same immutable candidate to web and worker only after SR-05; keep live providers, payments and schedules disabled | Web setup/health endpoint succeeds; worker boots with bounded logs; provider calls, payment calls and scheduled jobs remain zero | Boundary B |
-| SR-07 Zero-call fixture acceptance | Exercise setup, quote, create, progress, results, evidence and HoReCa read paths with fixture/stub adapters only | Expected state transitions and tenant fences pass; no external task, cost event or publishable evidence is created | Boundary B |
-| SR-08 Browser/API acceptance | Verify authentication, authorization scopes, UNKNOWN/LOCKED UI, CSV bounds, client-safe errors and evidence privacy | Browser/API report contains no secret/raw-provider leakage and no cross-tenant access | Boundary B |
-| SR-09 Provider capability preflight | For one candidate dataset, freeze schema version, retention/privacy decision, entitlement, cost ceiling, attempt cap and stop/circuit-breaker behavior | A signed owner decision names one provider/dataset, one request, maximum cost and abort conditions | Planning only until Boundary C |
-| SR-10 Isolated provider canary | Execute exactly one non-recurring, schema-discovery canary after SR-09; preserve raw evidence privately and reconcile the cost ledger | One terminal result is classified without retry ambiguity; answer/evidence requirements pass; actual cost is reconciled | Boundary C |
-| SR-11 Social/Travel activation | Review each Social or Travel dataset independently after its canary; keep Social out of AI Visibility scoring and Travel out of product activation until approved | Schema, privacy, retention, entitlement and stable-capability decisions are all explicit | Boundary C plus product approval |
-| SR-12 Pilot acceptance | Bind only accepted evidence to AVLI/KORA templates; retain UNKNOWN and module-level HoReCa outputs without a composite score | Pilot report has provenance, limitations, accepted-sample counts and owner sign-off | Separate pilot approval |
-| SR-13 Promotion decision | Assemble the complete evidence packet and issue GO/NO-GO for a later production plan | No unresolved P0/P1, no unowned rollback step and no evidence class inflation | Production remains separately gated |
+- `SELENA_RECURRING_JOBS_ENABLED=false`
+- `SELENA_PGBOSS_RECURRING_RUNTIME_ENABLED=false`
+- `SCHEDULE_MAINTENANCE_ENABLED=false`
+- `SELENA_ANSWER_RETENTION_ENABLED=false`
+- `SELENA_MEASUREMENT_ENABLED=false`
+- `SELENA_EMERGENCY_STOP=true`
+- `SELENA_PAYMENTS_ENABLED=false`
+- `SELENA_FREE_AUTO_DISPATCH_ENABLED=false`
+- `SCRAPE_TARGETS=stub:stub`
+- `ONBOARDING_LLM_TARGET=stub:stub`
+- `SELENA_PGBOSS_OWNER_MANAGED_SCHEMA=true`
 
-## Current execution state
+This list records key names and expected non-secret booleans/fixtures only. It
+does not authorize reading or publishing credential values.
 
-| Gate | State | Receipt / blocker |
-|---|---|---|
-| SR-00 | `IN_PROGRESS` | Candidate `143318c1`; PR #95 CI is running. |
-| SR-01 | `PASS_LOCAL` | Root lint/tests/build pass on Node 24; warnings remain registered. |
-| SR-02 | `PARTIAL_DOMAIN_BINDING_HOLD` | Exact staging project/environment/service IDs are recorded without secret values, but staging web also serves `app.selenasystems.com`; production-like domain isolation is not proven. |
-| SR-03 | `PARTIAL` | Key-name and scheduler state audit exists; sealed value correctness is not claimed. |
-| SR-04 | `PARTIAL_CHECKPOINT_EXISTS` | PITR enabled/bucket-wired; Postgres deploy successful; named backup `92f3adae…` exists. WAL health, restore range and restore rehearsal remain `UNKNOWN`. |
-| SR-05 | `HOLD_APP_RUNTIME` | Read-only journal proves staging through 0042 with 0043–0051 pending. App-wide transaction-local tenant context is incomplete; no runtime role switch allowed. |
-| SR-06–SR-08 | `BLOCKED_BY_SR05` | Web/worker candidate, fixture and browser/API RLS acceptance must not be relabelled as complete while runtime RLS is unproven. |
-| SR-09 | `AUTHORIZED_FROZEN` | Bright Data / GOOGLE_AI_MODE / one call / USD 0.25 / 25m / zero retries / non-recurring. |
-| SR-10 | `NOT_ELIGIBLE` | No provider call has occurred; SR-00–SR-08 are not all green. |
-| SR-11 | `PROHIBITED` | Social and Travel activation not authorized. |
+## Remaining gate sequence
 
-## Provider canary invariants
+### G1 — Postgres administration binding (`CLOSED`)
 
-- One dataset and one request per approval; `recurring=false` and no generic
-  queue retry.
-- `providerCalls=1` is a hard maximum, not a target to retry toward.
-- A cost quote, cap and remaining-account-budget check precede dispatch.
-- Ambiguous submission or reconciliation opens a hold/circuit breaker and does
-  not create a second call.
-- Raw payloads and provider errors remain private. Customer-visible data uses
-  normalized, versioned evidence only after schema validation.
-- Social and Travel cannot change scoring, UI availability, tariffs or public
-  promises merely because configuration or a dataset ID exists.
+The owner confirmed staging Postgres rotation. The follow-up count-only TCP
+connection check through the service's sealed administration binding returned
+`ADMIN_TCP=PASS`; no credential value was read or printed.
 
-## Required evidence packet
+The working `selena_app` runtime remains unchanged and both public setup-status
+endpoints continue to return HTTP 200.
 
-1. Candidate commit, tree and build/image digest.
-2. Links to CI and the disposition of the two registered root baselines.
-3. Staging inventory and configuration-presence receipt with secrets redacted.
-4. Backup/rollback evidence and ordered migration receipt.
-5. Non-owner RLS and transaction-local tenant-context proof.
-6. Web/worker health, zero-call fixture and browser/API reports.
-7. Provider-call count, cost-ledger reconciliation and circuit-breaker receipt
-   only if Boundary C is separately approved.
-8. Explicit remaining `UNKNOWN`, `HOLD` and `BLOCKED_FACT` items.
+### G2 — authenticated browser acceptance (`CLOSED`)
 
-Until SR-00 through SR-08 pass, runtime readiness is `NO-GO`. The single
-paid-call authorization already exists, but SR-10 remains ineligible until
-those earlier gates pass and is `NO-GO` until its one result is accepted.
-Production remains outside this plan.
+The owner signed in through the normal staging login without sharing
+credentials. The reviewer verified:
+
+1. HoReCa page loads under the intended test organization.
+2. Local-first modules remain independent and preserve `UNKNOWN`/locked state.
+3. Social/Travel modules are absent from DOM and customer-visible payloads.
+4. API/network failures expose no raw provider locator, content hash, secret or
+   cross-tenant row.
+
+No credential or session material was sent in chat or persisted in an
+acceptance artifact. Authenticated network failures and console errors were 0.
+
+### G3 — optional paid canary
+
+Current status: forbidden. A future owner decision must explicitly authorize:
+
+1. migration `0052` in staging;
+2. one `GOOGLE_AI_MODE` Bright Data call;
+3. a hard dollar cap and timeout;
+4. zero retries and `recurring=false`;
+5. durable snapshot journal validation and exact post-call cost reconciliation.
+
+Until all five are explicit, provider calls remain `0`, actual canary price is
+`UNKNOWN`, and incurred cost is `USD 0.00`.
+
+## Rollback
+
+| Failure | Action |
+|---|---|
+| Web health/runtime regression | Redeploy prior web `cc89f46b-b548-4216-a546-362051e98ecd`; keep worker fail-closed. |
+| Worker startup/containment regression | Scale worker to 0 immediately; do not re-enable recurring/provider paths. |
+| DB/RLS regression | Stop mutations and restore isolated copy from backup `9b961055-4f2e-4cb2-aae6-a348f2b4cd5f`; do not down-migrate shared staging. |
+| Credential uncertainty | Revoke/reissue through the official surface; never copy values from logs or shell output. |
+| Paid canary failure, if later authorized | Stop after the single attempt, preserve 0052 journal/cost evidence, no retry. |
+
+No automatic rollback fired during this execution because exact-head CI, web,
+worker, database, RLS, API and public-browser gates passed.

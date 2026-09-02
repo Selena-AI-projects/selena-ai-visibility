@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svCycles,
 	svOrders,
@@ -7,11 +8,11 @@ import {
 	svRecommendationRuns,
 	svWebsiteSnapshots,
 } from "@workspace/lib/db/schema";
+import { readStoredGoogleMapsLocation } from "@workspace/lib/google-maps-location";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { actionPlanSchema, projectCreateSchema } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { readStoredGoogleMapsLocation } from "@workspace/lib/google-maps-location";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
@@ -32,67 +33,78 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 	const projects = await repositories.projects.list(context);
 	const summaries = await Promise.all(
 		projects.map(async (project) => {
-			const [profile, website, cycle, recommendationRun] = await Promise.all([
-				db
-					.select()
-					.from(svProjectProfiles)
-					.where(
-						and(eq(svProjectProfiles.projectId, project.id), eq(svProjectProfiles.organizationId, context.tenantId)),
-					)
-					.limit(1)
-					.then((rows) => rows[0] ?? null),
-				db
-					.select({
-						website: svWebsiteSnapshots.website,
-						capturedAt: svWebsiteSnapshots.capturedAt,
-					})
-					.from(svWebsiteSnapshots)
-					.where(
-						and(eq(svWebsiteSnapshots.projectId, project.id), eq(svWebsiteSnapshots.organizationId, context.tenantId)),
-					)
-					.orderBy(desc(svWebsiteSnapshots.capturedAt))
-					.limit(1)
-					.then((rows) => rows[0] ?? null),
-				db
-					.select({
-						id: svCycles.id,
-						status: svCycles.status,
-						expectedRuns: svCycles.expectedRuns,
-						completedRuns: svCycles.completedRuns,
-						createdAt: svCycles.createdAt,
-						updatedAt: svCycles.updatedAt,
-					})
-					.from(svCycles)
-					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-					.where(
-						and(
-							eq(svOrders.projectId, project.id),
-							eq(svOrders.organizationId, context.tenantId),
-							eq(svCycles.organizationId, context.tenantId),
-						),
-					)
-					.orderBy(desc(svCycles.createdAt))
-					.limit(1)
-					.then((rows) => rows[0] ?? null),
-				db
-					.select({
-						id: svRecommendationRuns.id,
-						status: svRecommendationRuns.status,
-						groundingStatus: svRecommendationRuns.groundingStatus,
-						actionPlan: svRecommendationRuns.actionPlan,
-						createdAt: svRecommendationRuns.createdAt,
-					})
-					.from(svRecommendationRuns)
-					.where(
-						and(
-							eq(svRecommendationRuns.projectId, project.id),
-							eq(svRecommendationRuns.organizationId, context.tenantId),
-						),
-					)
-					.orderBy(desc(svRecommendationRuns.createdAt))
-					.limit(1)
-					.then((rows) => rows[0] ?? null),
-			]);
+			const [profile, website, cycle, recommendationRun] = await withOrganizationTransaction(
+				db,
+				context.tenantId,
+				(tx) =>
+					Promise.all([
+						tx
+							.select()
+							.from(svProjectProfiles)
+							.where(
+								and(
+									eq(svProjectProfiles.projectId, project.id),
+									eq(svProjectProfiles.organizationId, context.tenantId),
+								),
+							)
+							.limit(1)
+							.then((rows) => rows[0] ?? null),
+						tx
+							.select({
+								website: svWebsiteSnapshots.website,
+								capturedAt: svWebsiteSnapshots.capturedAt,
+							})
+							.from(svWebsiteSnapshots)
+							.where(
+								and(
+									eq(svWebsiteSnapshots.projectId, project.id),
+									eq(svWebsiteSnapshots.organizationId, context.tenantId),
+								),
+							)
+							.orderBy(desc(svWebsiteSnapshots.capturedAt))
+							.limit(1)
+							.then((rows) => rows[0] ?? null),
+						tx
+							.select({
+								id: svCycles.id,
+								status: svCycles.status,
+								expectedRuns: svCycles.expectedRuns,
+								completedRuns: svCycles.completedRuns,
+								createdAt: svCycles.createdAt,
+								updatedAt: svCycles.updatedAt,
+							})
+							.from(svCycles)
+							.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+							.where(
+								and(
+									eq(svOrders.projectId, project.id),
+									eq(svOrders.organizationId, context.tenantId),
+									eq(svCycles.organizationId, context.tenantId),
+								),
+							)
+							.orderBy(desc(svCycles.createdAt))
+							.limit(1)
+							.then((rows) => rows[0] ?? null),
+						tx
+							.select({
+								id: svRecommendationRuns.id,
+								status: svRecommendationRuns.status,
+								groundingStatus: svRecommendationRuns.groundingStatus,
+								actionPlan: svRecommendationRuns.actionPlan,
+								createdAt: svRecommendationRuns.createdAt,
+							})
+							.from(svRecommendationRuns)
+							.where(
+								and(
+									eq(svRecommendationRuns.projectId, project.id),
+									eq(svRecommendationRuns.organizationId, context.tenantId),
+								),
+							)
+							.orderBy(desc(svRecommendationRuns.createdAt))
+							.limit(1)
+							.then((rows) => rows[0] ?? null),
+					]),
+			);
 
 			const parsedPlan = actionPlanSchema.safeParse(recommendationRun?.actionPlan);
 			const actionPlan = parsedPlan.success ? parsedPlan.data : null;
@@ -145,7 +157,7 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 									// run in: the three shown here are the whole plan for a
 									// customer who reads no further.
 									.sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority))
-								.slice(0, 3)
+									.slice(0, 3)
 									.map((item) => ({
 										ruleId: actionPlan.findings.find((finding) => finding.id === item.findingId)?.ruleId ?? "",
 										title: item.title,

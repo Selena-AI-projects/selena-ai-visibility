@@ -227,23 +227,6 @@ function media(
 	return output;
 }
 
-function nestedComments(
-	row: Row,
-	context: BrightDataNormalizationContext,
-	platform: BrightDataSocialPlatform,
-	field: string,
-	parentIdFields: readonly string[],
-): SocialComment[] {
-	const values = row[field];
-	if (!Array.isArray(values)) return [];
-	return values.flatMap((value) => {
-		if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-		const nested = value as Row;
-		const normalized = comment({ ...nested, post_id: text(row, ...parentIdFields) }, context, platform, ["comment_id"]);
-		return normalized ? [{ ...normalized, provenance: { ...context, fields: [field] } }] : [];
-	});
-}
-
 type DatasetEntity = Exclude<NormalizedSocialEntity, { entityType: "source_snapshot" }>;
 
 function compact(entities: (DatasetEntity | null)[]): DatasetEntity[] {
@@ -304,7 +287,6 @@ export const normalizeInstagramReels: BrightDataDatasetNormalizer = (rows, conte
 			audio_url: "audio",
 			thumbnail: "image",
 		}),
-		...nestedComments(row, context, "instagram", "top_comments", ["post_id"]),
 	]);
 
 export const normalizeInstagramComments: BrightDataDatasetNormalizer = (rows, context) =>
@@ -380,7 +362,6 @@ export const normalizeRedditPosts: BrightDataDatasetNormalizer = (rows, context)
 			}),
 			engagement(row, context, "reddit", ["post_id"], ["num_comments", "num_upvotes"]),
 		]),
-		...nestedComments(row, context, "reddit", "comments", ["post_id"]),
 	]);
 
 export const normalizeYouTubeVideos: BrightDataDatasetNormalizer = (rows, context) =>

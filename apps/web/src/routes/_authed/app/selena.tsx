@@ -1880,11 +1880,6 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 												)}
 											</p>
 										) : null}
-										{detail.rawResponseReference && (
-											<p className="text-xs text-[#6e6258]">
-												{tr(locale, "Answer reference", "Ссылка на ответ")}: {detail.rawResponseReference}
-											</p>
-										)}
 									</div>
 								)}
 							</div>

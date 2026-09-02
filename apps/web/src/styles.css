@@ -272,7 +272,8 @@
 }
 
 @media (max-width: 63.999rem) {
-	.selena-project-nav {
+	.selena-project-nav,
+	.selena-project-nav-list {
 		display: flex;
 		gap: 0.75rem;
 		overflow-x: auto;
@@ -280,7 +281,8 @@
 		scroll-snap-type: x proximity;
 	}
 
-	.selena-project-nav .selena-project-link {
+	.selena-project-nav .selena-project-link,
+	.selena-project-nav-list .selena-project-link {
 		min-width: 14rem;
 		scroll-snap-align: start;
 	}
@@ -289,6 +291,12 @@
 .selena-project-link:hover {
 	border-color: var(--selena-line);
 	background: rgb(255 253 248 / 72%);
+}
+
+.selena-project-link:focus-visible {
+	border-color: var(--selena-copper-deep);
+	outline: 2px solid var(--selena-copper-deep);
+	outline-offset: 2px;
 }
 
 .selena-project-link[data-selected] {

@@ -4,9 +4,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const scriptUrl = new URL("../../../apps/worker/src/scripts/measure-journal.ts", import.meta.url);
-const scriptPath = fileURLToPath(scriptUrl);
+const entrypointUrl = new URL("../../../apps/worker/src/scripts/measure-journal-entrypoint.ts", import.meta.url);
+const scriptPath = fileURLToPath(entrypointUrl);
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const source = readFileSync(scriptUrl, "utf8");
+const publishScriptUrl = new URL("../../../apps/worker/src/scripts/publish-journal.ts", import.meta.url);
+const publishScriptPath = fileURLToPath(publishScriptUrl);
+const dockerfile = readFileSync(new URL("../../../docker/Dockerfile", import.meta.url), "utf8");
 const repositorySource = readFileSync(new URL("./selena-visibility-repositories.ts", import.meta.url), "utf8");
 
 describe("journal provider stop", () => {
@@ -26,6 +30,101 @@ describe("journal provider stop", () => {
 		expect(result.status).not.toBe(0);
 		expect(output).toContain("PROVIDER_CALLS_STOPPED");
 		expect(output).not.toContain("DATABASE_URL is required");
+	}, 15_000);
+
+	it("keeps an enabled auto-deployment closed without exact release approval", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				SELENA_MEASUREMENT_ENABLED: "true",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(output).toContain("JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED");
+		expect(output).not.toContain("DATABASE_URL is required");
+		expect(output).not.toContain("BRIGHTDATA_API_TOKEN is required");
+	}, 15_000);
+});
+
+describe("journal publisher opt-in", () => {
+	it("routes the publish image through the guarded entrypoint", () => {
+		expect(dockerfile).toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]');
+		expect(dockerfile).not.toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal-detail.ts"]');
+		expect(dockerfile).not.toContain('CMD ["npx"');
+	});
+
+	it("routes the measurement image through its deployment approval wrapper", () => {
+		expect(dockerfile).toContain(
+			'CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal-entrypoint.ts"]',
+		);
+		expect(dockerfile).not.toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal.ts"]');
+	});
+
+	it.each([undefined, "", "false", "TRUE", "1"])(
+		"stops before credentials, database, or GitHub access for %s",
+		(value) => {
+			const result = spawnSync(process.execPath, ["--import", "tsx", publishScriptPath], {
+				cwd: repositoryRoot,
+				encoding: "utf8",
+				env: {
+					PATH: process.env.PATH,
+					...(value === undefined ? {} : { SELENA_JOURNAL_PUBLISH_ENABLED: value }),
+				},
+				timeout: 10_000,
+			});
+			const output = `${result.stdout}\n${result.stderr}`;
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).toBe(0);
+			expect(output).toContain("JOURNAL_PUBLISH_DISABLED");
+			expect(output).not.toContain("GITHUB_TOKEN is required");
+			expect(output).not.toContain("DATABASE_URL is required");
+		},
+		15_000,
+	);
+
+	it("refuses the implementation entrypoint when the guarded wrapper is bypassed", () => {
+		const detailScriptPath = fileURLToPath(
+			new URL("../../../apps/worker/src/scripts/publish-journal-detail.ts", import.meta.url),
+		);
+		const result = spawnSync(process.execPath, ["--import", "tsx", detailScriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: { PATH: process.env.PATH },
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).not.toBe(0);
+		expect(output).toContain("JOURNAL_PUBLISH_DISABLED");
+		expect(output).not.toContain("SELENA_JOURNAL_TENANT is required");
+		expect(output).not.toContain("GITHUB_TOKEN is required");
+		expect(output).not.toContain("DATABASE_URL is required");
+	});
+
+	it("enters the guarded publisher exactly for lowercase true", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", publishScriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				SELENA_JOURNAL_PUBLISH_ENABLED: "true",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).not.toBe(0);
+		expect(output).toContain("SELENA_JOURNAL_TENANT is required");
+		expect(output).not.toContain("JOURNAL_PUBLISH_DISABLED");
 	});
 });
 

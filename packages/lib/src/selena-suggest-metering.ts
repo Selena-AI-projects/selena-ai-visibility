@@ -1,4 +1,3 @@
-import { sql } from "drizzle-orm";
 import type { db as defaultDb } from "./db/db";
 
 type Executor = Pick<typeof defaultDb, "execute">;
@@ -29,41 +28,24 @@ export function isSuggestBudgetExceeded(
 	return spentThisMonthUsd + nextCallUsd > budgetUsd;
 }
 
-async function suggestSpendThisMonthUsd(dbc: Executor, now: Date): Promise<number> {
-	const result = await dbc.execute(sql`
-		SELECT coalesce(sum(amount_usd), 0)::float8 AS spent
-		FROM sv_cost_events
-		WHERE kind = 'suggest'
-			AND created_at >= date_trunc('month', ${now.toISOString()}::timestamptz)
-	`);
-	const row = result.rows?.[0] as { spent?: number } | undefined;
-	return Number(row?.spent ?? 0);
-}
-
 /**
- * The monthly ceiling for suggestion spending, deployment-wide: it protects
- * the owner's provider key, so it does not slice by tenant. Asserted before
- * enqueueing and again in the worker, because a job already queued when the
- * ceiling was reached must not spend either.
+ * The deployment-wide suggestion cap cannot be enforced by tenant RLS with a
+ * count followed by enqueue: concurrent requests race, while a tenant-scoped
+ * count silently weakens the owner's global ceiling. Staging therefore holds
+ * this provider path closed until one atomic reservation owns the cap.
  */
 export async function assertSuggestBudget(
-	dbc: Executor,
-	env: Record<string, string | undefined> = process.env,
-	now: Date = new Date(),
+	_dbc: Executor,
+	_env: Record<string, string | undefined> = process.env,
+	_now: Date = new Date(),
 ): Promise<void> {
-	const budget = suggestBudgetUsdFromEnv(env);
-	if (budget === null) return;
-	const spent = await suggestSpendThisMonthUsd(dbc, now);
-	if (isSuggestBudgetExceeded(spent, budget)) throw new Error("SUGGEST_BUDGET_EXHAUSTED");
+	throw new Error("SUGGEST_ATOMIC_RESERVATION_REQUIRED");
 }
 
-/** One ledger row per suggestion call, booked where the call is made. */
+/** Disabled with the provider path; no unscoped cost write is permitted. */
 export async function recordSuggestCost(
-	dbc: Executor,
-	value: { organizationId: string; provider: string },
+	_dbc: Executor,
+	_value: { organizationId: string; provider: string },
 ): Promise<void> {
-	await dbc.execute(sql`
-		INSERT INTO sv_cost_events (organization_id, provider, amount_usd, basis, kind)
-		VALUES (${value.organizationId}, ${value.provider}, ${SUGGEST_ESTIMATED_COST_USD}, 'estimated', 'suggest')
-	`);
+	throw new Error("SUGGEST_ATOMIC_RESERVATION_REQUIRED");
 }

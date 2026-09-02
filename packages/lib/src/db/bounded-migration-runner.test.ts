@@ -15,13 +15,27 @@ afterEach(() => {
 });
 
 describe("bounded migration runner", () => {
+	it("keeps the disposable scheduling replay aligned with the source journal frontier", () => {
+		const journal = JSON.parse(
+			readFileSync(fileURLToPath(new URL("./migrations/meta/_journal.json", import.meta.url)), "utf8"),
+		);
+		const workflow = readFileSync(
+			fileURLToPath(new URL("../../../../.github/workflows/e2e.yaml", import.meta.url)),
+			"utf8",
+		);
+		const sourceFrontier = journal.entries.at(-1)?.idx;
+
+		expect(Number.isSafeInteger(sourceFrontier)).toBe(true);
+		expect(workflow).toContain(`SELENA_MIGRATION_MAX_INDEX: "${sourceFrontier}"`);
+	});
+
 	it("builds an exact Drizzle bundle through the reviewed journal reconciliation", () => {
 		const targetDirectory = mkdtempSync(resolve(tmpdir(), "selena-bounded-migrations-"));
 		temporaryDirectories.push(targetDirectory);
 		const result = spawnSync(process.execPath, [runner, "--prepare-only"], {
 			env: {
 				...process.env,
-				SELENA_MIGRATION_MAX_INDEX: "55",
+				SELENA_MIGRATION_MAX_INDEX: "56",
 				SELENA_BOUNDED_MIGRATIONS_DIR: targetDirectory,
 			},
 			encoding: "utf8",
@@ -29,9 +43,9 @@ describe("bounded migration runner", () => {
 
 		expect(result.status).toBe(0);
 		const journal = JSON.parse(readFileSync(resolve(targetDirectory, "meta/_journal.json"), "utf8"));
-		expect(journal.entries.at(-1)).toMatchObject({ idx: 55, tag: "0055_provider_snapshot_resume_reconciliation" });
-		expect(readdirSync(targetDirectory)).toContain("0055_provider_snapshot_resume_reconciliation.sql");
-		expect(readdirSync(targetDirectory)).not.toContain("0056_placeholder.sql");
+		expect(journal.entries.at(-1)).toMatchObject({ idx: 56, tag: "0056_formal_evidence_acceptance_hardening" });
+		expect(readdirSync(targetDirectory)).toContain("0056_formal_evidence_acceptance_hardening.sql");
+		expect(readdirSync(targetDirectory)).not.toContain("0057_placeholder.sql");
 	});
 
 	it("fails before invoking drizzle-kit when no maximum is configured", () => {

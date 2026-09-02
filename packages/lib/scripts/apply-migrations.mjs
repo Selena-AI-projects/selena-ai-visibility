@@ -55,13 +55,23 @@ export async function expectedJournalRows(migrationsFolder) {
 	const rows = await Promise.all(
 		journal.entries.map(async (entry) => {
 			const createdAt = String(entry.when);
-			const hash = createHash("sha256")
+			const sourceHash = createHash("sha256")
 				.update(await readFile(resolve(migrationsFolder, `${entry.tag}.sql`), "utf8"))
 				.digest("hex");
+			const directKey = `${createdAt}:${sourceHash}`;
+			const canonicalEntry = APPLIED_MIGRATION_HASH_ALIASES.get(directKey)
+				? { hash: sourceHash, acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(directKey) }
+				: [...APPLIED_MIGRATION_HASH_ALIASES.entries()].find(
+						([key, aliases]) => key.startsWith(`${createdAt}:`) && aliases.includes(sourceHash),
+					);
+			const hash = canonicalEntry ? (canonicalEntry.hash ?? canonicalEntry[0].slice(createdAt.length + 1)) : sourceHash;
+			const acceptedAppliedHashes = canonicalEntry
+				? (canonicalEntry.acceptedAppliedHashes ?? canonicalEntry[1])
+				: Object.freeze([]);
 			return {
 				createdAt,
 				hash,
-				acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(`${createdAt}:${hash}`) ?? Object.freeze([]),
+				acceptedAppliedHashes,
 			};
 		}),
 	);

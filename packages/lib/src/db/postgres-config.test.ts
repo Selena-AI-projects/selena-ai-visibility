@@ -1,6 +1,6 @@
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import { runtimeDatabaseConnection } from "./postgres-config";
+import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "./postgres-config";
 
 const CERTIFICATE = ["-----BEGIN CERTIFICATE-----", "QUJDREVGRw==", "-----END CERTIFICATE-----"].join("\n");
 const PRIVATE_KEY = ["-----BEGIN ", "PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----"].join("");
@@ -66,5 +66,28 @@ describe("runtimeDatabaseConnection", () => {
 		expect(() =>
 			runtimeDatabaseConnection({ DATABASE_URL: "not a URL", SELENA_RUNTIME_DATABASE_CA_PEM: CERTIFICATE }),
 		).toThrow("DATABASE_URL_INVALID");
+	});
+});
+
+describe("runtimePgBossSchemaLifecycle", () => {
+	it("preserves pg-boss bootstrap for clean local and self-hosted installs", () => {
+		expect(runtimePgBossSchemaLifecycle({})).toEqual({ createSchema: true, migrate: true });
+		expect(runtimePgBossSchemaLifecycle({ SELENA_PGBOSS_OWNER_MANAGED_SCHEMA: "false" })).toEqual({
+			createSchema: true,
+			migrate: true,
+		});
+	});
+
+	it("disables runtime DDL only for an explicit owner-managed schema", () => {
+		expect(runtimePgBossSchemaLifecycle({ SELENA_PGBOSS_OWNER_MANAGED_SCHEMA: "true" })).toEqual({
+			createSchema: false,
+			migrate: false,
+		});
+	});
+
+	it("fails closed for an ambiguous lifecycle value", () => {
+		expect(() => runtimePgBossSchemaLifecycle({ SELENA_PGBOSS_OWNER_MANAGED_SCHEMA: "TRUE" })).toThrow(
+			"SELENA_PGBOSS_OWNER_MANAGED_SCHEMA_INVALID",
+		);
 	});
 });

@@ -1,10 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
-	citationDateWindow,
 	applyPerPromptKeyedLVCF,
+	citationDateWindow,
+	generateDateRange,
 	getDaysFromLookback,
 	getDefaultLookbackPeriod,
-	generateDateRange,
 	type LookbackPeriod,
 } from "@/lib/chart-utils";
 import { toRoundedPercentages } from "@/lib/domain-categories";
@@ -41,6 +41,20 @@ describe("getDefaultLookbackPeriod", () => {
 		[90, "1m"],
 	])("returns %s-period default when earliest data is %i days old", (days, expected) => {
 		expect(getDefaultLookbackPeriod(daysAgo(days))).toBe(expected);
+	});
+
+	it("uses completed whole days at the seven-day cutoff", () => {
+		vi.useFakeTimers();
+		try {
+			const now = new Date("2026-09-01T01:00:00.000Z");
+			vi.setSystemTime(now);
+			const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+			vi.setSystemTime(now.getTime() + 1);
+
+			expect(getDefaultLookbackPeriod(sevenDaysAgo)).toBe("1w");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

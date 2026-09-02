@@ -1,89 +1,216 @@
-# Draft PR — Selena AI Visibility v1.3 source-only acceptance package
+# Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN_RELEASE_INTEGRATED_CI_PENDING`.
+## Authoritative source candidate — 2026-09-02
 
-PR: `https://github.com/parkourcafe/selena-ai-visibility/pull/92`
+- Exact implementation source head:
+  `b9d967b668ba884b524ee7202060f5446abb58ad`.
+- Release `223f2681` is integrated by merge commit `81721f6d` without rewriting
+  feature history.
+- Source frontier is `57 entries / 0056`; shared staging remains at the last
+  evidenced `54 entries / 0053` and must not be advanced by this PR alone.
+- Formal evidence acceptance now requires a direct owner/control-plane
+  connection. `selena_app` remains unable to read raw private snapshot payload,
+  provider references or forge receipt/audit acceptance.
+- Local source gates: focused `74/74`, disposable PostgreSQL/RLS proof `PASS`,
+  root test/build `16/16`, lint `0 errors` (`129 warnings / 12 infos` baseline),
+  Local Maps replay `3 × 11/11`, provider calls `0`.
+- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
+  currently `OPEN/MERGEABLE`; published head `ee69000b` is `UNSTABLE` because
+  its Scheduling replay found the stale disposable ceiling. PR
+  [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is also
+  `OPEN/CONFLICTING`; its checks cover only historical head `a4d05d47`.
+- CI for `b9d967b6`: `PENDING_PUSH`; the preceding run
+  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
+  correctly rejected a stale disposable replay ceiling. The candidate aligns
+  that ceiling to source index `56` and adds a regression test.
+- No shared-staging mutation, deploy, provider call, production action, billing,
+  recurring job or merge is part of this source update.
 
-Base: `release/selena-visibility-mvp` (repository default branch).
+Status: `SOURCE_READY / CI_PENDING / STAGING_0056_HOLD / DO_NOT_MERGE`.
+
+## Current proposed PR summary
+
+- merge current release baseline into the feature branch;
+- harden provider-evidence acceptance around direct owner identity and
+  least-privilege runtime access;
+- add migration `0056` with pre-DDL legacy/RLS safety checks and reciprocal
+  immutable receipt/audit constraints;
+- preserve the two-axis HoReCa navigation with project keyboard focus and route
+  binding coverage;
+- keep Social/Travel, recurring execution, billing and provider calls closed.
+
+## Historical PR ledger
+
+The material below is retained for audit lineage. Older SHA, CI and deployment
+claims are historical and are not the current candidate status.
+
+- PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
+- Base: `release/selena-visibility-mvp`
+- Current remote base head: `4400d435`; integrated by merge commit `84cce314`
+- Last complete exact-head PR receipt: `1f3dd9d7`, base `330bab2a`,
+  `mergeable=true`, all six checks passed
+- Accepted staging implementation source: `100d34d8`
+- Diagnostic-2 runtime source: `a9d1f373`
+- Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
+- Bounded snapshot-download remediation source: `4a1fd948`
+- Canary-time feature HEAD: `3872a396`
+- Active staging worker after rollback: `100d34d8`, deployment `b583e695…`
+- Active staging web after drift recovery: `100d34d8`, deployment `835aca8d…`
+- Integrated release parent: `5cbb7b25`
+- Current offline reconciliation source patch: `b01a310b` in follow-up [PR
+  #108](https://github.com/parkourcafe/selena-ai-visibility/pull/108); exact
+provider capture/journal timestamps, strict replay checks and idempotent
+  dry-run rollback are covered by focused tests; final CI is green at
+  `f4b1418d`.
 
 ## Proposed title
 
-`feat(visibility): add source-only v1.3 acceptance package`
+`fix(visibility): harden v1.3 pre-production gates`
 
-## Proposed body
+## Proposed PR body
 
 ### Summary
 
-- add a domain-aware registry for 13 Bright Data dataset contracts with
-  lifecycle-only captures, external attempt control and no ambient transport;
-- add separate Google AI Mode, SERP, Maps Place and Maps Reviews contract
-  adapters;
-- keep Social and Travel fail-closed behind privacy, retention, cost and
-  product gates;
-- add tenant-scoped provider capability, source snapshot and evidence
-  provenance source with append-only guards and private raw references;
-- add signed ten-minute evidence cursors and safe HoReCa evidence read models;
-- add the HoReCa Local-first read-only contract/UI plus AVLI/KORA pilot,
-  60-intent ontology, owner review and unit-economics templates;
-- record three independent Codex audits and a blind read-only Claude Max review.
+- integrate release `4400d435` without rewriting feature history;
+- provide the provider registry and 13 canary-ready dataset contracts;
+- harden Google adapters and keep generic live probes fail-closed;
+- keep Social/Travel hidden at server, workflow and UI boundaries;
+- run staging through non-owner `selena_app` with tenant RLS;
+- keep recurring, billing and steady provider execution disabled;
+- deliver the HoReCa Local-first read model and separate the project axis from
+  the workspace-tool axis;
+- preserve the protected untracked recovery handoff boundary.
 
-### Evidence
+### Source and migration evidence
 
-- Provider/Database/Evidence: 115 tests passed across 6 files.
-- HoReCa contract: 8 tests passed.
-- HoReCa web model/rendering: 7 tests passed.
-- `@workspace/lib`, `@workspace/selena-visibility-contracts` and
-  `@workspace/web` typechecks passed.
-- changed-file Biome check passed.
-- `@workspace/web` production build passed.
-- Impeccable deterministic UI detector returned no findings in its single run.
-- three Codex cross-reviews: source-level PASS after remediation.
-- Claude Max `max5`/Sonnet blind review: complete, read-only, no permission
-  denials, no repository mutation; agreed with the source-only/pre-runtime
-  boundary.
-- post-release-integration full test run passed all 15 Turbo tasks, including
-  976 lib, 409 web and 240 visibility-contract tests; four DB-dependent web
-  tests remained explicitly skipped;
-- config, lib, contracts, worker and web typechecks passed;
-- changed-file Biome, web build and worker build passed after conflict
-  resolution.
+- fresh pre-`0053` backup `d2ac59a9…` was created and read back before the
+  mutation;
+- bounded migration deployment `76fe0d58…` applied only `0053`; journal
+  frontier advanced `53/1787940014000` → `54/1787940015000` and runner exit was
+  `0`;
+- canonical `0045` remains immutable for new installations;
+- the bounded runner accepts the one reviewed ordinal-bearing historical
+  `0045` hash only at timestamp `1787940007000`; a boolean-only staging
+  readback matched that historical variant and rejected the mistaken `0051`
+  hash;
+- `selena_app` has only the required `SELECT`/`INSERT` access to the snapshot
+  journal, FORCE RLS is active, cross-tenant insert returned SQLSTATE `42501`,
+  and the acceptance transaction rolled back to zero rows.
+- post-`0053` values-suppressed readback proved the non-owner runtime role,
+  FORCE RLS, ordinal column, validated check, unique index and insert guard.
+- sealed staging migration bound is `53`; follow-up no-op deployment
+  `b7b7fa33-6da8-49a0-835f-d76b74e9fafb` read journal `54/1787940015000` before
+  and after, verified TLS and exited `0` without applying a new migration.
 
-### Known baseline and authorization boundaries
+### Provider canary evidence
 
-- repository-wide build remains blocked in unchanged `apps/www` by 40
-  unresolved `@/lib/*` imports under the workspace path containing a space;
-  the changed web package builds independently;
-- repository-wide web lint has pre-existing findings outside this diff;
-  changed files pass targeted Biome;
-- no migration was applied and runtime RLS remains `UNKNOWN`;
-- no credentials, provider calls, paid canaries, shared staging/production,
-  billing changes, merge, deploy, production DB, recurring jobs or public
-  capability activation were performed;
-- `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and is not part
-  of the branch diff.
+- two separately authorized immutable identities each made exactly one Bright
+  Data `GOOGLE_AI_MODE` call;
+- historical snapshot `sd_mtiflifw2lfu6ne28l` is exactly bound to five staging
+  journal events: `TRIGGERED`, two `PENDING`, `READY`, `INTERRUPTED`;
+- provider `READY` timestamp `08:54:46Z` precedes the first journal event at
+  `08:54:47.108Z`; one tenant/project/dataset matched the raw ID;
+- diagnostic-2 receipt: `OUTCOME_UNKNOWN / TRIGGER_OUTCOME_UNKNOWN`;
+- each call used `automaticRetries=0`, `retryAllowed=false` and
+  `recurring=false`;
+- diagnostic-2 reserved cap `USD 0.25` at durable reference
+  `db:e432156c-7f5d-40ef-ad40-72a883affac9`;
+- diagnostic-2 completed in `0.34s` with no snapshot reference, record count or
+  new snapshot-lifecycle event;
+- read-only download produced one 1,543,419-byte record; offline registry
+  validation passed with a non-empty normalized answer and four citations;
+- the historical interruption is explained by the former 1 MB download cap;
+  source `4a1fd948` keeps control responses at 1 MB and bounds snapshot downloads
+  at 4 MiB;
+- the explicitly authorized staging-only reconciliation persisted one immutable
+  private source snapshot and one audit event (`PERSISTED_PRIVATE`, deployment
+  `78de5973-d6c5-446a-b8c9-390c1c273ee9`), with no evidence-index, cost or
+  acceptance rows and `providerCalls=0`;
+- a second replay reached the non-owner `selena_app` SELECT boundary on the
+  private snapshot and returned no receipt; no duplicate write was observed;
+- first-party Bright Data exports after diagnostic-2 show exactly one Google AI
+  Mode Search record and `USD 0.0015` total for 1 September;
+- the pre-diagnostic evidence already contained the same one record, therefore
+  diagnostic-2 added no billable record and `USD 0.0000` incremental cost;
+- the daily Web Scraper API total is `USD 0.0285` for 19 records; ChatGPT Search
+  and Gemini Search account for 18 records and `USD 0.0270` and are excluded
+  from Google AI Mode attribution;
+- both reservations remain immutable; no retry or additional provider call is
+  authorized.
+- offline historical reconciliation ran in staging dry-run mode and returned
+  `DRY_RUN_ROLLED_BACK`; it made no provider call or persistence write and
+  remains behind a separate owner gate for the irreversible commit.
+- prospective source diagnostics now classify HTTP 4xx/5xx, invalid response,
+  transport failure and hard trigger timeout without logging the provider body;
+  this does not reinterpret either already-consumed canary receipt.
+- the staging Postgres administration credential was rotated again after a
+  Railway tunnel diagnostic exposed it in restricted tool output; the sealed
+  variable and database role were updated together, a values-suppressed TCP
+  probe passed and temporary rotation material was destroyed.
 
-### Owner gates after review
+### HoReCa hosted evidence
 
-- disposable PostgreSQL migration/replay/rollback and non-owner RLS proof;
-- cost-capped provider canaries and schema/capability evidence;
-- hosted staging/payment acceptance;
-- product decision on general Selena vs HoReCa navigation;
-- merge/deploy/production/recurring activation.
+- exact staging deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` from git
+  archive `100d34d8` restored the accepted web after automatic release drift;
+- projects were presented in the complementary `PROJECTS / HoReCa projects`
+  rail;
+- `Overview`, `Visibility`, `Evidence`, `Competitors`, `Actions` and
+  `Outcomes` were presented in the top `TOOLS / Workspace tools` navigation;
+- external release auto-deploys `5cbb7b25`, `2e21ef04` and `4400d435` each
+  superseded an exact UI deployment; exact `100d34d8` was restored after all
+  three drifts;
+- authenticated DOM and visual rechecks passed on the active exact deployment,
+  both public health endpoints returned 200, and no page-origin browser errors
+  were observed.
 
-## PR creation side effects
+### Exact worker evidence
 
-Opening PR #92 to the repository default branch
-`release/selena-visibility-mvp` matches `pull_request` triggers for the
-following workflows:
+- temporary deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran diagnostic
+  source `a9d1f373` and was removed after the single call;
+- rollback deployment `b583e695-e935-4e2f-b6c5-f13b135964d4` restored exact
+  archive `100d34d8` and reached `SUCCESS`;
+- startup logs prove legacy provider execution disabled, recurring scheduler
+  disabled, managed schedules removed, pg-boss ready and all handlers
+  registered;
+- no package-manager/Corepack download occurred in the worker runtime phase.
 
-- `Build` — `blacksmith-4vcpu-ubuntu-2404`;
-- `E2E Tests` — `blacksmith-4vcpu-ubuntu-2404` plus a
-  `blacksmith-2vcpu-ubuntu-2404` scheduling-policy job;
-- `Deployment Smoke Tests` — `blacksmith-2vcpu-ubuntu-2404`;
-- `License Check` — `blacksmith-4vcpu-ubuntu-2404`;
-- `CLA Check` — pull-request workflow; runner billing was not established by
-  repository inspection.
+### CI evidence
 
-The billing/cost impact of Blacksmith jobs is `UNKNOWN`. The owner explicitly
-approved draft PR creation and the release-to-feature integration on 2026-08-31.
-PR merge, deploy and production activation remain separately unauthorized.
+- release-integrated evidence head `4a1fd948` passed Build, E2E Integration,
+  Scheduling Policy Verification, Deployment Smoke, License and CLA; exact run
+  links are in `ACCEPTANCE_MATRIX_V1_3.md`;
+- release integration `34d86417` preserved the feature historical-hash gate,
+  adopted release advisory-lock ordering and passed lib migration tests `10/10`
+  plus CLI migration image tests `2/2` locally;
+- GitHub reported PR #96 mergeable at `4a1fd948`; this source-quality
+  result does not override the provider HOLD;
+- PR #108 final exact-head checks are green at `f4b1418d`; the prior 30-minute
+  cleanup cancellation is superseded by the bounded 35-minute workflow run;
+- the E2E scheduling job now replays the final bounded runner through the
+  disposable release frontier `0054` against real PostgreSQL after the journal
+  is already complete; shared staging remains bounded at `0053`;
+  the current-head E2E check is the authoritative no-op/advisory-lock receipt;
+- local focused gates after the release merge: migration/repository tests
+  `77/77`, HoReCa web suite `441 passed / 4 skipped`, lib/web typecheck PASS,
+  shell syntax PASS and diff check clean;
+- local runtime is Node 22 while CI uses the required Node 24.
+
+### Remaining gates
+
+1. Historical Bright Data identity, payload and cost are reconciled. The private
+   staging capture is persisted once, and replay validation now checks canonical
+   payload, timestamps, schema, capability and audit binding. Owner-only
+   read-only verification against the actual staging Postgres remains blocked by
+   password authentication failure; neither execution may be retried.
+2. Production, production DB, recurring jobs, billing activation,
+   Social/Travel activation, additional provider calls and PR merge remain
+   prohibited.
+
+`HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` remains untracked and excluded.
+
+## CI side effects
+
+Every push to PR #96 starts the documented GitHub/Blacksmith checks. The owner
+restored the Actions budget and authorized bounded feature-branch pushes. A
+green check suite proves source quality only; it does not close the provider
+lifecycle or production gates.
