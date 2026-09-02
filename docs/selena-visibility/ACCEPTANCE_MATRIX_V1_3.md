@@ -47,7 +47,7 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS_PENDING_PR_AGGREGATION` | Documentation/evidence head `b4bd7f17` passed Build, Smoke, License and CLA; E2E remains `in_progress` on GitHub runner. PR #96 points to `b4bd7f17`, `mergeable=true`, aggregation `unstable`; no merge executed. |
+| Exact-head CI | `PASS` | Documentation/evidence head `b4bd7f17` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #96 points to `b4bd7f17`, `mergeable=true`; no merge executed. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` and restored worker deployment `b583e695-e935-4e2f-b6c5-f13b135964d4`. Worker was temporarily deployed from the diagnostic source (`78de5973…`) and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -64,7 +64,7 @@ Current documentation/evidence-head receipt for `b4bd7f17` (PR [#96](https://git
 | Check | Result | Evidence |
 |---|---|---|
 | Build | `PASS` | [run 33577408231](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408231) |
-| E2E Integration Tests | `IN_PROGRESS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
+| E2E Integration Tests | `PASS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
 | Scheduling Policy Verification | `PASS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
 | Dependency License Audit | `PASS` | [run 33577408226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408226) |
 | Deployment smoke | `PASS` | [run 33577408222](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408222) |

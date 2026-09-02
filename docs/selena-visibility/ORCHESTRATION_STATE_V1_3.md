@@ -87,9 +87,10 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
-- Current documentation/evidence head `b4bd7f17` has Build, Smoke, License and
-  CLA green; E2E run `33577408220` remains `in_progress`, so PR #96 aggregation
-  is `unstable` and no final all-green claim is made.
+- Documentation/evidence head `b4bd7f17` completed Build, E2E, Scheduling,
+  Smoke, License and CLA green (E2E run `33577408220` completed SUCCESS).
+- Follow-up documentation commit `c0b1b45a` starts a fresh CI cycle; its status
+  is not used to downgrade the completed `b4bd7f17` source evidence.
 - Documentation/evidence commit `eb82c8269724e66662abf3532b2ff15cea54c5e5`
   passed Build [33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750),
   E2E/Scheduling [33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710),
