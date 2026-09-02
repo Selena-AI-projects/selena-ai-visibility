@@ -47,7 +47,7 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS` | Implementation source `f4b1418d` and documentation head `1f3dd9d7` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #108 and PR #96 are clean/mergeable at the verified head. |
+| Exact-head CI | `PASS` | Documentation/evidence head `eb82c826` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #108 and PR #96 remain clean/mergeable; no merge executed. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` and restored worker deployment `b583e695-e935-4e2f-b6c5-f13b135964d4`. Worker was temporarily deployed from the diagnostic source (`78de5973…`) and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
@@ -59,16 +59,16 @@ Overall decision: `STAGING_PROVIDER_PAYLOAD_PASS / PRIVATE_RECONCILED / IDEMPOTE
 
 ## Exact-head CI evidence
 
-Final source-head receipt for `1f3dd9d7` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
+Final documentation/evidence-head receipt for `eb82c826` (PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108)):
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33532090636](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090636) |
-| E2E Integration Tests | `PASS` | [run 33532090581](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090581) |
-| Scheduling Policy Verification | `PASS` | [run 33532090581](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090581) |
-| Dependency License Audit | `PASS` | [run 33532090577](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090577) |
-| Deployment smoke | `PASS` | [run 33532090695](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090695) |
-| CLA | `PASS` | [run 33532090697](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33532090697) |
+| Build | `PASS` | [run 33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750) |
+| E2E Integration Tests | `PASS` | [run 33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710) |
+| Scheduling Policy Verification | `PASS` | [run 33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710) |
+| Dependency License Audit | `PASS` | [run 33574858545](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858545) |
+| Deployment smoke | `PASS` | [run 33574858731](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858731) |
+| CLA | `PASS` | [run 33574858503](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858503) |
 
 The scheduling job passed the real-PostgreSQL bounded replay at disposable
 frontier `0054`; this does not authorize applying `0054` to shared staging.
@@ -176,7 +176,7 @@ is actively re-established and rechecked.
 | Scope | Result | Boundary |
 |---|---|---|
 | Provider registry and 13 dataset contracts | `PASS_SOURCE_CANARY_READY` | Contract and adapter source plus exact-head CI. The historical Google AI Mode payload passed immutable schema-discovery validation with one record; formal accepted evidence remains intentionally ineligible until versioned promotion and human acceptance. |
-| Google adapters | `PASS_SOURCE / PASS_HISTORICAL_PAYLOAD / HOLD_PERSISTENCE` | Request/response validation, bounded timeout and zero internal retries passed in source. The exact historical payload produced a non-empty 40,224-character normalized answer and four normalized citations. Source `4a1fd948` adds a bounded 4 MiB snapshot path while keeping 1 MB control responses; no retry or provider trigger was added. Diagnostic-2 remains unresolved and no staging capture was retroactively written. |
+| Google adapters | `PASS_SOURCE / PASS_HISTORICAL_PAYLOAD / PRIVATE_RECONCILED / HOLD_ACCEPTANCE` | Request/response validation, bounded timeout and zero internal retries passed in source. The exact historical payload produced a non-empty 40,224-character normalized answer and four normalized citations. Source `4a1fd948` adds a bounded 4 MiB snapshot path while keeping 1 MB control responses; no retry or provider trigger was added. One immutable private staging capture plus one audit row were persisted with no evidence-index/cost/acceptance rows; formal acceptance remains held. |
 | Social/Travel | `PASS_HIDDEN` | Server strips hidden modules before the customer boundary; workflow and UI cannot activate them. |
 | HoReCa Local-first read models/UI | `PASS_HOSTED_RESTORED` | Exact source `100d34d8` was restored after automatic release drift. Its authenticated receipt separates the project rail at left from the six-tool axis across the top. |
 | AVLI/KORA pilot package | `PASS_TEMPLATE/HOLD_DATA` | Templates exist; no unsupported venue facts or provider results were invented. |
@@ -214,8 +214,11 @@ a values-suppressed TCP probe. No value is retained in this evidence package.
   `sha256:7b465dc14c050742f77fd37ecca4c64c5ff1f92eb30a945a9f60d688a8e3721f`
 - Offline adapter receipt: one immutable record, non-empty normalized answer,
   four normalized citations
-- Persisted provider capture: none; no retroactive staging evidence write was
-  attempted
+- Persisted provider capture: one immutable private source snapshot and one
+  reconciliation audit row (`PERSISTED_PRIVATE`, deployment `78de5973…`);
+  evidence-index, cost and acceptance rows were intentionally not created
+- Idempotent replay: blocked by intentional non-owner `selena_app` SELECT denial
+  on private snapshots; no duplicate write observed
 - First-party CSV evidence:
   [`brightdata-cost-by-web-api-2026-09-01.csv`](evidence/brightdata-cost-by-web-api-2026-09-01.csv)
   and

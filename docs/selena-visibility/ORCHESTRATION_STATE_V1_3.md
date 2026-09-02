@@ -2,11 +2,12 @@
 
 Updated: `2026-09-02` after diagnostic-2, mandatory worker rollback, exact-web
 drift recovery, first-party Bright Data payload/cost reconciliation, bounded
-snapshot remediation, release-head integration evidence and staging dry-run.
+snapshot remediation, release-head integration evidence and private historical
+capture persistence.
 
 ## Current state
 
-- State: `STAGING_CORE_PASS_HISTORICAL_PAYLOAD_VALIDATED_PERSISTENCE_HOLD`
+- State: `STAGING_CORE_PASS_HISTORICAL_PAYLOAD_VALIDATED_PRIVATE_RECONCILIATION_HOLD`
 - Context mode: `repository_only`
 - Branch: `feature/selena-visibility-v1-2-1`
 - Accepted staging implementation source: `100d34d8`
@@ -17,7 +18,7 @@ snapshot remediation, release-head integration evidence and staging dry-run.
 - Canary-time feature HEAD: `3872a396dabfb6763b2b93f70ea3c521f12d8688`
 - Active exact staging web: `100d34d8`, deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b`, restored after
   automatic release drift
-- Active worker after diagnostic rollback: `100d34d8`, deployment `9275a824-281d-4afa-8098-1ed7184ffc68`,
+- Active worker after diagnostic rollback: `100d34d8`, deployment `b583e695-e935-4e2f-b6c5-f13b135964d4`,
   `SUCCESS`
 - Integrated release baseline: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
@@ -26,6 +27,10 @@ snapshot remediation, release-head integration evidence and staging dry-run.
   PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108);
   provider capture and journal READY timestamps are separate and idempotent
   replay/dry-run invariants are hardened.
+- Historical private capture persistence: `PERSISTED_PRIVATE` from temporary
+  worker deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9`; idempotent replay
+  hit the intentional non-owner snapshot SELECT boundary and made no duplicate
+  write.
 - Current release-integrated source head: `f4b1418d`; final PR #108 checks are
   green, including bounded replay through disposable migration `0054`.
 - Original release comparison snapshot: `0d1f21ed57577d915ef3d41a6533cb88fd3a1f1e`
@@ -82,6 +87,12 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
+- Documentation/evidence commit `eb82c8269724e66662abf3532b2ff15cea54c5e5`
+  passed Build [33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750),
+  E2E/Scheduling [33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710),
+  Smoke [33574858731](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858731),
+  License [33574858545](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858545)
+  and CLA [33574858503](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858503).
 - Last complete exact-head receipt: `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
 - PR merge aggregation at that receipt: PR #96 `open`, `mergeable=true`,

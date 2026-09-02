@@ -1,6 +1,6 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PERSISTENCE_HOLD / DO_NOT_MERGE`.
+Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PRIVATE_RECONCILED / ACCEPTANCE_HOLD / DO_NOT_MERGE`.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`
