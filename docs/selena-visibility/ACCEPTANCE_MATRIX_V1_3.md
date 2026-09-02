@@ -5,18 +5,22 @@
 This is the only current acceptance overlay. The hosted receipts below are a
 dated historical ledger and do not prove deployment of this source head.
 
-- Exact implementation source head: `970aa54da81ffcd8b15fccae4e343d999acfe281`.
+- Exact implementation source head: `b9d967b668ba884b524ee7202060f5446abb58ad`.
 - Branch: `feature/selena-visibility-v1-2-1`.
 - Release head integrated by merge commit `81721f6d`: `223f2681224812ffe2be0bff0bf354eb57c83166`.
 - Source migration frontier: `57 entries / 0056`; shared staging remains at the
   last evidenced frontier `54 entries / 0053`. Applying `0054–0056` is not
   authorized by this document.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  `OPEN`, remote head `d514d79b`, `CONFLICTING/DIRTY`, with no current checks.
+  `OPEN/MERGEABLE`; its preceding remote head `ee69000b` is `UNSTABLE` because
+  the Scheduling gate exposed the stale disposable ceiling now fixed here.
   PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is
   `OPEN`, remote head `a4d05d47`, also `CONFLICTING/DIRTY`. Neither is merged.
-- CI for `970aa54d`: `PENDING_PUSH`. Historical runs belong to earlier heads and
-  are not evidence for this implementation head.
+- CI for `b9d967b6`: `PENDING_PUSH`. The immediately preceding PR-head run
+  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
+  exposed a stale disposable-only migration ceiling (`54` versus source `56`);
+  `b9d967b6` aligns it and adds a journal/workflow regression test. That failed
+  run is diagnostic evidence, not acceptance.
 - Local gates: root test `16/16` tasks, build `16/16`, lint `0 errors` with the
   registered baseline `129 warnings / 12 infos`, focused final suite `74/74`,
   lib/web typecheck `PASS`, disposable PostgreSQL migration/RLS proof `PASS`,
@@ -29,7 +33,7 @@ dated historical ledger and do not prove deployment of this source head.
 | Provider registry and 13 dataset contracts | `PASS_SOURCE` | Existing source plus local/CI-gated contract suites; no new provider execution. |
 | Google adapters and gates | `PASS_SOURCE / NO_CALL` | Timeout/retry and immutable-identity controls remain fail-closed; provider calls in this change: `0`. |
 | Social/Travel | `PASS_HIDDEN` | Activation remains prohibited and hidden at customer boundaries. |
-| HoReCa Local-first UI | `PASS_SOURCE / HOLD_HOSTED` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. Exact `970aa54d` is not deployed. |
+| HoReCa Local-first UI | `PASS_SOURCE / HOLD_HOSTED` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. Exact `b9d967b6` is not deployed. |
 | Runtime least privilege | `PASS_SOURCE` | `selena_app` retains metadata-only access and cannot read private payload/provider references or forge formal acceptance. |
 | Formal evidence acceptance | `PASS_SOURCE / HOLD_STAGING_0056` | Only a direct table-owner session with RLS bypass may accept. Receipt and formal audit are reciprocal, immutable and atomic. Migration preflight rejects legacy rows before DDL. |
 | CI | `PENDING_PUSH` | Must be replaced with exact run links after the authorized feature push. |
@@ -46,7 +50,7 @@ Overall decision: `GO_SOURCE_PUSH_AND_CI / NO_GO_STAGING_0056 / NO_GO_PRODUCTION
 
 ## Historical hosted evidence ledger
 
-Everything below predates `970aa54d` and is retained for lineage only. Where a
+Everything below predates `b9d967b6` and is retained for lineage only. Where a
 row calls an older SHA "current" or "final", read it as current at the date of
 that receipt, not as the current branch state.
 

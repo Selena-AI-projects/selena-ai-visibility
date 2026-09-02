@@ -3,7 +3,7 @@
 ## Authoritative source candidate — 2026-09-02
 
 - Exact implementation source head:
-  `970aa54da81ffcd8b15fccae4e343d999acfe281`.
+  `b9d967b668ba884b524ee7202060f5446abb58ad`.
 - Release `223f2681` is integrated by merge commit `81721f6d` without rewriting
   feature history.
 - Source frontier is `57 entries / 0056`; shared staging remains at the last
@@ -15,12 +15,14 @@
   root test/build `16/16`, lint `0 errors` (`129 warnings / 12 infos` baseline),
   Local Maps replay `3 × 11/11`, provider calls `0`.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  currently `OPEN`, published head `d514d79b`, `CONFLICTING/DIRTY`, with no
-  checks for this local candidate. PR
+  currently `OPEN/MERGEABLE`; published head `ee69000b` is `UNSTABLE` because
+  its Scheduling replay found the stale disposable ceiling. PR
   [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is also
   `OPEN/CONFLICTING`; its checks cover only historical head `a4d05d47`.
-- CI for `970aa54d`: `PENDING_PUSH`; replace this with exact run links only
-  after GitHub returns them.
+- CI for `b9d967b6`: `PENDING_PUSH`; the preceding run
+  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
+  correctly rejected a stale disposable replay ceiling. The candidate aligns
+  that ceiling to source index `56` and adds a regression test.
 - No shared-staging mutation, deploy, provider call, production action, billing,
   recurring job or merge is part of this source update.
 

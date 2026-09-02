@@ -1,11 +1,11 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_970AA54D / CI_PENDING / HOSTED_0056_NOT_RUN`.
+Status: `PASS_SOURCE_B9D967B6 / CI_PENDING / HOSTED_0056_NOT_RUN`.
 
 ## Current independent overlay — 2026-09-02
 
 Reviewed implementation source:
-`970aa54da81ffcd8b15fccae4e343d999acfe281`.
+`b9d967b668ba884b524ee7202060f5446abb58ad`.
 
 - Database/Evidence independent verdict: `P0=0`, `P1=0` after the final
   preflight fix. Migration `0056` requires direct session identity, ownership
@@ -27,7 +27,9 @@ Reviewed implementation source:
   provider call.
 - Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
   is absent; it was not installed during acceptance.
-- CI for this implementation head is pending the authorized feature push.
+- CI for this implementation head is pending the authorized feature push. The
+  preceding Scheduling run failed on a stale disposable ceiling and directly
+  motivated the source-frontier regression test in `b9d967b6`.
 - No shared staging migration/deploy, provider call, production action, billing,
   recurring job or PR merge was performed for this overlay.
 

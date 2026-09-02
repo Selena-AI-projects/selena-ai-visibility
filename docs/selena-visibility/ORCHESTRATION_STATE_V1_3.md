@@ -4,9 +4,9 @@
 
 - State: `SOURCE_READY_CI_PENDING / STAGING_0056_HOLD / PRODUCTION_NO_GO`.
 - Exact implementation source head:
-  `970aa54da81ffcd8b15fccae4e343d999acfe281`.
-- Branch: `feature/selena-visibility-v1-2-1`, seven commits ahead of the
-  currently published feature ref before this documentation commit.
+  `b9d967b668ba884b524ee7202060f5446abb58ad`.
+- Branch: `feature/selena-visibility-v1-2-1`; published feature ref `ee69000b`,
+  current source candidate `b9d967b6` pending push.
 - Release lineage: remote release `223f2681`, integrated by merge `81721f6d`.
 - Source database frontier: `57 entries / 0056`; last evidenced shared staging
   frontier: `54 entries / 0053`.
@@ -21,11 +21,16 @@
   warnings and `12` infos, Local Maps stability `3 × 11/11`.
 - Impeccable: `NOT_SUPPORTED` because no workspace binary exists.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96):
-  `OPEN`, remote head `d514d79b`, `CONFLICTING/DIRTY`, no current checks.
+  `OPEN/MERGEABLE`; preceding head `ee69000b` is `UNSTABLE` only because its
+  Scheduling replay used the stale disposable migration ceiling.
 - PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108):
   `OPEN`, remote head `a4d05d47`, `CONFLICTING/DIRTY`; its green checks are
   historical and do not cover `970aa54d`.
-- CI for `970aa54d`: `PENDING_PUSH`.
+- CI for `b9d967b6`: `PENDING_PUSH`. Run
+  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
+  on the preceding PR head failed only because the disposable replay ceiling
+  was stale at `54`; `b9d967b6` raises that CI-only ceiling to source index `56`
+  and locks the invariant with a test.
 - Shared staging mutation/deploy/provider execution in this source closure:
   `0`; production/merge/recurring/billing/Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
