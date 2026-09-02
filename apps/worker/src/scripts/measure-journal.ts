@@ -433,6 +433,13 @@ async function heartbeatDailyClaim(claimId: string): Promise<void> {
 	});
 }
 
+async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDONED" | "HOLD" | "BUSY"> {
+	return db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		return recoverJournalDailyClaim(tx, { claimId, actorId: ctx.actorId });
+	});
+}
+
 async function measure(slug: string): Promise<void> {
 	const { project, scenario } = await projectFor(slug);
 	const rows = await scenarioRowsFor(project.id, slug);
@@ -597,11 +604,12 @@ async function measure(slug: string): Promise<void> {
 		await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED");
 	} catch (error) {
 		try {
-			await transitionDailyClaim(
-				claim.id,
-				providerBoundaryCrossed ? "EXECUTING" : "CLAIMED",
-				providerBoundaryCrossed ? "HOLD" : "NO_SPEND",
-			);
+			// Once execution begins, only the database may interpret the committed
+			// run/boundary/cost ledgers. It can finish a terminal claim and otherwise
+			// leaves EXECUTING fail-closed for later evidence, rather than freezing an
+			// exact state into the immutable HOLD terminal.
+			if (providerBoundaryCrossed) await recoverDailyClaim(claim.id);
+			else await transitionDailyClaim(claim.id, "CLAIMED", "NO_SPEND");
 		} catch (settlementError) {
 			console.error(
 				`${slug}: daily claim remains fail-closed after settlement error: ${settlementError instanceof Error ? settlementError.message : String(settlementError)}`,

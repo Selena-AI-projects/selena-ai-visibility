@@ -362,7 +362,18 @@ BEGIN
 		OR has_table_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'DELETE')
 		OR has_table_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'TRUNCATE')
 		OR NOT has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_at', 'SELECT')
-		OR has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_by', 'SELECT') THEN
+		OR has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_by', 'SELECT')
+		OR NOT has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'SELECT')
+		OR NOT has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'INSERT')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'UPDATE')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'DELETE')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'TRUNCATE')
+		OR NOT has_function_privilege(
+			'selena_app', 'public.sv_journal_claim_recovery_state(uuid)', 'EXECUTE'
+		)
+		OR NOT has_function_privilege(
+			'selena_app', 'public.sv_recover_journal_daily_claim(uuid,text)', 'EXECUTE'
+		) THEN
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE';
 	END IF;
 END;
@@ -1202,6 +1213,24 @@ END;
 $proof_missing_tenant$;
 
 SELECT set_config('app.organization_id', 'rls-schema-proof-org-a', true);
+
+DO $proof_runtime_journal_recovery_acl$
+BEGIN
+	IF (SELECT count(*) FROM sv_journal_provider_boundaries) <> 0 THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_BOUNDARY_SCOPE_FAILED';
+	END IF;
+	BEGIN
+		PERFORM sv_recover_journal_daily_claim(
+			'00000000-0000-4000-8000-000000000000',
+			'rls-schema-proof-runtime'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_RECOVERY_MISSING_CLAIM_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'JOURNAL_RECOVERY_CLAIM_NOT_FOUND' THEN RAISE; END IF;
+	END;
+END;
+$proof_runtime_journal_recovery_acl$;
 
 INSERT INTO sv_provider_canary_executions (organization_id, execution_identity)
 VALUES ('rls-schema-proof-org-a', 'release-0e00df4f-google-ai-mode-owner-canary-1');

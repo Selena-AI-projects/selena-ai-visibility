@@ -167,7 +167,8 @@ describe("journal durable daily claim", () => {
 		expect(source).toContain("isAffirmativeEnvValue(process.env.SELENA_JOURNAL_FORCE)");
 		expect(measurement).toContain('outcome.outcome.status !== "SUCCEEDED"');
 		expect(measurement).toContain("terminalCycle.completedRuns !== terminalCycle.expectedRuns");
-		expect(measurement).toContain('providerBoundaryCrossed ? "HOLD" : "NO_SPEND"');
+		expect(measurement).toContain("if (providerBoundaryCrossed) await recoverDailyClaim(claim.id)");
+		expect(measurement).not.toContain('providerBoundaryCrossed ? "HOLD" : "NO_SPEND"');
 		expect(measurement).toContain('await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED")');
 		expect(source).toContain("JOURNAL_DAILY_CLAIM_" + "$" + "{status}");
 		expect(source).toContain("select set_config('app.organization_id'");
