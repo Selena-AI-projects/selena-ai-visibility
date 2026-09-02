@@ -18,3 +18,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO se
 -- Server repositories must use an explicitly granted internal role and project
 -- only the safe read model; broad table/view grants above never expose it.
 REVOKE ALL ON sv_evidence_provenance FROM selena_app;
+
+-- pg-boss is a service-owned schema, not tenant evidence. The worker runtime
+-- must be able to poll and maintain its queues, while ownership stays with the
+-- database owner. Keep this in owner provisioning (not the application
+-- migration journal) so restored databases receive the same ACL contract.
+CREATE SCHEMA IF NOT EXISTS pgboss AUTHORIZATION postgres;
+GRANT USAGE ON SCHEMA pgboss TO selena_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA pgboss
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO selena_app;
