@@ -303,7 +303,12 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 						eq(schema.svJournalDailyClaims.id, unresolved.id),
 						eq(schema.svJournalDailyClaims.organizationId, tenantId),
 						eq(schema.svJournalDailyClaims.status, unresolved.status),
-						eq(schema.svJournalDailyClaims.updatedAt, unresolved.updatedAt),
+						// The lease is compared in the database rather than against the timestamp
+						// read into this process: the column keeps microseconds and a JavaScript
+						// Date keeps milliseconds, so an equality on the value read back can never
+						// match a row whose timestamp came from CURRENT_TIMESTAMP. Status and the
+						// interval are the compare-and-swap — a holder that is still alive has
+						// either moved the row on or refreshed it with a heartbeat.
 						sql`${schema.svJournalDailyClaims.updatedAt} <= CURRENT_TIMESTAMP - interval '45 minutes'`,
 					),
 				)
