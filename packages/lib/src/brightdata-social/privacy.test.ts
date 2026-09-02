@@ -88,7 +88,7 @@ describe("YouTube privacy projection", () => {
 				contentType: "video",
 				platform: "youtube",
 				platformId: "video-1",
-				aliases: [],
+				aliases: ["short-1"],
 				provenance: { ...provenance, fields: ["video_id", "views"] },
 			},
 			{

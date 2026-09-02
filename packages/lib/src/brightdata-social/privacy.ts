@@ -74,7 +74,10 @@ export function projectYouTubeDurableEntities(
 						contentType: entity.contentType,
 						platform: entity.platform,
 						platformId: entity.platformId,
-						aliases: [],
+						// Normalizers use aliases for stable platform IDs such as
+						// YouTube shortcode. Keep those identifiers; text and URLs
+						// remain excluded by the projection shape.
+						aliases: [...entity.aliases],
 						provenance: safeProvenance(entity),
 					},
 				];
@@ -85,8 +88,8 @@ export function projectYouTubeDurableEntities(
 						platform: entity.platform,
 						subjectPlatformId: entity.subjectPlatformId,
 						metrics: Object.fromEntries(
-							Object.entries(entity.metrics).filter(([field, value]) =>
-								YOUTUBE_DURABLE_FIELDS.has(field.toLowerCase()) && Number.isFinite(value),
+							Object.entries(entity.metrics).filter(
+								([field, value]) => YOUTUBE_DURABLE_FIELDS.has(field.toLowerCase()) && Number.isFinite(value),
 							),
 						),
 						provenance: safeProvenance(entity),
@@ -94,6 +97,8 @@ export function projectYouTubeDurableEntities(
 				];
 			case "media_asset":
 			case "social_comment":
+				return [];
+			default:
 				return [];
 		}
 	});

@@ -110,6 +110,7 @@ import { Route as ApiV1SelenaAdminProvidersProviderIdCapabilitiesRouteImport } f
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
 import { Route as ApiV1SelenaLocationsLocationIdLocalScanQuoteRouteImport } from './routes/api/v1/selena/locations/$locationId/local-scan/quote'
 import { Route as ApiV1SelenaPilotObservationsObservationIdReviewRouteImport } from './routes/api/v1/selena/pilot/observations/$observationId/review'
+import { Route as ApiV1SelenaProjectsProjectIdYoutubeVideosRouteImport } from './routes/api/v1/selena/projects/$projectId/youtube/videos'
 import { Route as ApiV1SelenaPilotCyclesCycleIdTasksIndexRouteImport } from './routes/api/v1/selena/pilot/cycles/$cycleId/tasks/index'
 import { Route as ApiV1SelenaPilotCyclesCycleIdTasksGenerateRouteImport } from './routes/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
 import { Route as ApiV1SelenaReadinessScansScanIdFixesFindingIdRouteImport } from './routes/api/v1/selena/readiness/scans/$scanId/fixes/$findingId'
@@ -663,6 +664,12 @@ const ApiV1SelenaPilotObservationsObservationIdReviewRoute =
     path: '/api/v1/selena/pilot/observations/$observationId/review',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaProjectsProjectIdYoutubeVideosRoute =
+  ApiV1SelenaProjectsProjectIdYoutubeVideosRouteImport.update({
+    id: '/api/v1/selena/projects/$projectId/youtube/videos',
+    path: '/api/v1/selena/projects/$projectId/youtube/videos',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute =
   ApiV1SelenaPilotCyclesCycleIdTasksIndexRouteImport.update({
     id: '/api/v1/selena/pilot/cycles/$cycleId/tasks/',
@@ -783,6 +790,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
+  '/api/v1/selena/projects/$projectId/youtube/videos': typeof ApiV1SelenaProjectsProjectIdYoutubeVideosRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
   '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId': typeof ApiV1SelenaReadinessScansScanIdFixesFindingIdRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/': typeof ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute
@@ -884,6 +892,7 @@ export interface FileRoutesByTo {
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
+  '/api/v1/selena/projects/$projectId/youtube/videos': typeof ApiV1SelenaProjectsProjectIdYoutubeVideosRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
   '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId': typeof ApiV1SelenaReadinessScansScanIdFixesFindingIdRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks': typeof ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute
@@ -991,6 +1000,7 @@ export interface FileRoutesById {
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
   '/api/v1/selena/locations/$locationId/local-scan/quote': typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   '/api/v1/selena/pilot/observations/$observationId/review': typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
+  '/api/v1/selena/projects/$projectId/youtube/videos': typeof ApiV1SelenaProjectsProjectIdYoutubeVideosRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate': typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
   '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId': typeof ApiV1SelenaReadinessScansScanIdFixesFindingIdRoute
   '/api/v1/selena/pilot/cycles/$cycleId/tasks/': typeof ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute
@@ -1098,6 +1108,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
+    | '/api/v1/selena/projects/$projectId/youtube/videos'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
     | '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/'
@@ -1199,6 +1210,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
+    | '/api/v1/selena/projects/$projectId/youtube/videos'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
     | '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks'
@@ -1305,6 +1317,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
     | '/api/v1/selena/locations/$locationId/local-scan/quote'
     | '/api/v1/selena/pilot/observations/$observationId/review'
+    | '/api/v1/selena/projects/$projectId/youtube/videos'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/generate'
     | '/api/v1/selena/readiness/scans/$scanId/fixes/$findingId'
     | '/api/v1/selena/pilot/cycles/$cycleId/tasks/'
@@ -1372,6 +1385,7 @@ export interface RootRouteChildren {
   ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute: typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute: typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
   ApiV1SelenaPilotObservationsObservationIdReviewRoute: typeof ApiV1SelenaPilotObservationsObservationIdReviewRoute
+  ApiV1SelenaProjectsProjectIdYoutubeVideosRoute: typeof ApiV1SelenaProjectsProjectIdYoutubeVideosRoute
   ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute: typeof ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute
   ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute: typeof ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute
 }
@@ -2085,6 +2099,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaPilotObservationsObservationIdReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/projects/$projectId/youtube/videos': {
+      id: '/api/v1/selena/projects/$projectId/youtube/videos'
+      path: '/api/v1/selena/projects/$projectId/youtube/videos'
+      fullPath: '/api/v1/selena/projects/$projectId/youtube/videos'
+      preLoaderRoute: typeof ApiV1SelenaProjectsProjectIdYoutubeVideosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/pilot/cycles/$cycleId/tasks/': {
       id: '/api/v1/selena/pilot/cycles/$cycleId/tasks/'
       path: '/api/v1/selena/pilot/cycles/$cycleId/tasks'
@@ -2358,6 +2379,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute,
   ApiV1SelenaPilotObservationsObservationIdReviewRoute:
     ApiV1SelenaPilotObservationsObservationIdReviewRoute,
+  ApiV1SelenaProjectsProjectIdYoutubeVideosRoute:
+    ApiV1SelenaProjectsProjectIdYoutubeVideosRoute,
   ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute:
     ApiV1SelenaPilotCyclesCycleIdTasksGenerateRoute,
   ApiV1SelenaPilotCyclesCycleIdTasksIndexRoute:

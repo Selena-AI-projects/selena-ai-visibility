@@ -22,6 +22,7 @@ export * from "./registry";
 export * from "./retention";
 export * from "./transport";
 export * from "./types";
+export * from "./youtube-durable-persistence";
 
 export class BrightDataSocialPolicyError extends Error {
 	constructor(public readonly code: string) {

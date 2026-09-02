@@ -1369,7 +1369,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-18)).toEqual([
+		expect(journal.entries.slice(-19)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1466,7 +1466,37 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0055_provider_snapshot_resume_reconciliation",
 				breakpoints: true,
 			},
+			{
+				idx: 56,
+				version: "7",
+				when: 1787940018000,
+				tag: "0056_youtube_durable_projection",
+				breakpoints: true,
+			},
 		]);
+	});
+
+	it("keeps the YouTube durable projection tenant-scoped and free of raw payload columns", () => {
+		const table = getTableConfig(schema.svYouTubeVideoMetrics);
+		expect(table.name).toBe("sv_youtube_video_metrics");
+		expect(table.enableRLS).toBe(true);
+		expect(table.columns.map((column) => column.name)).not.toEqual(
+			expect.arrayContaining(["raw_payload", "video_url", "title", "description", "transcript", "comments"]),
+		);
+		expect(table.indexes.map((index) => index.config.name)).toEqual(
+			expect.arrayContaining([
+				"sv_youtube_video_metrics_video_snapshot_unique",
+				"sv_youtube_video_metrics_org_project_captured_idx",
+				"sv_youtube_video_metrics_expires_idx",
+			]),
+		);
+		const migration = readFileSync(
+			new URL("./migrations/0056_youtube_durable_projection.sql", import.meta.url),
+			"utf8",
+		);
+		expect(migration).toContain('ALTER TABLE "sv_youtube_video_metrics" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_youtube_video_metrics"');
+		expect(migration).toContain('FOREIGN KEY ("project_id", "organization_id")');
 	});
 
 	it("carries the legacy lock ordinal in a follow-up migration that fits either applied shape", () => {

@@ -361,6 +361,58 @@ export const svProviderDatasetSnapshotEvents = pgTable(
 	}),
 ).enableRLS();
 
+/**
+ * Minimal durable YouTube projection. Raw provider payloads, URLs, titles,
+ * descriptions, transcripts and comments deliberately have no column here.
+ * Rows are tenant/project scoped metric snapshots and expire after the
+ * owner-approved 90-day window.
+ */
+export const svYouTubeVideoMetrics = pgTable(
+	"sv_youtube_video_metrics",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
+		snapshotId: text("snapshot_id").notNull(),
+		videoId: text("video_id").notNull(),
+		shortcode: text("shortcode"),
+		youtuberId: text("youtuber_id"),
+		views: bigint("views", { mode: "number" }),
+		likes: bigint("likes", { mode: "number" }),
+		commentsCount: integer("comments_count"),
+		contentSha256: text("content_sha256").notNull(),
+		schemaVersion: text("schema_version").notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_youtube_video_metrics_project_org_fk",
+		}),
+		videoSnapshotUnique: uniqueIndex("sv_youtube_video_metrics_video_snapshot_unique").on(
+			table.organizationId,
+			table.projectId,
+			table.videoId,
+			table.snapshotId,
+		),
+		orgProjectCapturedIdx: index("sv_youtube_video_metrics_org_project_captured_idx").on(
+			table.organizationId,
+			table.projectId,
+			table.capturedAt,
+		),
+		expiresIdx: index("sv_youtube_video_metrics_expires_idx").on(table.organizationId, table.expiresAt),
+		shapeCheck: check(
+			"sv_youtube_video_metrics_shape_check",
+			sql`${table.snapshotId} = btrim(${table.snapshotId}) AND length(${table.snapshotId}) > 0 AND ${table.videoId} = btrim(${table.videoId}) AND length(${table.videoId}) > 0 AND (${table.shortcode} IS NULL OR (${table.shortcode} = btrim(${table.shortcode}) AND length(${table.shortcode}) > 0)) AND (${table.youtuberId} IS NULL OR (${table.youtuberId} = btrim(${table.youtuberId}) AND length(${table.youtuberId}) > 0)) AND (${table.views} IS NULL OR ${table.views} >= 0) AND (${table.likes} IS NULL OR ${table.likes} >= 0) AND (${table.commentsCount} IS NULL OR ${table.commentsCount} >= 0) AND ${table.contentSha256} ~ '^sha256:[a-f0-9]{64}$' AND ${table.schemaVersion} = btrim(${table.schemaVersion}) AND length(${table.schemaVersion}) > 0 AND ${table.expiresAt} > ${table.capturedAt}`,
+		),
+	}),
+).enableRLS();
+
 export const svSourceSnapshots = pgTable(
 	"sv_source_snapshots",
 	{

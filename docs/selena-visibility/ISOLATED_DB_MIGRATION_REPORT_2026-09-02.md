@@ -87,6 +87,12 @@ The approved one-shot canary ran after an automatically generated, read-only `CL
 
 **Overall canary decision: `PASS` (bounded technical canary).** The transport, input, response, IDs, cardinality, latency and dated Bright Usage cost reconciliation are validated within the `$0.50` cap. Activation, scoring, UI, tariffs, public product composition and all other datasets remain unchanged. Durable raw retention remains disabled; privacy/architecture review is still required before any pilot activation.
 
+The follow-up source implementation adds a tenant-scoped YouTube metric projection
+and fail-closed customer API guard (`0056_youtube_durable_projection`). This does
+not change the canary decision or activate the product: the migration has not been
+applied to live staging, the capability row is not approved for customer exposure,
+and `SELENA_YOUTUBE_CUSTOMER_API_ENABLED` remains off.
+
 ## Final acceptance follow-up
 
 The post-canary runtime reconciliation was completed on 2026-09-02 without a

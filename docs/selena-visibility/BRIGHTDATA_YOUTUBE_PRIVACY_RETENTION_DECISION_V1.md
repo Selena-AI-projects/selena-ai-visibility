@@ -59,16 +59,22 @@ The worker queue is wired behind an explicit feature flag and removes only
 expired, name-matched temporary canary directories. Local tests cover the
 projection and expiry planner without provider calls.
 
-The staging `worker` environment now has the two non-secret feature variables
-set, with deployment intentionally skipped. They will take effect on the next
-worker deployment; no provider call or restart was triggered by setting them.
+The durable persistence boundary is now implemented in
+`packages/lib/src/brightdata-social/youtube-durable-persistence.ts` and migration
+`0056_youtube_durable_projection`. It stores only tenant/project-scoped IDs,
+numeric metrics, capture timestamps and hashes; RLS is forced, project identity
+is composite-tenant fenced, updates are rejected (new snapshots are append-only),
+and expiry is set to 90 days. The customer read route is
+`/api/v1/selena/projects/:projectId/youtube/videos`; it returns only the safe
+projection and fails closed unless both the feature flag and an approved
+capability row are present. The flag remains off by default.
 
 Before any durable pilot, the remaining work is:
 
-1. Store only the approved projection plus provenance and hashes. Keep raw
-   retention disabled in the registry.
-2. Enforce tenant-scoped access and prevent public/customer API exposure of the
-   evidence projection until product approval.
+1. Apply and verify migration `0056` in the approved staging maintenance
+   window; it has not been applied to live staging by this change.
+2. Seed and approve the tenant capability row through the owner-controlled
+   provisioning path. No customer API exposure is enabled until that decision.
 3. The temporary-fixture cleanup job is enabled only when both
    `SELENA_YOUTUBE_RETENTION_ENABLED=true` and an explicit, non-broad
    `SELENA_BRIGHTDATA_CANARY_ARTIFACT_ROOT` are present. It is not enabled by
@@ -107,10 +113,10 @@ The disposable redaction fixture passed `23/23` targeted tests and the lib
 typecheck passed. The allowlist removes unknown fields, URLs, personal text,
 transcripts, comments and media assets from the approved projection.
 
-The gate is nevertheless **`HOLD_FOR_PILOT`**, not `PASS`: the projection is
-currently exercised by the manual canary and tests, but is not yet the enforced
-boundary of a durable provider-evidence persistence path or a customer API
-route. No durable YouTube projection was written, no public exposure was
-enabled, and no provider call was made during this audit. Pilot activation must
-first add and verify that tenant-scoped persistence/API boundary under a
-separate owner-approved change.
+The code-level gate is now **`PASS_SOURCE_ONLY`**: the projection is enforced
+by a tenant-scoped durable write/read boundary and a fail-closed customer API
+guard in source and tests. The operational pilot gate remains
+**`HOLD_FOR_PILOT`** because migration `0056`, capability approval and feature
+flag enablement are intentionally not applied. No durable YouTube projection
+was written, no public exposure was enabled, and no provider call was made
+during this implementation.
