@@ -1,5 +1,46 @@
 # Selena AI Visibility v1.3 — orchestration state
 
+## Authoritative current state — 2026-09-03
+
+- State: `GO_SOURCE / HOLD_STAGING_0059_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
+- Exact executable candidate:
+  `e59537a032df7d18efe3bbba12bad18e29eba020`, integrating release
+  `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`.
+- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+  is open, draft, mergeable and clean. Exact-head Build
+  [33659667608](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
+  E2E/Scheduling
+  [33659667384](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
+  License [33659667351](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
+  Smoke [33659667347](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
+  and CLA [33659667675](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675)
+  passed.
+- `0059` safely quarantines a stale journal HOLD through an owner-only function.
+  `selena_app` keeps its private payload/provider-reference denials and cannot
+  call or spoof the reconciliation. Unused permits are revoked and excluded
+  from enqueue/claim; replay is identity-bound and idempotent; no evidence,
+  acceptance or cost row is synthesized.
+- Both pure legacy-cost and mixed boundary/legacy-cost histories require an
+  explicit ambiguous-spend acknowledgement. The call upper bound adds only
+  unmatched legacy cost rows to the boundary upper bound.
+- Local lint, full tests, Impeccable detect, build, shell/diff checks and the
+  isolated real-PostgreSQL 0059 rehearsal passed. Independent audit found no
+  remaining P0/P1.
+- Shared staging remains on hosted source `b4e678b8` and migration `0058` with
+  providers, recurring jobs and billing off. No migration, deployment or paid
+  call occurred in this source loop.
+- Owner authorization exists for one AVLI staging measurement cycle up to USD
+  10, zero retries and no recurrence. Execution remains bounded by the stricter
+  frozen/source USD 0.50 cap (public list-price estimate USD 0.1125 for 75
+  records).
+
+Next owner gate: approve fresh backup plus isolated restore, staging-only `0059`
+and exact `e59537a0` web/worker deploy with providers still off; separately
+acknowledge up to four possible historic calls under the old USD 0.50 lock and
+authorize the owner reconciliation write. Only after those receipts pass may
+the already-authorized single AVLI cycle be attempted. PR merge, production,
+Social/Travel, billing and recurring jobs remain prohibited.
+
 ## Authoritative current state — 2026-09-02
 
 - State: `STAGING_PRELAUNCH_PASS / OWNER_DB_BINDING_HOLD / PRODUCTION_NO_GO`.

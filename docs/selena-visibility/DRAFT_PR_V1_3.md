@@ -1,5 +1,35 @@
 # Selena AI Visibility v1.3 — audit remediation follow-up
 
+## Authoritative PR #120 overlay — 2026-09-03
+
+- Draft PR: [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+- Exact executable head: `e59537a032df7d18efe3bbba12bad18e29eba020`
+- Exact integrated release: `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`
+- Source verdict: `GO_SOURCE_COMMIT`; independent audit found no P0/P1.
+- CI: all six checks passed —
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675).
+- Migration `0059` adds an owner-only, tenant-scoped and replay-safe stale-HOLD
+  reconciliation. It does not grant `selena_app` private snapshot access and
+  conservatively preserves ambiguity from both provider boundaries and
+  unmatched legacy cost events.
+- The first E2E run failed before tests because a hosted runner could not finish
+  Playwright apt downloads inside one minute and retry-action received
+  `kill EPERM`. The bounded install timeout is now five minutes with at most two
+  attempts; two subsequent exact-source E2E runs passed in about 11 minutes.
+- Shared staging remains on `b4e678b8 / 0058`; no deploy, migration, provider
+  call, billing or recurring work occurred.
+- The owner has authorized one AVLI staging cycle up to USD 10 with zero retries
+  and no recurrence. The effective candidate cap remains the stricter USD 0.50.
+  Staging `0059`, exact candidate deploy and the old HOLD reconciliation remain
+  separate owner gates; the four historical pre-transport boundaries require
+  explicit ambiguous-spend acknowledgement before reconciliation.
+
+PR #120 must remain draft and unmerged until staging receipts are attached.
+
 ## Authoritative hosted candidate — 2026-09-02
 
 - Exact hosted implementation source head:

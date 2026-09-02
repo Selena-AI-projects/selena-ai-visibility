@@ -1,5 +1,49 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
+## Authoritative AVLI measurement overlay — 2026-09-03
+
+- Exact executable candidate: `e59537a032df7d18efe3bbba12bad18e29eba020`.
+- Branch: `fix/avli-journal-hold-reconciliation`; exact integrated release
+  base: `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`.
+- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+  is `OPEN/DRAFT/MERGEABLE/CLEAN`. Exact-head checks passed:
+  [Build 33659667608](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
+  [E2E and Scheduling 33659667384](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
+  [License 33659667351](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
+  [Smoke 33659667347](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
+  and [CLA 33659667675](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675).
+- Migration `0059` is `PASS_SOURCE_AND_DISPOSABLE`: ordinary `selena_app`
+  receives no new raw snapshot/provider-reference privilege; owner-only stale
+  HOLD reconciliation requires tenant scope, a 45-minute lease fence, runtime
+  quiescence, no active jobs and explicit acknowledgement of ambiguous spend.
+  Its call upper bound is the union of provider boundaries and unmatched
+  legacy cost rows, so mixed old/new evidence cannot produce a false zero.
+- Disposable PostgreSQL receipt:
+  `JOURNAL_0059_DISPOSABLE_PASS ownerOnly=true runtimeQuiesced=true ambiguousSpend=preserved upperBound=1 mixedLegacyUpperBound=2 legacyCost=ack-required revoked=1 settled=1 replay=idempotent costRows=0 nextAttempt=allowed`;
+  cleanup was verified. An independent read-only Codex review found no
+  remaining P0/P1 and returned `GO_SOURCE_COMMIT`.
+- Local gates on the executable candidate passed: lint exit `0` with the
+  registered `129 warnings / 12 infos`, tests `16/16` (`lib 1141/1141`, web
+  `448 passed / 4 skipped`), Impeccable detect exit `0`, build `16/16`, shell
+  syntax and diff checks. Local Node is 22.23.0; CI used required Node 24.
+- Shared staging is intentionally unchanged: exact hosted implementation is
+  still `b4e678b8`, database frontier is `59 entries / 0058`, and provider
+  execution, recurring jobs and billing remain disabled.
+- Owner authorized one AVLI staging measurement cycle with an aggregate ceiling
+  of USD 10, zero retries and `recurring=false`. The executable path must keep
+  the stricter frozen/source limit: effective maximum USD 0.50; current public
+  list-price estimate for 75 records is USD 0.1125. This is authorization, not
+  evidence that a call has occurred.
+- Before the authorized cycle can run, separate approval is still required for
+  a fresh backup plus isolated restore, staging-only migration `0059`, exact
+  `e59537a0` web/worker deployment with providers off, and owner reconciliation
+  of the old HOLD. The reconciliation also requires explicit acknowledgement
+  that its four pre-transport boundaries represent up to four possible historic
+  calls under the old USD 0.50 lock. No provider call or staging mutation was
+  performed in this overlay.
+
+Current decision: `GO_SOURCE / HOLD_STAGING_0059_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
+
 ## Authoritative source overlay — 2026-09-02
 
 This is the only current acceptance overlay. Hosted receipts in this section
