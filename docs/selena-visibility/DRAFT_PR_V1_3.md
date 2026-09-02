@@ -3,39 +3,47 @@
 ## Authoritative source candidate — 2026-09-02
 
 - Exact implementation source head:
-  `6c3246222d18cab655c01136e7c524dfdc912b8c`.
+  `67df9d1621188de879f32feb240ad3bcb1b1596c`.
 - Exact release base: `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
-- Source frontier is `59 entries / 0058`; this PR does not authorize or perform
-  a shared-staging migration.
+- Source and shared-staging frontier is `59 entries / 0058`.
 - `0051` converges four evidenced historical/release schema variants. `0057`
   adds tenant-and-project formal-evidence identity and delivered-journal
   binding. `0058` persists the no-spend/provider-execution boundary and makes
   recovery idempotent without reopening a provider path.
-- `selena_app` remains non-owner/no-bypass, has allowlisted metadata only, and
-  cannot read raw private snapshot payload/provider locators, execute private
-  reconciliation or forge formal acceptance.
+- `selena_app` remains non-owner/no-bypass/no-inherit, has 11 allowlisted
+  snapshot metadata columns only, and cannot read raw private snapshot
+  payload/provider locators, execute private reconciliation or forge formal
+  acceptance. The proof actor is derived from the actual owner connection.
+- Paginated Local read routes require a server-only HMAC cursor secret of at
+  least 32 UTF-8 bytes, bind cursors to tenant/cycle/resource and fail closed
+  before DB access when the sealed key is unavailable. The key cannot be
+  supplied through tenant/provider configuration.
 - Local source gates: four-variant migration matrix, actual-role RLS proof,
   formal-evidence replay and journal-recovery replay all `PASS`; root lint
   `0 errors` (`129 warnings / 12 infos` baseline), typecheck `13/13`, tests
-  `16/16`, build `16/16`; provider calls and cost rows `0`.
+  `16/16`, build `16/16`; provider calls `0`.
 - PR [#112](https://github.com/parkourcafe/selena-ai-visibility/pull/112)
   remains open/conflicting and is superseded by this remediation. PR
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
   remains open/draft; its independently reviewed project/tool UI tree is
   integrated in this candidate.
 - Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
-  is open, mergeable and clean at evidence head `aebe3948`. All six checks pass:
-  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429).
+  is open/draft, mergeable and clean at exact head `67df9d16`. All six checks pass:
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056845),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056975),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056949),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056978)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633057066).
   These source checks use stub/no-network provider paths and do not deploy or
   execute a paid call.
-- No shared-staging mutation, deploy, provider call, production action, billing
+- Fresh backup and isolated restore preceded bounded staging migrations
+  `0057–0058`. The owner-neutral proof then passed in a transaction ending in
+  rollback; counts stayed `1/2/0/0/10647/4560` for snapshots/canaries/evidence/
+  acceptance/audit/cost, with zero proof fixtures or residual memberships.
+- No exact-source web/worker deploy, provider call, production action, billing
   or recurring job is part of this follow-up.
 
-Status: `SOURCE_CI_PASS / STAGING_0057_0058_HOLD`.
+Status: `SOURCE_CI_RLS_PASS / EXACT_SOURCE_DEPLOY_HOLD`.
 
 ## Current follow-up PR summary
 
@@ -46,8 +54,8 @@ Status: `SOURCE_CI_PASS / STAGING_0057_0058_HOLD`.
 - persist an immutable journal boundary so crash recovery cannot relabel a
   possibly-spent execution as `NO_SPEND`;
 - preserve the reviewed HoReCa project rail and top tool axis;
-- keep shared staging `0057–0058`, production, Social/Travel, recurring
-  execution, billing and provider calls closed.
+- keep exact-source deploy, production, Social/Travel, recurring execution,
+  billing and provider calls closed until their separate gates.
 
 ## Historical PR ledger
 

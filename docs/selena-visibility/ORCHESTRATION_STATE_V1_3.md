@@ -2,13 +2,13 @@
 
 ## Authoritative current state — 2026-09-02
 
-- State: `SOURCE_CI_PASS / STAGING_0057_0058_HOLD / PRODUCTION_NO_GO`.
+- State: `SOURCE_CI_RLS_PASS / EXACT_SOURCE_DEPLOY_HOLD / PRODUCTION_NO_GO`.
 - Exact implementation source head:
-  `6c3246222d18cab655c01136e7c524dfdc912b8c`.
+  `67df9d1621188de879f32feb240ad3bcb1b1596c`.
 - Branch: `fix/selena-v13-audit-remediation`; exact release base
   `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
-- Source database frontier: `59 entries / 0058`. Hosted frontier was not
-  re-read and is not promoted in this source-only loop.
+- Source and shared-staging database frontier: `59 entries / 0058`; hosted
+  receipt `max_created_at=1787940020000`.
 - `0051` now bridges all four evidenced schema variants to one catalog while
   rejecting any legacy formal acceptance state before migration.
 - `0057` makes formal evidence tenant-and-project scoped, binds acceptance to
@@ -17,12 +17,17 @@
 - `0058` persists the provider execution boundary: `NO_SPEND` is available only
   before transport; post-boundary `EXECUTING` remains fail-closed unless the
   same claim can be completed from durable terminal evidence.
-- `selena_app` remains non-owner/no-bypass, has only allowlisted safe metadata,
-  cannot read raw private payload/provider locators, and cannot execute private
-  reconciliation or formal acceptance.
-- Local quality: disposable variants/0051/0057/0058 all `PASS`; root tests
-  `16/16`, root build `16/16`, typecheck `13/13`, lint `0 errors` with `129`
-  warnings and `12` infos. Provider calls and cost rows are `0`.
+- `selena_app` remains non-owner/no-bypass/no-inherit, has only 11 allowlisted
+  snapshot metadata columns, cannot read raw private payload/provider locators,
+  and cannot execute private reconciliation or formal acceptance. The staging
+  proof now uses the actual owner identity instead of a fixed role name.
+- Paginated Local read APIs require a server-only HMAC cursor key of at least
+  32 UTF-8 bytes. Missing/short configuration fails closed before DB access;
+  tenant/cycle/resource binding rejects replay across scopes. No key value is
+  present in source or accepted as a tenant/provider override.
+- Node 24 local quality: disposable variants/0051/0057/0058 all `PASS`; root
+  tests `16/16`, root build `16/16`, typecheck `13/13`, lint `0 errors` with
+  `129` warnings and `12` infos. Provider calls are `0`.
 - Impeccable: `NOT_SUPPORTED` because no workspace binary exists.
 - PR [#112](https://github.com/parkourcafe/selena-ai-visibility/pull/112)
   remains open and conflicting; its successful historical checks do not close
@@ -30,24 +35,32 @@
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
   remains open/draft; its reviewed UI tree is integrated here. Exact-head
   follow-up PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
-  is open/draft, mergeable and clean at `aebe3948`; Build
-  [33624631226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  is open/draft, mergeable and clean at `67df9d16`; Build
+  [33633056845](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056845),
   E2E/Scheduling
-  [33624631358](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
-  License [33624631367](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
-  Smoke [33624631241](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
-  and CLA [33624631429](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429)
+  [33633056975](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056975),
+  License [33633056949](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056949),
+  Smoke [33633056978](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056978)
+  and CLA [33633057066](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633057066)
   all passed.
-- Shared staging mutation/deploy/provider execution in this remediation loop:
-  `0`. Production, recurring, billing and Social/Travel remain prohibited.
+- Staging preconditions and proof: backup
+  `b0544cb8-7f5f-491c-833e-47d87f99cc10`, isolated PITR restore service
+  `9bec47ee-bebe-49e6-bb0e-ae29fa39ce3`, bounded `0057–0058` deployment
+  `e27792a7-de75-46f6-9fe8-38d075361525`, and rollback-only receipt
+  `RLS_SCHEMA_PROOF_ONLY PASS`. Counts were unchanged at snapshots/canaries/
+  evidence/acceptance/audit/cost `1/2/0/0/10647/4560`; fixtures and residual
+  owner membership were `0/0`.
+- Exact-source web/worker deploys and sealed staging cursor-key provisioning in
+  this remediation loop: `0`. Production, providers, recurring, billing and
+  Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
 Next gate: if and only if the final documentation-only PR head remains green
-and the owner separately authorizes the hosted step, create a fresh staging backup, prove an
-isolated restore, apply only `0057–0058`, deploy the exact candidate with all
-provider/recurring/billing gates closed, then run hosted DB/RLS/API/browser
-acceptance. No such staging mutation is authorized by this ledger.
+and the owner separately confirms deployment, provision the sealed cursor key
+without reading its value, deploy exact-source web/worker with provider,
+recurring and billing gates closed, then run hosted API/browser acceptance.
+No deploy is authorized by this ledger.
 
 ## Historical orchestration ledger
 
