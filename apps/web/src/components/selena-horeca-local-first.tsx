@@ -15,6 +15,7 @@ type Props = {
 	sourceOnlyPreview?: boolean;
 	evidenceDetail?: HorecaEvidenceDetail | null;
 	evidenceDetailHref?: (evidenceId: string) => string;
+	workspaceToolHref?: (areaId: (typeof HORECA_PREVIEW_AREAS)[number]["id"]) => string;
 };
 
 const statusCopy: Record<HorecaPreviewState, { en: string; ru: string }> = {
@@ -168,6 +169,7 @@ export function SelenaHorecaLocalFirst({
 	sourceOnlyPreview = true,
 	evidenceDetail = null,
 	evidenceDetailHref,
+	workspaceToolHref,
 }: Props) {
 	const modules = model.modules.filter((module) => module.state !== "HIDDEN");
 	const socialHidden = model.modules.some((module) => module.moduleId === "SOCIAL" && module.state === "HIDDEN");
@@ -250,7 +252,7 @@ export function SelenaHorecaLocalFirst({
 					{HORECA_PREVIEW_AREAS.map((area) => (
 						<li key={area.id}>
 							<a
-								href={`#${area.id}`}
+								href={workspaceToolHref?.(area.id) ?? `#${area.id}`}
 								className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
 							>
 								{localizedHorecaText(locale, area.label)}

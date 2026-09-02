@@ -22,7 +22,11 @@ const routerHarness = vi.hoisted(() => ({
 		},
 		generatedAt: "2026-09-01T00:00:00.000Z",
 	},
-	search: { locale: "en" as const, project: "11111111-1111-4111-8111-111111111111" },
+	search: {
+		locale: "en" as const,
+		project: "11111111-1111-4111-8111-111111111111",
+		evidence: undefined as string | undefined,
+	},
 }));
 
 vi.mock("@tanstack/react-router", () => {
@@ -78,5 +82,26 @@ describe("HoReCa project rail", () => {
 		expect(avli).toContain('aria-current="page"');
 		expect(kora).toContain(`href="/app/selena-horeca?locale=en&amp;project=${projectIds.kora}"`);
 		expect(kora).not.toContain("aria-current");
+		expect(html).toContain(
+			`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}#visibility"`,
+		);
+	});
+
+	it("keeps evidence and selected project context in workspace tool links", () => {
+		const previousSearch = routerHarness.search;
+		routerHarness.search = {
+			locale: "en",
+			project: projectIds.avli,
+			evidence: "33333333-3333-4333-8333-333333333333",
+		};
+		try {
+			const component = (Route as unknown as { options: { component: () => ReactNode } }).options.component;
+			const html = renderToStaticMarkup(createElement(component));
+			expect(html).toContain(
+				`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}&amp;evidence=33333333-3333-4333-8333-333333333333#actions"`,
+			);
+		} finally {
+			routerHarness.search = previousSearch;
+		}
 	});
 });
