@@ -322,8 +322,8 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 						.update(schema.svJournalDailyClaims)
 						.set({
 							status: "ABANDONED",
-							abandonedAt: sql`CURRENT_TIMESTAMP`,
-							updatedAt: sql`CURRENT_TIMESTAMP`,
+							abandonedAt: sql`clock_timestamp()`,
+							updatedAt: sql`clock_timestamp()`,
 						})
 						.where(
 							and(
@@ -433,7 +433,7 @@ async function linkDailyClaim(claimId: string, configurationLockId: string): Pro
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
 		const [linked] = await tx
 			.update(schema.svJournalDailyClaims)
-			.set({ configurationLockId, updatedAt: sql`CURRENT_TIMESTAMP` })
+			.set({ configurationLockId, updatedAt: sql`clock_timestamp()` })
 			.where(
 				and(
 					eq(schema.svJournalDailyClaims.id, claimId),
@@ -458,8 +458,8 @@ async function transitionDailyClaim(
 			.update(schema.svJournalDailyClaims)
 			.set({
 				status,
-				completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null,
-				updatedAt: sql`CURRENT_TIMESTAMP`,
+				completedAt: status === "COMPLETED" ? sql`clock_timestamp()` : null,
+				updatedAt: sql`clock_timestamp()`,
 			})
 			.where(
 				and(
@@ -486,7 +486,7 @@ async function heartbeatDailyClaim(claimId: string): Promise<void> {
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
 		const [heartbeat] = await tx
 			.update(schema.svJournalDailyClaims)
-			.set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+			.set({ updatedAt: sql`clock_timestamp()` })
 			.where(
 				and(
 					eq(schema.svJournalDailyClaims.id, claimId),

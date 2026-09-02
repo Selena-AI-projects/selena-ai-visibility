@@ -59,8 +59,13 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain("recordedCostUsd");
 		expect(allocator).toContain("forced: FORCE");
 		expect(claimLifecycle).not.toContain("new Date()");
-		expect(claimLifecycle.match(/updatedAt: sql`CURRENT_TIMESTAMP`/g)?.length).toBeGreaterThanOrEqual(4);
-		expect(claimLifecycle).toContain('completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null');
+		// Concurrent workers hold one claim row between them, and CURRENT_TIMESTAMP is
+		// the transaction's start time: a worker that opened first and writes last
+		// carries a stamp older than the row already has, which the monotonic lease
+		// guard refuses. The claim's own timestamps are read at statement time.
+		expect(claimLifecycle.match(/updatedAt: sql`clock_timestamp\(\)`/g)?.length).toBeGreaterThanOrEqual(4);
+		expect(claimLifecycle).not.toContain("updatedAt: sql`CURRENT_TIMESTAMP`");
+		expect(claimLifecycle).toContain('completedAt: status === "COMPLETED" ? sql`clock_timestamp()` : null');
 		expect(measurement.indexOf("await acquireDailyClaim")).toBeLessThan(
 			measurement.indexOf("repositories.locks.allocate"),
 		);

@@ -944,7 +944,7 @@ export function createSelenaRepositories(db: Db) {
 					if (opts?.journalClaimId) {
 						const [lease] = await tx
 							.update(schema.svJournalDailyClaims)
-							.set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+							.set({ updatedAt: sql`clock_timestamp()` })
 							.where(
 								and(
 									eq(schema.svJournalDailyClaims.id, opts.journalClaimId),
