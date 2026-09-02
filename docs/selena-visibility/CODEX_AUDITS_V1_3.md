@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_B9D967B6 / CI_PENDING / HOSTED_0056_NOT_RUN`.
+Status: `PASS_SOURCE_B9D967B6 / CI_PASS_A8522067 / MERGED_A8B15116 / HOSTED_0056_NOT_RUN`.
 
 ## Current independent overlay — 2026-09-02
 
@@ -27,13 +27,16 @@ Reviewed implementation source:
   provider call.
 - Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
   is absent; it was not installed during acceptance.
-- CI for this implementation head is pending the authorized feature push. The
+- CI passed on PR head `a8522067`, which contains exact implementation
+  `b9d967b6`: Build, E2E, Scheduling, License, Smoke and CLA are green. The
   preceding Scheduling run failed on a stale disposable ceiling and directly
   motivated the source-frontier regression test in `b9d967b6`.
+- The owner merged PR #96 at `2026-09-02T06:31:55Z`; GitHub recorded squash
+  merge commit `a8b151162a849eec899382b550a948edb40b399c` on the release branch.
 - No shared staging migration/deploy, provider call, production action, billing,
   recurring job or PR merge was performed for this overlay.
 
-Current independent conclusion: `GO_SOURCE_PUSH_AND_CI`; `NO_GO_STAGING_0056`
+Current independent conclusion: `PASS_SOURCE_CI_AND_MERGE`; `NO_GO_STAGING_0056`
 until a fresh backup/read-only legacy count and a separately authorized bounded
 apply; `NO_GO_PRODUCTION`.
 
