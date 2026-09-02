@@ -57,7 +57,7 @@ function SelenaHorecaPage() {
 	}, [requestedLocale]);
 
 	return (
-		<div className="selena-app min-h-screen bg-[#f7f2ea] pb-16 text-[#181614]">
+		<div className="selena-app min-h-screen bg-[#ece4d8] pb-16 text-[#181614]">
 			<header className="selena-app-header">
 				<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
 					<SelenaWordmark />
@@ -82,9 +82,9 @@ function SelenaHorecaPage() {
 			</header>
 
 			<main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:py-12">
-				<aside className="lg:sticky lg:top-8 lg:self-start">
+				<aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
 					<nav aria-label={locale === "ru" ? "Проекты HoReCa" : "HoReCa projects"}>
-						<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#6e6258]">
+						<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#574d45]">
 							{locale === "ru" ? "ПРОЕКТЫ" : "PROJECTS"}
 						</p>
 						{workspace.projects.length > 0 ? (
@@ -100,8 +100,8 @@ function SelenaHorecaPage() {
 												data-selected={selected || undefined}
 												aria-current={selected ? "page" : undefined}
 											>
-												<span className="truncate font-medium">{project.name}</span>
-												<span className="text-xs text-[#6e6258]">
+												<span className="font-medium">{project.name}</span>
+												<span className="text-xs text-[#574d45]">
 													{locale === "ru" ? "Открыть кабинет" : "Open workspace"}
 												</span>
 											</Link>
@@ -110,7 +110,7 @@ function SelenaHorecaPage() {
 								})}
 							</ul>
 						) : (
-							<p className="rounded-xl border border-dashed border-[#d9cfc2] p-4 text-sm leading-6 text-[#6e6258]">
+							<p className="rounded-xl border border-dashed border-[#d9cfc2] p-4 text-sm leading-6 text-[#574d45]">
 								{locale === "ru" ? "Проекты HoReCa пока не доступны." : "No HoReCa projects are available yet."}
 							</p>
 						)}

@@ -152,7 +152,7 @@ function SelenaOrderPage() {
 		<main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-12">
 			<section className="selena-section">
 				<h1 className="selena-heading text-3xl">{tr(locale, "Order an AI measurement", "Заказ AI-замера")}</h1>
-				<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+				<p className="mt-2 text-sm leading-6 text-[#574d45]">
 					{tr(
 						locale,
 						"Choose a plan and leave a contact. A measurement starts only after the questions are approved — nothing runs from this form by itself.",
@@ -203,8 +203,8 @@ function SelenaOrderPage() {
 										{tr(locale, "/mo", "/мес")}
 									</span>
 								</span>
-								<span className="text-xs uppercase tracking-wide text-[#6e6258]">{option.systems}</span>
-								<span className="text-sm text-[#6e6258]">{tr(locale, option.en, option.ru)}</span>
+								<span className="text-xs uppercase tracking-wide text-[#574d45]">{option.systems}</span>
+								<span className="text-sm text-[#574d45]">{tr(locale, option.en, option.ru)}</span>
 							</label>
 						))}
 					</fieldset>
@@ -252,7 +252,7 @@ function SelenaOrderPage() {
 							onChange={(event) => setPromoCode(event.target.value)}
 							maxLength={100}
 						/>
-						<p className="text-xs text-[#6e6258]">
+						<p className="text-xs text-[#574d45]">
 							{tr(
 								locale,
 								"A valid promo code makes this measurement free of charge.",

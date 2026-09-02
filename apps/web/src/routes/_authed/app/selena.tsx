@@ -472,7 +472,7 @@ function SelenaWorkspace() {
 					<div className="flex min-w-0 items-center gap-4">
 						<SelenaWordmark />
 						<span className="hidden h-6 w-px bg-[#d9cfc2] sm:block" aria-hidden="true" />
-						<span className="hidden truncate text-sm font-medium text-[#6e6258] sm:block">
+						<span className="hidden truncate text-sm font-medium text-[#574d45] sm:block">
 							{tr(locale, "AI Visibility", "Видимость в AI")}
 						</span>
 					</div>
@@ -520,7 +520,7 @@ function SelenaWorkspace() {
 				<aside className="space-y-5">
 					<div>
 						<h1 className="selena-heading text-3xl text-[#181614]">{tr(locale, "Your projects", "Ваши проекты")}</h1>
-						<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+						<p className="mt-2 text-sm leading-6 text-[#574d45]">
 							{tr(
 								locale,
 								"One place for evidence, results and your action plan.",
@@ -553,15 +553,15 @@ function SelenaWorkspace() {
 										setError("");
 									}}
 								>
-									<span className="truncate font-medium">{item.project.name}</span>
-									<span className="text-xs text-[#6e6258]">{projectStageLabel(item, locale)}</span>
+									<span className="font-medium">{item.project.name}</span>
+									<span className="text-xs text-[#574d45]">{projectStageLabel(item, locale)}</span>
 									<span className="text-xs text-[#8a7d70]">{lastAuditLabel(item, locale)}</span>
 								</button>
 							);
 						})}
 					</nav>
 					{projects.length === 0 && !showCreate && (
-						<p className="rounded-xl border border-dashed border-[#d9cfc2] p-4 text-sm text-[#6e6258]">
+						<p className="rounded-xl border border-dashed border-[#d9cfc2] p-4 text-sm text-[#574d45]">
 							{tr(locale, "Create your first project to begin.", "Создайте первый проект, чтобы начать.")}
 						</p>
 					)}
@@ -654,7 +654,7 @@ function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeature
 						<h2 id="local-visibility-title" className="selena-heading text-2xl">
 							{tr(locale, "6 · Local visibility", "6 · Локальная видимость")}
 						</h2>
-						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 							{tr(
 								locale,
 								"A planned Google Maps visibility view for approved coordinates and searches. Data appears only after a separately approved local scan is enabled and completed.",
@@ -663,12 +663,12 @@ function LocalVisibilityPanel({ state, locale }: { state: LocalVisibilityFeature
 						</p>
 					</div>
 				</div>
-				<span className="inline-flex min-h-8 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-3 text-xs font-semibold text-[#6e6258]">
+				<span className="inline-flex min-h-8 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-3 text-xs font-semibold text-[#574d45]">
 					{statusLabel(state.enabled ? "UNKNOWN" : "LOCKED")}
 				</span>
 			</div>
 
-			<p className="mt-5 max-w-3xl text-sm leading-6 text-[#6e6258]">
+			<p className="mt-5 max-w-3xl text-sm leading-6 text-[#574d45]">
 				{tr(
 					locale,
 					"Read-only status only. This cabinet never starts a local scan or an AI capture.",
@@ -745,7 +745,7 @@ function LocalVisibilitySurface({
 	emptyState: string;
 }) {
 	return (
-		<div className="flex min-h-56 flex-col rounded-xl border border-[#e6ddd1] bg-[#fbf7f1] p-5">
+		<div className="flex min-h-56 flex-col rounded-xl border border-[#dccfbe] bg-[#fbf7f1] p-5">
 			<div className="flex items-start justify-between gap-3">
 				<div className="flex items-center gap-3">
 					<div className="selena-icon-disc size-10" aria-hidden="true">
@@ -754,17 +754,17 @@ function LocalVisibilitySurface({
 					<h3 className="selena-heading text-xl text-[#181614]">{title}</h3>
 				</div>
 				<span
-					className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-2.5 text-[0.6875rem] font-bold tracking-[0.08em] text-[#6e6258]"
+					className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-2.5 text-[0.6875rem] font-bold tracking-[0.08em] text-[#574d45]"
 					data-state={status.toLowerCase()}
 				>
 					{status === "LOCKED" && <IconLock className="size-3.5" aria-hidden="true" />}
 					{statusLabel}
 				</span>
 			</div>
-			<p className="mt-4 text-sm leading-6 text-[#6e6258]">{description}</p>
-			<div className="mt-auto border-t border-[#e6ddd1] pt-4">
+			<p className="mt-4 text-sm leading-6 text-[#574d45]">{description}</p>
+			<div className="mt-auto border-t border-[#dccfbe] pt-4">
 				<p className="text-sm font-medium text-[#181614]">{emptyState}</p>
-				<p className="mt-1 text-xs leading-5 text-[#6e6258]">
+				<p className="mt-1 text-xs leading-5 text-[#574d45]">
 					{tr(locale, "Nothing is run from this panel.", "Из этой панели ничего не запускается.")}
 				</p>
 			</div>
@@ -818,7 +818,7 @@ function SetupProgress({ project, locale }: { project: WorkspaceProject; locale:
 					<h2 id="setup-progress-title" className="selena-heading text-2xl">
 						{tr(locale, "1 · Setup progress", "1 · Подготовка проекта")}
 					</h2>
-					<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+					<p className="mt-2 text-sm leading-6 text-[#574d45]">
 						{tr(
 							locale,
 							"Complete these steps to prepare the project and its AI visibility report.",
@@ -830,13 +830,13 @@ function SetupProgress({ project, locale }: { project: WorkspaceProject; locale:
 			</div>
 			<ol className="mt-6 grid gap-3 sm:grid-cols-2">
 				{steps.map((step) => (
-					<li key={step.label} className="flex min-h-14 items-center gap-3 border-t border-[#e6ddd1] pt-3 text-sm">
+					<li key={step.label} className="flex min-h-14 items-center gap-3 border-t border-[#dccfbe] pt-3 text-sm">
 						{step.complete ? (
 							<IconCheck className="size-5 shrink-0 text-[#2e7d4f]" aria-hidden="true" />
 						) : (
 							<IconCircleDashed className="size-5 shrink-0 text-[#8e8175]" aria-hidden="true" />
 						)}
-						<span className={step.complete ? "font-medium text-[#181614]" : "text-[#6e6258]"}>{step.label}</span>
+						<span className={step.complete ? "font-medium text-[#181614]" : "text-[#574d45]"}>{step.label}</span>
 					</li>
 				))}
 			</ol>
@@ -864,7 +864,7 @@ function CreateProjectForm({
 	return (
 		<section className="selena-section">
 			<h2 className="selena-heading text-3xl">{tr(locale, "Create a project", "Создать проект")}</h2>
-			<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+			<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 				{tr(
 					locale,
 					"Start with the business and market you want to understand. Creating a project does not start a paid scan.",
@@ -979,7 +979,7 @@ function SuggestionPicker({
 	) =>
 		items.length > 0 && (
 			<div>
-				<p className="text-xs font-semibold uppercase tracking-wide text-[#6e6258]">{title}</p>
+				<p className="text-xs font-semibold uppercase tracking-wide text-[#574d45]">{title}</p>
 				<ul className="mt-2 grid gap-1.5">
 					{items.map((item) => (
 						<li key={item} className="flex items-start gap-2.5">
@@ -999,7 +999,7 @@ function SuggestionPicker({
 		);
 
 	return (
-		<div className="grid gap-4 border-t border-[#e6ddd1] pt-4">
+		<div className="grid gap-4 border-t border-[#dccfbe] pt-4">
 			{group(
 				tr(locale, "Suggested competitors", "Предложенные конкуренты"),
 				suggestion.competitors,
@@ -1032,7 +1032,7 @@ function SuggestionPicker({
 						`Принять отмеченные (${checkedCompetitors.size + checkedQuestions.size})`,
 					)}
 				</Button>
-				<span className="text-xs text-[#6e6258]">
+				<span className="text-xs text-[#574d45]">
 					{tr(
 						locale,
 						"They will fill the Competitors and Customer questions fields below.",
@@ -1076,7 +1076,7 @@ function BrandProfileForm({
 					<h2 id="brand-profile-title" className="selena-heading text-2xl">
 						{tr(locale, "2 · Brand profile", "2 · Профиль бренда")}
 					</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 						{tr(
 							locale,
 							"Confirm the public information and the questions customers ask. AI visibility checks start only after you approve a plan.",
@@ -1151,9 +1151,9 @@ function BrandProfileForm({
 						placeholder={tr(locale, "Instagram or other public profile", "Instagram или другой публичный профиль")}
 					/>
 				</Field>
-				<div className="flex flex-col gap-3 rounded-xl border border-[#e6ddd1] bg-[#fbf7f1] p-4 sm:col-span-2">
+				<div className="flex flex-col gap-3 rounded-xl border border-[#dccfbe] bg-[#fbf7f1] p-4 sm:col-span-2">
 					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-						<p className="text-sm leading-6 text-[#6e6258]">
+						<p className="text-sm leading-6 text-[#574d45]">
 							{locale === "ru"
 								? `Не уверены, кого писать в конкурентах и какие вопросы задать? Мы прочитаем сайт выше и предложим до ${SUGGESTION_LIMITS.competitors} конкурентов и ${SUGGESTION_LIMITS.questions} вопросов — вы отметите галочками, что оставить.`
 								: `Not sure who to list or what to ask? We read the website above and propose up to ${SUGGESTION_LIMITS.competitors} competitors and ${SUGGESTION_LIMITS.questions} questions — you tick what stays.`}
@@ -1263,12 +1263,12 @@ function WebsiteEvidence({
 							{tr(locale, "3 · Technical website check", "3 · Техническая проверка сайта")}
 						</h2>
 						{project.website ? (
-							<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+							<p className="mt-2 text-sm leading-6 text-[#574d45]">
 								{tr(locale, "Last reviewed", "Последняя проверка")} {formatDate(project.website.capturedAt, locale)} ·{" "}
 								{project.website.website}
 							</p>
 						) : (
-							<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+							<p className="mt-2 text-sm leading-6 text-[#574d45]">
 								{tr(
 									locale,
 									"How technically ready the site is for AI agents to read: crawling, structure, markup. This is not a visibility measurement.",
@@ -1379,7 +1379,7 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 					<h2 id="questions-title" className="selena-heading text-2xl">
 						{tr(locale, "4 · Approve the questions", "4 · Утвердите вопросы")}
 					</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 						{tr(
 							locale,
 							"A paid measurement asks only questions you approved. Edit the wording if needed, then approve or reject each one — nothing runs on unapproved questions.",
@@ -1431,9 +1431,9 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 					{tr(locale, "Could not load the questions.", "Не удалось загрузить вопросы.")}
 				</p>
 			) : scenarios === null ? (
-				<p className="mt-5 text-sm text-[#6e6258]">{tr(locale, "Loading…", "Загружаем…")}</p>
+				<p className="mt-5 text-sm text-[#574d45]">{tr(locale, "Loading…", "Загружаем…")}</p>
 			) : scenarios.length === 0 ? (
-				<p className="mt-5 rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#6e6258]">
+				<p className="mt-5 rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#574d45]">
 					{tr(
 						locale,
 						"No questions proposed yet. They appear here after the profile is confirmed and questions are prepared.",
@@ -1461,7 +1461,7 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 								className="mt-1"
 							/>
 							<div className="min-w-0 flex-1">
-								<label htmlFor={`question-${scenario.id}`} className="text-xs uppercase tracking-wide text-[#6e6258]">
+								<label htmlFor={`question-${scenario.id}`} className="text-xs uppercase tracking-wide text-[#574d45]">
 									{scenario.language.toUpperCase()} ·{" "}
 									{scenario.intentType === "branded"
 										? tr(locale, "names the brand", "с названием бренда")
@@ -1517,7 +1517,7 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 								{decided.map((scenario) => (
 									<li key={scenario.id} className="flex items-start justify-between gap-3">
 										<span>{scenario.text}</span>
-										<span className="shrink-0 text-xs text-[#6e6258]">
+										<span className="shrink-0 text-xs text-[#574d45]">
 											{scenario.status === "APPROVED"
 												? tr(locale, "approved", "утверждён")
 												: tr(locale, "rejected", "отклонён")}
@@ -1571,7 +1571,7 @@ function MeasurementPanel({ project, locale }: { project: WorkspaceProject; loca
 						<h2 id="measurement-title" className="selena-heading text-2xl">
 							{tr(locale, "5 · Measurement", "5 · Замер")}
 						</h2>
-						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+						<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 							{tr(
 								locale,
 								"What the ordered AI measurement observed. Questions naming the brand and category questions are counted separately and never merged into one score.",
@@ -1589,7 +1589,7 @@ function MeasurementPanel({ project, locale }: { project: WorkspaceProject; loca
 				)}
 			</div>
 			{!hasCycle ? (
-				<p className="mt-5 rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#6e6258]">
+				<p className="mt-5 rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#574d45]">
 					{tr(
 						locale,
 						"This step opens after a measurement order is confirmed. No cycle has been ordered yet.",
@@ -1601,7 +1601,7 @@ function MeasurementPanel({ project, locale }: { project: WorkspaceProject; loca
 					{tr(locale, "Could not load the measurement.", "Не удалось загрузить замер.")}
 				</p>
 			) : view === null ? (
-				<p className="mt-5 text-sm text-[#6e6258]">{tr(locale, "Loading…", "Загружаем…")}</p>
+				<p className="mt-5 text-sm text-[#574d45]">{tr(locale, "Loading…", "Загружаем…")}</p>
 			) : (
 				<MeasurementReport view={view} locale={locale} projectId={project.project.id} />
 			)}
@@ -1622,7 +1622,7 @@ function MeasurementReport({
 	const cycle = view.cycles[0];
 	if (!latest || !cycle) {
 		return (
-			<p className="mt-5 text-sm text-[#6e6258]">
+			<p className="mt-5 text-sm text-[#574d45]">
 				{tr(locale, "No measurement cycle recorded yet.", "Ни одного цикла замера ещё не записано.")}
 			</p>
 		);
@@ -1637,7 +1637,7 @@ function MeasurementReport({
 	const [en, ru] = statusLabel[cycle.status] ?? [cycle.status, cycle.status];
 	return (
 		<div className="mt-5 flex flex-col gap-4">
-			<p className="text-sm text-[#6e6258]">
+			<p className="text-sm text-[#574d45]">
 				{tr(locale, "Cycle status", "Статус цикла")}: <strong>{tr(locale, en, ru)}</strong> ·{" "}
 				{tr(locale, "runs completed", "прогонов завершено")}: {cycle.completedRuns} / {cycle.expectedRuns}
 			</p>
@@ -1656,7 +1656,7 @@ function MeasurementReport({
 			<RelativeMentionShare locale={locale} report={latest.report} />
 			<VisitorApiSplit locale={locale} report={latest.report} />
 			{latest.report.unclassifiedRuns > 0 && (
-				<p className="text-xs text-[#6e6258]">
+				<p className="text-xs text-[#574d45]">
 					{tr(locale, "Runs outside both groups", "Прогоны вне обеих групп")}: {latest.report.unclassifiedRuns}
 				</p>
 			)}
@@ -1697,7 +1697,7 @@ function CycleComparePanel({
 
 	if (cycleCount < 2)
 		return (
-			<p className="rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#6e6258]">
+			<p className="rounded-lg border border-dashed border-[#cdbdac] bg-[#fffdf8] px-4 py-3 text-sm text-[#574d45]">
 				{tr(
 					locale,
 					"Comparison between measurements opens after the second cycle.",
@@ -1728,7 +1728,7 @@ function CycleComparePanel({
 			<h3 className="text-sm font-semibold text-[#3d362e]">
 				{tr(locale, "What changed between the measurements", "Что изменилось между замерами")}
 			</h3>
-			<p className="mt-1 text-xs text-[#6e6258]">
+			<p className="mt-1 text-xs text-[#574d45]">
 				{tr(
 					locale,
 					"Observed differences only — engines and competitors also change over the same period.",
@@ -1736,7 +1736,7 @@ function CycleComparePanel({
 				)}
 			</p>
 			{result.report.changes.length === 0 ? (
-				<p className="mt-2 text-sm text-[#6e6258]">
+				<p className="mt-2 text-sm text-[#574d45]">
 					{tr(locale, "No differences in the compared groups.", "В сравнимых группах различий нет.")}
 				</p>
 			) : (
@@ -1744,7 +1744,7 @@ function CycleComparePanel({
 					{result.report.changes.map((change) => (
 						<li key={`${change.type}-${change.scenarioId}-${change.system}-${JSON.stringify(change.evidence)}`}>
 							{change.system} · {label(change)}{" "}
-							<span className="text-xs text-[#6e6258]">
+							<span className="text-xs text-[#574d45]">
 								({tr(locale, "measured in", "измерено в")} {change.evidence.baseRunIds.length}+
 								{change.evidence.compareRunIds.length} {tr(locale, "answers", "ответах")})
 							</span>
@@ -1753,7 +1753,7 @@ function CycleComparePanel({
 				</ul>
 			)}
 			{unknownGroups.length > 0 && (
-				<p className="mt-2 text-xs text-[#6e6258]">
+				<p className="mt-2 text-xs text-[#574d45]">
 					{tr(locale, "Groups not comparable between the cycles", "Группы, несравнимые между циклами")}:{" "}
 					{unknownGroups.length}
 				</p>
@@ -1820,7 +1820,7 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 									? "Visitor View"
 									: "API View"}
 							</span>
-							<span className="shrink-0 text-xs text-[#6e6258]">
+							<span className="shrink-0 text-xs text-[#574d45]">
 								{run.validity ?? run.status}
 								{run.finishedAt ? ` · ${formatDate(run.finishedAt, locale)}` : ""}
 							</span>
@@ -1828,24 +1828,24 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 						{openRunId === run.id && (
 							<div className="mt-1 rounded border border-[#e5dbcd] bg-white p-3 text-sm">
 								{detail === null ? (
-									<p className="text-[#6e6258]">{tr(locale, "Loading…", "Загружаем…")}</p>
+									<p className="text-[#574d45]">{tr(locale, "Loading…", "Загружаем…")}</p>
 								) : (
 									<div className="flex flex-col gap-2">
 										{detail.scenarioText && (
 											<p>
-												<span className="text-[#6e6258]">{tr(locale, "Question", "Вопрос")}: </span>
+												<span className="text-[#574d45]">{tr(locale, "Question", "Вопрос")}: </span>
 												{detail.scenarioText}
 											</p>
 										)}
 										{detail.mentions.length > 0 ? (
 											<p>
-												<span className="text-[#6e6258]">{tr(locale, "Named", "Названы")}: </span>
+												<span className="text-[#574d45]">{tr(locale, "Named", "Названы")}: </span>
 												{detail.mentions
 													.map((m) => `${m.name}${m.ordinalPosition ? ` (#${m.ordinalPosition})` : ""}`)
 													.join(", ")}
 											</p>
 										) : (
-											<p className="text-[#6e6258]">
+											<p className="text-[#574d45]">
 												{tr(
 													locale,
 													"No tracked entity was named, or the answer is stored but not measured.",
@@ -1855,13 +1855,13 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 										)}
 										{detail.citations.length > 0 && (
 											<p>
-												<span className="text-[#6e6258]">{tr(locale, "Cited", "Процитированы")}: </span>
+												<span className="text-[#574d45]">{tr(locale, "Cited", "Процитированы")}: </span>
 												{detail.citations.map((c) => c.domain).join(", ")}
 											</p>
 										)}
 										{detail.sources.length > 0 && (
 											<p>
-												<span className="text-[#6e6258]">
+												<span className="text-[#574d45]">
 													{tr(locale, "Shown as sources", "Показаны как источники")}:{" "}
 												</span>
 												{detail.sources.map((s) => s.domain).join(", ")}
@@ -1872,7 +1872,7 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 												{detail.answer.text}
 											</blockquote>
 										) : detail.answer.state === "deleted" ? (
-											<p className="text-[#6e6258]">
+											<p className="text-[#574d45]">
 												{tr(
 													locale,
 													"The verbatim text was deleted at the end of its retention window; the findings above remain.",
@@ -1896,7 +1896,7 @@ function MeasurementGroup({ locale, title, group }: { locale: WorkspaceLocale; t
 		<div className="rounded-lg border border-[#e5dbcd] bg-[#fffdf8] p-4">
 			<h3 className="text-sm font-semibold text-[#3d362e]">{title}</h3>
 			{group.state === "unknown" ? (
-				<p className="mt-2 text-sm text-[#6e6258]">
+				<p className="mt-2 text-sm text-[#574d45]">
 					{tr(
 						locale,
 						"Unknown — no measured answers in this group yet. Not shown as 0%.",
@@ -1906,24 +1906,24 @@ function MeasurementGroup({ locale, title, group }: { locale: WorkspaceLocale; t
 			) : (
 				<dl className="mt-2 grid gap-1 text-sm text-[#3d362e]">
 					<div className="flex justify-between gap-3">
-						<dt className="text-[#6e6258]">
+						<dt className="text-[#574d45]">
 							{tr(locale, "Answers mentioning the brand", "Ответы с упоминанием бренда")}
 						</dt>
 						<dd>{group.mentionCoverage ?? tr(locale, "unknown", "неизвестно")}</dd>
 					</div>
 					<div className="flex justify-between gap-3">
-						<dt className="text-[#6e6258]">
+						<dt className="text-[#574d45]">
 							{tr(locale, "Average position among mentions", "Средняя позиция среди упоминаний")}
 						</dt>
 						<dd>{group.averageBrandPosition ?? "—"}</dd>
 					</div>
 					<div className="flex justify-between gap-3">
-						<dt className="text-[#6e6258]">{tr(locale, "Measured answers", "Измеренных ответов")}</dt>
+						<dt className="text-[#574d45]">{tr(locale, "Measured answers", "Измеренных ответов")}</dt>
 						<dd>{group.measuredRuns}</dd>
 					</div>
 					{group.unmeasuredRuns > 0 && (
 						<div className="flex justify-between gap-3">
-							<dt className="text-[#6e6258]">{tr(locale, "Stored but not measured", "Сохранено, но не измерено")}</dt>
+							<dt className="text-[#574d45]">{tr(locale, "Stored but not measured", "Сохранено, но не измерено")}</dt>
 							<dd>{group.unmeasuredRuns}</dd>
 						</div>
 					)}
@@ -1955,12 +1955,12 @@ function RelativeMentionShare({ locale, report }: { locale: WorkspaceLocale; rep
 			</h3>
 			<dl className="mt-2 grid gap-1 text-[#3d362e]">
 				<div className="flex justify-between gap-3">
-					<dt className="text-[#6e6258]">{tr(locale, "Your brand", "Ваш бренд")}</dt>
+					<dt className="text-[#574d45]">{tr(locale, "Your brand", "Ваш бренд")}</dt>
 					<dd>{formatShare(share.brand) ?? tr(locale, "unknown", "неизвестно")}</dd>
 				</div>
 				{share.competitors.map((competitor) => (
 					<div key={competitor.name} className="flex justify-between gap-3">
-						<dt className="text-[#6e6258]">{competitor.name}</dt>
+						<dt className="text-[#574d45]">{competitor.name}</dt>
 						<dd>{formatShare(competitor.share)}</dd>
 					</div>
 				))}
@@ -1978,7 +1978,7 @@ function VisitorApiSplit({ locale, report }: { locale: WorkspaceLocale; report: 
 			<h3 className="font-semibold text-[#3d362e]">
 				{tr(locale, "Visitor View and API View, separately", "Visitor View и API View, раздельно")}
 			</h3>
-			<p className="mt-2 text-[#6e6258]">
+			<p className="mt-2 text-[#574d45]">
 				{tr(locale, "What a visitor is shown", "Что видит посетитель")}:{" "}
 				{formatShare(visitorMentionRate) ?? tr(locale, "unknown", "неизвестно")} ·{" "}
 				{tr(locale, "what the model answers directly", "что модель отвечает напрямую")}:{" "}
@@ -1999,7 +1999,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 					<h2 id="results-title" className="selena-heading text-2xl">
 						{tr(locale, "7 · Results and next actions", "7 · Результаты и следующие действия")}
 					</h2>
-					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">
+					<p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">
 						{tr(
 							locale,
 							"The website action plan and AI visibility report are separate. A website review never counts as an AI mention.",
@@ -2027,11 +2027,11 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 						<h3 className="text-sm font-semibold text-[#181614]">
 							{tr(locale, "Website action plan", "План улучшения сайта")}
 						</h3>
-						<span className="text-xs font-medium text-[#6e6258]">{tr(locale, "Public website", "Публичный сайт")}</span>
+						<span className="text-xs font-medium text-[#574d45]">{tr(locale, "Public website", "Публичный сайт")}</span>
 					</div>
 					{result ? (
 						<>
-							<dl className="grid gap-5 border-y border-[#e6ddd1] py-5 sm:grid-cols-3">
+							<dl className="grid gap-5 border-y border-[#dccfbe] py-5 sm:grid-cols-3">
 								<ResultMetric label={tr(locale, "Findings", "Наблюдения")} value={result.findingsCount} />
 								<ResultMetric
 									label={tr(locale, "Recommendations", "Рекомендации")}
@@ -2048,7 +2048,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 											`Приоритетные действия — первые ${Math.min(3, result.recommendationsCount)} из ${result.recommendationsCount}`,
 										)}
 									</h3>
-									<ul className="mt-3 divide-y divide-[#e6ddd1]">
+									<ul className="mt-3 divide-y divide-[#dccfbe]">
 										{result.topActions.map((item) => (
 											<li
 												key={`${item.priority}:${item.title}`}
@@ -2066,14 +2066,14 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 															</span>
 														)}
 													</p>
-													<p className="mt-1 text-sm leading-6 text-[#6e6258]">
+													<p className="mt-1 text-sm leading-6 text-[#574d45]">
 														{ruleHow(locale, item.ruleId, item.action)}
 													</p>
 													<details className="mt-2">
 														<summary className="cursor-pointer text-xs font-semibold text-[#8f5c34] underline underline-offset-4 [&::-webkit-details-marker]:hidden">
 															{tr(locale, "How to fix →", "Как исправить →")}
 														</summary>
-														<div className="mt-2 rounded-lg border border-[#e6ddd1] bg-[#fbf7ef] p-3">
+														<div className="mt-2 rounded-lg border border-[#dccfbe] bg-[#fbf7ef] p-3">
 															{ruleSteps(locale, item.ruleId).length > 0 ? (
 																<ol className="list-decimal space-y-1 pl-4 text-xs leading-5 text-[#3d362e]">
 																	{ruleSteps(locale, item.ruleId).map((step) => (
@@ -2084,7 +2084,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 																<p className="text-xs leading-5 text-[#3d362e]">{item.action}</p>
 															)}
 															{ruleExample(locale, item.ruleId) && (
-																<p className="mt-2 rounded border border-[#e6ddd1] bg-[#fffdf8] px-2.5 py-1.5 font-mono text-[0.68rem] leading-4 text-[#3d362e]">
+																<p className="mt-2 rounded border border-[#dccfbe] bg-[#fffdf8] px-2.5 py-1.5 font-mono text-[0.68rem] leading-4 text-[#3d362e]">
 																	{tr(locale, "Done right: ", "Как правильно: ")}
 																	{ruleExample(locale, item.ruleId)}
 																</p>
@@ -2136,7 +2136,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 							)}
 						</>
 					) : (
-						<p className="mt-4 max-w-2xl border-t border-[#e6ddd1] pt-5 text-sm leading-6 text-[#6e6258]">
+						<p className="mt-4 max-w-2xl border-t border-[#dccfbe] pt-5 text-sm leading-6 text-[#574d45]">
 							{tr(
 								locale,
 								"Your first recommendations will appear after the website review.",
@@ -2146,12 +2146,12 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 					)}
 				</div>
 
-				<div className="border-t border-[#e6ddd1] pt-7">
+				<div className="border-t border-[#dccfbe] pt-7">
 					<div className="flex flex-wrap items-center justify-between gap-3">
 						<h3 className="text-sm font-semibold text-[#181614]">
 							{tr(locale, "AI visibility report", "Отчёт о видимости в AI")}
 						</h3>
-						<span className={measurementReady ? "selena-success-label" : "text-xs font-medium text-[#6e6258]"}>
+						<span className={measurementReady ? "selena-success-label" : "text-xs font-medium text-[#574d45]"}>
 							{measurementReady
 								? tr(locale, "Report ready", "Отчёт готов")
 								: project.measurement
@@ -2184,7 +2184,7 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 						/>
 					</div>
 					{project.measurement ? (
-						<p className="mt-4 text-sm text-[#6e6258]">
+						<p className="mt-4 text-sm text-[#574d45]">
 							{locale === "ru"
 								? `Проверено ответов: ${project.measurement.completedRuns} из ${project.measurement.expectedRuns}`
 								: `${project.measurement.completedRuns} of ${project.measurement.expectedRuns} answers checked`}
@@ -2226,11 +2226,11 @@ function ChannelSummary({
 	return (
 		<a
 			href={href}
-			className="block rounded-xl border border-[#e6ddd1] bg-[#fbf7f1] p-4 transition-colors hover:border-[#8f5c34]"
+			className="block rounded-xl border border-[#dccfbe] bg-[#fbf7f1] p-4 transition-colors hover:border-[#8f5c34]"
 		>
 			<p className="font-medium text-[#181614]">{title}</p>
 			<p className="mt-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#8f5c34]">{systems}</p>
-			<p className="mt-2 text-sm leading-6 text-[#6e6258]">{description}</p>
+			<p className="mt-2 text-sm leading-6 text-[#574d45]">{description}</p>
 			<p className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#8f5c34]">
 				{planLabel} <IconArrowRight className="size-4" />
 			</p>
@@ -2241,7 +2241,7 @@ function ChannelSummary({
 function ResultMetric({ label, value }: { label: string; value: number }) {
 	return (
 		<div>
-			<dt className="text-xs font-medium text-[#6e6258]">{label}</dt>
+			<dt className="text-xs font-medium text-[#574d45]">{label}</dt>
 			<dd className="selena-heading mt-1 text-3xl text-[#181614]">{value}</dd>
 		</div>
 	);
@@ -2296,8 +2296,8 @@ function WorkspaceSkeleton() {
 	return (
 		<div className="selena-app min-h-screen px-5 py-10 sm:px-8">
 			<div className="mx-auto max-w-7xl animate-pulse space-y-6">
-				<div className="h-8 w-48 rounded bg-[#e6ddd1]" />
-				<div className="h-56 rounded-2xl bg-[#e6ddd1]" />
+				<div className="h-8 w-48 rounded bg-[#dccfbe]" />
+				<div className="h-56 rounded-2xl bg-[#dccfbe]" />
 				<div className="h-72 rounded-2xl bg-[#eee6dc]" />
 			</div>
 		</div>
