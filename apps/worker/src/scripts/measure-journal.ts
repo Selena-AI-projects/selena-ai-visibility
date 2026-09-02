@@ -18,16 +18,18 @@
  * Usage:
  *   DATABASE_URL=postgres://... BRIGHTDATA_API_TOKEN=... \
  *   SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=brightdata \
+ *   SELENA_MEASUREMENT_APPROVED_COMMIT_SHA=<exact commit> \
+ *   RAILWAY_GIT_COMMIT_SHA=<same exact commit> \
+ *   SELENA_MEASUREMENT_APPROVED_ENVIRONMENT=staging RAILWAY_ENVIRONMENT_NAME=staging \
  *   SELENA_JOURNAL_TENANT=<organization id> \
  *   SELENA_JOURNAL_PROJECTS=korafoodhall SELENA_JOURNAL_MAX_COST_USD=0.5 \
- *   pnpm -C apps/worker exec tsx src/scripts/measure-journal.ts
+ *   pnpm -C apps/worker measure:journal
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import * as schema from "@workspace/lib/db/schema";
-import { assertGlobalProviderStop } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
 import type { SelenaMeasurementAdapter } from "@workspace/lib/selena-measurement";
@@ -39,8 +41,9 @@ import {
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { assertMeasurementDeploymentApproved } from "./measurement-deployment-gate.js";
 
-assertGlobalProviderStop(process.env);
+assertMeasurementDeploymentApproved(process.env);
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;

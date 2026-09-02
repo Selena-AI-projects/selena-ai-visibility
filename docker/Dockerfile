@@ -139,7 +139,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal.ts"]
+CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal-entrypoint.ts"]
 
 # Publishing stage — reads a finished measurement and opens a pull request on
 # the marketing site with its per-question detail, then exits.
