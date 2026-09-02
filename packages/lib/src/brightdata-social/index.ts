@@ -17,7 +17,9 @@ import type {
 } from "./types";
 
 export * from "./normalizers";
+export * from "./privacy";
 export * from "./registry";
+export * from "./retention";
 export * from "./transport";
 export * from "./types";
 
@@ -203,7 +205,11 @@ export function createBrightDataSocialCollector(options: BrightDataSocialCollect
 	return Object.freeze({
 		async collect(request: BrightDataSocialCollectRequest): Promise<BrightDataSocialCollectionResult> {
 			const prepared = prepare(request);
-			return result(prepared, await options.client.collect(prepared.prepared));
+			const collection =
+				prepared.config.collectionMode === "sync_scrape"
+					? await options.client.collectSynchronous(prepared.prepared)
+					: await options.client.collect(prepared.prepared);
+			return result(prepared, collection);
 		},
 
 		async resume(request: BrightDataSocialResumeRequest): Promise<BrightDataSocialCollectionResult> {

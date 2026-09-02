@@ -35,6 +35,7 @@
 		"./providers": "./src/providers/index.ts",
 		"./providers/brightdata-dataset-client": "./src/providers/brightdata-dataset-client.ts",
 		"./providers/dataset-registry": "./src/providers/dataset-registry.ts",
+		"./providers/provider-dataset-authority": "./src/providers/provider-dataset-authority.ts",
 		"./brightdata-social": "./src/brightdata-social/index.ts",
 		"./providers/types": "./src/providers/types.ts",
 		"./entitlements": "./src/entitlements/index.ts",

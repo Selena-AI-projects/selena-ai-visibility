@@ -10,6 +10,11 @@ import {
 
 export type BrightDataSnapshotProgress = Readonly<{ status: string }>;
 export type BrightDataSnapshotTrigger = Readonly<{ snapshotId: string }>;
+export type BrightDataSynchronousScrape = Readonly<{
+	snapshotId: string;
+	rawPayload?: unknown;
+	rawReference?: string;
+}>;
 
 export type BrightDataDatasetTransportRequest = Readonly<{
 	source: ProviderDatasetSourceId;
@@ -20,6 +25,7 @@ export type BrightDataDatasetTransportRequest = Readonly<{
 export type BrightDataDatasetTransport = Readonly<{
 	preflight(request: BrightDataDatasetTransportRequest, signal: AbortSignal): Promise<void>;
 	trigger(request: BrightDataDatasetTransportRequest, signal: AbortSignal): Promise<BrightDataSnapshotTrigger>;
+	scrape?(request: BrightDataDatasetTransportRequest, signal: AbortSignal): Promise<BrightDataSynchronousScrape>;
 	progress(snapshotId: string, signal: AbortSignal): Promise<BrightDataSnapshotProgress>;
 	download(snapshotId: string, signal: AbortSignal): Promise<unknown>;
 	cancel(snapshotId: string, signal: AbortSignal): Promise<void>;
@@ -290,6 +296,34 @@ export function createBrightDataDatasetClient(options: BrightDataDatasetClientOp
 		return Object.freeze({ status: "TIMEOUT" as const, snapshotId });
 	}
 
+	async function collectSynchronous(
+		prepared: PreparedProviderDatasetCanary,
+		transport: BrightDataDatasetTransport,
+	): Promise<BrightDataDatasetCollectionResult> {
+		const scrapeTransport = transport.scrape;
+		if (!scrapeTransport) throw new Error("BRIGHTDATA_DATASET_SYNC_TRANSPORT_REQUIRED");
+		const deadline = now() + options.lifecycle.timeoutMs;
+		const request = await preflight(prepared, transport, deadline);
+		let scrape: BrightDataSynchronousScrape;
+		try {
+			scrape = await withinDeadline(deadline, now, (signal) => scrapeTransport(request, signal));
+		} catch (error) {
+			if (error instanceof SnapshotDeadlineError) throw new Error("BRIGHTDATA_DATASET_SCRAPE_TIMEOUT");
+			throw new Error("BRIGHTDATA_DATASET_SCRAPE_FAILED");
+		}
+		const snapshotId = requireSnapshotId(scrape.snapshotId);
+		await record(prepared, snapshotId, "TRIGGERED");
+		if (scrape.rawPayload === undefined) return finish(prepared, transport, snapshotId, deadline);
+		const capture = createProviderDatasetRawCaptureFromLifecycle(prepared, {
+			snapshotId,
+			capturedAt: nowIso(),
+			rawPayload: scrape.rawPayload,
+			...(scrape.rawReference ? { rawReference: scrape.rawReference } : {}),
+		});
+		await record(prepared, snapshotId, "DELIVERED", { recordCount: capture.recordCount });
+		return Object.freeze({ status: "COMPLETE" as const, snapshotId, capture });
+	}
+
 	return Object.freeze({
 		async collect(prepared: PreparedProviderDatasetCanary): Promise<BrightDataDatasetCollectionResult> {
 			consumePreparedProviderDatasetCanary(prepared);
@@ -308,6 +342,13 @@ export function createBrightDataDatasetClient(options: BrightDataDatasetClientOp
 			const snapshotId = requireSnapshotId(trigger.snapshotId);
 			await record(prepared, snapshotId, "TRIGGERED");
 			return finish(prepared, transport, snapshotId, deadline);
+		},
+
+		async collectSynchronous(prepared: PreparedProviderDatasetCanary): Promise<BrightDataDatasetCollectionResult> {
+			consumePreparedProviderDatasetCanary(prepared);
+			const transport = options.transport;
+			if (!transport) throw new Error("BRIGHTDATA_DATASET_TRANSPORT_REQUIRED");
+			return collectSynchronous(prepared, transport);
 		},
 
 		async resume(

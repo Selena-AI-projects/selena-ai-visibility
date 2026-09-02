@@ -2,6 +2,7 @@ import type {
 	BrightDataDatasetTransport,
 	BrightDataDatasetTransportRequest,
 } from "../providers/brightdata-dataset-client";
+import { providerDatasetContentHash } from "../providers/provider-dataset-authority";
 import { getBrightDataSocialDatasetBySource } from "./registry";
 
 type FetchImpl = typeof fetch;
@@ -168,6 +169,34 @@ export function createBrightDataSocialTransport(options: BrightDataSocialTranspo
 			if (typeof payload?.snapshot_id !== "string" || !payload.snapshot_id.trim())
 				throw new BrightDataSocialTransportError("BRIGHTDATA_TRIGGER_MALFORMED");
 			return { snapshotId: payload.snapshot_id.trim() };
+		},
+
+		async scrape(requestDetails, signal) {
+			const dataset = assertRequestBinding(requestDetails);
+			const url = new URL(`${baseUrl}/datasets/v3/scrape`);
+			url.searchParams.set("dataset_id", requestDetails.datasetId);
+			url.searchParams.set("format", "json");
+			for (const [key, value] of Object.entries(dataset.triggerQuery)) url.searchParams.set(key, value);
+			// Never retry this POST: an ambiguous failure may already represent a billable scrape.
+			const response = await request(
+				url.toString(),
+				{ method: "POST", headers: headers(), body: JSON.stringify(requestDetails.input.records), signal },
+				"BRIGHTDATA_SCRAPE_TRANSPORT_FAILED",
+			);
+			if (!response.ok) throw new BrightDataSocialTransportError("BRIGHTDATA_SCRAPE_FAILED", response.status);
+			const payload = parseJson(await readTextBounded(response, maxResponseBytes), "BRIGHTDATA_SCRAPE_MALFORMED");
+			const record = asRecord(payload);
+			if (typeof record?.snapshot_id === "string" && record.snapshot_id.trim())
+				return { snapshotId: record.snapshot_id.trim() };
+			const snapshotId = `sync_${providerDatasetContentHash({
+				datasetId: requestDetails.datasetId,
+				input: requestDetails.input.records,
+			}).slice("sha256:".length)}`;
+			return {
+				snapshotId,
+				rawReference: `brightdata:scrape:${snapshotId}`,
+				rawPayload: payload,
+			};
 		},
 
 		async progress(snapshotId, signal) {

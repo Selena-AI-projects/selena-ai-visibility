@@ -64,7 +64,7 @@ export function consumePreparedProviderDatasetCanary(prepared: PreparedProviderD
 
 export function createProviderDatasetRawCaptureFromLifecycle(
 	prepared: PreparedProviderDatasetCanary,
-	result: Readonly<{ snapshotId: string; capturedAt: string; rawPayload: unknown }>,
+	result: Readonly<{ snapshotId: string; capturedAt: string; rawPayload: unknown; rawReference?: string }>,
 ): ProviderDatasetRawCapture {
 	assertPreparedProviderDatasetCanary(prepared);
 	const snapshotId = result.snapshotId.trim();
@@ -76,7 +76,7 @@ export function createProviderDatasetRawCaptureFromLifecycle(
 		source: prepared.definition.source,
 		providerDatasetId: prepared.providerDatasetId,
 		capturedAt: result.capturedAt,
-		rawReference: `brightdata:snapshot:${snapshotId}`,
+		rawReference: result.rawReference ?? `brightdata:snapshot:${snapshotId}`,
 		rawPayload,
 		recordCount: Array.isArray(rawPayload) ? rawPayload.length : 1,
 	});

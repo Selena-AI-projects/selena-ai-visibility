@@ -7,6 +7,7 @@ import { startCredentialRefresh } from "@workspace/lib/secrets";
 import boss from "./boss";
 import { registerHandlers } from "./handlers";
 import { reconcileAnswerRetentionSchedule } from "./jobs/selena-answer-retention";
+import { reconcileBrightDataYouTubeRetentionSchedule } from "./jobs/brightdata-youtube-retention";
 import { shutdownTelemetry } from "./telemetry";
 
 if (process.env.SENTRY_DSN) {
@@ -88,6 +89,11 @@ async function main() {
 		retryDelay: 600,
 		expireInSeconds: 60 * 10,
 	});
+	await boss.createQueue("brightdata-youtube-retention", {
+		retryLimit: 1,
+		retryDelay: 600,
+		expireInSeconds: 60 * 10,
+	});
 	if (process.env.DEPLOYMENT_MODE === "whitelabel") {
 		await boss.createQueue("sync-auth0-memberships", {
 			retryLimit: 3,
@@ -112,6 +118,11 @@ async function main() {
 	}
 
 	await reconcileAnswerRetentionSchedule(boss, process.env.SELENA_ANSWER_RETENTION_ENABLED);
+	await reconcileBrightDataYouTubeRetentionSchedule(
+		boss,
+		process.env.SELENA_YOUTUBE_RETENTION_ENABLED,
+		process.env.SELENA_BRIGHTDATA_CANARY_ARTIFACT_ROOT,
+	);
 
 	// Register job handlers
 	await registerHandlers(boss);

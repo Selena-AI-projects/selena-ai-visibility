@@ -84,6 +84,7 @@ describe("Bright Data social registry", () => {
 			runtimeStatus: "blocked_cost_and_pii",
 			expectedMaxOutputRecords: 0,
 		});
+		expect(brightDataSocialDatasetRegistry.youtube_videos.collectionMode).toBe("sync_scrape");
 		expect(proposedBrightDataSocialWorkflowMapping).toEqual({
 			SOCIAL_INTELLIGENCE: ["instagram_profiles", "tiktok_profiles"],
 			REPUTATION: ["reddit_posts"],
@@ -163,6 +164,51 @@ describe("Bright Data social policy boundary", () => {
 });
 
 describe("shared client with the social transport", () => {
+	it("uses synchronous scrape for YouTube and never calls the async trigger", async () => {
+		const calls: { url: string; init?: RequestInit }[] = [];
+		const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
+			const url = String(input);
+			calls.push({ url, init });
+			if (url.endsWith("/datasets/gd_lk56epmy2i5g7lzu0k/metadata"))
+				return json({ id: "gd_lk56epmy2i5g7lzu0k", fields: { video_id: {}, youtuber_id: {}, url: {} } });
+			if (url.includes("/datasets/v3/scrape?"))
+				return json([
+					{
+						video_id: "dQw4w9WgXcQ",
+						youtuber_id: "UC-1",
+						url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+						title: "Fixture video",
+						views: 1,
+					},
+				]);
+			throw new Error(`unexpected test request: ${url}`);
+		});
+		const harness = createHarness(fetchImpl);
+		const collector = createBrightDataSocialCollector({
+			client: harness.client,
+			datasetEnvironment,
+			policy: { projectA: { CONTENT_VISIBILITY: ["youtube_videos"] } },
+		});
+
+		const result = await collector.collect({
+			projectId: "projectA",
+			workflow: "CONTENT_VISIBILITY",
+			datasetKey: "youtube_videos",
+			input: { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+			access,
+		});
+
+		expect(calls.filter((call) => call.url.includes("/datasets/v3/scrape?")).length).toBe(1);
+		expect(calls.some((call) => call.url.includes("/datasets/v3/trigger?"))).toBe(false);
+		expect(JSON.parse(String(calls.find((call) => call.url.includes("/scrape?"))?.init?.body))).toEqual([
+			{ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
+		]);
+		expect(harness.entries.map((entry) => entry.phase)).toEqual(["TRIGGERED", "DELIVERED"]);
+		expect(result).toMatchObject({ status: "COMPLETE", estimatedCostUsd: 0.0015 });
+		if (result.status !== "COMPLETE") throw new Error("expected complete fixture");
+		expect(result.snapshotId).toMatch(/^sync_[0-9a-f]{64}$/);
+	});
+
 	it("preflights, records snapshot authority, triggers once and returns no raw payload", async () => {
 		let progressCalls = 0;
 		let downloadCalls = 0;

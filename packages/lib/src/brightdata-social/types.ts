@@ -25,6 +25,7 @@ export type BrightDataSocialDatasetConfig = {
 	envKey: string;
 	datasetId: string;
 	mode: "collect_by_url" | "discover_by_profile_url";
+	collectionMode: "async_trigger" | "sync_scrape";
 	inputContract: BrightDataDatasetInputContract;
 	triggerQuery: Readonly<Record<string, string>>;
 	metadataSignature: readonly string[];
