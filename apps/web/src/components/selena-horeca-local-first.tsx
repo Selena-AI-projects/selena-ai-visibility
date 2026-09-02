@@ -1,4 +1,5 @@
 import { IconArrowUpRight, IconMapPin } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import type { HorecaLocalFirstReadModel, HorecaModuleReadModel } from "@workspace/selena-visibility-contracts";
 import {
 	HORECA_PREVIEW_AREAS,
@@ -15,6 +16,11 @@ type Props = {
 	sourceOnlyPreview?: boolean;
 	evidenceDetail?: HorecaEvidenceDetail | null;
 	evidenceDetailHref?: (evidenceId: string) => string;
+	workspaceToolSearch?: {
+		locale: HorecaPreviewLocale;
+		project?: string;
+		evidence?: string;
+	};
 };
 
 const statusCopy: Record<HorecaPreviewState, { en: string; ru: string }> = {
@@ -168,6 +174,7 @@ export function SelenaHorecaLocalFirst({
 	sourceOnlyPreview = true,
 	evidenceDetail = null,
 	evidenceDetailHref,
+	workspaceToolSearch,
 }: Props) {
 	const modules = model.modules.filter((module) => module.state !== "HIDDEN");
 	const socialHidden = model.modules.some((module) => module.moduleId === "SOCIAL" && module.state === "HIDDEN");
@@ -249,12 +256,23 @@ export function SelenaHorecaLocalFirst({
 				<ul className="flex min-w-max gap-2 pb-1">
 					{HORECA_PREVIEW_AREAS.map((area) => (
 						<li key={area.id}>
-							<a
-								href={`#${area.id}`}
-								className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
-							>
-								{localizedHorecaText(locale, area.label)}
-							</a>
+							{workspaceToolSearch ? (
+								<Link
+									to="/app/selena-horeca"
+									search={workspaceToolSearch}
+									hash={area.id}
+									className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
+								>
+									{localizedHorecaText(locale, area.label)}
+								</Link>
+							) : (
+								<a
+									href={`#${area.id}`}
+									className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
+								>
+									{localizedHorecaText(locale, area.label)}
+								</a>
+							)}
 						</li>
 					))}
 				</ul>
