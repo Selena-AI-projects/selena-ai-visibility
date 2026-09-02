@@ -42,12 +42,10 @@ function SelenaHorecaPage() {
 		params.set("evidence", evidenceId);
 		return `/app/selena-horeca?${params.toString()}#evidence`;
 	};
-	const workspaceToolHref = (areaId: string) => {
-		const params = new URLSearchParams();
-		params.set("locale", locale);
-		if (workspace.selectedProjectId) params.set("project", workspace.selectedProjectId);
-		if (search.evidence) params.set("evidence", search.evidence);
-		return `/app/selena-horeca?${params.toString()}#${areaId}`;
+	const workspaceToolSearch = {
+		locale,
+		...(workspace.selectedProjectId ? { project: workspace.selectedProjectId } : {}),
+		...(search.evidence ? { evidence: search.evidence } : {}),
 	};
 
 	useEffect(() => {
@@ -126,7 +124,7 @@ function SelenaHorecaPage() {
 						sourceOnlyPreview={workspace.model === null}
 						evidenceDetail={workspace.evidenceDetail}
 						evidenceDetailHref={workspace.model ? evidenceDetailHref : undefined}
-						workspaceToolHref={workspaceToolHref}
+						workspaceToolSearch={workspaceToolSearch}
 					/>
 				</div>
 			</main>

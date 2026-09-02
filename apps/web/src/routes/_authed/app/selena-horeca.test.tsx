@@ -30,13 +30,14 @@ const routerHarness = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => {
-	const toHref = (to: string, search?: Record<string, string | undefined>) => {
+	const toHref = (to: string, search?: Record<string, string | undefined>, hash?: string) => {
 		const params = new URLSearchParams();
 		for (const [key, value] of Object.entries(search ?? {})) {
 			if (value) params.set(key, value);
 		}
 		const query = params.toString();
-		return query ? `${to}?${query}` : to;
+		const href = query ? `${to}?${query}` : to;
+		return hash ? `${href}#${hash}` : href;
 	};
 
 	return {
@@ -48,13 +49,15 @@ vi.mock("@tanstack/react-router", () => {
 		Link: ({
 			to,
 			search,
+			hash,
 			children,
 			...props
 		}: {
 			to: string;
 			search?: Record<string, string | undefined>;
+			hash?: string;
 			children: ReactNode;
-		}) => createElement("a", { ...props, href: toHref(to, search) }, children),
+		}) => createElement("a", { ...props, "data-router-link": "true", href: toHref(to, search, hash) }, children),
 	};
 });
 
@@ -82,9 +85,9 @@ describe("HoReCa project rail", () => {
 		expect(avli).toContain('aria-current="page"');
 		expect(kora).toContain(`href="/app/selena-horeca?locale=en&amp;project=${projectIds.kora}"`);
 		expect(kora).not.toContain("aria-current");
-		expect(html).toContain(
-			`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}#visibility"`,
-		);
+		const visibility = projectLinkAttributes(html, "Visibility");
+		expect(visibility).toContain('data-router-link="true"');
+		expect(html).toContain(`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}#visibility"`);
 	});
 
 	it("keeps evidence and selected project context in workspace tool links", () => {
