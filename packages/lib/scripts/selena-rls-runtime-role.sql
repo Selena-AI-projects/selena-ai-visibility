@@ -1,5 +1,5 @@
 -- Owner-run staging bootstrap for the non-owner application role. Migrations
--- through 0058 must be committed first so this script can grant only known runtime
+-- through 0059 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -165,6 +165,34 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058';
 	END IF;
 
+	IF to_regclass('public.sv_journal_no_spend_reconciliations') IS NULL
+		OR to_regprocedure('public.sv_owner_reconcile_journal_no_spend(uuid,uuid[],text,text,text[],timestamp with time zone,timestamp with time zone,timestamp with time zone,timestamp with time zone,text,text)') IS NULL
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_class
+			WHERE oid = to_regclass('public.sv_journal_no_spend_reconciliations')
+				AND relrowsecurity AND relforcerowsecurity
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_trigger
+			WHERE tgrelid = to_regclass('public.sv_journal_no_spend_reconciliations')
+				AND tgname = 'sv_journal_no_spend_reconciliations_owner_insert_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_trigger
+			WHERE tgrelid = to_regclass('public.sv_journal_no_spend_reconciliations')
+				AND tgname = 'sv_journal_no_spend_reconciliations_immutable_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_journal_daily_claims'::regclass
+				AND tgname = 'sv_guard_journal_daily_claim_mutation'
+				AND tgenabled = 'O'
+		) THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0059';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -194,6 +222,7 @@ ALTER TABLE sv_provider_dataset_capabilities FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_evidence_acceptance_receipts FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_journal_daily_claims FORCE ROW LEVEL SECURITY;
 ALTER TABLE sv_journal_provider_boundaries FORCE ROW LEVEL SECURITY;
+ALTER TABLE sv_journal_no_spend_reconciliations FORCE ROW LEVEL SECURITY;
 
 -- Remove privileges left by an older version of this bootstrap before applying
 -- the explicit runtime allowlist. No future table or sequence is auto-granted.
@@ -201,6 +230,26 @@ REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM selena_app;
 REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM selena_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM selena_app;
+
+-- 0059 no-spend owner recovery is explicitly owner-only: neither the immutable
+-- certificate table nor any of its guard/reconcile functions are reachable by
+-- the runtime role. REVOKE ALL is the allowlist default; these lines make the
+-- boundary self-documenting on top of that default.
+REVOKE ALL ON sv_journal_no_spend_reconciliations FROM selena_app;
+REVOKE ALL ON FUNCTION sv_owner_reconcile_journal_no_spend(
+	uuid, uuid[], text, text, text[], timestamptz, timestamptz,
+	timestamptz, timestamptz, text, text
+) FROM selena_app;
+REVOKE ALL ON FUNCTION
+	sv_guard_journal_no_spend_reconciliation_insert(),
+	sv_reject_journal_no_spend_reconciliation_mutation(),
+	sv_require_journal_no_spend_claim_pair(),
+	sv_reject_journal_no_spend_dependency_mutation(),
+	sv_reject_journal_no_spend_cost_insert(),
+	sv_reject_journal_no_spend_outcome_mutation(),
+	sv_reject_journal_no_spend_provider_snapshot_insert(),
+	sv_reject_journal_no_spend_execution_truncate()
+FROM selena_app;
 
 -- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
 -- runtime allowlist: schema state is read-only, queue data is mutable, and only
