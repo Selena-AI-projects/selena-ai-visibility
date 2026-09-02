@@ -95,8 +95,9 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
   and CLA [33574858503](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858503).
 - Last complete exact-head receipt: `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
-- PR merge aggregation at that receipt: PR #96 `open`, `mergeable=true`,
-  `mergeable_state=clean`; merge remains intentionally unexecuted
+- PR #96 is open at documentation/evidence head `778e4aae`; GitHub currently
+  reports `mergeable=true` with aggregation `unstable` while its E2E check is
+  still in progress; merge remains intentionally unexecuted
 - Merge-resolution tests: lib migration runner `10/10`; CLI migration image
   contract `2/2`
 - Hosted deployment equality: `PASS_RESTORED`; exact git archive `100d34d8`
