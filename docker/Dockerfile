@@ -63,6 +63,11 @@ RUN pnpm --filter @workspace/web build
 RUN pnpm --filter @workspace/worker deploy --legacy /deploy/worker
 RUN pnpm --filter @workspace/lib deploy --legacy /deploy/lib
 
+# The job stages run this binary directly rather than through a resolver that
+# may reach the registry at start time, so a missing runner has to fail the
+# build instead of the run.
+RUN test -x /deploy/worker/node_modules/.bin/tsx
+
 # Runner stage for web app (Nitro)
 FROM base AS web
 WORKDIR /app
@@ -118,7 +123,7 @@ COPY --from=builder --chown=worker:nodejs /deploy/worker ./
 USER worker
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["./node_modules/.bin/tsx", "src/index.ts"]
 
 # Measurement stage — runs one measurement of the owner's own projects, then
 # exits. A job, not a server: the script refuses a second run of the same
@@ -134,7 +139,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["npx", "tsx", "src/scripts/measure-journal.ts"]
+CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal.ts"]
 
 # Publishing stage — reads a finished measurement and opens a pull request on
 # the marketing site with its per-question detail, then exits.
@@ -147,7 +152,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["npx", "tsx", "src/scripts/publish-journal-detail.ts"]
+CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal-detail.ts"]
 
 # The service name selects the final runtime stage: web or worker.
 FROM ${RAILWAY_SERVICE_NAME} AS final
