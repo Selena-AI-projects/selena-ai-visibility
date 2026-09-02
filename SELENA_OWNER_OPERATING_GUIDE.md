@@ -283,6 +283,27 @@ may be measured — the answers are public and the cost is ours — but its resu
 does not reach a public page without that owner's recorded yes, and the script
 says so as it runs.
 
+### Applying Railway variable changes
+
+Railway variable edits are staged changes, not live edits to a running
+container. The Variables screen can therefore show the proposed value while
+the active configuration and every existing deployment still use the previous
+value. A redeploy of an old deployment also reuses its image; it is not a
+substitute for committing the staged changes.
+
+Use this order for `SELENA_MIGRATION_MAX_INDEX`, `SELENA_JOURNAL_FORCE` and other
+operator controls:
+
+1. Confirm the environment and service before editing the value.
+2. Open the staged-changes banner on the project canvas and choose **Details**.
+3. Verify the old-to-new diff, then choose **Deploy** without holding Alt. Alt
+   commits configuration without redeploying the affected service.
+4. Wait for the resulting deployment to reach its successful terminal state.
+   The previous running container never receives the new value in place.
+5. Verify behavior from the new deployment logs. For `migrate`, the
+   `prepared ... through index N` line must name the reviewed ceiling before any
+   journal or migration result is trusted.
+
 ## Before accepting a paid order
 
 - Set package prices in the admin pricing configuration.
