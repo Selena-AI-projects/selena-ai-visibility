@@ -1,9 +1,9 @@
 # Selena AI Visibility v1.3 — audit remediation follow-up
 
-## Authoritative source candidate — 2026-09-02
+## Authoritative hosted candidate — 2026-09-02
 
-- Exact implementation source head:
-  `67df9d1621188de879f32feb240ad3bcb1b1596c`.
+- Exact hosted implementation source head:
+  `b4e678b812b42623d20a4211a0ae6f6d657420b3`.
 - Exact release base: `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
 - Source and shared-staging frontier is `59 entries / 0058`.
 - `0051` converges four evidenced historical/release schema variants. `0057`
@@ -28,22 +28,32 @@
   remains open/draft; its independently reviewed project/tool UI tree is
   integrated in this candidate.
 - Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
-  is open/draft, mergeable and clean at exact head `67df9d16`. All six checks pass:
-  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056845),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056975),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056949),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056978)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633057066).
+  is open/draft, mergeable and clean at exact hosted head `b4e678b8`. All six
+  source checks pass:
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753485),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753450),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753471),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753579)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753617).
   These source checks use stub/no-network provider paths and do not deploy or
   execute a paid call.
 - Fresh backup and isolated restore preceded bounded staging migrations
   `0057–0058`. The owner-neutral proof then passed in a transaction ending in
   rollback; counts stayed `1/2/0/0/10647/4560` for snapshots/canaries/evidence/
   acceptance/audit/cost, with zero proof fixtures or residual memberships.
-- No exact-source web/worker deploy, provider call, production action, billing
-  or recurring job is part of this follow-up.
+- Exact `b4e678b8` staging web/worker deployments passed at
+  `8a377d4c-28ce-4a0c-b633-9f72fec89b3a` and
+  `c5c2b004-f727-49e4-954d-bfe0e9415cfe`. The cursor key is sealed and its
+  runtime length gate passed without disclosure. Scoped API auth/HMAC checks
+  and AVLI/KORA browser acceptance passed; the temporary API key was deleted.
+  Counts remained `1/2/0/0/10647/4560`, with schedules and residual fixtures
+  `0/0`. No provider, billing, recurring or production action occurred.
+- Remaining staging holds are the Better Auth trusted-client-IP rate-limit
+  warning and failed fresh direct `postgres` authentication after credential
+  rotation. These do not invalidate the already proved backup/RLS receipts or
+  the healthy `selena_app` runtime, but block further owner-scoped maintenance.
 
-Status: `SOURCE_CI_RLS_PASS / EXACT_SOURCE_DEPLOY_HOLD`.
+Status: `STAGING_PRELAUNCH_PASS / OWNER_DB_BINDING_HOLD / PRODUCTION_NO_GO`.
 
 ## Current follow-up PR summary
 
@@ -54,8 +64,8 @@ Status: `SOURCE_CI_RLS_PASS / EXACT_SOURCE_DEPLOY_HOLD`.
 - persist an immutable journal boundary so crash recovery cannot relabel a
   possibly-spent execution as `NO_SPEND`;
 - preserve the reviewed HoReCa project rail and top tool axis;
-- keep exact-source deploy, production, Social/Travel, recurring execution,
-  billing and provider calls closed until their separate gates.
+- keep production, Social/Travel, recurring execution, billing and provider
+  calls closed until their separate gates.
 
 ## Historical PR ledger
 

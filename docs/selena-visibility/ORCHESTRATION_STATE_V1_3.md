@@ -2,9 +2,9 @@
 
 ## Authoritative current state — 2026-09-02
 
-- State: `SOURCE_CI_RLS_PASS / EXACT_SOURCE_DEPLOY_HOLD / PRODUCTION_NO_GO`.
-- Exact implementation source head:
-  `67df9d1621188de879f32feb240ad3bcb1b1596c`.
+- State: `STAGING_PRELAUNCH_PASS / OWNER_DB_BINDING_HOLD / PRODUCTION_NO_GO`.
+- Exact hosted implementation source head:
+  `b4e678b812b42623d20a4211a0ae6f6d657420b3`.
 - Branch: `fix/selena-v13-audit-remediation`; exact release base
   `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
 - Source and shared-staging database frontier: `59 entries / 0058`; hosted
@@ -35,13 +35,13 @@
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
   remains open/draft; its reviewed UI tree is integrated here. Exact-head
   follow-up PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
-  is open/draft, mergeable and clean at `67df9d16`; Build
-  [33633056845](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056845),
+  is open/draft, mergeable and clean at exact hosted source `b4e678b8`; Build
+  [33634753485](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753485),
   E2E/Scheduling
-  [33633056975](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056975),
-  License [33633056949](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056949),
-  Smoke [33633056978](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056978)
-  and CLA [33633057066](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633057066)
+  [33634753450](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753450),
+  License [33634753471](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753471),
+  Smoke [33634753579](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753579)
+  and CLA [33634753617](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753617)
   all passed.
 - Staging preconditions and proof: backup
   `b0544cb8-7f5f-491c-833e-47d87f99cc10`, isolated PITR restore service
@@ -50,17 +50,30 @@
   `RLS_SCHEMA_PROOF_ONLY PASS`. Counts were unchanged at snapshots/canaries/
   evidence/acceptance/audit/cost `1/2/0/0/10647/4560`; fixtures and residual
   owner membership were `0/0`.
-- Exact-source web/worker deploys and sealed staging cursor-key provisioning in
-  this remediation loop: `0`. Production, providers, recurring, billing and
-  Social/Travel remain prohibited.
+- Exact `b4e678b8` web deployment
+  `8a377d4c-28ce-4a0c-b633-9f72fec89b3a` and pinned worker deployment
+  `c5c2b004-f727-49e4-954d-bfe0e9415cfe` are `SUCCESS`. The sealed cursor key
+  is present and meets the runtime minimum without disclosure. Scoped hosted
+  API GETs passed auth/HMAC and returned the expected tenant `404` for a
+  nonexistent cycle; the short-lived key was deleted (`0` remaining). Browser
+  acceptance passed for AVLI/KORA, project rail plus top tool axis, hidden
+  Social/Travel and zero console errors.
+- Post-deploy staging counts remained `1/2/0/0/10647/4560` for snapshots/
+  canaries/evidence/acceptance/audit/cost; schedules and residual API fixtures
+  are `0/0`. Provider calls, billing, recurring jobs and production actions
+  were `0`.
+- Residual holds: Better Auth reports a shared per-path rate-limit bucket
+  because no trusted client IP header is resolved; fresh direct `postgres`
+  authentication failed after credential rotation, so future owner-scoped
+  maintenance is held until the owner binding is reconciled. Runtime
+  `selena_app` connectivity and least privilege passed.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
-Next gate: if and only if the final documentation-only PR head remains green
-and the owner separately confirms deployment, provision the sealed cursor key
-without reading its value, deploy exact-source web/worker with provider,
-recurring and billing gates closed, then run hosted API/browser acceptance.
-No deploy is authorized by this ledger.
+Next gate: keep PR #117 draft until the documentation-only evidence commit is
+green. Reconcile the owner DB credential binding and trusted proxy/IP rate-limit
+configuration before any further migration or public-launch decision.
+Production, providers, billing, recurring jobs and Social/Travel remain closed.
 
 ## Historical orchestration ledger
 

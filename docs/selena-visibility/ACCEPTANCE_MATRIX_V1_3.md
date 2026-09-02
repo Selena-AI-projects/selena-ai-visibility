@@ -2,11 +2,11 @@
 
 ## Authoritative source overlay — 2026-09-02
 
-This is the only current acceptance overlay. Hosted receipts below are a dated
-historical ledger and do not prove deployment of the source candidate below.
+This is the only current acceptance overlay. Hosted receipts in this section
+prove the exact staging runtime named below; the older ledger remains historical.
 
-- Exact implementation source head:
-  `67df9d1621188de879f32feb240ad3bcb1b1596c`.
+- Exact hosted implementation source head:
+  `b4e678b812b42623d20a4211a0ae6f6d657420b3`.
 - Branch: `fix/selena-v13-audit-remediation`.
 - Exact release base: `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
 - Source and shared-staging migration frontier: `59 entries / 0058`; staging
@@ -20,44 +20,66 @@ historical ledger and do not prove deployment of the source candidate below.
   `OPEN/DRAFT` at `7bb1ec35`; its reviewed UI tree is integrated into this
   candidate by merge `b87287fa`.
 - Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
-  is `OPEN/DRAFT/MERGEABLE/CLEAN` at exact head `67df9d16`. All six checks
-  passed: [Build 33633056845](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056845),
-  [E2E and Scheduling 33633056975](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056975),
-  [License 33633056949](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056949),
-  [Smoke 33633056978](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633056978)
-  and [CLA 33633057066](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33633057066).
+  was `OPEN/DRAFT/MERGEABLE/CLEAN` at exact hosted head `b4e678b8`. Its six
+  source checks passed: [Build 33634753485](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753485),
+  [E2E and Scheduling 33634753450](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753450),
+  [License 33634753471](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753471),
+  [Smoke 33634753579](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753579)
+  and [CLA 33634753617](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33634753617).
 - Fresh staging backup `b0544cb8-7f5f-491c-833e-47d87f99cc10` and isolated
   PITR restore service `9bec47ee-bebe-49e6-bb0e-ae29fa39ce3` were proved
   before bounded migrations `0057–0058` were applied by deployment
   `e27792a7-de75-46f6-9fe8-38d075361525`.
-- The exact `67df9d16` owner-neutral RLS proof ran against staging as
+- The owner-neutral RLS proof incorporated in `b4e678b8` ran against staging as
   `postgres/postgres` and ended in `ROLLBACK`. Receipt:
   `RLS_SCHEMA_PROOF_ONLY PASS`; before/after counts were identical:
   snapshots `1`, canaries `2`, evidence `0`, acceptance `0`, audit `10647`,
   cost `4560`, proof fixtures `0`.
-- No web/worker deployment, provider call, billing action, recurring job or
-  production action was performed for this overlay.
+- Exact `b4e678b8` staging deployments passed: web
+  `8a377d4c-28ce-4a0c-b633-9f72fec89b3a` and pinned worker
+  `c5c2b004-f727-49e4-954d-bfe0e9415cfe`. The sealed cursor key is present in
+  web runtime and meets the 32-byte minimum; its value was never read or shown.
+- Hosted API acceptance used one short-lived, test-tenant-only scoped key whose
+  value was never shown. Progress, Maps, Local AI and evidence GETs passed auth;
+  the three paginated routes passed the HMAC gate and all four returned the
+  expected tenant-scoped `404 LOCAL_CYCLE_NOT_FOUND` for a nonexistent cycle.
+  The fixture key was deleted and verified at `0` remaining rows.
+- Hosted browser acceptance passed for the AVLI and KORA project routes: the
+  project rail is left-aligned, the tool axis is separate and horizontal,
+  Local-first content is read-only, Social/Travel are absent, and browser
+  console errors were `0`.
+- Provider calls, billing, recurring jobs and production actions were `0`.
+  Post-acceptance counts remained snapshots/canaries/evidence/acceptance/audit/
+  cost `1/2/0/0/10647/4560`; `pgboss.schedule=0`.
 
 | Current boundary | Decision | Evidence |
 |---|---|---|
 | 0051 schema compatibility | `PASS_DISPOSABLE` | Four historical/release schema variants converge to one catalog; legacy formal acceptance is rejected; migration catalog digest `2ccfdc3a033d1f4d95d34b5ba567d0a6`; provider calls `0`. |
 | 0057 project-scoped formal evidence | `PASS_DISPOSABLE` | Dry-run rolls back; concurrent acceptance is deterministic; cross-tenant and cross-project access are blocked; Local Maps is eligible; historical canary is blocked; evidence/acceptance/audit rows are `4/4/4`; provider calls and cost rows are `0/0`. |
 | Runtime least privilege | `PASS_STAGING_ROLLBACK_PROOF` | Actual non-owner `selena_app` has no `SUPERUSER`, `BYPASSRLS` or inheritance, can read only 11 allowlisted snapshot metadata columns, cannot read `content_sha256`, `raw_reference` or table-level private snapshots, cannot insert formal acceptance, and retained the same grants after rollback. The owner-neutral proof derives the actor from the actual control-plane database role instead of a fixed owner name. |
-| Local cursor integrity | `PASS_SOURCE_CI / HOLD_HOSTED` | Paginated Local read routes require a server-only `SELENA_LOCAL_CURSOR_HMAC_SECRET` of at least 32 UTF-8 bytes, issue HMAC-SHA256 cursors bound to tenant/cycle/resource and fail closed before DB access when the sealed key is missing or short. The key is not a tenant/provider override. No secret value was read or published; hosted wiring awaits deploy authorization. |
+| Local cursor integrity | `PASS_HOSTED_GATE` | Paginated Local read routes require a server-only `SELENA_LOCAL_CURSOR_HMAC_SECRET` of at least 32 UTF-8 bytes, issue HMAC-SHA256 cursors bound to tenant/cycle/resource and fail closed before DB access when the sealed key is missing or short. Staging config and runtime both confirmed the sealed value is present and at least 32 bytes without reading it; authenticated paginated GETs reached tenant-scoped lookup rather than `OWNER_GATE_REQUIRED`. |
 | 0058 journal/provider boundary | `PASS_DISPOSABLE` | Exact `NO_SPEND` before transport; `EXECUTING` remains fail-closed after the boundary; terminal recovery completes the same claim; replay is idempotent; cross-tenant recovery is blocked; provider/cost rows are `0/0`. |
-| HoReCa Local-first UI | `PASS_SOURCE` | Reviewed project rail and top tool axis are integrated; route query/hash and project identity are preserved; independent review found no P0/P1. Hosted browser acceptance for this exact source is not claimed. |
+| HoReCa Local-first UI | `PASS_HOSTED` | Exact `b4e678b8` rendered AVLI and KORA with the project rail on the left and a separate top tool axis; project identity and anchor navigation were preserved, Social/Travel were absent and browser console errors were `0`. |
 | Root quality gates | `PASS_LOCAL_WITH_BASELINE_WARNINGS` | Node 24 lint exit `0` with `129 warnings / 12 infos`; typecheck `13/13`; tests `16/16` (`lib 1138`, `web 448 + 4 skipped`); build `16/16`. |
 | Impeccable | `NOT_SUPPORTED` | No workspace binary is installed; no dependency was added to manufacture this gate. |
 | Provider and historical canary | `NO_CALL / HOLD` | This loop made zero provider calls. The historical capture remains private and ineligible for formal acceptance; no retroactive promotion is permitted. |
-| CI | `PASS_EXACT_IMPLEMENTATION` | PR head `67df9d16` passed Build, E2E, Scheduling, License, Smoke and CLA under the project CI runtime. |
-| Shared staging / production | `RLS_PASS / DEPLOY_HOLD / NO_GO` | Backup/isolated restore, migrations `0057–0058` and the rollback-only owner-neutral RLS proof pass. The exact source has not been deployed, the cursor key has not been provisioned by this loop, and hosted API/browser acceptance remains gated on separate deploy confirmation. Production remains prohibited. |
+| CI | `PASS_EXACT_HOSTED_SOURCE` | Exact hosted head `b4e678b8` passed Build, E2E, Scheduling, License, Smoke and CLA; Railway web and worker status checks are also green. |
+| Shared staging / production | `STAGING_DEPLOY_PASS / PRODUCTION_NO_GO` | Backup/isolated restore, migrations `0057–0058`, rollback-only owner-neutral RLS, exact web/worker lifecycle, sealed HMAC wiring and bounded API/browser acceptance pass. Runtime `selena_app` remains non-owner/no-bypass and denied private snapshot payload/provider references. Production remains prohibited. |
 
 Chosen architecture: private reconciliation and formal acceptance remain
 owner/control-plane functions. Ordinary `selena_app` gets only allowlisted
 metadata and narrowly scoped journal recovery; it never receives raw snapshot
 payload or provider-reference access.
 
-Overall decision: `GO_SOURCE_CI_AND_STAGING_RLS / HOLD_EXACT_SOURCE_DEPLOY / NO_GO_PRODUCTION`.
+Residual staging observations: Better Auth emitted a warning that Railway did
+not provide a trusted client IP header, so its rate limiter uses one shared
+per-path bucket. The runtime role remains healthy, but a fresh direct
+`postgres` owner login failed password authentication after credential
+rotation; the earlier backup, migration and rollback-only RLS receipts remain
+valid, while future owner-scoped maintenance is held until that binding is
+reconciled.
+
+Overall decision: `GO_STAGING_PRELAUNCH / HOLD_OWNER_DB_BINDING / NO_GO_PRODUCTION`.
 
 ## Historical hosted evidence ledger
 
