@@ -1,30 +1,46 @@
 # Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
 
-## Authoritative reconciliation overlay — 2026-09-02
+## Authoritative source candidate — 2026-09-02
 
-- Final source candidate: `f2c71dfe8eff6b7207463fce0e4d2f1088e3a15f`.
+- Exact implementation source head:
+  `970aa54da81ffcd8b15fccae4e343d999acfe281`.
+- Release `223f2681` is integrated by merge commit `81721f6d` without rewriting
+  feature history.
+- Source frontier is `57 entries / 0056`; shared staging remains at the last
+  evidenced `54 entries / 0053` and must not be advanced by this PR alone.
+- Formal evidence acceptance now requires a direct owner/control-plane
+  connection. `selena_app` remains unable to read raw private snapshot payload,
+  provider references or forge receipt/audit acceptance.
+- Local source gates: focused `74/74`, disposable PostgreSQL/RLS proof `PASS`,
+  root test/build `16/16`, lint `0 errors` (`129 warnings / 12 infos` baseline),
+  Local Maps replay `3 × 11/11`, provider calls `0`.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  `OPEN / DO_NOT_MERGE` with `mergeable_state=dirty`; no merge or production
-  action was performed. Build/E2E/License runs
-  [33581340784](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581340784),
-  [33581342375](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581342375)
-  and
-  [33581344379](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581344379)
-  are `SUCCESS` for this source head.
-- Private reconciliation uses an owner/admin-scoped connection. The ordinary
-  `selena_app` role cannot read raw snapshot payload/provider references and is
-  fail-closed by `GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED`.
-- Staging-only rollback dry-run returned redacted
-  `GOOGLE_AI_MODE_HISTORICAL_RECONCILIATION_FAILED` under `selena_app`, with no
-  commit, DB mutation or provider call. Owner-scoped verification is blocked by
-  current owner-credential authentication failure.
-- Tests prove first-commit `0→1` private snapshot and audit rows, replay-stable
-  `1/1/0/0/0`, dry-run rollback, and `providerCalls=0`. Existing staging
-  persistence remains one snapshot plus one audit row; no duplicate was added.
-- Worker rollback is complete: exact `100d34d8`, deployment
-  `9cf426fe-98ae-4c73-8ec9-a7fd7358504e`, `SUCCESS`.
+  currently `OPEN`, published head `d514d79b`, `CONFLICTING/DIRTY`, with no
+  checks for this local candidate. PR
+  [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is also
+  `OPEN/CONFLICTING`; its checks cover only historical head `a4d05d47`.
+- CI for `970aa54d`: `PENDING_PUSH`; replace this with exact run links only
+  after GitHub returns them.
+- No shared-staging mutation, deploy, provider call, production action, billing,
+  recurring job or merge is part of this source update.
 
-Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PRIVATE_RECONCILED / ACCEPTANCE_HOLD / DO_NOT_MERGE`.
+Status: `SOURCE_READY / CI_PENDING / STAGING_0056_HOLD / DO_NOT_MERGE`.
+
+## Current proposed PR summary
+
+- merge current release baseline into the feature branch;
+- harden provider-evidence acceptance around direct owner identity and
+  least-privilege runtime access;
+- add migration `0056` with pre-DDL legacy/RLS safety checks and reciprocal
+  immutable receipt/audit constraints;
+- preserve the two-axis HoReCa navigation with project keyboard focus and route
+  binding coverage;
+- keep Social/Travel, recurring execution, billing and provider calls closed.
+
+## Historical PR ledger
+
+The material below is retained for audit lineage. Older SHA, CI and deployment
+claims are historical and are not the current candidate status.
 
 - PR: [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)
 - Base: `release/selena-visibility-mvp`

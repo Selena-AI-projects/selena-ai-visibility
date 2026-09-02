@@ -1,8 +1,41 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_AND_HOSTED_CORE_WITH_OWNER_GATES`.
+Status: `PASS_SOURCE_970AA54D / CI_PENDING / HOSTED_0056_NOT_RUN`.
 
-## Final exact-head closure — 2026-09-01
+## Current independent overlay — 2026-09-02
+
+Reviewed implementation source:
+`970aa54da81ffcd8b15fccae4e343d999acfe281`.
+
+- Database/Evidence independent verdict: `P0=0`, `P1=0` after the final
+  preflight fix. Migration `0056` requires direct session identity, ownership
+  of both acceptance tables and `SUPERUSER/BYPASSRLS` before any DDL; FORCE RLS
+  cannot conceal legacy acceptance state from migration review.
+- Receipt and formal audit references are reciprocal deferred constraints;
+  accepted cycle/dataset metadata is immutable; runtime `selena_app` has no raw
+  payload/provider path and no formal-acceptance privilege.
+- Disposable PostgreSQL proof passed migration apply, FORCE-RLS owner rejection,
+  legacy-state rollback without DDL residue, runtime payload/forgery denial and
+  clean teardown.
+- Provider/evidence focused verification passed `74/74`; root test and build
+  passed `16/16` tasks. Lint has `0 errors`; `129 warnings / 12 infos` are the
+  registered non-blocking web baseline.
+- HoReCa source navigation has a complementary project rail and top tool axis,
+  visible project focus, `aria-current` and locale/project route preservation.
+  Its targeted route test passed.
+- Local Maps stability replay passed three independent `11/11` runs with no
+  provider call.
+- Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
+  is absent; it was not installed during acceptance.
+- CI for this implementation head is pending the authorized feature push.
+- No shared staging migration/deploy, provider call, production action, billing,
+  recurring job or PR merge was performed for this overlay.
+
+Current independent conclusion: `GO_SOURCE_PUSH_AND_CI`; `NO_GO_STAGING_0056`
+until a fresh backup/read-only legacy count and a separately authorized bounded
+apply; `NO_GO_PRODUCTION`.
+
+## Historical exact-head closure — 2026-09-01
 
 Accepted runtime/source HEAD:
 `2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
@@ -142,7 +175,7 @@ remaining P0/P1 in this slice.
   web typecheck, scoped Biome and the web production build. Existing browser
   externalization and missing Sentry-token messages remain warnings.
 
-## Remaining owner gates
+## Historical owner gates at the 2026-09-01 audit
 
 - separate authorization for migration `0052` and any paid Google AI Mode
   canary; the latest decision currently prohibits the call;

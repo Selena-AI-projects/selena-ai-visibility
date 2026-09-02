@@ -1,42 +1,56 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
-## Authoritative reconciliation overlay — 2026-09-02
+## Authoritative source overlay — 2026-09-02
 
-This overlay supersedes earlier candidate-head and worker-deployment rows below.
+This is the only current acceptance overlay. The hosted receipts below are a
+dated historical ledger and do not prove deployment of this source head.
 
-- Source acceptance head: `f2c71dfe8eff6b7207463fce0e4d2f1088e3a15f`.
+- Exact implementation source head: `970aa54da81ffcd8b15fccae4e343d999acfe281`.
+- Branch: `feature/selena-visibility-v1-2-1`.
+- Release head integrated by merge commit `81721f6d`: `223f2681224812ffe2be0bff0bf354eb57c83166`.
+- Source migration frontier: `57 entries / 0056`; shared staging remains at the
+  last evidenced frontier `54 entries / 0053`. Applying `0054–0056` is not
+  authorized by this document.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  `OPEN`, `mergeable_state=dirty`; no merge was performed. The feature branch
-  has no published PR checks because the merge ref is dirty.
-- Source CI for `f2c71dfe`: Build
-  [33581340784](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581340784),
-  E2E
-  [33581342375](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581342375),
-  License
-  [33581344379](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33581344379);
-  all three `SUCCESS`.
-- Chosen architecture: private reconciliation requires a separate owner/admin
-  scoped staging connection. `selena_app` remains metadata-only and is rejected
-  before any private snapshot read with
-  `GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED`.
-- Staging rollback-only dry-run receipt: command returned redacted
-  `GOOGLE_AI_MODE_HISTORICAL_RECONCILIATION_FAILED` under `selena_app`; no
-  `--commit`, provider call, or persistence write occurred. Owner-authenticated
-  staging verification is `BLOCKED_ACCESS` after password rotation, so staging
-  row counts are not promoted to formal evidence.
-- Exact source-test cardinality: first commit `0→1` private snapshot and
-  `0→1` audit row; evidence/cost/acceptance rows `0→0`; replay remains `1/1/0/0/0`;
-  `providerCalls=0`; dry-run performs no writes. The previously persisted
-  staging receipt remains one snapshot plus one audit row with no duplicate.
-- Worker was restored to exact `100d34d8` by deployment
-  `9cf426fe-98ae-4c73-8ec9-a7fd7358504e` (`SUCCESS`).
-- Formal decision: `NO-GO / HOLD_OWNER_READ`; no provider, production, billing,
-  recurring, or merge action is authorized.
+  `OPEN`, remote head `d514d79b`, `CONFLICTING/DIRTY`, with no current checks.
+  PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is
+  `OPEN`, remote head `a4d05d47`, also `CONFLICTING/DIRTY`. Neither is merged.
+- CI for `970aa54d`: `PENDING_PUSH`. Historical runs belong to earlier heads and
+  are not evidence for this implementation head.
+- Local gates: root test `16/16` tasks, build `16/16`, lint `0 errors` with the
+  registered baseline `129 warnings / 12 infos`, focused final suite `74/74`,
+  lib/web typecheck `PASS`, disposable PostgreSQL migration/RLS proof `PASS`,
+  and Local Maps stability replay `3 × 11/11` with zero provider calls.
+- Impeccable detect: `NOT_SUPPORTED` because the binary is absent from the
+  workspace; no package was installed to manufacture this gate.
 
-Evidence date: `2026-09-02`. This document is the canonical post-hosted
-acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
+| Current boundary | Decision | Evidence |
+|---|---|---|
+| Provider registry and 13 dataset contracts | `PASS_SOURCE` | Existing source plus local/CI-gated contract suites; no new provider execution. |
+| Google adapters and gates | `PASS_SOURCE / NO_CALL` | Timeout/retry and immutable-identity controls remain fail-closed; provider calls in this change: `0`. |
+| Social/Travel | `PASS_HIDDEN` | Activation remains prohibited and hidden at customer boundaries. |
+| HoReCa Local-first UI | `PASS_SOURCE / HOLD_HOSTED` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. Exact `970aa54d` is not deployed. |
+| Runtime least privilege | `PASS_SOURCE` | `selena_app` retains metadata-only access and cannot read private payload/provider references or forge formal acceptance. |
+| Formal evidence acceptance | `PASS_SOURCE / HOLD_STAGING_0056` | Only a direct table-owner session with RLS bypass may accept. Receipt and formal audit are reciprocal, immutable and atomic. Migration preflight rejects legacy rows before DDL. |
+| CI | `PENDING_PUSH` | Must be replaced with exact run links after the authorized feature push. |
+| Shared staging / production / merge | `NO_GO` | No `0056` apply, deploy, provider call, production action or merge is authorized here. |
 
-## Canonical anchors
+Chosen architecture: reconciliation and formal acceptance use a separate
+owner/control-plane connection. Ordinary `selena_app` cannot perform private
+reconciliation. The last historical staging persistence receipt remains one
+private snapshot plus one audit row and no evidence/cost/acceptance rows; this
+turn performed no shared-staging read or write, so those counts are not promoted
+as a fresh `970aa54d` runtime receipt.
+
+Overall decision: `GO_SOURCE_PUSH_AND_CI / NO_GO_STAGING_0056 / NO_GO_PRODUCTION`.
+
+## Historical hosted evidence ledger
+
+Everything below predates `970aa54d` and is retained for lineage only. Where a
+row calls an older SHA "current" or "final", read it as current at the date of
+that receipt, not as the current branch state.
+
+## Historical anchors
 
 - Accepted staging implementation source: `100d34d8` (merge parent
   `5cbb7b25`; canonical `0045`, follow-up `0053`, exact historical-hash

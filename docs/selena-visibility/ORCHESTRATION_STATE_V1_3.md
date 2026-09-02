@@ -1,32 +1,47 @@
 # Selena AI Visibility v1.3 — orchestration state
 
-## Authoritative reconciliation overlay — 2026-09-02
+## Authoritative current state — 2026-09-02
 
-- Exact source head: `f2c71dfe8eff6b7207463fce0e4d2f1088e3a15f`.
-- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) remains
-  open with `mergeable_state=dirty`; no merge was executed. Source CI runs
-  `33581340784`, `33581342375` and `33581344379` are `SUCCESS`.
-- Architecture decision: owner/admin-scoped staging connection for private
-  reconciliation; no `selena_app` grant expansion. The runtime guard fails
-  closed with `GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED`.
-- Rollback-only staging dry-run returned redacted
-  `GOOGLE_AI_MODE_HISTORICAL_RECONCILIATION_FAILED`; it used no `--commit`, made
-  no DB write and made zero provider calls. Owner-scoped staging readback is
-  `BLOCKED_ACCESS` because the rotated owner credential currently fails auth.
-- Test receipt: `0→1` snapshot and `0→1` audit on first commit, then stable
-  `1/1/0/0/0` (snapshot/audit/evidence/cost/acceptance) on replay; dry-run is
-  write-free and `providerCalls=0`.
-- Active staging worker is restored to exact `100d34d8` at deployment
-  `9cf426fe-98ae-4c73-8ec9-a7fd7358504e` (`SUCCESS`).
-- Current state: `NO_GO_HOLD_OWNER_READ`; production, provider, billing,
-  recurring and merge gates remain closed.
+- State: `SOURCE_READY_CI_PENDING / STAGING_0056_HOLD / PRODUCTION_NO_GO`.
+- Exact implementation source head:
+  `970aa54da81ffcd8b15fccae4e343d999acfe281`.
+- Branch: `feature/selena-visibility-v1-2-1`, seven commits ahead of the
+  currently published feature ref before this documentation commit.
+- Release lineage: remote release `223f2681`, integrated by merge `81721f6d`.
+- Source database frontier: `57 entries / 0056`; last evidenced shared staging
+  frontier: `54 entries / 0053`.
+- `0056` architecture: direct owner/control-plane session only, table-owner
+  identity plus `SUPERUSER/BYPASSRLS`, fail-closed preflight before DDL, no
+  `selena_app` raw-payload grant, reciprocal immutable receipt/audit rows.
+- Exact source tests: first reconciliation creates one private snapshot and one
+  audit row; dry-run rolls back; replay returns `ALREADY_RECONCILED`; duplicate
+  snapshot/audit/evidence/cost/acceptance rows remain zero; provider calls `0`.
+- Local quality: focused final suite `74/74`, disposable PostgreSQL proof
+  `PASS`, root tests `16/16`, root build `16/16`, lint `0 errors` with `129`
+  warnings and `12` infos, Local Maps stability `3 × 11/11`.
+- Impeccable: `NOT_SUPPORTED` because no workspace binary exists.
+- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96):
+  `OPEN`, remote head `d514d79b`, `CONFLICTING/DIRTY`, no current checks.
+- PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108):
+  `OPEN`, remote head `a4d05d47`, `CONFLICTING/DIRTY`; its green checks are
+  historical and do not cover `970aa54d`.
+- CI for `970aa54d`: `PENDING_PUSH`.
+- Shared staging mutation/deploy/provider execution in this source closure:
+  `0`; production/merge/recurring/billing/Social/Travel remain prohibited.
+- Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
+  excluded from every commit.
 
-Updated: `2026-09-02` after diagnostic-2, mandatory worker rollback, exact-web
-drift recovery, first-party Bright Data payload/cost reconciliation, bounded
-snapshot remediation, release-head integration evidence and private historical
-capture persistence.
+Next autonomous sequence: commit this documentation overlay, push the feature
+branch, collect exact Blacksmith/GitHub receipts, fix source-only CI failures if
+any, then return to the owner before any shared-staging `0054–0056` action.
 
-## Current state
+## Historical orchestration ledger
+
+The remainder is retained as dated hosted evidence. Its words "current" and
+"final" refer to the older receipt that contained them, not to the source head
+above.
+
+## Historical state
 
 - State: `STAGING_CORE_PASS_HISTORICAL_PAYLOAD_VALIDATED_PRIVATE_RECONCILIATION_HOLD`
 - Context mode: `repository_only`
