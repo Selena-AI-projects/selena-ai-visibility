@@ -82,7 +82,7 @@ function SelenaHorecaPage() {
 			</header>
 
 			<main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[17rem_minmax(0,1fr)] lg:py-12">
-				<aside className="lg:sticky lg:top-8 lg:self-start">
+				<aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
 					<nav aria-label={locale === "ru" ? "Проекты HoReCa" : "HoReCa projects"}>
 						<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#6e6258]">
 							{locale === "ru" ? "ПРОЕКТЫ" : "PROJECTS"}
@@ -100,7 +100,7 @@ function SelenaHorecaPage() {
 												data-selected={selected || undefined}
 												aria-current={selected ? "page" : undefined}
 											>
-												<span className="truncate font-medium">{project.name}</span>
+												<span className="font-medium">{project.name}</span>
 												<span className="text-xs text-[#6e6258]">
 													{locale === "ru" ? "Открыть кабинет" : "Open workspace"}
 												</span>

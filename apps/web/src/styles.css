@@ -256,6 +256,7 @@
 .selena-project-link {
 	display: flex;
 	width: 100%;
+	min-width: 0;
 	min-height: 4.25rem;
 	flex-direction: column;
 	align-items: flex-start;
@@ -269,6 +270,18 @@
 		background-color 160ms ease-out,
 		border-color 160ms ease-out,
 		color 160ms ease-out;
+}
+
+/*
+ * A column of flex items is sized to each line's own content, so a project name
+ * long enough — a staging name carrying a date, say — leaves the rail and lands
+ * on the page beside it. Bounding each line to the card keeps the name inside
+ * it; wrapping rather than clipping keeps the whole name readable, since the
+ * part that tells two staging projects apart is usually at the end.
+ */
+.selena-project-link > span {
+	max-width: 100%;
+	overflow-wrap: anywhere;
 }
 
 @media (max-width: 63.999rem) {

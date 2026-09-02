@@ -553,7 +553,7 @@ function SelenaWorkspace() {
 										setError("");
 									}}
 								>
-									<span className="truncate font-medium">{item.project.name}</span>
+									<span className="font-medium">{item.project.name}</span>
 									<span className="text-xs text-[#6e6258]">{projectStageLabel(item, locale)}</span>
 									<span className="text-xs text-[#8a7d70]">{lastAuditLabel(item, locale)}</span>
 								</button>
