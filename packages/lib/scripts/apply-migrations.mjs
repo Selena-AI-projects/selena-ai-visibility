@@ -22,6 +22,12 @@ const MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '5s'";
 // candidates from migrating the same journal concurrently.
 const MIGRATION_LOCK_SQL = "select pg_advisory_lock(1397050446, 1095587150)";
 const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock(1397050446, 1095587150) as unlocked";
+const RELEASE_SHORT_0051 = Object.freeze({
+	createdAt: "1787940013000",
+	hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+});
+const FORMAL_ACCEPTANCE_0056_CREATED_AT = "1787940018000";
+const RELEASE_SHORT_0051_BRIDGE = "0051_release_short_to_feature_superset.sql";
 
 // Staging was initially migrated from reviewed local snapshots before the
 // service was connected to GitHub. Drizzle keeps applied file hashes immutable,
@@ -90,12 +96,54 @@ async function journalState(pool) {
 	}
 }
 
+function migrationStatements(source) {
+	return source
+		.split("--> statement-breakpoint")
+		.map((statement) => statement.trim())
+		.filter(Boolean);
+}
+
+/**
+ * The reviewed release-short 0051 hash predates receipt/read-model objects that
+ * 0056 requires. Its journal row cannot be rewritten, and a normal 0057 would
+ * be unreachable because PostgreSQL resolves the missing receipt table at the
+ * start of 0056. Apply the exact owner-reviewed compatibility bridge while the
+ * database-wide migration lock is held, then let Drizzle continue normally.
+ */
+export async function reconcileHistoricalMigrationVariants({
+	client,
+	actualRows,
+	migrationsFolder,
+	readCompatibilitySource = readFile,
+	log = console.log,
+}) {
+	const releaseShortApplied = actualRows.some(
+		(row) => row.createdAt === RELEASE_SHORT_0051.createdAt && row.hash === RELEASE_SHORT_0051.hash,
+	);
+	const formalAcceptanceApplied = actualRows.some((row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT);
+	if (!releaseShortApplied || formalAcceptanceApplied) return false;
+
+	const compatibilityPath = resolve(migrationsFolder, "compat", RELEASE_SHORT_0051_BRIDGE);
+	const source = await readCompatibilitySource(compatibilityPath, "utf8");
+	await client.query("BEGIN");
+	try {
+		for (const statement of migrationStatements(source)) await client.query(statement);
+		await client.query("COMMIT");
+	} catch (error) {
+		await client.query("ROLLBACK").catch(() => {});
+		throw error;
+	}
+	log("historical 0051 release-short schema reconciled before 0056");
+	return true;
+}
+
 export async function runMigrationCycleWithLock({
 	client,
 	expectedRows,
 	migrationsFolder,
 	createDatabase = drizzle,
 	migrateDatabase = migrate,
+	readCompatibilitySource = readFile,
 	log = console.log,
 }) {
 	let lockAcquired = false;
@@ -109,7 +157,16 @@ export async function runMigrationCycleWithLock({
 		log(
 			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
 		);
-		if (before) assertJournalPrefix(before, expectedRows);
+		if (before) {
+			assertJournalPrefix(before, expectedRows);
+			await reconcileHistoricalMigrationVariants({
+				client,
+				actualRows: before,
+				migrationsFolder,
+				readCompatibilitySource,
+				log,
+			});
+		}
 
 		await migrateDatabase(createDatabase(client), { migrationsFolder });
 
