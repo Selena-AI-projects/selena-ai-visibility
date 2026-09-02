@@ -12,7 +12,7 @@ Status: `OPEN / HISTORICAL_PAYLOAD_PASS / PRIVATE_RECONCILED / ACCEPTANCE_HOLD /
 - Sanitized trigger-diagnostics source before this evidence update: `4f701b35`
 - Bounded snapshot-download remediation source: `4a1fd948`
 - Canary-time feature HEAD: `3872a396`
-- Active staging worker after rollback: `100d34d8`, deployment `9275a824…`
+- Active staging worker after rollback: `100d34d8`, deployment `b583e695…`
 - Active staging web after drift recovery: `100d34d8`, deployment `835aca8d…`
 - Integrated release parent: `5cbb7b25`
 - Current offline reconciliation source patch: `b01a310b` in follow-up [PR
@@ -125,7 +125,7 @@ provider capture/journal timestamps, strict replay checks and idempotent
 
 - temporary deployment `de5df16a-2768-4541-8eaf-a6a33604c5b8` ran diagnostic
   source `a9d1f373` and was removed after the single call;
-- rollback deployment `9275a824-281d-4afa-8098-1ed7184ffc68` restored exact
+- rollback deployment `b583e695-e935-4e2f-b6c5-f13b135964d4` restored exact
   archive `100d34d8` and reached `SUCCESS`;
 - startup logs prove legacy provider execution disabled, recurring scheduler
   disabled, managed schedules removed, pg-boss ready and all handlers
@@ -155,9 +155,11 @@ provider capture/journal timestamps, strict replay checks and idempotent
 
 ### Remaining gates
 
-1. Historical Bright Data identity, payload and cost are reconciled, but no
-   retroactive staging capture write is authorized. Diagnostic-2 remains
-   `TRIGGER_OUTCOME_UNKNOWN`; neither execution may be retried.
+1. Historical Bright Data identity, payload and cost are reconciled. The private
+   staging capture is persisted once, and replay validation now checks canonical
+   payload, timestamps, schema, capability and audit binding. Owner-only
+   read-only verification against the actual staging Postgres remains blocked by
+   password authentication failure; neither execution may be retried.
 2. Production, production DB, recurring jobs, billing activation,
    Social/Travel activation, additional provider calls and PR merge remain
    prohibited.

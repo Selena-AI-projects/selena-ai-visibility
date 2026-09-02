@@ -67,10 +67,11 @@ and excluded from every commit and archive.
 | Provider | `PASS_HISTORICAL_PAYLOAD / HOLD_PERSISTENCE_AND_DIAGNOSTIC` | Historical identity is exactly bound to provider snapshot `sd_mtiflifw2lfu6ne28l`; its one-record payload has a non-empty answer and four normalized citations. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
 | Database/Evidence | `PASS_0053_CANARY_HOLD / PRIVATE_RECONCILED / IDEMPOTENCY_VERIFY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Historical capture persistence receipt is `PERSISTED_PRIVATE` from temporary worker deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9` (one source snapshot + one audit row, no evidence/cost/acceptance rows). Replay was blocked by intentional `selena_app` SELECT denial on private snapshots; no duplicate write occurred. Both reservations remain immutable. |
 | HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `4400d435` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / PRIVATE_RECONCILIATION_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload has one immutable private capture and one audit row; formal evidence acceptance remains on hold, and no new provider call occurred. Release `4400d435` is integrated by merge `84cce314`; PR is not merged. |
+| Orchestrator | `STAGING_CORE_PASS / PRIVATE_RECONCILIATION_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload has one immutable private capture and one audit row; replay validation is hardened, but formal evidence acceptance remains on hold because owner-only staging verification cannot authenticate. PR #96 is open at `399a605a` and is not merged. |
 
-Independent Codex cross-audits found no P0/P1 in the material provider,
-database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
+Independent Codex cross-audits found no remaining P0/P1 in the material provider,
+database/evidence and HoReCa changes after the reconciliation hardening in
+`b01a310b`. Commit `d4ac606a`
 only enabled the intentional stub recurring worker in disposable CI. Commit
 `2d023470` only made a real-time timeout test deterministic. All required CI
 checks passed on canary-time feature HEAD `3872a396`; current candidate
@@ -87,10 +88,10 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
 
 ## CI state
 
-- Documentation/evidence head `b4bd7f17` completed Build, E2E, Scheduling,
-  Smoke, License and CLA green (E2E run `33577408220` completed SUCCESS).
-- Follow-up documentation commit `c0b1b45a` starts a fresh CI cycle; its status
-  is not used to downgrade the completed `b4bd7f17` source evidence.
+- Documentation/evidence head `399a605a` completed Build, E2E, Scheduling,
+  Smoke, License and CLA green (E2E run `33578329505` completed SUCCESS).
+- PR #96 is open at `399a605a`; GitHub reports `mergeable=true` and
+  `mergeable_state=clean`. Merge remains intentionally unexecuted.
 - Documentation/evidence commit `eb82c8269724e66662abf3532b2ff15cea54c5e5`
   passed Build [33574858750](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858750),
   E2E/Scheduling [33574858710](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858710),
@@ -99,9 +100,9 @@ at 4 MiB. It does not enable a trigger, retry or recurring path.
   and CLA [33574858503](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33574858503).
 - Last complete exact-head receipt: `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
 - Build, E2E, Scheduling, Smoke, License and CLA: `ALL PASS`
-- PR #96 is open at documentation/evidence head `778e4aae`; GitHub currently
-  reports `mergeable=true` with aggregation `unstable` while its E2E check is
-  still in progress; merge remains intentionally unexecuted
+- PR #96 is open at documentation/evidence head `399a605a`; GitHub reports
+  `mergeable=true` with aggregation `clean`; merge remains intentionally
+  unexecuted
 - Merge-resolution tests: lib migration runner `10/10`; CLI migration image
   contract `2/2`
 - Hosted deployment equality: `PASS_RESTORED`; exact git archive `100d34d8`
@@ -161,11 +162,13 @@ Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 
 ## Remaining gates
 
-1. `HOLD_PROVIDER_PERSISTENCE`: historical identity, provider snapshot, payload
-   and cost are reconciled. The staging dry-run returned
-   `DRY_RUN_ROLLED_BACK` with no provider call, evidence, cost or acceptance
-   writes. No retroactive capture write is authorized or fabricated. Diagnostic-2
-   remains `TRIGGER_OUTCOME_UNKNOWN` and neither immutable identity may be retried.
+1. `HOLD_OWNER_READ`: historical identity, provider snapshot, payload and cost
+   are reconciled and source replay validation is hardened. The staging dry-run
+   returned `DRY_RUN_ROLLED_BACK` with no provider call, evidence, cost or
+   acceptance writes. Owner-only verification against the actual staging
+   Postgres is still blocked by password authentication failure; do not bypass
+   RLS or expand `selena_app`. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN` and
+   neither immutable identity may be retried.
 2. `NO_GO`: production, production DB, recurring jobs, Social/Travel and any
    additional provider call remain prohibited.
 
@@ -173,7 +176,7 @@ Status: `PASS_ADMIN_BINDING_ROTATED_AGAIN`.
 
 - Web rollback source: prior successful deployment
   `cc89f46b-b548-4216-a546-362051e98ecd`.
-- Worker rollback completed: exact `100d34d8` deployment `9275a824…` is active;
+- Worker rollback completed: exact `100d34d8` deployment `b583e695…` is active;
   logs confirm recurring scheduler disabled, legacy provider execution disabled,
   pg-boss started and handlers ready.
 - Database rollback posture: restore from fresh pre-`0053` backup

@@ -16,7 +16,7 @@ acceptance snapshot. Earlier pre-mutation candidates remain Git history only.
 - Bounded snapshot-download remediation source: `4a1fd948` (control responses
   remain capped at 1 MB; snapshot downloads are bounded at 4 MiB)
 - Last exact PR evidence head verified inside this document:
-  `1f3dd9d7f6e48e9e675b4e1cc16b7e6c7061819`
+  `399a605a2f570f9e3f74ed02208515c016033cb`
 - Active worker implementation source after mandatory rollback: `100d34d8`
 - Integrated release parent: `5cbb7b256f286295a3dafdbeddc9aa46e24227f7`
 - Current remote release head: `4400d4352042eba73a6364ab3fafd29664c2d194`
@@ -47,28 +47,28 @@ finalized.
 | Boundary | Decision | Reason |
 |---|---|---|
 | Source package | `PASS_SOURCE_RECONCILIATION_READY` | Provider, database/evidence and HoReCa streams are code-complete for the authorized v1.3 scope. The offline historical path has separate provider/journal timestamps, strict replay validation and rollback-only dry-run behavior. |
-| Exact-head CI | `PASS` | Documentation/evidence head `b4bd7f17` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #96 points to `b4bd7f17`, `mergeable=true`; no merge executed. |
+| Exact-head CI | `PASS` | Documentation/evidence head `399a605a` passed Build, E2E, Scheduling, Smoke, License and CLA. PR #96 points to `399a605a`, `mergeable=true`, `mergeable_state=clean`; no merge executed. |
 | Staging database/RLS | `PASS` | Fresh backup `d2ac59a9…`, migrations through `0053`, actual non-owner runtime role, GUC, FORCE RLS and rollback-only cross-tenant proof were recorded. |
 | Staging web/worker | `PASS_EXACT_WEB / PASS_ROLLBACK_WORKER` | Exact archive `100d34d8` is active on staging web deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b` and restored worker deployment `b583e695-e935-4e2f-b6c5-f13b135964d4`. Worker was temporarily deployed from the diagnostic source (`78de5973…`) and then returned to exact `100d34d8`. |
 | Public/unauthenticated browser and scoped API | `PASS` | Browser smoke, authenticated API-key tenant fences and invalid-key response passed. |
 | Authenticated human browser | `PASS` | Owner signed in interactively. AVLI and KORA routes, Local-first states, hidden-module boundary and sanitized customer payload passed without sharing credentials. |
 | Google/Bright Data canary | `COST_PASS / READY_PAYLOAD_VALIDATED / PRIVATE_RECONCILED / ACCEPTANCE_HOLD` | Historical capture `sd_mtiflifw2lfu6ne28l` was persisted once in staging as an immutable private `sv_source_snapshots` row plus one reconciliation audit event by deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9`; receipt `PERSISTED_PRIVATE`, `providerCalls=0`, no evidence-index/cost/acceptance rows. A second commit attempt could not complete idempotent verification because non-owner `selena_app` is denied SELECT on private snapshots (RLS boundary); no duplicate write occurred. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN`, added no record and cost `USD 0.0000`; human acceptance remains required. |
-| Production/merge | `NO_GO` | Historical provider identity and payload are privately reconciled in staging, but formal evidence acceptance remains blocked (human acceptance and owner-scoped idempotency verification). Diagnostic-2 remains unresolved. PR #96 is open at `b4bd7f17` with mergeability aggregation `unstable`; production is prohibited and no merge was executed. |
+| Production/merge | `NO_GO` | Historical provider identity and payload are privately reconciled in staging, but formal evidence acceptance remains blocked (human acceptance and owner-scoped idempotency verification). Diagnostic-2 remains unresolved. PR #96 is open at `399a605a` with `mergeable_state=clean`; production is prohibited and no merge was executed. |
 
 Overall decision: `STAGING_PROVIDER_PAYLOAD_PASS / PRIVATE_RECONCILED / IDEMPOTENCY_VERIFY_HOLD / PRE_PRODUCTION_NO_GO`.
 
 ## Exact-head CI evidence
 
-Current documentation/evidence-head receipt for `b4bd7f17` (PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)):
+Current documentation/evidence-head receipt for `399a605a` (PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96)):
 
 | Check | Result | Evidence |
 |---|---|---|
-| Build | `PASS` | [run 33577408231](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408231) |
-| E2E Integration Tests | `PASS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
-| Scheduling Policy Verification | `PASS` | [run 33577408220](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408220) |
-| Dependency License Audit | `PASS` | [run 33577408226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408226) |
-| Deployment smoke | `PASS` | [run 33577408222](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408222) |
-| CLA | `PASS` | [run 33577408217](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33577408217) |
+| Build | `PASS` | [run 33578329492](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329492) |
+| E2E Integration Tests | `PASS` | [run 33578329505](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329505) |
+| Scheduling Policy Verification | `PASS` | [run 33578329505](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329505) |
+| Dependency License Audit | `PASS` | [run 33578329490](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329490) |
+| Deployment smoke | `PASS` | [run 33578329484](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329484) |
+| CLA | `PASS` | [run 33578329512](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33578329512) |
 
 The scheduling job passed the real-PostgreSQL bounded replay at disposable
 frontier `0054`; this does not authorize applying `0054` to shared staging.
@@ -128,7 +128,7 @@ at 35 minutes to include cleanup after successful tests.
 | Replay/concurrency/idempotency | `PASS` | Two concurrent writes produced one winner; replay was stable; cross-tenant read returned no row; active mutation was blocked; expired fixture cleaned up. |
 | Exact web deploy | `PASS_RESTORED` | Automatic release drift was superseded. Exact archive `100d34d8` was restored by deployment `835aca8d-2a47-4bad-af75-d7f4920cd35b`, terminal `SUCCESS`; both setup-status endpoints returned HTTP 200. |
 | Two-axis UI receipt | `PASS_RESTORED` | Authenticated post-restore DOM on `app.selenasystems.com/app/selena-horeca` proved `ПРОЕКТЫ` in the complementary project rail and `ИНСТРУМЕНТЫ` across the top with all six tool links. Both `/api/setup-status` endpoints returned HTTP 200. |
-| Worker deploy | `PASS_ROLLBACK_EXACT` | Temporary diagnostic-2 deployment was removed. Rollback deployment `9275a824-281d-4afa-8098-1ed7184ffc68` restored exact `100d34d8` and is `SUCCESS`. |
+| Worker deploy | `PASS_ROLLBACK_EXACT` | Temporary reconciliation deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9` was removed. Rollback deployment `b583e695-e935-4e2f-b6c5-f13b135964d4` restored exact `100d34d8` and is `SUCCESS`. |
 | Public health | `PASS` | `app.selenasystems.com`, `staging.selenasystems.com` and `/api/setup-status` returned HTTP 200. |
 | Runtime containment | `PASS` | Logs: legacy provider execution disabled; recurring scheduler disabled and managed schedules removed; pg-boss started; handlers ready; no error-level log. |
 | Canary trigger receipts | `HISTORICAL_READY_PAYLOAD / DIAGNOSTIC_HOLD` | Historical identity is exactly reconciled to `sd_mtiflifw2lfu6ne28l`; diagnostic-2 remains `OUTCOME_UNKNOWN/TRIGGER_OUTCOME_UNKNOWN`. Each immutable identity made one trigger, retries `0`, `recurring=false`; no accepted staging capture was retroactively persisted. |
@@ -234,8 +234,10 @@ a values-suppressed TCP probe. No value is retained in this evidence package.
 ## Remaining owner gates
 
 1. Historical provider identity, payload and cost are reconciled. The
-   no-trigger persistence path is complete (`PERSISTED_PRIVATE`); formal
-   evidence acceptance still requires owner-scoped idempotency verification.
+   persistence path is complete (`PERSISTED_PRIVATE`), and source replay
+   validation is hardened. Formal evidence acceptance still requires a
+   successful owner-scoped read-only idempotency verification against the actual
+   staging Postgres; the current owner shell fails password authentication.
 2. Diagnostic-2 remains `TRIGGER_OUTCOME_UNKNOWN`; do not retry it. Billing and
    usage attribution are closed.
 3. Keep both reservations immutable. No additional provider call, identity,
