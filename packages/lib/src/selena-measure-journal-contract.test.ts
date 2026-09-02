@@ -34,8 +34,9 @@ describe("journal provider stop", () => {
 
 describe("journal publisher opt-in", () => {
 	it("routes the publish image through the guarded entrypoint", () => {
-		expect(dockerfile).toContain('CMD ["npx", "tsx", "src/scripts/publish-journal.ts"]');
-		expect(dockerfile).not.toContain('CMD ["npx", "tsx", "src/scripts/publish-journal-detail.ts"]');
+		expect(dockerfile).toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]');
+		expect(dockerfile).not.toContain('CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal-detail.ts"]');
+		expect(dockerfile).not.toContain('CMD ["npx"');
 	});
 
 	it.each([undefined, "", "false", "TRUE", "1"])(
@@ -126,6 +127,7 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_CLAIMED"');
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_ABANDONED"');
 		expect(allocator).toContain("interval '45 minutes'");
+		expect(allocator).not.toContain("eq(schema.svJournalDailyClaims.updatedAt, unresolved.updatedAt)");
 		expect(allocator).toContain("recordedCostUsd");
 		expect(allocator).toContain("forced: FORCE");
 		expect(claimLifecycle).not.toContain("new Date()");
