@@ -62,6 +62,23 @@ const graphB: Graph = {
 	capabilityDomain: "AI",
 };
 
+const sameTenantProjectGraph: Graph = {
+	organizationId: graphA.organizationId,
+	projectId: "33000000-0000-4000-8000-000000000001",
+	lockId: "33000000-0000-4000-8000-000000000002",
+	cycleId: "33000000-0000-4000-8000-000000000003",
+	datasetId: "33000000-0000-4000-8000-000000000004",
+	capabilityId: graphA.capabilityId,
+	snapshotId: "33000000-0000-4000-8000-000000000006",
+	domainId: graphA.domainId,
+	source: graphA.source,
+	datasetKey: "google-ai-mode-answers-a-project-b",
+	providerDatasetId: "formal-google-ai-same-tenant-project",
+	providerSnapshotId: "formal-snapshot-same-tenant-project",
+	environment: "STAGING_ACCEPTANCE",
+	capabilityDomain: graphA.capabilityDomain,
+};
+
 const localMapsGraph: Graph = {
 	organizationId: graphA.organizationId,
 	projectId: "11000000-0000-4000-8000-000000000011",
@@ -124,7 +141,12 @@ async function seedOrganization(client: PoolClient, organizationId: string): Pro
 	);
 }
 
-async function seedGraph(client: PoolClient, graph: Graph, ordinal: number): Promise<void> {
+async function seedGraph(
+	client: PoolClient,
+	graph: Graph,
+	ordinal: number,
+	options: Readonly<{ reuseCapability?: boolean; contentHashSeed?: string }> = {},
+): Promise<void> {
 	await seedOrganization(client, graph.organizationId);
 	await client.query(
 		"INSERT INTO sv_measurement_domains (domain_id, unit_of_measure) VALUES ($1, 'fixture') ON CONFLICT (domain_id) DO NOTHING",
@@ -146,16 +168,23 @@ async function seedGraph(client: PoolClient, graph: Graph, ordinal: number): Pro
 		"INSERT INTO sv_measurement_datasets (id, organization_id, cycle_id, dataset_key, version) VALUES ($1, $2, $3, $4, 1)",
 		[graph.datasetId, graph.organizationId, graph.cycleId, graph.datasetKey],
 	);
-	await client.query(
-		`INSERT INTO sv_provider_dataset_capabilities (
+	if (!options.reuseCapability)
+		await client.query(
+			`INSERT INTO sv_provider_dataset_capabilities (
 			id, organization_id, provider, source, surface, domain, entity_type,
 			dataset_env_key, input_schema_version, output_schema_version, access_class,
 			capability_status, retention_class, contract_version, version, contract_metadata
 		) VALUES ($1, $2, 'BRIGHT_DATA', $3, $3, $4, 'FIXTURE', $5,
 			'fixture-input-v1', 'fixture-output-v1', 'PUBLIC', 'PILOT_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 1, '{}'::jsonb)`,
-		[graph.capabilityId, graph.organizationId, graph.source, graph.capabilityDomain, `FIXTURE_DATASET_${ordinal}`],
-	);
+			[
+				graph.capabilityId,
+				graph.organizationId,
+				graph.source,
+				graph.capabilityDomain,
+				`FIXTURE_DATASET_${ordinal}`,
+			],
+		);
 	for (const [eventIndex, phase] of ["TRIGGERED", "READY", "DELIVERED"].entries()) {
 		await client.query(
 			`INSERT INTO sv_provider_dataset_snapshot_events (
@@ -190,7 +219,7 @@ async function seedGraph(client: PoolClient, graph: Graph, ordinal: number): Pro
 			graph.projectId,
 			graph.source,
 			`private:${graph.providerSnapshotId}`,
-			hash(`${ordinal === 3 ? 1 : ordinal}9`),
+			hash(options.contentHashSeed ?? `${ordinal === 3 ? 1 : ordinal}9`),
 			graph.capabilityId,
 			graph.providerDatasetId,
 			graph.environment,
@@ -255,6 +284,7 @@ async function main(): Promise<void> {
 		await seedGraph(client, localMapsGraph, 3);
 		await seedGraph(client, canaryGraph, 4);
 		await seedGraph(client, blockedGraph, 5);
+		await seedGraph(client, sameTenantProjectGraph, 6, { reuseCapability: true, contentHashSeed: "19" });
 	} finally {
 		client.release();
 	}
@@ -293,12 +323,17 @@ async function main(): Promise<void> {
 	assert.equal(replay.status, "ALREADY_ACCEPTED");
 	assert.deepEqual(await counts(), { evidence: 1, acceptance: 1, audit: 1, runs: 0, cost: 0 });
 
-	const crossTenant = await acceptProviderEvidence(database, input(graphB));
-	assert.equal(crossTenant.status, "ACCEPTED");
+	const sameTenantProject = await acceptProviderEvidence(database, input(sameTenantProjectGraph));
+	assert.equal(sameTenantProject.status, "ACCEPTED");
+	assert.equal((await acceptProviderEvidence(database, input(sameTenantProjectGraph))).status, "ALREADY_ACCEPTED");
 	assert.deepEqual(await counts(), { evidence: 2, acceptance: 2, audit: 2, runs: 0, cost: 0 });
 
+	const crossTenant = await acceptProviderEvidence(database, input(graphB));
+	assert.equal(crossTenant.status, "ACCEPTED");
+	assert.deepEqual(await counts(), { evidence: 3, acceptance: 3, audit: 3, runs: 0, cost: 0 });
+
 	await expectRejected(
-		acceptProviderEvidence(database, { ...input(graphA), projectId: localMapsGraph.projectId }),
+		acceptProviderEvidence(database, { ...input(graphA), projectId: sameTenantProjectGraph.projectId }),
 		"PROVIDER_EVIDENCE_ACCEPTANCE_SNAPSHOT_NOT_ELIGIBLE",
 	);
 	await expectRejected(
@@ -308,7 +343,7 @@ async function main(): Promise<void> {
 
 	const localMaps = await acceptProviderEvidence(database, input(localMapsGraph));
 	assert.equal(localMaps.status, "ACCEPTED");
-	assert.deepEqual(await counts(), { evidence: 3, acceptance: 3, audit: 3, runs: 0, cost: 0 });
+	assert.deepEqual(await counts(), { evidence: 4, acceptance: 4, audit: 4, runs: 0, cost: 0 });
 	const acceptedEvidence = await pool.query<{ id: string }>(
 		"SELECT id::text FROM sv_evidence_index WHERE organization_id = $1 AND project_id = $2",
 		[graphA.organizationId, graphA.projectId],
@@ -326,7 +361,7 @@ async function main(): Promise<void> {
 		),
 		"FORMAL_EVIDENCE_AUDIT_DETAILS_INVALID",
 	);
-	assert.deepEqual(await counts(), { evidence: 3, acceptance: 3, audit: 3, runs: 0, cost: 0 });
+	assert.deepEqual(await counts(), { evidence: 4, acceptance: 4, audit: 4, runs: 0, cost: 0 });
 
 	await pool.query(
 		`INSERT INTO sv_provider_dataset_capabilities (
@@ -342,16 +377,16 @@ async function main(): Promise<void> {
 		acceptProviderEvidence(database, input(blockedGraph)),
 		"EVIDENCE_ACCEPTANCE_CAPABILITY_SUPERSEDED_BY_BLOCK",
 	);
-	assert.deepEqual(await counts(), { evidence: 3, acceptance: 3, audit: 3, runs: 0, cost: 0 });
+	assert.deepEqual(await counts(), { evidence: 4, acceptance: 4, audit: 4, runs: 0, cost: 0 });
 
-	for (const receipt of [dryRun, ...concurrent, replay, crossTenant, localMaps]) {
+	for (const receipt of [dryRun, ...concurrent, replay, sameTenantProject, crossTenant, localMaps]) {
 		assert.equal(receipt.providerCalls, 0);
 		assert.equal(receipt.costRows, 0);
 		assert.equal(receipt.recurring, false);
 	}
 
 	process.stdout.write(
-		"FORMAL_EVIDENCE_ACCEPTANCE_PASS dryRun=rollback concurrent=deterministic crossTenant=isolated crossProject=blocked canary=blocked localMaps=accepted evidence=3 acceptance=3 audit=3 providerCalls=0 costRows=0 recurring=false\n",
+		"FORMAL_EVIDENCE_ACCEPTANCE_PASS dryRun=rollback concurrent=deterministic sameTenantProject=isolated crossTenant=isolated crossProject=blocked canary=blocked localMaps=accepted evidence=4 acceptance=4 audit=4 providerCalls=0 costRows=0 recurring=false\n",
 	);
 }
 

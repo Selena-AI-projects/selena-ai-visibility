@@ -26,11 +26,26 @@ if [[ "$ready" != true ]]; then
 	exit 3
 fi
 
+mapped_port="$("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" port postgres 5432)"
+mapped_port="${mapped_port##*:}"
+if [[ ! "$mapped_port" =~ ^[0-9]+$ ]]; then
+	printf 'BLOCKED_ENV: disposable PostgreSQL mapped port is unavailable.\n' >&2
+	exit 3
+fi
+database_url_prefix="postgres://selena_test:selena_test@127.0.0.1:${mapped_port}"
+bounded_bundle_51=''
+bounded_bundle_58=''
+
 cleanup_databases() {
 	local exit_code=$?
 	trap - EXIT
-	for database in selena_variant_full_current selena_variant_full_release selena_variant_short_current selena_variant_short_release; do
+	for database in selena_variant_full_current selena_variant_full_release selena_variant_short_current selena_variant_short_release selena_variant_bounded_release_short selena_variant_legacy_acceptance_guard; do
 		"${admin[@]}" -d postgres -c "DROP DATABASE IF EXISTS $database WITH (FORCE)" >/dev/null 2>&1 || true
+	done
+	for bundle in "$bounded_bundle_51" "$bounded_bundle_58"; do
+		if [[ -n "$bundle" && -d "$bundle" ]]; then
+			rm -rf -- "$bundle"
+		fi
 	done
 	exit "$exit_code"
 }
@@ -183,7 +198,8 @@ WITH catalog_rows AS (
 	WHERE table_schema = 'public'
 		AND table_name IN (
 			'sv_provider_canary_executions', 'sv_source_snapshots', 'sv_evidence_index',
-			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events'
+			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events',
+			'sv_journal_daily_claims', 'sv_journal_provider_boundaries'
 		)
 	UNION ALL
 	SELECT 'constraint:' || conname || ':' || pg_get_constraintdef(oid)
@@ -194,7 +210,9 @@ WITH catalog_rows AS (
 			'public.sv_source_snapshots'::regclass,
 			'public.sv_evidence_index'::regclass,
 			'public.sv_evidence_acceptance_receipts'::regclass,
-			'public.sv_provider_dataset_snapshot_events'::regclass
+			'public.sv_provider_dataset_snapshot_events'::regclass,
+			'public.sv_journal_daily_claims'::regclass,
+			'public.sv_journal_provider_boundaries'::regclass
 		)
 	UNION ALL
 	SELECT 'index:' || indexname || ':' || indexdef
@@ -202,7 +220,8 @@ WITH catalog_rows AS (
 	WHERE schemaname = 'public'
 		AND tablename IN (
 			'sv_provider_canary_executions', 'sv_source_snapshots', 'sv_evidence_index',
-			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events'
+			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events',
+			'sv_journal_daily_claims', 'sv_journal_provider_boundaries'
 		)
 	UNION ALL
 	SELECT 'view:' || viewname || ':' || definition
@@ -216,6 +235,7 @@ WITH catalog_rows AS (
 		AND relation.relname IN (
 			'sv_provider_canary_executions', 'sv_source_snapshots', 'sv_evidence_index',
 			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events',
+			'sv_journal_daily_claims', 'sv_journal_provider_boundaries',
 			'sv_evidence_provenance', 'sv_evidence_read_model'
 		)
 	UNION ALL
@@ -225,7 +245,8 @@ WITH catalog_rows AS (
 	WHERE schemaname = 'public'
 		AND tablename IN (
 			'sv_provider_canary_executions', 'sv_source_snapshots', 'sv_evidence_index',
-			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events'
+			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events',
+			'sv_journal_daily_claims', 'sv_journal_provider_boundaries'
 		)
 	UNION ALL
 	SELECT 'trigger:' || event_object_table || ':' || trigger_name || ':' || action_statement
@@ -234,7 +255,8 @@ WITH catalog_rows AS (
 		AND event_object_table IN (
 			'sv_provider_canary_executions', 'sv_source_snapshots', 'sv_evidence_index',
 			'sv_evidence_acceptance_receipts', 'sv_provider_dataset_snapshot_events',
-			'sv_audit_events'
+			'sv_journal_daily_claims', 'sv_journal_provider_boundaries',
+			'sv_measurement_runs', 'sv_audit_events'
 		)
 	UNION ALL
 	SELECT 'function:' || proname || ':' || pg_get_functiondef(oid)
@@ -245,7 +267,11 @@ WITH catalog_rows AS (
 			'sv_reject_evidence_acceptance_mutation', 'sv_resolve_api_key_context',
 			'sv_enforce_provider_dataset_snapshot_event_insert', 'sv_enforce_evidence_capability_domain',
 			'sv_enforce_formal_evidence_audit', 'sv_require_formal_evidence_audit_pair',
-			'sv_require_formal_evidence_receipt_pair'
+			'sv_require_formal_evidence_receipt_pair',
+			'sv_guard_journal_provider_boundary_insert',
+			'sv_prevent_journal_provider_boundary_mutation',
+			'sv_require_journal_provider_boundary', 'sv_journal_claim_recovery_state',
+			'sv_guard_journal_daily_claim_mutation', 'sv_recover_journal_daily_claim'
 		)
 )
 SELECT md5(string_agg(value, E'\n' ORDER BY value)) FROM catalog_rows;
@@ -282,14 +308,99 @@ run_variant() {
 	seed_legacy_project_rows "$database"
 	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0056_formal_evidence_acceptance_hardening.sql" >/dev/null
 	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0057_evidence_project_identity_hardening.sql" >/dev/null
-	backfill_receipt="$("${admin[@]}" -d "$database" -Atc "SELECT (SELECT project_id::text FROM sv_evidence_index WHERE id = '57000000-0000-4000-8000-000000000006') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000005') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000008') || ':' || (SELECT project_id IS NULL FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000009') || ':' || (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'sv_evidence_index'::regclass AND tgname = 'sv_evidence_index_immutable_guard')")"
-	if [[ "$backfill_receipt" != '57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:true:O' ]]; then
+	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0058_journal_provider_boundary_recovery.sql" >/dev/null
+	backfill_receipt="$("${admin[@]}" -d "$database" -Atc "SELECT (SELECT project_id::text FROM sv_evidence_index WHERE id = '57000000-0000-4000-8000-000000000006') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000005') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000008') || ':' || (SELECT project_id IS NULL FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000009') || ':' || (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'sv_evidence_index'::regclass AND tgname = 'sv_evidence_index_immutable_guard') || ':' || (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'sv_source_snapshots'::regclass AND tgname = 'sv_source_snapshots_immutable_guard')")"
+	if [[ "$backfill_receipt" != '57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:true:O:O' ]]; then
 		printf 'MIGRATION_VARIANT_LEGACY_BACKFILL_FAILED database=%s receipt=%s\n' "$database" "$backfill_receipt" >&2
 		exit 1
 	fi
 	variant_fingerprint="$(catalog_fingerprint "$database")"
 	if [[ -z "$variant_fingerprint" ]]; then
 		printf 'MIGRATION_VARIANT_EMPTY_FINGERPRINT database=%s\n' "$database" >&2
+		exit 1
+	fi
+}
+
+run_bounded_release_short() {
+	local database='selena_variant_bounded_release_short'
+	"${admin[@]}" -d postgres -c "CREATE DATABASE $database" >/dev/null
+	bounded_bundle_51="$(mktemp -d "${TMPDIR:-/tmp}/selena-bounded-0051.XXXXXX")"
+	DATABASE_URL="${database_url_prefix}/${database}" \
+		SELENA_MIGRATION_MAX_INDEX=51 \
+		SELENA_BOUNDED_MIGRATIONS_DIR="$bounded_bundle_51" \
+		node "$repo_root/packages/lib/scripts/run-bounded-migrations.mjs" --prepare-only >/dev/null
+	if [[ -e "$bounded_bundle_51/compat/0051_release_short_to_feature_superset.sql" ]]; then
+		printf 'MIGRATION_VARIANT_BOUNDED_CEILING_BREACH maximum=51\n' >&2
+		exit 1
+	fi
+	DATABASE_URL="${database_url_prefix}/${database}" \
+		SELENA_MIGRATIONS_DIR="$bounded_bundle_51" \
+		node "$repo_root/packages/lib/scripts/apply-migrations.mjs" >/dev/null
+	"${admin[@]}" -d "$database" --single-transaction \
+		< "$repo_root/tools/fixtures/0051_release_short_catalog.sql" >/dev/null
+	"${admin[@]}" -d "$database" -c \
+		"UPDATE drizzle.__drizzle_migrations SET hash = 'd66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395' WHERE created_at = 1787940013000" \
+		>/dev/null
+	bounded_bundle_58="$(mktemp -d "${TMPDIR:-/tmp}/selena-bounded-0058.XXXXXX")"
+	DATABASE_URL="${database_url_prefix}/${database}" \
+		SELENA_MIGRATION_MAX_INDEX=58 \
+		SELENA_BOUNDED_MIGRATIONS_DIR="$bounded_bundle_58" \
+		node "$repo_root/packages/lib/scripts/run-bounded-migrations.mjs" --prepare-only >/dev/null
+	if [[ ! -f "$bounded_bundle_58/compat/0051_release_short_to_feature_superset.sql" ]]; then
+		printf 'MIGRATION_VARIANT_BOUNDED_COMPATIBILITY_MISSING maximum=58\n' >&2
+		exit 1
+	fi
+	DATABASE_URL="${database_url_prefix}/${database}" \
+		SELENA_MIGRATIONS_DIR="$bounded_bundle_58" \
+		node "$repo_root/packages/lib/scripts/apply-migrations.mjs" >/dev/null
+	if [[ "$("${admin[@]}" -d "$database" -Atc "SELECT count(*) || ':' || max(created_at)::text || ':' || (to_regclass('public.sv_evidence_acceptance_receipts') IS NOT NULL)::text || ':' || EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sv_evidence_index' AND column_name = 'project_id')::text || ':' || (to_regclass('public.sv_journal_provider_boundaries') IS NOT NULL)::text FROM drizzle.__drizzle_migrations")" != '59:1787940020000:true:true:true' ]]; then
+		printf 'MIGRATION_VARIANT_BOUNDED_RELEASE_SHORT_FAILED\n' >&2
+		exit 1
+	fi
+}
+
+run_legacy_acceptance_guard() {
+	local database='selena_variant_legacy_acceptance_guard'
+	"${admin[@]}" -d postgres -c "CREATE DATABASE $database" >/dev/null
+	apply_through_0050 "$database"
+	for migration in \
+		0051_visibility_os_provider_evidence_provenance \
+		0052_provider_dataset_snapshot_journal \
+		0053_configuration_lock_legacy_collision_ordinal \
+		0054_journal_daily_claim_execution_lease \
+		0055_provider_snapshot_resume_reconciliation; do
+		"${admin[@]}" -d "$database" --single-transaction \
+			< "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
+	done
+	seed_legacy_project_rows "$database"
+	"${admin[@]}" -d "$database" --single-transaction \
+		< "$repo_root/packages/lib/src/db/migrations/0056_formal_evidence_acceptance_hardening.sql" >/dev/null
+	"${admin[@]}" -d "$database" <<'SQL' >/dev/null
+ALTER TABLE sv_evidence_acceptance_receipts DISABLE TRIGGER USER;
+ALTER TABLE sv_audit_events DISABLE TRIGGER USER;
+INSERT INTO sv_evidence_acceptance_receipts (
+	organization_id, evidence_id, accepted_at, accepted_by
+) VALUES (
+	'migration-variant', '57000000-0000-4000-8000-000000000006',
+	'2026-09-02T00:05:00Z', 'database-role:selena_test'
+);
+INSERT INTO sv_audit_events (
+	organization_id, actor_id, event, subject_kind, subject_id, details
+) VALUES (
+	'migration-variant', 'historical-owner', 'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED',
+	'evidence', '57000000-0000-4000-8000-000000000006', '{}'::jsonb
+);
+ALTER TABLE sv_evidence_acceptance_receipts ENABLE TRIGGER USER;
+ALTER TABLE sv_audit_events ENABLE TRIGGER USER;
+SQL
+	if "${admin[@]}" -d "$database" --single-transaction \
+		< "$repo_root/packages/lib/src/db/migrations/0057_evidence_project_identity_hardening.sql" \
+		>/dev/null 2>&1; then
+		printf 'MIGRATION_VARIANT_LEGACY_ACCEPTANCE_NOT_BLOCKED\n' >&2
+		exit 1
+	fi
+	if [[ "$("${admin[@]}" -d "$database" -Atc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'sv_evidence_index' AND column_name = 'project_id')::text || ':' || (SELECT count(*) FROM sv_evidence_acceptance_receipts)::text || ':' || (SELECT count(*) FROM sv_audit_events WHERE event = 'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED')::text")" != 'false:1:1' ]]; then
+		printf 'MIGRATION_VARIANT_LEGACY_ACCEPTANCE_GUARD_ROLLBACK_FAILED\n' >&2
 		exit 1
 	fi
 }
@@ -304,10 +415,13 @@ short_current="$variant_fingerprint"
 run_variant selena_variant_short_release release-short release
 short_release="$variant_fingerprint"
 
+run_bounded_release_short
+run_legacy_acceptance_guard
+
 if [[ "$full_current" != "$full_release" || "$full_current" != "$short_current" || "$full_current" != "$short_release" ]]; then
 	printf 'MIGRATION_VARIANT_CATALOG_DIVERGENCE full_current=%s full_release=%s short_current=%s short_release=%s\n' \
 		"$full_current" "$full_release" "$short_current" "$short_release" >&2
 	exit 1
 fi
 
-printf 'MIGRATION_VARIANT_MATRIX_PASS variants=4 catalog=%s providerCalls=0 cleanup=verified\n' "$full_current"
+printf 'MIGRATION_VARIANT_MATRIX_PASS variants=4 boundedReleaseShort=true legacyAcceptance=blocked catalog=%s providerCalls=0 cleanup=verified\n' "$full_current"

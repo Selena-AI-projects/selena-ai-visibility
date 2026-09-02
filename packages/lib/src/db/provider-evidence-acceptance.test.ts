@@ -422,6 +422,7 @@ describe("formal evidence acceptance migration", () => {
 
 	it("scopes formal identity to tenant and project-bound delivered provenance", () => {
 		expect(projectIdentityMigration).toContain('ADD COLUMN IF NOT EXISTS "project_id" uuid');
+		expect(projectIdentityMigration).toContain("EVIDENCE_PROJECT_IDENTITY_LEGACY_ACCEPTANCE_REVIEW_REQUIRED");
 		expect(projectIdentityMigration).toContain('ADD CONSTRAINT "sv_evidence_index_formal_identity_unique"');
 		expect(projectIdentityMigration).toContain('"organization_id", "project_id", "domain_id", "cycle_id"');
 		expect(projectIdentityMigration).toContain("EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED");

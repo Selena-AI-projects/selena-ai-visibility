@@ -33,6 +33,13 @@ export function prepareBoundedMigrations({ maximumIndex, targetDirectory }) {
 	mkdirSync(resolve(targetDirectory, "meta"), { recursive: true });
 	for (const entry of entries)
 		cpSync(resolve(sourceDirectory, `${entry.tag}.sql`), resolve(targetDirectory, `${entry.tag}.sql`));
+	if (maximumIndex >= 56) {
+		mkdirSync(resolve(targetDirectory, "compat"), { recursive: true });
+		cpSync(
+			resolve(sourceDirectory, "compat/0051_release_short_to_feature_superset.sql"),
+			resolve(targetDirectory, "compat/0051_release_short_to_feature_superset.sql"),
+		);
+	}
 	writeFileSync(
 		resolve(targetDirectory, "meta/_journal.json"),
 		`${JSON.stringify({ ...journal, entries }, null, 2)}\n`,

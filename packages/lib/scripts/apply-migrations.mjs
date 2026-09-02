@@ -113,6 +113,7 @@ function migrationStatements(source) {
 export async function reconcileHistoricalMigrationVariants({
 	client,
 	actualRows,
+	expectedRows,
 	migrationsFolder,
 	readCompatibilitySource = readFile,
 	log = console.log,
@@ -121,7 +122,10 @@ export async function reconcileHistoricalMigrationVariants({
 		(row) => row.createdAt === RELEASE_SHORT_0051.createdAt && row.hash === RELEASE_SHORT_0051.hash,
 	);
 	const formalAcceptanceApplied = actualRows.some((row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT);
-	if (!releaseShortApplied || formalAcceptanceApplied) return false;
+	const formalAcceptanceRequested = expectedRows.some(
+		(row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT,
+	);
+	if (!releaseShortApplied || formalAcceptanceApplied || !formalAcceptanceRequested) return false;
 
 	const compatibilityPath = resolve(migrationsFolder, "compat", RELEASE_SHORT_0051_BRIDGE);
 	const source = await readCompatibilitySource(compatibilityPath, "utf8");
@@ -162,6 +166,7 @@ export async function runMigrationCycleWithLock({
 			await reconcileHistoricalMigrationVariants({
 				client,
 				actualRows: before,
+				expectedRows,
 				migrationsFolder,
 				readCompatibilitySource,
 				log,

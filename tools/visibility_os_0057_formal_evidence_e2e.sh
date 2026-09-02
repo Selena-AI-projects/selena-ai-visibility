@@ -40,7 +40,8 @@ for migration in \
 	0054_journal_daily_claim_execution_lease \
 	0055_provider_snapshot_resume_reconciliation \
 	0056_formal_evidence_acceptance_hardening \
-	0057_evidence_project_identity_hardening; do
+	0057_evidence_project_identity_hardening \
+	0058_journal_provider_boundary_recovery; do
 	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
 done
 
@@ -61,7 +62,7 @@ DATABASE_URL="$database_url" \
 	pnpm --dir "$repo_root/packages/lib" exec tsx scripts/provider-evidence-acceptance-rehearsal.ts
 
 role_receipt="$("${psql[@]}" -qAtc "SELECT NOT rolsuper AND NOT rolbypassrls FROM pg_roles WHERE rolname = 'selena_app'; SELECT NOT has_table_privilege('selena_app', 'sv_source_snapshots', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_source_snapshots', 'snapshot', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_source_snapshots', 'content_sha256', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_source_snapshots', 'source_ref', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_source_snapshots', 'provider_dataset_ref', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_source_snapshots', 'raw_reference', 'SELECT') AND NOT has_column_privilege('selena_app', 'sv_evidence_provenance', 'organization_id', 'SELECT'); BEGIN; SET LOCAL ROLE selena_app; SET LOCAL app.organization_id = 'formal-evidence-org-a'; SELECT count(id) FROM sv_source_snapshots; SELECT count(id) FROM sv_source_snapshots WHERE organization_id = 'formal-evidence-org-b'; ROLLBACK;")"
-if [[ "$role_receipt" != $'t\nt\n3\n0' ]]; then
+if [[ "$role_receipt" != $'t\nt\n4\n0' ]]; then
 	printf 'RUNTIME_ROLE_0057_PRIVILEGE_RECEIPT_FAILED\n' >&2
 	exit 1
 fi
@@ -70,4 +71,4 @@ if "${psql[@]}" -qAtc "BEGIN; SET LOCAL ROLE selena_app; SET LOCAL app.organizat
 	exit 1
 fi
 
-printf 'RUNTIME_ROLE_0057_PASS nonOwner=true bypassRls=false safeMetadata=3 crossTenant=0 privatePayload=blocked providerLocators=blocked cleanup=verified\n'
+printf 'RUNTIME_ROLE_0057_PASS nonOwner=true bypassRls=false safeMetadata=4 crossTenant=0 privatePayload=blocked providerLocators=blocked cleanup=verified\n'

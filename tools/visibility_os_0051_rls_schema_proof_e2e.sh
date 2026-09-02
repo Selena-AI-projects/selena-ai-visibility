@@ -82,6 +82,15 @@ if [[ "$("${psql[@]}" -Atc "SELECT to_regprocedure('public.sv_require_owner_evid
 fi
 "${psql[@]}" -c "DELETE FROM sv_audit_events WHERE organization_id = 'rls-schema-proof-legacy-upgrade'; DELETE FROM organization WHERE id = 'rls-schema-proof-legacy-upgrade';" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0056_formal_evidence_acceptance_hardening.sql" >/dev/null
+for migration in \
+	0052_provider_dataset_snapshot_journal \
+	0053_configuration_lock_legacy_collision_ordinal \
+	0054_journal_daily_claim_execution_lease \
+	0055_provider_snapshot_resume_reconciliation \
+	0057_evidence_project_identity_hardening \
+	0058_journal_provider_boundary_recovery; do
+	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
+done
 
 # Generate the owner-managed schema from the pinned pg-boss package instead of
 # maintaining a second hand-written copy. The construction plan is applied by
@@ -108,4 +117,4 @@ if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_provider_dataset_capab
 	exit 1
 fi
 
-printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migrations=0051,0056 runtime_role=validated cleanup=verified\n'
+printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migrations=0051-0058 runtime_role=validated cleanup=verified\n'
