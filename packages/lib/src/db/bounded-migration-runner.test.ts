@@ -15,6 +15,20 @@ afterEach(() => {
 });
 
 describe("bounded migration runner", () => {
+	it("keeps the disposable scheduling replay aligned with the source journal frontier", () => {
+		const journal = JSON.parse(
+			readFileSync(fileURLToPath(new URL("./migrations/meta/_journal.json", import.meta.url)), "utf8"),
+		);
+		const workflow = readFileSync(
+			fileURLToPath(new URL("../../../../.github/workflows/e2e.yaml", import.meta.url)),
+			"utf8",
+		);
+		const sourceFrontier = journal.entries.at(-1)?.idx;
+
+		expect(Number.isSafeInteger(sourceFrontier)).toBe(true);
+		expect(workflow).toContain(`SELENA_MIGRATION_MAX_INDEX: "${sourceFrontier}"`);
+	});
+
 	it("builds an exact Drizzle bundle through the reviewed journal reconciliation", () => {
 		const targetDirectory = mkdtempSync(resolve(tmpdir(), "selena-bounded-migrations-"));
 		temporaryDirectories.push(targetDirectory);

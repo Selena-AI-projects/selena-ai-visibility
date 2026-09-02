@@ -250,10 +250,10 @@ jobs:
 
       - name: Replay bounded migrations on real PostgreSQL
         env:
-          # Release now contains disposable migration 0054; replay the
-          # complete current frontier after drizzle-kit has applied it.
+          # Replay the complete source frontier after drizzle-kit has applied
+          # it. This is a disposable CI database only.
           # Shared staging remains explicitly bounded at 0053.
-          SELENA_MIGRATION_MAX_INDEX: "54"
+          SELENA_MIGRATION_MAX_INDEX: "56"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
 
       - name: Seed local fixtures
