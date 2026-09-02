@@ -59,7 +59,9 @@ function SceneLoop({ video, poster }: { video: string; poster: string }) {
 	const ref = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
+		// The panel is display:none below lg, so the loop would only cost bytes there.
 		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (!window.matchMedia("(min-width: 64rem)").matches) return;
 		setEnabled(true);
 	}, []);
 
