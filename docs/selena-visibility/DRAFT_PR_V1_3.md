@@ -3,19 +3,20 @@
 ## Authoritative PR #120 overlay — 2026-09-03
 
 - Draft PR: [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
-- Exact executable head: `e59537a032df7d18efe3bbba12bad18e29eba020`
-- Exact integrated release: `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`
+- Exact executable head: `9a4d7b615d2c670c92ed7495cab75c9fcc040464`
+- Exact integrated release: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`
 - Source verdict: `GO_SOURCE_COMMIT`; independent audit found no P0/P1.
 - CI: all six checks passed —
-  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675).
-- Migration `0059` adds an owner-only, tenant-scoped and replay-safe stale-HOLD
-  reconciliation. It does not grant `selena_app` private snapshot access and
-  conservatively preserves ambiguity from both provider boundaries and
-  unmatched legacy cost events.
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576826),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576822),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576894),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576903)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576848).
+- Upstream migration `0059` retains the owner-certified proved-zero path.
+  Follow-up `0060` adds a separate owner-only, tenant-scoped and replay-safe
+  stale-HOLD reconciliation for acknowledged ambiguity. The post-0060 proof
+  confirms the positive `NO_SPEND` path still works and `selena_app` has no
+  execute or private snapshot privilege.
 - The first E2E run failed before tests because a hosted runner could not finish
   Playwright apt downloads inside one minute and retry-action received
   `kill EPERM`. The bounded install timeout is now five minutes with at most two
@@ -24,9 +25,9 @@
   call, billing or recurring work occurred.
 - The owner has authorized one AVLI staging cycle up to USD 10 with zero retries
   and no recurrence. The effective candidate cap remains the stricter USD 0.50.
-  Staging `0059`, exact candidate deploy and the old HOLD reconciliation remain
-  separate owner gates; the four historical pre-transport boundaries require
-  explicit ambiguous-spend acknowledgement before reconciliation.
+  Staging `0059–0060`, exact candidate deploy and the old HOLD reconciliation
+  remain separate owner gates; the four historical pre-transport boundaries
+  require explicit ambiguous-spend acknowledgement before reconciliation.
 
 PR #120 must remain draft and unmerged until staging receipts are attached.
 

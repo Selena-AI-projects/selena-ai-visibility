@@ -2,30 +2,32 @@
 
 ## Authoritative current state — 2026-09-03
 
-- State: `GO_SOURCE / HOLD_STAGING_0059_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
+- State: `GO_SOURCE / HOLD_STAGING_0059_0060_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
 - Exact executable candidate:
-  `e59537a032df7d18efe3bbba12bad18e29eba020`, integrating release
-  `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`.
+  `9a4d7b615d2c670c92ed7495cab75c9fcc040464`, integrating release
+  `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
 - Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
   is open, draft, mergeable and clean. Exact-head Build
-  [33659667608](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
+  [33662576826](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576826),
   E2E/Scheduling
-  [33659667384](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
-  License [33659667351](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
-  Smoke [33659667347](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
-  and CLA [33659667675](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675)
+  [33662576822](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576822),
+  License [33662576894](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576894),
+  Smoke [33662576903](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576903)
+  and CLA [33662576848](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576848)
   passed.
-- `0059` safely quarantines a stale journal HOLD through an owner-only function.
-  `selena_app` keeps its private payload/provider-reference denials and cannot
-  call or spoof the reconciliation. Unused permits are revoked and excluded
-  from enqueue/claim; replay is identity-bound and idempotent; no evidence,
-  acceptance or cost row is synthesized.
+- Upstream `0059` preserves an owner-certified `HOLD → NO_SPEND` only for proved
+  zero spend. `0060` separately quarantines an acknowledged ambiguous HOLD.
+  The combined guard and disposable positive/negative proof preserve both
+  terminal paths. `selena_app` keeps its private payload/provider-reference
+  denials and cannot call or spoof either reconciliation. Unused permits are
+  revoked and excluded from enqueue/claim; replay is identity-bound and
+  idempotent; no evidence, acceptance or cost row is synthesized.
 - Both pure legacy-cost and mixed boundary/legacy-cost histories require an
   explicit ambiguous-spend acknowledgement. The call upper bound adds only
   unmatched legacy cost rows to the boundary upper bound.
 - Local lint, full tests, Impeccable detect, build, shell/diff checks and the
-  isolated real-PostgreSQL 0059 rehearsal passed. Independent audit found no
-  remaining P0/P1.
+  isolated real-PostgreSQL `0059` and `0060` rehearsals passed. Independent
+  audit found no remaining code P0/P1.
 - Shared staging remains on hosted source `b4e678b8` and migration `0058` with
   providers, recurring jobs and billing off. No migration, deployment or paid
   call occurred in this source loop.
@@ -34,12 +36,12 @@
   frozen/source USD 0.50 cap (public list-price estimate USD 0.1125 for 75
   records).
 
-Next owner gate: approve fresh backup plus isolated restore, staging-only `0059`
-and exact `e59537a0` web/worker deploy with providers still off; separately
-acknowledge up to four possible historic calls under the old USD 0.50 lock and
-authorize the owner reconciliation write. Only after those receipts pass may
-the already-authorized single AVLI cycle be attempted. PR merge, production,
-Social/Travel, billing and recurring jobs remain prohibited.
+Next owner gate: approve fresh backup plus isolated restore, staging-only
+`0059–0060` and exact `9a4d7b61` web/worker deploy with providers still off;
+separately acknowledge up to four possible historic calls under the old USD
+0.50 lock and authorize the owner reconciliation write. Only after those
+receipts pass may the already-authorized single AVLI cycle be attempted. PR
+merge, production, Social/Travel, billing and recurring jobs remain prohibited.
 
 ## Authoritative current state — 2026-09-02
 

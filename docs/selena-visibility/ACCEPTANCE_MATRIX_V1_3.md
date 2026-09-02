@@ -2,26 +2,27 @@
 
 ## Authoritative AVLI measurement overlay — 2026-09-03
 
-- Exact executable candidate: `e59537a032df7d18efe3bbba12bad18e29eba020`.
+- Exact executable candidate: `9a4d7b615d2c670c92ed7495cab75c9fcc040464`.
 - Branch: `fix/avli-journal-hold-reconciliation`; exact integrated release
-  base: `a07fd48224052a83a0e1b462ad61c45c8ebe93d1`.
+  base: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
 - Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
   is `OPEN/DRAFT/MERGEABLE/CLEAN`. Exact-head checks passed:
-  [Build 33659667608](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667608),
-  [E2E and Scheduling 33659667384](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667384),
-  [License 33659667351](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667351),
-  [Smoke 33659667347](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667347)
-  and [CLA 33659667675](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33659667675).
-- Migration `0059` is `PASS_SOURCE_AND_DISPOSABLE`: ordinary `selena_app`
-  receives no new raw snapshot/provider-reference privilege; owner-only stale
-  HOLD reconciliation requires tenant scope, a 45-minute lease fence, runtime
-  quiescence, no active jobs and explicit acknowledgement of ambiguous spend.
-  Its call upper bound is the union of provider boundaries and unmatched
-  legacy cost rows, so mixed old/new evidence cannot produce a false zero.
-- Disposable PostgreSQL receipt:
-  `JOURNAL_0059_DISPOSABLE_PASS ownerOnly=true runtimeQuiesced=true ambiguousSpend=preserved upperBound=1 mixedLegacyUpperBound=2 legacyCost=ack-required revoked=1 settled=1 replay=idempotent costRows=0 nextAttempt=allowed`;
-  cleanup was verified. An independent read-only Codex review found no
-  remaining P0/P1 and returned `GO_SOURCE_COMMIT`.
+  [Build 33662576826](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576826),
+  [E2E and Scheduling 33662576822](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576822),
+  [License 33662576894](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576894),
+  [Smoke 33662576903](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576903)
+  and [CLA 33662576848](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576848).
+- Ordered migrations `0059–0060` are `PASS_SOURCE_AND_DISPOSABLE`. Upstream
+  `0059` remains the immutable certificate-backed path for proved zero spend;
+  `0060` adds the separate owner-only path for acknowledged ambiguous spend.
+  The combined claim guard preserves both terminal outcomes. Ordinary
+  `selena_app` receives no raw snapshot/provider-reference or reconciliation
+  privilege; direct execute is revoked in the migration and runtime bootstrap.
+- Disposable PostgreSQL receipts:
+  `JOURNAL_NO_SPEND_0059_DISPOSABLE_PASS provider_code_invoked=false external_network_api_calls_made=0 cleanup=verified` and
+  `JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved upperBound=1 mixedLegacyUpperBound=2 legacyCost=ack-required revoked=1 settled=1 replay=idempotent costRows=0 nextAttempt=allowed`.
+  Both isolated environments were removed. An independent read-only Codex
+  review found no remaining code P0/P1 and returned `GO` for this architecture.
 - Local gates on the executable candidate passed: lint exit `0` with the
   registered `129 warnings / 12 infos`, tests `16/16` (`lib 1141/1141`, web
   `448 passed / 4 skipped`), Impeccable detect exit `0`, build `16/16`, shell
@@ -35,14 +36,14 @@
   list-price estimate for 75 records is USD 0.1125. This is authorization, not
   evidence that a call has occurred.
 - Before the authorized cycle can run, separate approval is still required for
-  a fresh backup plus isolated restore, staging-only migration `0059`, exact
-  `e59537a0` web/worker deployment with providers off, and owner reconciliation
-  of the old HOLD. The reconciliation also requires explicit acknowledgement
-  that its four pre-transport boundaries represent up to four possible historic
-  calls under the old USD 0.50 lock. No provider call or staging mutation was
-  performed in this overlay.
+  a fresh backup plus isolated restore, staging-only migrations `0059–0060`,
+  exact `9a4d7b61` web/worker deployment with providers off, and owner
+  reconciliation of the old HOLD. The reconciliation also requires explicit
+  acknowledgement that its four pre-transport boundaries represent up to four
+  possible historic calls under the old USD 0.50 lock. No provider call or
+  staging mutation was performed in this overlay.
 
-Current decision: `GO_SOURCE / HOLD_STAGING_0059_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
+Current decision: `GO_SOURCE / HOLD_STAGING_0059_0060_AND_HISTORICAL_ACK / NO_GO_PRODUCTION`.
 
 ## Authoritative source overlay — 2026-09-02
 
