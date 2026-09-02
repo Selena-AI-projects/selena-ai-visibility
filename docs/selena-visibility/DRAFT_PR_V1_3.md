@@ -1,11 +1,11 @@
-# Draft PR #96 — Selena AI Visibility v1.3 pre-production hardening
+# Selena AI Visibility v1.3 — post-merge evidence follow-up
 
 ## Authoritative source candidate — 2026-09-02
 
 - Exact implementation source head:
   `b9d967b668ba884b524ee7202060f5446abb58ad`.
-- Release `223f2681` is integrated by merge commit `81721f6d` without rewriting
-  feature history.
+- Pre-merge release `223f2681` was integrated by merge `81721f6d`; PR #96 was
+  then squash-merged to release commit `a8b15116` by the owner.
 - Source frontier is `57 entries / 0056`; shared staging remains at the last
   evidenced `54 entries / 0053` and must not be advanced by this PR alone.
 - Formal evidence acceptance now requires a direct owner/control-plane
@@ -15,29 +15,32 @@
   root test/build `16/16`, lint `0 errors` (`129 warnings / 12 infos` baseline),
   Local Maps replay `3 × 11/11`, provider calls `0`.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  currently `OPEN/MERGEABLE`; published head `ee69000b` is `UNSTABLE` because
-  its Scheduling replay found the stale disposable ceiling. PR
+  `MERGED`; green PR head `a8522067` became release squash commit `a8b15116`.
+  PR
   [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is also
   `OPEN/CONFLICTING`; its checks cover only historical head `a4d05d47`.
-- CI for `b9d967b6`: `PENDING_PUSH`; the preceding run
+- CI for implementation `b9d967b6` and documentation overlay `a8522067`:
+  `PASS` — [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997).
+  The preceding run
   [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
   correctly rejected a stale disposable replay ceiling. The candidate aligns
   that ceiling to source index `56` and adds a regression test.
-- No shared-staging mutation, deploy, provider call, production action, billing,
-  recurring job or merge is part of this source update.
+- No shared-staging mutation, deploy, provider call, production action, billing
+  or recurring job is part of this post-merge documentation update.
 
-Status: `SOURCE_READY / CI_PENDING / STAGING_0056_HOLD / DO_NOT_MERGE`.
+Status: `SOURCE_CI_MERGE_PASS / FOLLOW_UP_DOCS_PENDING / STAGING_0056_HOLD`.
 
-## Current proposed PR summary
+## Current follow-up PR summary
 
-- merge current release baseline into the feature branch;
-- harden provider-evidence acceptance around direct owner identity and
-  least-privilege runtime access;
-- add migration `0056` with pre-DDL legacy/RLS safety checks and reciprocal
-  immutable receipt/audit constraints;
-- preserve the two-axis HoReCa navigation with project keyboard focus and route
-  binding coverage;
-- keep Social/Travel, recurring execution, billing and provider calls closed.
+- record the exact owner merge commit and green PR receipts;
+- preserve `b9d967b6` as the exact implementation anchor and `a8b15116` as the
+  accepted release anchor;
+- keep shared staging `0056`, production, Social/Travel, recurring execution,
+  billing and provider calls closed.
 
 ## Historical PR ledger
 
