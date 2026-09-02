@@ -1,8 +1,8 @@
--- RLS_SCHEMA_PROOF_ONLY for the migration frontier through 0051.
+-- RLS_SCHEMA_PROOF_ONLY for the migration frontier through 0058.
 --
 -- Source-only acceptance artifact. This file does not connect to a database.
 -- Do not execute it against shared staging without separate owner approval, a
--- verified restorable checkpoint, and a migration receipt ending at 0051.
+-- verified restorable checkpoint, and a migration receipt ending at 0058.
 -- Run with psql as a database administration role that can CREATE ROLE and
 -- grant table privileges, after applying selena-rls-runtime-role.sql. The proof
 -- is deliberately one transaction and ends with ROLLBACK, so its temporary
@@ -557,7 +557,7 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-a',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 	'2026-09-01T00:05:00Z',
-	'database-role:selena_test'
+	'database-role:' || current_user
 );
 INSERT INTO sv_audit_events (
 	organization_id, actor_id, event, subject_kind, subject_id, details
@@ -718,7 +718,7 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-b',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
 	'2026-09-01T00:05:00Z',
-	'database-role:selena_test'
+	'database-role:' || current_user
 );
 INSERT INTO sv_audit_events (
 	organization_id, actor_id, event, subject_kind, subject_id, details
@@ -809,7 +809,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '10000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_NULL_SCHEMA_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -863,7 +863,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '20000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_CANARY_ONLY_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -917,7 +917,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '30000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ISOLATED_CANARY_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -982,7 +982,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '40000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_BLOCKED_SUPERSESSION_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -1041,7 +1041,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '50000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		SET CONSTRAINTS sv_evidence_acceptance_receipts_audit_pair_guard IMMEDIATE;
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED';
@@ -1096,7 +1096,7 @@ BEGIN
 			'rls-schema-proof-org-a',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 			'2026-08-31T23:59:59Z',
-			'database-role:selena_test'
+			'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED';
 	EXCEPTION

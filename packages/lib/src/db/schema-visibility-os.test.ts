@@ -447,6 +447,9 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_AUDIT_WITHOUT_ACCEPTANCE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_IDENTITY_FORGERY_ALLOWED");
+		expect(proof).toContain("migration frontier through 0058");
+		expect(proof).toContain("'database-role:' || current_user");
+		expect(proof).not.toContain("'database-role:selena_test'");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_UPDATE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_DELETE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_TRUNCATE_ALLOWED");
