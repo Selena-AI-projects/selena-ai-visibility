@@ -107,10 +107,10 @@ function summaryCopy(module: HorecaModuleReadModel, locale: HorecaPreviewLocale)
 }
 
 function stateTone(state: HorecaPreviewState): string {
-	if (state === "ACTIVE") return "border-[#b7d4bf] bg-[#edf7ef] text-[#285f3e]";
-	if (state === "PARTIAL" || state === "PILOT") return "border-[#dfc09e] bg-[#fff7ed] text-[#7a4b24]";
-	if (state === "BLOCKED") return "border-[#e3bbb5] bg-[#fff1ef] text-[#7c3029]";
-	return "border-[#d9cfc2] bg-[#fffdf8] text-[#574d45]";
+	if (state === "ACTIVE") return "selena-state--active";
+	if (state === "PARTIAL" || state === "PILOT") return "selena-state--partial";
+	if (state === "BLOCKED") return "selena-state--blocked";
+	return "selena-state--quiet";
 }
 
 function ModuleRow({
@@ -125,25 +125,23 @@ function ModuleRow({
 	const copy = HORECA_PREVIEW_MODULE_COPY[module.moduleId];
 	const linkedEvidence = evidence.filter((item) => module.evidenceIds.includes(item.id));
 	return (
-		<li className="grid gap-3 border-t border-[#dccfbe] py-5 first:border-t-0 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(16rem,1.3fr)] sm:items-start">
-			<div className="flex items-center justify-between gap-3 sm:block">
-				<h3 className="font-semibold text-[#181614]">
+		<li className="selena-record grid gap-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(16rem,1.3fr)] sm:items-start">
+			<div className="flex items-baseline justify-between gap-3 sm:block">
+				<h3 className="selena-record-label">
 					{locale === "en" ? module.label : localizedHorecaText(locale, copy.label)}
 				</h3>
-				<span
-					className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[0.6875rem] font-bold tracking-[0.08em] ${stateTone(module.state)}`}
-				>
+				<span className={`selena-state sm:mt-3 sm:block ${stateTone(module.state)}`}>
 					{localizedHorecaText(locale, statusCopy[module.state])}
 				</span>
 			</div>
 			<div>
-				<p className="text-sm font-medium leading-6 text-[#181614]">{summaryCopy(module, locale)}</p>
+				<p className="selena-record-statement">{summaryCopy(module, locale)}</p>
 				{module.configurationLockReference && (
 					<p className="mt-1 text-xs font-semibold text-[#8f5c34]">
 						{tr(locale, "Measurement settings saved for comparison.", "Настройки замера сохранены для сравнения.")}
 					</p>
 				)}
-				<ul className="mt-1 space-y-1 text-sm leading-6 text-[#574d45]">
+				<ul className="selena-record-note mt-2 space-y-1">
 					{(module.limitations.length > 0 ? module.limitations : [localizedHorecaText(locale, copy.limitation)]).map(
 						(limitation) => (
 							<li key={limitation}>{limitation}</li>
@@ -250,10 +248,10 @@ export function SelenaHorecaLocalFirst({
 	];
 
 	return (
-		<div className="space-y-6">
-			<nav aria-label={tr(locale, "Workspace tools", "Инструменты кабинета")} className="overflow-x-auto">
-				<p className="mb-2 text-xs font-bold tracking-[0.08em] text-[#574d45]">{tr(locale, "TOOLS", "ИНСТРУМЕНТЫ")}</p>
-				<ul className="flex min-w-max gap-2 pb-1">
+		<div className="space-y-8">
+			<nav aria-label={tr(locale, "Workspace tools", "Инструменты кабинета")} className="selena-toolbar overflow-x-auto">
+				<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#574d45]">{tr(locale, "TOOLS", "ИНСТРУМЕНТЫ")}</p>
+				<ul className="flex min-w-max gap-7">
 					{HORECA_PREVIEW_AREAS.map((area) => (
 						<li key={area.id}>
 							{workspaceToolSearch ? (
@@ -261,15 +259,12 @@ export function SelenaHorecaLocalFirst({
 									to="/app/selena-horeca"
 									search={workspaceToolSearch}
 									hash={area.id}
-									className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
+									className="selena-tool-link outline-none"
 								>
 									{localizedHorecaText(locale, area.label)}
 								</Link>
 							) : (
-								<a
-									href={`#${area.id}`}
-									className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
-								>
+								<a href={`#${area.id}`} className="selena-tool-link outline-none">
 									{localizedHorecaText(locale, area.label)}
 								</a>
 							)}
@@ -288,7 +283,7 @@ export function SelenaHorecaLocalFirst({
 						<h1 id="horeca-overview-title" className="selena-heading text-3xl sm:text-4xl">
 							{tr(locale, "HoReCa Local-first decision view", "HoReCa Local-first для принятия решений")}
 						</h1>
-						<p className="selena-anchor-lede mt-3 text-sm leading-6 sm:text-base">
+						<p className="selena-anchor-lede selena-prose mt-4">
 							{tr(
 								locale,
 								"A business decision view, not a single score. Each signal stays independent; evidence appears only after it is accepted and linked. No measurement starts from this page.",
@@ -307,7 +302,7 @@ export function SelenaHorecaLocalFirst({
 					</span>
 				</div>
 
-				<dl className="mt-7 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-5">
+				<dl className="mt-9 grid gap-x-10 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
 					{overviewSignals.map((signal) => (
 						<div key={signal.label} className="selena-signal">
 							<dt className="selena-signal-label">{signal.label}</dt>
@@ -325,7 +320,7 @@ export function SelenaHorecaLocalFirst({
 						<h2 id="horeca-visibility-title" className="selena-heading text-2xl text-[#181614]">
 							{tr(locale, "Visibility", "Видимость")}
 						</h2>
-						<p className="mt-2 text-sm leading-6 text-[#574d45]">
+						<p className="selena-prose mt-3 text-[#574d45]">
 							{tr(
 								locale,
 								"AI answers, search, Maps and Local AI keep separate samples, comparison settings and dates.",
@@ -345,7 +340,7 @@ export function SelenaHorecaLocalFirst({
 				<h2 id="horeca-evidence-title" className="selena-heading text-2xl text-[#181614]">
 					{tr(locale, "Evidence", "Доказательства")}
 				</h2>
-				<p className="mt-2 max-w-3xl text-sm leading-6 text-[#574d45]">
+				<p className="selena-prose mt-3 text-[#574d45]">
 					{tr(
 						locale,
 						"Business facts, website and menu, reviews, and approved connected sources remain separate records. A configured source is never shown as collected proof.",
@@ -472,7 +467,7 @@ export function SelenaHorecaLocalFirst({
 						))}
 					</ul>
 				) : (
-					<p className="mt-3 max-w-3xl text-sm leading-6 text-[#574d45]">
+					<p className="selena-prose mt-3 text-[#574d45]">
 						{tr(
 							locale,
 							"No recommendation is published until it has accepted sources, an owner, a priority and a verification plan.",

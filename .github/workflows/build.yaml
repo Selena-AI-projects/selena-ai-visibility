@@ -84,7 +84,11 @@ jobs:
       - name: Install Playwright browsers
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 1
+          # --with-deps installs system font packages through apt on every run,
+          # cached browsers or not. A minute covers that only while the Ubuntu
+          # mirror is fast; when it is not, the action kills an apt child it does
+          # not own and fails with EPERM instead of retrying.
+          timeout_minutes: 5
           max_attempts: 3
           command: pnpm -C apps/web exec playwright install chromium --with-deps
 
