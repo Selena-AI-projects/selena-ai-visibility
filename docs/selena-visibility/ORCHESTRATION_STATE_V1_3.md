@@ -2,12 +2,13 @@
 
 ## Authoritative current state — 2026-09-02
 
-- State: `SOURCE_READY_CI_PENDING / STAGING_0056_HOLD / PRODUCTION_NO_GO`.
+- State: `SOURCE_CI_MERGE_PASS / STAGING_0056_HOLD / PRODUCTION_NO_GO`.
 - Exact implementation source head:
   `b9d967b668ba884b524ee7202060f5446abb58ad`.
-- Branch: `feature/selena-visibility-v1-2-1`; published feature ref `ee69000b`,
-  current source candidate `b9d967b6` pending push.
-- Release lineage: remote release `223f2681`, integrated by merge `81721f6d`.
+- Branch: `feature/selena-visibility-v1-2-1`; exact implementation
+  `b9d967b6`, green documentation overlay and PR head `a8522067`.
+- Release lineage: pre-merge release `223f2681`, local integration merge
+  `81721f6d`, owner squash merge and current release head `a8b15116`.
 - Source database frontier: `57 entries / 0056`; last evidenced shared staging
   frontier: `54 entries / 0053`.
 - `0056` architecture: direct owner/control-plane session only, table-owner
@@ -21,24 +22,38 @@
   warnings and `12` infos, Local Maps stability `3 × 11/11`.
 - Impeccable: `NOT_SUPPORTED` because no workspace binary exists.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96):
-  `OPEN/MERGEABLE`; preceding head `ee69000b` is `UNSTABLE` only because its
-  Scheduling replay used the stale disposable migration ceiling.
+  `MERGED` at `2026-09-02T06:31:55Z`; all six checks passed; merge commit
+  `a8b151162a849eec899382b550a948edb40b399c`.
 - PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108):
   `OPEN`, remote head `a4d05d47`, `CONFLICTING/DIRTY`; its green checks are
   historical and do not cover `970aa54d`.
-- CI for `b9d967b6`: `PENDING_PUSH`. Run
+- CI for implementation `b9d967b6` plus overlay `a8522067`: `PASS`. Build
+  [33596500999](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999),
+  E2E/Scheduling
+  [33596501001](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001),
+  License [33596501017](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017),
+  Smoke [33596501053](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053)
+  and CLA [33596500997](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997)
+  all succeeded. Run
   [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
   on the preceding PR head failed only because the disposable replay ceiling
   was stale at `54`; `b9d967b6` raises that CI-only ceiling to source index `56`
   and locks the invariant with a test.
+- Post-merge Railway read-only receipt: staging web deployment `638ec631…` at
+  exact release `a8b15116` is `SUCCESS`; app and staging setup-status endpoints
+  return HTTP 200 and bounded error logs are empty. Automatic measure deployment
+  `99d1717e…` stopped fail-closed at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. Worker remains `9cf426fe…`.
 - Shared staging mutation/deploy/provider execution in this source closure:
-  `0`; production/merge/recurring/billing/Social/Travel remain prohibited.
+  no orchestrator-issued mutation or deploy and no provider execution path;
+  Railway auto-deploys caused by the owner merge are recorded above. Production,
+  recurring, billing and Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
-Next autonomous sequence: commit this documentation overlay, push the feature
-branch, collect exact Blacksmith/GitHub receipts, fix source-only CI failures if
-any, then return to the owner before any shared-staging `0054–0056` action.
+Next gate: documentation-only PR #114 CI, then authenticated browser recheck and
+owner-gated shared-staging `0054–0056` preconditions. No database mutation is
+authorized by this ledger.
 
 ## Historical orchestration ledger
 

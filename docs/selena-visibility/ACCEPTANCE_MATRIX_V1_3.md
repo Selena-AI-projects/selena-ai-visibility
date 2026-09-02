@@ -7,20 +7,32 @@ dated historical ledger and do not prove deployment of this source head.
 
 - Exact implementation source head: `b9d967b668ba884b524ee7202060f5446abb58ad`.
 - Branch: `feature/selena-visibility-v1-2-1`.
-- Release head integrated by merge commit `81721f6d`: `223f2681224812ffe2be0bff0bf354eb57c83166`.
+- Pre-merge release `223f2681` was integrated locally by merge `81721f6d`.
+  Owner merge of PR #96 produced release squash commit
+  `a8b151162a849eec899382b550a948edb40b399c`.
 - Source migration frontier: `57 entries / 0056`; shared staging remains at the
   last evidenced frontier `54 entries / 0053`. Applying `0054–0056` is not
   authorized by this document.
 - PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  `OPEN/MERGEABLE`; its preceding remote head `ee69000b` is `UNSTABLE` because
-  the Scheduling gate exposed the stale disposable ceiling now fixed here.
+  `MERGED` at `2026-09-02T06:31:55Z`; PR head `a8522067` passed all six
+  checks and was squashed to release commit `a8b15116`.
   PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is
   `OPEN`, remote head `a4d05d47`, also `CONFLICTING/DIRTY`. Neither is merged.
-- CI for `b9d967b6`: `PENDING_PUSH`. The immediately preceding PR-head run
+- CI for implementation `b9d967b6` plus its exact documentation overlay
+  `a8522067`: `PASS`. The immediately preceding diagnostic run
   [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
   exposed a stale disposable-only migration ceiling (`54` versus source `56`);
   `b9d967b6` aligns it and adds a journal/workflow regression test. That failed
   run is diagnostic evidence, not acceptance.
+- Read-only Railway verification after the owner merge found automatic staging
+  web deployment `638ec631-bafe-4e60-9378-1d2fe6d36291` at exact release
+  `a8b15116` in terminal `SUCCESS`. Both public setup-status endpoints returned
+  HTTP 200 and the bounded error-level web log query returned no rows.
+- The release hook also created staging measure deployment
+  `99d1717e-af17-4b27-8acf-bbea4b1e2066`; its bounded runtime log stopped at
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. The source guard therefore
+  remained closed and no provider execution path was opened. Staging worker
+  deployment remains `9cf426fe-98ae-4c73-8ec9-a7fd7358504e`.
 - Local gates: root test `16/16` tasks, build `16/16`, lint `0 errors` with the
   registered baseline `129 warnings / 12 infos`, focused final suite `74/74`,
   lib/web typecheck `PASS`, disposable PostgreSQL migration/RLS proof `PASS`,
@@ -33,20 +45,20 @@ dated historical ledger and do not prove deployment of this source head.
 | Provider registry and 13 dataset contracts | `PASS_SOURCE` | Existing source plus local/CI-gated contract suites; no new provider execution. |
 | Google adapters and gates | `PASS_SOURCE / NO_CALL` | Timeout/retry and immutable-identity controls remain fail-closed; provider calls in this change: `0`. |
 | Social/Travel | `PASS_HIDDEN` | Activation remains prohibited and hidden at customer boundaries. |
-| HoReCa Local-first UI | `PASS_SOURCE / HOLD_HOSTED` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. Exact `b9d967b6` is not deployed. |
+| HoReCa Local-first UI | `PASS_SOURCE / PASS_DEPLOYMENT / HOLD_AUTH_BROWSER_RECHECK` | Project rail and top tool axis are distinct; keyboard focus and route binding have targeted test coverage. The tree-equivalent release `a8b15116` is active on staging web and public health is 200; authenticated UI receipt was not replayed after this deploy. |
 | Runtime least privilege | `PASS_SOURCE` | `selena_app` retains metadata-only access and cannot read private payload/provider references or forge formal acceptance. |
 | Formal evidence acceptance | `PASS_SOURCE / HOLD_STAGING_0056` | Only a direct table-owner session with RLS bypass may accept. Receipt and formal audit are reciprocal, immutable and atomic. Migration preflight rejects legacy rows before DDL. |
-| CI | `PENDING_PUSH` | Must be replaced with exact run links after the authorized feature push. |
-| Shared staging / production / merge | `NO_GO` | No `0056` apply, deploy, provider call, production action or merge is authorized here. |
+| CI | `PASS` | [Build 33596500999](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999), [E2E and Scheduling 33596501001](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001), [License 33596501017](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017), [Smoke 33596501053](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053), [CLA 33596500997](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997). |
+| Shared staging database / production | `NO_GO` | No `0056` apply, database mutation, provider call or production action is authorized here. Automatic release web/measure deployments are recorded above; measure failed closed. |
 
 Chosen architecture: reconciliation and formal acceptance use a separate
 owner/control-plane connection. Ordinary `selena_app` cannot perform private
 reconciliation. The last historical staging persistence receipt remains one
 private snapshot plus one audit row and no evidence/cost/acceptance rows; this
 turn performed no shared-staging read or write, so those counts are not promoted
-as a fresh `970aa54d` runtime receipt.
+as a fresh `b9d967b6` runtime receipt.
 
-Overall decision: `GO_SOURCE_PUSH_AND_CI / NO_GO_STAGING_0056 / NO_GO_PRODUCTION`.
+Overall decision: `PASS_SOURCE_CI_AND_MERGE / NO_GO_STAGING_0056 / NO_GO_PRODUCTION`.
 
 ## Historical hosted evidence ledger
 
