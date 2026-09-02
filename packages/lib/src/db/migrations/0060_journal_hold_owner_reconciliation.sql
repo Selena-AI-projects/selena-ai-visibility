@@ -221,8 +221,12 @@ DECLARE
 	consumed_permit_count integer;
 	run_count integer;
 	boundary_count integer;
+	boundary_backed_run_count integer;
+	legacy_unfenced_run_count integer;
 	revoked_permit_count integer;
 	settled_run_count integer;
+	settled_boundary_run_count integer;
+	settled_legacy_run_count integer;
 	cost_event_count integer;
 	unmatched_cost_event_count integer;
 	boundary_call_upper_bound integer;
@@ -287,21 +291,94 @@ BEGIN
 	WHERE "id" = claim_record."configuration_lock_id"
 		AND "organization_id" = claim_record."organization_id";
 
+	SELECT
+		(
+			SELECT count(*)::integer
+			FROM "public"."sv_run_permits" AS permit
+			WHERE permit."cycle_id" = cycle_record."id"
+				AND permit."organization_id" = claim_record."organization_id"
+				AND permit."status" = 'consumed'
+		),
+		(
+			SELECT count(*)::integer
+			FROM "public"."sv_runs" AS run
+			WHERE run."cycle_id" = cycle_record."id"
+				AND run."organization_id" = claim_record."organization_id"
+		),
+		(
+			SELECT count(*)::integer
+			FROM "public"."sv_journal_provider_boundaries" AS boundary
+			WHERE boundary."cycle_id" = cycle_record."id"
+				AND boundary."organization_id" = claim_record."organization_id"
+		),
+		(
+			SELECT count(*)::integer
+			FROM "public"."sv_runs" AS run
+			INNER JOIN "public"."sv_run_permits" AS permit
+				ON permit."id" = run."permit_id"
+				AND permit."cycle_id" = run."cycle_id"
+				AND permit."organization_id" = run."organization_id"
+			INNER JOIN "public"."sv_journal_provider_boundaries" AS boundary
+				ON boundary."run_id" = run."id"
+				AND boundary."permit_id" = permit."id"
+				AND boundary."cycle_id" = run."cycle_id"
+				AND boundary."journal_claim_id" = claim_record."id"
+				AND boundary."configuration_lock_id" = claim_record."configuration_lock_id"
+				AND boundary."project_id" = claim_record."project_id"
+				AND boundary."organization_id" = run."organization_id"
+			WHERE run."cycle_id" = cycle_record."id"
+				AND run."organization_id" = claim_record."organization_id"
+				AND permit."status" = 'consumed'
+				AND permit."consumed_at" IS NOT NULL
+				AND permit."dispatch_key" = run."dispatch_key"
+				AND permit."channel" = run."channel"
+				AND permit."scenario_id" = run."scenario_id"
+				AND permit."system_id" IS NOT DISTINCT FROM run."system_id"
+				AND boundary."dispatch_key" = run."dispatch_key"
+				AND boundary."channel" = run."channel"
+				AND boundary."system_id" IS NOT DISTINCT FROM run."system_id"
+		),
+		(
+			SELECT count(*)::integer
+			FROM "public"."sv_runs" AS run
+			INNER JOIN "public"."sv_run_permits" AS permit
+				ON permit."id" = run."permit_id"
+				AND permit."cycle_id" = run."cycle_id"
+				AND permit."organization_id" = run."organization_id"
+			WHERE run."cycle_id" = cycle_record."id"
+				AND run."organization_id" = claim_record."organization_id"
+				AND permit."status" = 'consumed'
+				AND permit."consumed_at" IS NOT NULL
+				AND permit."dispatch_key" = run."dispatch_key"
+				AND permit."channel" = run."channel"
+				AND permit."scenario_id" = run."scenario_id"
+				AND permit."system_id" IS NOT DISTINCT FROM run."system_id"
+				AND NOT EXISTS (
+					SELECT 1
+					FROM "public"."sv_journal_provider_boundaries" AS boundary
+					WHERE boundary."run_id" = run."id"
+						AND boundary."cycle_id" = run."cycle_id"
+						AND boundary."organization_id" = run."organization_id"
+				)
+		)
+	INTO consumed_permit_count, run_count, boundary_count,
+		boundary_backed_run_count, legacy_unfenced_run_count;
+
 	SELECT coalesce(sum(boundary."provider_call_upper_bound"), 0)::integer
 	INTO boundary_call_upper_bound
 	FROM "public"."sv_journal_provider_boundaries" AS boundary
 	WHERE boundary."journal_claim_id" = claim_record."id"
+		AND boundary."cycle_id" = cycle_record."id"
 		AND boundary."organization_id" = claim_record."organization_id";
 	SELECT count(*)::integer,
 		coalesce(sum(cost."amount_usd"), 0)::numeric(12, 6),
 		count(*) FILTER (
 			WHERE cost."run_id" IS NULL OR NOT EXISTS (
 				SELECT 1
-				FROM "public"."sv_journal_provider_boundaries" AS boundary
-				WHERE boundary."journal_claim_id" = claim_record."id"
-					AND boundary."cycle_id" = cycle_record."id"
-					AND boundary."organization_id" = claim_record."organization_id"
-					AND boundary."run_id" = cost."run_id"
+				FROM "public"."sv_runs" AS run
+				WHERE run."id" = cost."run_id"
+					AND run."cycle_id" = cycle_record."id"
+					AND run."organization_id" = claim_record."organization_id"
 			)
 		)::integer
 	INTO cost_event_count, observed_cost, unmatched_cost_event_count
@@ -309,10 +386,14 @@ BEGIN
 	WHERE cost."cycle_id" = cycle_record."id"
 		AND cost."organization_id" = claim_record."organization_id";
 	-- 0058 boundaries are the authoritative call fence for new executions.
-	-- Legacy cost rows can predate that fence, so only cost rows without a
-	-- matching boundary/run add another possible call. This avoids both a false
-	-- PROVEN_ZERO and double-counting a cost already covered by a boundary.
-	provider_call_upper_bound := boundary_call_upper_bound + unmatched_cost_event_count;
+	-- A valid consumed/run pair without such a fence can only be inherited from
+	-- the pre-0058 topology. It remains ambiguous and contributes one possible
+	-- call; no synthetic boundary is created. A cost tied to any already-counted
+	-- run is not counted again, while an unattached legacy cost remains another
+	-- possible call.
+	provider_call_upper_bound := boundary_call_upper_bound
+		+ legacy_unfenced_run_count
+		+ unmatched_cost_event_count;
 
 	IF claim_record."status" = 'RECONCILED' THEN
 		IF claim_record."reconciliation_reason" IS DISTINCT FROM p_owner_decision_ref
@@ -326,14 +407,26 @@ BEGIN
 		SELECT count(*)::integer INTO revoked_permit_count
 		FROM "public"."sv_run_permits"
 		WHERE "cycle_id" = cycle_record."id" AND "status" = 'revoked';
-		SELECT count(*)::integer INTO settled_run_count
+		SELECT
+			count(*) FILTER (
+				WHERE "invalid_reason" = 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'
+			)::integer,
+			count(*) FILTER (
+				WHERE "invalid_reason" = 'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY'
+			)::integer
+		INTO settled_boundary_run_count, settled_legacy_run_count
 		FROM "public"."sv_runs"
 		WHERE "cycle_id" = cycle_record."id"
-			AND "invalid_reason" = 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY';
+			AND "organization_id" = claim_record."organization_id";
+		settled_run_count := settled_boundary_run_count + settled_legacy_run_count;
 		RETURN jsonb_build_object(
 			'decision', 'ALREADY_RECONCILED', 'claimId', claim_record."id",
 			'cycleId', cycle_record."id", 'revokedPermitCount', revoked_permit_count,
 			'settledRunCount', settled_run_count, 'costEventCount', cost_event_count,
+			'boundaryBackedRunCount', boundary_backed_run_count,
+			'legacyUnfencedRunCount', legacy_unfenced_run_count,
+			'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count,
+			'legacyTopologyStatus', CASE WHEN legacy_unfenced_run_count = 0 THEN 'NONE' ELSE 'CONSUMED_RUNS_WITHOUT_BOUNDARY' END,
 			'unmatchedCostEventCount', unmatched_cost_event_count,
 			'providerCallUpperBound', provider_call_upper_bound,
 			'observedCostUsd', observed_cost::text, 'historicalExposureCapUsd', historical_exposure_cap::text,
@@ -367,31 +460,101 @@ BEGIN
 		RAISE EXCEPTION 'JOURNAL_HOLD_RECONCILIATION_ACTIVE_JOB';
 	END IF;
 
-	SELECT count(*) FILTER (WHERE permit."status" = 'consumed')::integer,
-		count(run."id")::integer,
-		count(boundary."id")::integer,
-		count(*) FILTER (
-			WHERE (permit."status" = 'consumed') IS DISTINCT FROM (permit."consumed_at" IS NOT NULL)
-				OR (permit."status" = 'consumed' AND (run."id" IS NULL OR boundary."id" IS NULL))
-				OR (permit."status" IN ('issued', 'revoked') AND (run."id" IS NOT NULL OR boundary."id" IS NOT NULL))
-		)::integer
-	INTO consumed_permit_count, run_count, boundary_count, execution_invariant_violation_count
-	FROM "public"."sv_run_permits" AS permit
-	LEFT JOIN "public"."sv_runs" AS run
-		ON run."permit_id" = permit."id"
-		AND run."cycle_id" = permit."cycle_id"
-		AND run."organization_id" = permit."organization_id"
-	LEFT JOIN "public"."sv_journal_provider_boundaries" AS boundary
-		ON boundary."permit_id" = permit."id"
-		AND boundary."run_id" = run."id"
-		AND boundary."cycle_id" = permit."cycle_id"
-		AND boundary."journal_claim_id" = claim_record."id"
-		AND boundary."organization_id" = permit."organization_id"
-	WHERE permit."cycle_id" = cycle_record."id"
-		AND permit."organization_id" = claim_record."organization_id";
+	SELECT (
+		SELECT count(*)::integer
+		FROM "public"."sv_run_permits" AS permit
+		WHERE permit."cycle_id" = cycle_record."id"
+			AND permit."organization_id" = claim_record."organization_id"
+			AND (
+				(permit."status" = 'consumed') IS DISTINCT FROM (permit."consumed_at" IS NOT NULL)
+				OR (
+					permit."status" = 'consumed'
+					AND (
+						SELECT count(*)
+						FROM "public"."sv_runs" AS run
+						WHERE run."permit_id" = permit."id"
+							AND run."cycle_id" = permit."cycle_id"
+							AND run."organization_id" = permit."organization_id"
+							AND run."dispatch_key" = permit."dispatch_key"
+							AND run."channel" = permit."channel"
+							AND run."scenario_id" = permit."scenario_id"
+							AND run."system_id" IS NOT DISTINCT FROM permit."system_id"
+					) <> 1
+				)
+				OR (
+					permit."status" IN ('issued', 'revoked')
+					AND EXISTS (
+						SELECT 1 FROM "public"."sv_runs" AS run
+						WHERE run."permit_id" = permit."id"
+							AND run."cycle_id" = permit."cycle_id"
+							AND run."organization_id" = permit."organization_id"
+					)
+				)
+			)
+	) + (
+		SELECT count(*)::integer
+		FROM "public"."sv_runs" AS run
+		LEFT JOIN "public"."sv_run_permits" AS permit
+			ON permit."id" = run."permit_id"
+			AND permit."cycle_id" = run."cycle_id"
+			AND permit."organization_id" = run."organization_id"
+		WHERE run."cycle_id" = cycle_record."id"
+			AND run."organization_id" = claim_record."organization_id"
+			AND (
+				permit."id" IS NULL
+				OR permit."status" <> 'consumed'
+				OR permit."consumed_at" IS NULL
+				OR permit."dispatch_key" IS DISTINCT FROM run."dispatch_key"
+				OR permit."channel" IS DISTINCT FROM run."channel"
+				OR permit."scenario_id" IS DISTINCT FROM run."scenario_id"
+				OR permit."system_id" IS DISTINCT FROM run."system_id"
+				OR run."status" <> 'RUNNING'
+				OR run."finished_at" IS NOT NULL
+				OR run."validity" IS NOT NULL
+				OR run."invalid_reason" IS NOT NULL
+			)
+	) + (
+		SELECT count(*)::integer
+		FROM "public"."sv_journal_provider_boundaries" AS boundary
+		LEFT JOIN "public"."sv_runs" AS run
+			ON run."id" = boundary."run_id"
+			AND run."cycle_id" = boundary."cycle_id"
+			AND run."organization_id" = boundary."organization_id"
+		LEFT JOIN "public"."sv_run_permits" AS permit
+			ON permit."id" = boundary."permit_id"
+			AND permit."cycle_id" = boundary."cycle_id"
+			AND permit."organization_id" = boundary."organization_id"
+		WHERE boundary."cycle_id" = cycle_record."id"
+			AND boundary."organization_id" = claim_record."organization_id"
+			AND (
+				boundary."journal_claim_id" IS DISTINCT FROM claim_record."id"
+				OR boundary."configuration_lock_id" IS DISTINCT FROM claim_record."configuration_lock_id"
+				OR boundary."project_id" IS DISTINCT FROM claim_record."project_id"
+				OR run."id" IS NULL
+				OR permit."id" IS NULL
+				OR run."permit_id" IS DISTINCT FROM permit."id"
+				OR boundary."dispatch_key" IS DISTINCT FROM run."dispatch_key"
+				OR boundary."channel" IS DISTINCT FROM run."channel"
+				OR boundary."system_id" IS DISTINCT FROM run."system_id"
+			)
+	) + (
+		SELECT count(*)::integer
+		FROM "public"."sv_cost_events" AS cost
+		WHERE cost."cycle_id" = cycle_record."id"
+			AND cost."organization_id" = claim_record."organization_id"
+			AND cost."run_id" IS NOT NULL
+			AND NOT EXISTS (
+				SELECT 1 FROM "public"."sv_runs" AS run
+				WHERE run."id" = cost."run_id"
+					AND run."cycle_id" = cycle_record."id"
+					AND run."organization_id" = claim_record."organization_id"
+			)
+	)
+	INTO execution_invariant_violation_count;
 	IF execution_invariant_violation_count <> 0
 		OR consumed_permit_count <> run_count
-		OR run_count <> boundary_count
+		OR run_count <> boundary_backed_run_count + legacy_unfenced_run_count
+		OR boundary_count <> boundary_backed_run_count
 		OR boundary_count <> boundary_call_upper_bound
 	THEN
 		RAISE EXCEPTION 'JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT';
@@ -412,10 +575,26 @@ BEGIN
 	UPDATE "public"."sv_runs" AS run
 	SET "status" = 'FAILED',
 		"validity" = 'INVALID',
-		"invalid_reason" = 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY',
+		"invalid_reason" = CASE WHEN EXISTS (
+			SELECT 1
+			FROM "public"."sv_journal_provider_boundaries" AS boundary
+			WHERE boundary."run_id" = run."id"
+				AND boundary."cycle_id" = run."cycle_id"
+				AND boundary."journal_claim_id" = claim_record."id"
+				AND boundary."organization_id" = run."organization_id"
+		) THEN 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'
+		ELSE 'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY' END,
 		"canonical_payload" = jsonb_build_object(
 			'dispatchKey', run."dispatch_key", 'status', 'FAILED', 'validity', 'INVALID',
-			'invalidReason', 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'
+			'invalidReason', CASE WHEN EXISTS (
+				SELECT 1
+				FROM "public"."sv_journal_provider_boundaries" AS boundary
+				WHERE boundary."run_id" = run."id"
+					AND boundary."cycle_id" = run."cycle_id"
+					AND boundary."journal_claim_id" = claim_record."id"
+					AND boundary."organization_id" = run."organization_id"
+			) THEN 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'
+			ELSE 'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY' END
 		),
 		"finished_at" = reconciliation_time
 	WHERE run."cycle_id" = cycle_record."id"
@@ -426,10 +605,18 @@ BEGIN
 	SELECT count(*)::integer INTO revoked_permit_count
 	FROM "public"."sv_run_permits"
 	WHERE "cycle_id" = cycle_record."id" AND "status" = 'revoked';
-	SELECT count(*)::integer INTO settled_run_count
+	SELECT
+		count(*) FILTER (
+			WHERE "invalid_reason" = 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'
+		)::integer,
+		count(*) FILTER (
+			WHERE "invalid_reason" = 'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY'
+		)::integer
+	INTO settled_boundary_run_count, settled_legacy_run_count
 	FROM "public"."sv_runs"
 	WHERE "cycle_id" = cycle_record."id"
-		AND "invalid_reason" = 'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY';
+		AND "organization_id" = claim_record."organization_id";
+	settled_run_count := settled_boundary_run_count + settled_legacy_run_count;
 
 	UPDATE "public"."sv_cycles"
 	SET "status" = 'STOPPED',
@@ -466,6 +653,10 @@ BEGIN
 			'ambiguousSpendAcknowledged', p_ambiguous_spend_acknowledged,
 			'cycleId', cycle_record."id", 'revokedPermitCount', revoked_permit_count,
 			'settledRunCount', settled_run_count, 'costEventCount', cost_event_count,
+			'boundaryBackedRunCount', boundary_backed_run_count,
+			'legacyUnfencedRunCount', legacy_unfenced_run_count,
+			'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count,
+			'legacyTopologyStatus', CASE WHEN legacy_unfenced_run_count = 0 THEN 'NONE' ELSE 'CONSUMED_RUNS_WITHOUT_BOUNDARY' END,
 			'unmatchedCostEventCount', unmatched_cost_event_count,
 			'providerCallUpperBound', provider_call_upper_bound,
 			'observedCostUsd', observed_cost, 'historicalExposureCapUsd', historical_exposure_cap,
@@ -478,6 +669,10 @@ BEGIN
 	RETURN jsonb_build_object(
 		'decision', 'RECONCILED', 'claimId', claim_record."id", 'cycleId', cycle_record."id",
 		'revokedPermitCount', revoked_permit_count, 'settledRunCount', settled_run_count,
+		'boundaryBackedRunCount', boundary_backed_run_count,
+		'legacyUnfencedRunCount', legacy_unfenced_run_count,
+		'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count,
+		'legacyTopologyStatus', CASE WHEN legacy_unfenced_run_count = 0 THEN 'NONE' ELSE 'CONSUMED_RUNS_WITHOUT_BOUNDARY' END,
 		'costEventCount', cost_event_count, 'unmatchedCostEventCount', unmatched_cost_event_count,
 		'providerCallUpperBound', provider_call_upper_bound,
 		'observedCostUsd', observed_cost::text,

@@ -1530,7 +1530,11 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT");
 		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_AMBIGUOUS_SPEND_ACK_REQUIRED");
 		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_REPLAY_IDENTITY_MISMATCH");
-		expect(migration).toContain("boundary_call_upper_bound + unmatched_cost_event_count");
+		expect(migration).toContain("+ legacy_unfenced_run_count");
+		expect(migration).toContain("+ unmatched_cost_event_count");
+		expect(migration).toContain("'legacyUnfencedRunCount', legacy_unfenced_run_count");
+		expect(migration).toContain("'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count");
+		expect(migration).toContain("'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY'");
 		expect(migration).toContain("'costEventCount', cost_event_count");
 		expect(migration).toContain("'unmatchedCostEventCount', unmatched_cost_event_count");
 		expect(migration).toContain("'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'");

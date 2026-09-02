@@ -20,7 +20,97 @@ for migration in \
 	0054_journal_daily_claim_execution_lease \
 	0055_provider_snapshot_resume_reconciliation \
 	0056_formal_evidence_acceptance_hardening \
-	0057_evidence_project_identity_hardening \
+	0057_evidence_project_identity_hardening; do
+	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
+done
+
+# This is the exact pre-0058 legacy topology seen in staging: four consumed
+# permits paired with four unfinished runs, with no boundary or downstream
+# spend/evidence rows. It must remain visibly ambiguous; no migration may
+# fabricate PRE_TRANSPORT fences for it.
+"${psql[@]}" <<'SQL' >/dev/null
+INSERT INTO organization (id, name, slug, created_at)
+VALUES ('journal-hold-0060', 'Journal hold 0060', 'journal-hold-0060', clock_timestamp());
+INSERT INTO sv_projects (id, organization_id, name, category, country, languages, status) VALUES (
+	'60000000-0000-4000-8000-000000000004', 'journal-hold-0060', 'Legacy unfenced AVLI disposable',
+	'test', 'ID', ARRAY['en'], 'ACTIVE'
+);
+SELECT set_config('app.organization_id', 'journal-hold-0060', false);
+INSERT INTO sv_journal_daily_claims (
+	id, organization_id, project_id, question_set_version, utc_day, attempt, claimed_at, updated_at
+) VALUES (
+	'60000000-0000-4000-8000-000000000014', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', 'legacy-unfenced-0060',
+	(clock_timestamp() AT TIME ZONE 'UTC')::date, 1,
+	clock_timestamp() - interval '2 hours', clock_timestamp() - interval '2 hours'
+);
+INSERT INTO sv_configuration_locks (
+	id, organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by
+) VALUES (
+	'60000000-0000-4000-8000-000000000060', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', 1,
+	jsonb_build_object('journalClaim', jsonb_build_object(
+		'id', '60000000-0000-4000-8000-000000000014',
+		'utcDay', (clock_timestamp() AT TIME ZONE 'UTC')::date::text,
+		'attempt', 1
+	)), 'legacy-unfenced-0060', 75, 0.5, 'disposable-0060'
+);
+UPDATE sv_journal_daily_claims
+SET configuration_lock_id = '60000000-0000-4000-8000-000000000060', status = 'EXECUTING'
+WHERE id = '60000000-0000-4000-8000-000000000014';
+INSERT INTO sv_quotes (
+	id, organization_id, project_id, lock_id, status, price_amount, currency, expected_runs, expires_at
+) VALUES (
+	'60000000-0000-4000-8000-000000000061', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', '60000000-0000-4000-8000-000000000060',
+	'ACCEPTED', 0, 'USD', 75, clock_timestamp() + interval '1 day'
+);
+INSERT INTO sv_orders (id, organization_id, project_id, quote_id, lock_id, status, order_cap) VALUES (
+	'60000000-0000-4000-8000-000000000062', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000004', '60000000-0000-4000-8000-000000000061',
+	'60000000-0000-4000-8000-000000000060', 'QUEUED', 0.5
+);
+INSERT INTO sv_cycles (
+	id, organization_id, order_id, lock_id, status, expected_runs, created_runs, completed_runs
+) VALUES (
+	'60000000-0000-4000-8000-000000000063', 'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000062', '60000000-0000-4000-8000-000000000060',
+	'QUEUED', 75, 75, 0
+);
+INSERT INTO sv_run_permits (
+	id, organization_id, cycle_id, dispatch_key, channel, scenario_id, system_id, status, expires_at, consumed_at
+) VALUES
+	('60000000-0000-4000-8000-000000000070', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '0060-legacy-unfenced-1', 'VISITOR', 'legacy-q1', 'ChatGPT', 'consumed', clock_timestamp() + interval '1 day', clock_timestamp()),
+	('60000000-0000-4000-8000-000000000071', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '0060-legacy-unfenced-2', 'VISITOR', 'legacy-q2', 'Gemini', 'consumed', clock_timestamp() + interval '1 day', clock_timestamp()),
+	('60000000-0000-4000-8000-000000000072', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '0060-legacy-unfenced-3', 'VISITOR', 'legacy-q3', 'Perplexity', 'consumed', clock_timestamp() + interval '1 day', clock_timestamp()),
+	('60000000-0000-4000-8000-000000000073', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '0060-legacy-unfenced-4', 'VISITOR', 'legacy-q4', 'ChatGPT', 'consumed', clock_timestamp() + interval '1 day', clock_timestamp());
+INSERT INTO sv_run_permits (
+	id, organization_id, cycle_id, dispatch_key, channel, scenario_id, system_id, status, expires_at, consumed_at
+)
+SELECT
+	('60000000-0000-4000-8000-' || lpad(ordinal::text, 12, '0'))::uuid,
+	'journal-hold-0060',
+	'60000000-0000-4000-8000-000000000063',
+	'0060-legacy-issued-' || ordinal::text,
+	'VISITOR',
+	'legacy-issued-q' || ordinal::text,
+	(ARRAY['ChatGPT', 'Gemini', 'Perplexity'])[((ordinal - 100) % 3) + 1],
+	'issued',
+	clock_timestamp() + interval '1 day',
+	NULL
+FROM generate_series(100, 170) AS issued(ordinal);
+INSERT INTO sv_runs (
+	id, organization_id, cycle_id, permit_id, dispatch_key, channel, scenario_id, system_id, status, started_at
+) VALUES
+	('60000000-0000-4000-8000-000000000074', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000070', '0060-legacy-unfenced-1', 'VISITOR', 'legacy-q1', 'ChatGPT', 'RUNNING', clock_timestamp() - interval '2 hours'),
+	('60000000-0000-4000-8000-000000000075', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000071', '0060-legacy-unfenced-2', 'VISITOR', 'legacy-q2', 'Gemini', 'RUNNING', clock_timestamp() - interval '2 hours'),
+	('60000000-0000-4000-8000-000000000076', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000072', '0060-legacy-unfenced-3', 'VISITOR', 'legacy-q3', 'Perplexity', 'RUNNING', clock_timestamp() - interval '2 hours'),
+	('60000000-0000-4000-8000-000000000077', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000073', '0060-legacy-unfenced-4', 'VISITOR', 'legacy-q4', 'ChatGPT', 'RUNNING', clock_timestamp() - interval '2 hours');
+UPDATE sv_journal_daily_claims SET status = 'HOLD', updated_at = clock_timestamp() - interval '2 hours'
+WHERE id = '60000000-0000-4000-8000-000000000014';
+SQL
+
+for migration in \
 	0058_journal_provider_boundary_recovery \
 	0059_journal_no_spend_reconciliation; do
 	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
@@ -30,8 +120,6 @@ done
 	< "$repo_root/packages/lib/src/db/migrations/0060_journal_hold_owner_reconciliation.sql" >/dev/null
 
 "${psql[@]}" <<'SQL' >/dev/null
-INSERT INTO organization (id, name, slug, created_at)
-VALUES ('journal-hold-0060', 'Journal hold 0060', 'journal-hold-0060', clock_timestamp());
 INSERT INTO sv_projects (id, organization_id, name, category, country, languages, status) VALUES (
 	'60000000-0000-4000-8000-000000000001', 'journal-hold-0060', 'AVLI disposable',
 	'test', 'ID', ARRAY['en'], 'ACTIVE'
@@ -252,6 +340,67 @@ if [[ "$("${psql[@]}" -Atc "SELECT has_function_privilege('selena_app', 'public.
 	exit 1
 fi
 
+legacy_before="$("${psql[@]}" -qAtc "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT concat_ws(':', (SELECT status FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000014'), (SELECT expected_runs FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000063'), (SELECT created_runs FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='issued'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='consumed'), (SELECT count(*) FROM sv_runs WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='RUNNING' AND finished_at IS NULL), (SELECT count(*) FROM sv_journal_provider_boundaries WHERE journal_claim_id='60000000-0000-4000-8000-000000000014'), (SELECT count(*) FROM sv_cost_events WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_response_mentions WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_citation_gap_snapshots WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_source_snapshots WHERE organization_id='journal-hold-0060' AND project_id='60000000-0000-4000-8000-000000000004'), (SELECT count(*) FROM sv_evidence_index WHERE organization_id='journal-hold-0060' AND project_id='60000000-0000-4000-8000-000000000004'), (SELECT count(*) FROM sv_evidence_acceptance_receipts WHERE organization_id='journal-hold-0060'));")"
+if [[ "$legacy_before" != $'journal-hold-0060\nHOLD:75:75:75:71:4:4:0:0:0:0:0:0:0' ]]; then
+	printf 'JOURNAL_0060_LEGACY_INITIAL_STATE_MISMATCH:%s\n' "$legacy_before" >&2
+	exit 1
+fi
+
+legacy_unacknowledged=''
+if legacy_unacknowledged="$("${psql[@]}" -c "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, false);" 2>&1)"; then
+	printf 'JOURNAL_0060_LEGACY_AMBIGUOUS_SPEND_NOT_ACKNOWLEDGED_ALLOWED\n' >&2
+	exit 1
+fi
+if [[ "$legacy_unacknowledged" != *"JOURNAL_HOLD_RECONCILIATION_AMBIGUOUS_SPEND_ACK_REQUIRED"* ]]; then
+	printf 'JOURNAL_0060_LEGACY_AMBIGUOUS_SPEND_WRONG_FAILURE\n' >&2
+	exit 1
+fi
+
+legacy_mismatched_run=''
+if legacy_mismatched_run="$("${psql[@]}" -c "BEGIN; SELECT set_config('app.organization_id', 'journal-hold-0060', true); UPDATE sv_runs SET dispatch_key='0060-legacy-mismatch' WHERE id='60000000-0000-4000-8000-000000000074'; SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, true); ROLLBACK;" 2>&1)"; then
+	printf 'JOURNAL_0060_LEGACY_MISMATCHED_RUN_ALLOWED\n' >&2
+	exit 1
+fi
+if [[ "$legacy_mismatched_run" != *"JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT"* ]]; then
+	printf 'JOURNAL_0060_LEGACY_MISMATCHED_RUN_WRONG_FAILURE\n' >&2
+	exit 1
+fi
+
+legacy_dry_run="$("${psql[@]}" -qAtc "BEGIN; SELECT set_config('app.organization_id', 'journal-hold-0060', true); SELECT concat_ws(':', result->>'decision', coalesce(result->>'providerCalls', 'NULL'), result->>'providerCallsStatus', result->>'providerCallUpperBound', result->>'legacyUnfencedRunCount', result->>'legacyUnfencedProviderCallUpperBound', result->>'boundaryBackedRunCount', result->>'revokedPermitCount', result->>'costEventCount', result->>'unmatchedCostEventCount') FROM (SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, true) AS result) AS reconciliation; ROLLBACK;")"
+if [[ "$legacy_dry_run" != $'journal-hold-0060\nRECONCILED:NULL:UNKNOWN_WITHIN_UPPER_BOUND:4:4:4:0:71:0:0' ]]; then
+	printf 'JOURNAL_0060_LEGACY_DRY_RUN_RECEIPT_MISMATCH:%s\n' "$legacy_dry_run" >&2
+	exit 1
+fi
+legacy_after_dry_run="$("${psql[@]}" -Atc "SELECT concat_ws(':', (SELECT status FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000014'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='issued'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='revoked'), (SELECT count(*) FROM sv_runs WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='RUNNING' AND finished_at IS NULL), (SELECT count(*) FROM sv_audit_events WHERE subject_id='60000000-0000-4000-8000-000000000014' AND event='JOURNAL_DAILY_CLAIM_RECONCILED'), (SELECT count(*) FROM sv_incidents WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND kind='OWNER_RECONCILED_JOURNAL_HOLD'));")"
+if [[ "$legacy_after_dry_run" != 'HOLD:71:0:4:0:0' ]]; then
+	printf 'JOURNAL_0060_LEGACY_DRY_RUN_DID_NOT_ROLL_BACK:%s\n' "$legacy_after_dry_run" >&2
+	exit 1
+fi
+
+# A cost row linked to one of the four legacy runs is evidence about that
+# already-counted ambiguous execution, not a fifth possible call.
+legacy_linked_cost="$("${psql[@]}" -qAtc "BEGIN; SELECT set_config('app.organization_id', 'journal-hold-0060', true); INSERT INTO sv_cost_events (id, organization_id, cycle_id, run_id, provider, amount_usd, basis) VALUES ('60000000-0000-4000-8000-000000000078', 'journal-hold-0060', '60000000-0000-4000-8000-000000000063', '60000000-0000-4000-8000-000000000074', 'legacy-provider', 0.010000, 'legacy-observed'); SELECT concat_ws(':', result->>'providerCallUpperBound', result->>'legacyUnfencedRunCount', result->>'costEventCount', result->>'unmatchedCostEventCount') FROM (SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, true) AS result) AS reconciliation; ROLLBACK;")"
+if [[ "$legacy_linked_cost" != $'journal-hold-0060\n4:4:1:0' ]]; then
+	printf 'JOURNAL_0060_LEGACY_LINKED_COST_DOUBLE_COUNTED:%s\n' "$legacy_linked_cost" >&2
+	exit 1
+fi
+
+legacy_receipt="$("${psql[@]}" -qAtc "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT concat_ws(':', result->>'decision', coalesce(result->>'providerCalls', 'NULL'), result->>'providerCallsStatus', result->>'providerCallUpperBound', result->>'legacyUnfencedRunCount', result->>'legacyUnfencedProviderCallUpperBound', result->>'boundaryBackedRunCount', result->>'revokedPermitCount', result->>'settledRunCount') FROM (SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, true) AS result) AS reconciliation;")"
+if [[ "$legacy_receipt" != $'journal-hold-0060\nRECONCILED:NULL:UNKNOWN_WITHIN_UPPER_BOUND:4:4:4:0:71:4' ]]; then
+	printf 'JOURNAL_0060_LEGACY_RECONCILIATION_FAILED:%s\n' "$legacy_receipt" >&2
+	exit 1
+fi
+legacy_replay="$("${psql[@]}" -qAtc "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT concat_ws(':', result->>'decision', coalesce(result->>'providerCalls', 'NULL'), result->>'providerCallsStatus', result->>'providerCallUpperBound', result->>'legacyUnfencedRunCount', result->>'legacyUnfencedProviderCallUpperBound', result->>'boundaryBackedRunCount', result->>'revokedPermitCount', result->>'settledRunCount') FROM (SELECT sv_reconcile_journal_hold('60000000-0000-4000-8000-000000000014', 'disposable-0060', 'owner-decision-legacy-unfenced-0060', true, true) AS result) AS reconciliation;")"
+if [[ "$legacy_replay" != $'journal-hold-0060\nALREADY_RECONCILED:NULL:UNKNOWN_WITHIN_UPPER_BOUND:4:4:4:0:71:4' ]]; then
+	printf 'JOURNAL_0060_LEGACY_REPLAY_FAILED:%s\n' "$legacy_replay" >&2
+	exit 1
+fi
+legacy_after="$("${psql[@]}" -Atc "SELECT concat_ws(':', (SELECT status FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000014'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='revoked'), (SELECT count(*) FROM sv_run_permits WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='consumed'), (SELECT count(*) FROM sv_runs WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND status='FAILED' AND validity='INVALID' AND invalid_reason='OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY' AND canonical_payload->>'invalidReason'='OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY' AND finished_at IS NOT NULL), (SELECT count(*) FROM sv_journal_provider_boundaries WHERE journal_claim_id='60000000-0000-4000-8000-000000000014'), (SELECT count(*) FROM sv_audit_events WHERE subject_id='60000000-0000-4000-8000-000000000014' AND event='JOURNAL_DAILY_CLAIM_RECONCILED'), (SELECT count(*) FROM sv_audit_events WHERE subject_id='60000000-0000-4000-8000-000000000014' AND event='JOURNAL_DAILY_CLAIM_RECONCILED' AND details->>'providerCallsStatus'='UNKNOWN_WITHIN_UPPER_BOUND' AND details->>'providerCallUpperBound'='4' AND details->>'legacyUnfencedRunCount'='4' AND details->>'legacyUnfencedProviderCallUpperBound'='4' AND details->>'boundaryBackedRunCount'='0' AND details->>'legacyTopologyStatus'='CONSUMED_RUNS_WITHOUT_BOUNDARY' AND details->>'revokedPermitCount'='71' AND details->'providerCalls'='null'::jsonb), (SELECT count(*) FROM sv_incidents WHERE cycle_id='60000000-0000-4000-8000-000000000063' AND kind='OWNER_RECONCILED_JOURNAL_HOLD'), (SELECT count(*) FROM sv_cost_events WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_response_mentions WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_citation_gap_snapshots WHERE cycle_id='60000000-0000-4000-8000-000000000063'), (SELECT count(*) FROM sv_source_snapshots WHERE organization_id='journal-hold-0060' AND project_id='60000000-0000-4000-8000-000000000004'), (SELECT count(*) FROM sv_evidence_index WHERE organization_id='journal-hold-0060' AND project_id='60000000-0000-4000-8000-000000000004'), (SELECT count(*) FROM sv_evidence_acceptance_receipts WHERE organization_id='journal-hold-0060'));")"
+if [[ "$legacy_after" != 'RECONCILED:71:4:4:0:1:1:1:0:0:0:0:0:0' ]]; then
+	printf 'JOURNAL_0060_LEGACY_FINAL_STATE_MISMATCH:%s\n' "$legacy_after" >&2
+	exit 1
+fi
+
 "${psql[@]}" -c "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT 1 FROM sv_owner_reconcile_journal_no_spend('60000000-0000-4000-8000-000000000013', ARRAY[]::uuid[], 'BRIGHT_DATA', 'sha256:' || repeat('c', 64), ARRAY['dataset-alone'], clock_timestamp() - interval '5 hours', clock_timestamp() - interval '1 hour', clock_timestamp() - interval '3 hours', clock_timestamp() - interval '30 minutes', 'immutable://0060/post-0060-no-spend', 'sha256:' || repeat('d', 64));" >/dev/null
 if [[ "$("${psql[@]}" -Atc "SELECT concat_ws(':', status, (SELECT count(*) FROM sv_journal_no_spend_reconciliations WHERE claim_id='60000000-0000-4000-8000-000000000013')) FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000013'")" != 'NO_SPEND:1' ]]; then
 	printf 'JOURNAL_0060_POSITIVE_NO_SPEND_PATH_NOT_PRESERVED\n' >&2
@@ -425,7 +574,7 @@ if [[ "$wrong_replay" != *"JOURNAL_HOLD_RECONCILIATION_REPLAY_IDENTITY_MISMATCH"
 	exit 1
 fi
 
-state="$("${psql[@]}" -qAtc "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT concat_ws(':', (SELECT status FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000010'), (SELECT status FROM sv_run_permits WHERE id='60000000-0000-4000-8000-000000000031'), (SELECT status FROM sv_runs WHERE id='60000000-0000-4000-8000-000000000032'), (SELECT status FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000023'), (SELECT completed_runs FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000023'), (SELECT status FROM sv_orders WHERE id='60000000-0000-4000-8000-000000000022'), (SELECT count(*) FROM sv_audit_events WHERE organization_id='journal-hold-0060' AND event='JOURNAL_DAILY_CLAIM_RECONCILED'), (SELECT count(*) FROM sv_incidents WHERE organization_id='journal-hold-0060' AND kind='OWNER_RECONCILED_JOURNAL_HOLD' AND status='RESOLVED' AND resolved_at IS NOT NULL), (SELECT count(*) FROM sv_cost_events WHERE organization_id='journal-hold-0060' AND cycle_id='60000000-0000-4000-8000-000000000023'));")"
+state="$("${psql[@]}" -qAtc "SELECT set_config('app.organization_id', 'journal-hold-0060', false); SELECT concat_ws(':', (SELECT status FROM sv_journal_daily_claims WHERE id='60000000-0000-4000-8000-000000000010'), (SELECT status FROM sv_run_permits WHERE id='60000000-0000-4000-8000-000000000031'), (SELECT status FROM sv_runs WHERE id='60000000-0000-4000-8000-000000000032'), (SELECT status FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000023'), (SELECT completed_runs FROM sv_cycles WHERE id='60000000-0000-4000-8000-000000000023'), (SELECT status FROM sv_orders WHERE id='60000000-0000-4000-8000-000000000022'), (SELECT count(*) FROM sv_audit_events WHERE organization_id='journal-hold-0060' AND subject_id='60000000-0000-4000-8000-000000000010' AND event='JOURNAL_DAILY_CLAIM_RECONCILED'), (SELECT count(*) FROM sv_incidents WHERE organization_id='journal-hold-0060' AND cycle_id='60000000-0000-4000-8000-000000000023' AND kind='OWNER_RECONCILED_JOURNAL_HOLD' AND status='RESOLVED' AND resolved_at IS NOT NULL), (SELECT count(*) FROM sv_cost_events WHERE organization_id='journal-hold-0060' AND cycle_id='60000000-0000-4000-8000-000000000023'));")"
 if [[ "$state" != $'journal-hold-0060\nRECONCILED:revoked:FAILED:STOPPED:1:CANCELLED:1:1:0' ]]; then
 	printf 'JOURNAL_0060_STATE_MISMATCH:%s\n' "$state" >&2
 	exit 1
@@ -442,4 +591,4 @@ INSERT INTO sv_journal_daily_claims (
 );
 SQL
 
-printf 'JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved upperBound=1 mixedLegacyUpperBound=2 legacyCost=ack-required revoked=1 settled=1 replay=idempotent costRows=0 nextAttempt=allowed\n'
+printf 'JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved legacyPermits=75 legacyIssuedRevoked=71 legacyConsumed=4 boundaryUpperBound=1 legacyUnfencedUpperBound=4 unmatchedNullCostUpperBound=+1 legacyLinkedCost=not-double-counted legacyInvariantMismatch=rejected legacyReceipt=UNKNOWN_WITHIN_UPPER_BOUND legacyDryRun=rolled-back legacyReplay=idempotent legacyAudit=exact revoked=1 settled=1 replay=idempotent costRows=0 providerInvocationsDuringTest=0 nextAttempt=allowed\n'
