@@ -17,10 +17,6 @@ interface FullPageCardProps {
 	backButtonText?: string;
 	customBackButton?: ReactNode;
 	className?: string;
-	/**
-	 * Cinematic scene shown beside the card (auth pages). Only rendered for the
-	 * default Selena branding; white-label deployments keep the plain card.
-	 */
 	scene?: AuthSceneName;
 }
 
@@ -36,6 +32,7 @@ export default function FullPageCard({
 	scene,
 }: FullPageCardProps) {
 	const context = useRouteContext({ strict: false }) as { clientConfig?: ClientConfig };
+	// A white-label deployment must not open under Selena's imagery, so the scene follows the branding, not the route.
 	const showScene = scene !== undefined && isSelenaBranding(context.clientConfig?.branding);
 
 	const body = (

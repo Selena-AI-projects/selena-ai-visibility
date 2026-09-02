@@ -2,9 +2,10 @@
  * Cinematic side panel for the auth pages.
  *
  * Carries one short, silent loop from the Selena Systems public site so the
- * workspace entrance speaks the same visual language as the site. Poster
- * first: the form never waits on the video. The loop mounts after hydration
- * and stays hidden when the visitor prefers reduced motion.
+ * workspace entrance speaks the same visual language as the site. The poster
+ * is in the server-rendered markup so the form never waits on the video; the
+ * loop itself mounts only after hydration, because React does not serialize
+ * `muted` and browsers refuse to autoplay an unmuted video.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -23,7 +24,6 @@ export type AuthSceneName = keyof typeof SCENES;
 
 interface AuthSceneProps {
 	scene: AuthSceneName;
-	/** `panel` fills a column on wide screens; `strip` is the slim poster above the card on small screens. */
 	variant: "panel" | "strip";
 }
 
@@ -54,16 +54,32 @@ export function AuthScene({ scene, variant }: AuthSceneProps) {
 	);
 }
 
-function SceneLoop({ video, poster }: { video: string; poster: string }) {
+// Matches the `lg:` breakpoint that reveals the panel; below it the loop would only spend bytes on a hidden element.
+const PANEL_QUERY = "(min-width: 64rem)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function useLoopEnabled(): boolean {
 	const [enabled, setEnabled] = useState(false);
-	const ref = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
-		// The panel is display:none below lg, so the loop would only cost bytes there.
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-		if (!window.matchMedia("(min-width: 64rem)").matches) return;
-		setEnabled(true);
+		const panel = window.matchMedia(PANEL_QUERY);
+		const reducedMotion = window.matchMedia(REDUCED_MOTION_QUERY);
+		const update = () => setEnabled(panel.matches && !reducedMotion.matches);
+		update();
+		panel.addEventListener("change", update);
+		reducedMotion.addEventListener("change", update);
+		return () => {
+			panel.removeEventListener("change", update);
+			reducedMotion.removeEventListener("change", update);
+		};
 	}, []);
+
+	return enabled;
+}
+
+function SceneLoop({ video, poster }: { video: string; poster: string }) {
+	const enabled = useLoopEnabled();
+	const ref = useRef<HTMLVideoElement>(null);
 
 	useEffect(() => {
 		const el = ref.current;
