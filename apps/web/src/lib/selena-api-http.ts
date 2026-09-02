@@ -39,6 +39,7 @@ const SAFE_SCOPES = new Set(["local:read", "local:write", "local:execute", "evid
 const SAFE_SURFACES = new Set(["LOCAL_AI", "LOCAL_MAPS"]);
 const SAFE_BLOCKERS = new Set([
 	"LOCAL_SCHEMA_NOT_APPLIED_OR_RLS_UNVERIFIED",
+	"LOCAL_CURSOR_HMAC_SECRET_UNAVAILABLE",
 	"LOCAL_SETUP_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
 	"LOCAL_ADMIN_SCHEMA_RLS_OR_APPROVAL_UNVERIFIED",
 	"PROVIDER_REGISTRY_OR_CREDENTIALS_UNVERIFIED",
@@ -76,7 +77,7 @@ function safeErrorMessage(code: string, message: string): string {
 	}
 	if (
 		code === "OWNER_GATE_REQUIRED" &&
-		/^(?:LOCAL_[A-Z0-9_-]+ is unavailable until the target schema(?:, RLS| and tenant RLS)?(?: and approval gates)? are verified\.|(?:Admin action|Provider capabilities did not produce a durable registry response|Local setup action did not produce a durable response|Local setup action did not produce a valid durable response)\.)$/.test(
+		/^(?:LOCAL_[A-Z0-9_-]+ is unavailable until the target schema(?:, RLS| and tenant RLS)?(?: and approval gates)? are verified\.|Local cursor signing is unavailable until the sealed runtime secret is configured\.|(?:Admin action|Provider capabilities did not produce a durable registry response|Local setup action did not produce a durable response|Local setup action did not produce a valid durable response)\.)$/.test(
 			normalized,
 		)
 	) {
@@ -195,11 +196,7 @@ export function encodeSelenaApiCursor(payload: LocalApiCursorPayload): string {
 	return Buffer.from(JSON.stringify(parsed), "utf8").toString("base64url");
 }
 
-/**
- * Signed cursor codec for a future runtime that injects an owner-managed key.
- * The default API deliberately continues using the unsigned codec until that
- * key is provisioned and rotation/retention policy is proven.
- */
+/** Signed cursor codec for runtimes that inject an owner-managed key. */
 export function encodeSelenaApiCursorSigned(payload: LocalApiCursorPayload, secret: string): string {
 	if (secret.length < 16) throw new Error("CURSOR_SIGNING_SECRET_INVALID");
 	const unsigned = encodeSelenaApiCursor(payload);

@@ -12,7 +12,9 @@ import {
 	type LocalReadMapRow,
 	type SelenaLocalReadStore,
 } from "../../server/selena-local-read-api";
-import { encodeSelenaApiCursor } from "../selena-api-http";
+import { encodeSelenaApiCursorSigned } from "../selena-api-http";
+
+const cursorSecret = "sealed-local-cursor-test-secret-32";
 
 const ids = {
 	cycle: "10000000-0000-4000-8000-000000000001",
@@ -867,6 +869,7 @@ describe("Selena local read API core", () => {
 				permissions: ["local:read", "evidence:read"],
 			})),
 			requestId: () => "request-local-read-contract",
+			cursorSecret,
 		});
 
 		const ai = await handlers.aiResults(new Request("https://example.test/ai-results"), ids.cycle);
@@ -937,15 +940,19 @@ describe("Selena local read API core", () => {
 			api: createSelenaLocalReadApi(source),
 			authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
 			requestId: () => "request-local-read-2",
+			cursorSecret,
 		});
-		const cursor = encodeSelenaApiCursor({
-			version: 1,
-			tenantId: "tenant-b",
-			cycleId: ids.cycle,
-			resource: "map-results",
-			snapshotVersion: "2026-08-30T02:00:00.000Z",
-			position: { sortValue: "2026-08-30T02:00:00.000Z", tieBreakerId: ids.observation1 },
-		});
+		const cursor = encodeSelenaApiCursorSigned(
+			{
+				version: 1,
+				tenantId: "tenant-b",
+				cycleId: ids.cycle,
+				resource: "map-results",
+				snapshotVersion: "2026-08-30T02:00:00.000Z",
+				position: { sortValue: "2026-08-30T02:00:00.000Z", tieBreakerId: ids.observation1 },
+			},
+			cursorSecret,
+		);
 
 		const response = await handlers.mapResults(
 			new Request(`https://example.test/map-results?cursor=${cursor}`),
@@ -957,6 +964,57 @@ describe("Selena local read API core", () => {
 			error: { code: "CURSOR_INVALID", requestId: "request-local-read-2" },
 		});
 		expect(source.findCycle).not.toHaveBeenCalled();
+	});
+
+	it.each(["", "short-cursor-secret"])(
+		"fails closed before a paginated read when the sealed cursor secret is %s",
+		async (unavailableSecret) => {
+			const source = store();
+			const handlers = createSelenaLocalReadRouteHandlers({
+				api: createSelenaLocalReadApi(source),
+				authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
+				requestId: () => "request-local-read-cursor-gate",
+				cursorSecret: unavailableSecret,
+			});
+
+			const response = await handlers.mapResults(new Request("https://example.test/map-results"), ids.cycle);
+
+			expect(response.status).toBe(503);
+			expect(await response.json()).toMatchObject({
+				error: {
+					code: "OWNER_GATE_REQUIRED",
+					message: "Local cursor signing is unavailable until the sealed runtime secret is configured.",
+					requestId: "request-local-read-cursor-gate",
+					retryable: false,
+					details: { blocker: "LOCAL_CURSOR_HMAC_SECRET_UNAVAILABLE", providerCalls: 0 },
+				},
+			});
+			expect(source.findCycle).not.toHaveBeenCalled();
+		},
+	);
+
+	it("loads the signing key from sealed server runtime config for the hosted route seam", async () => {
+		vi.stubEnv("SELENA_LOCAL_CURSOR_HMAC_SECRET", cursorSecret);
+		try {
+			const rows = [
+				mapRow(ids.observation1, ids.evidence1, "2026-08-30T02:00:00.000Z"),
+				mapRow(ids.observation2, ids.evidence2, "2026-08-30T02:00:00.000Z"),
+			];
+			const source = store({ listMapResults: vi.fn(async () => rows) });
+			const handlers = createSelenaLocalReadRouteHandlers({
+				api: createSelenaLocalReadApi(source),
+				authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
+				requestId: () => "request-local-read-runtime-secret",
+			});
+
+			const response = await handlers.mapResults(new Request("https://example.test/map-results?limit=1"), ids.cycle);
+			const body = (await response.json()) as { page: { nextCursor: string } };
+
+			expect(response.status).toBe(200);
+			expect(body.page.nextCursor.split(".")).toHaveLength(2);
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 
 	it("rejects malformed cycle ids on every route before a database-bound read", async () => {
@@ -999,12 +1057,14 @@ describe("Selena local read API core", () => {
 			api: createSelenaLocalReadApi(source),
 			authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
 			requestId: () => "request-local-read-3",
+			cursorSecret,
 		});
 
 		const first = await handlers.mapResults(new Request("https://example.test/map-results?limit=1"), ids.cycle);
 		const firstBody = (await first.json()) as { page: { nextCursor: string } };
 		expect(first.status).toBe(200);
 		expect(firstBody.page.nextCursor).toEqual(expect.any(String));
+		expect(firstBody.page.nextCursor.split(".")).toHaveLength(2);
 
 		const second = await handlers.mapResults(
 			new Request(`https://example.test/map-results?limit=1&cursor=${firstBody.page.nextCursor}`),
@@ -1037,6 +1097,7 @@ describe("Selena local read API core", () => {
 			api: createSelenaLocalReadApi(source),
 			authenticate: vi.fn(async () => ({ tenantId: "tenant-a", permissions: ["local:read"] })),
 			requestId: () => "request-local-read-stale",
+			cursorSecret,
 		});
 
 		const first = await handlers.mapResults(new Request("https://example.test/map-results?limit=1"), ids.cycle);

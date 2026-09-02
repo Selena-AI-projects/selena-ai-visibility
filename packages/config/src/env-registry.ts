@@ -448,6 +448,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Monthly USD ceiling for profile-suggestion LLM spending, deployment-wide. Unset means no ceiling — the budget-class gate alone decides, as before.",
 	},
 	{
+		name: "SELENA_LOCAL_CURSOR_HMAC_SECRET",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Owner-managed HMAC secret for tenant-bound Local API pagination cursors. Paginated Local reads fail closed when it is unavailable.",
+	},
+	{
 		name: "SELENA_EVIDENCE_S3_ENDPOINT",
 		scope: "server",
 		requiredBy: "optional",

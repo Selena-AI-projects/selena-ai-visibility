@@ -32,7 +32,6 @@ import {
 import { and, asc, eq, gt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
-	encodeSelenaApiCursor,
 	encodeSelenaApiCursorSigned,
 	parseSelenaApiCursor,
 	requireSelenaApiScope,
@@ -1360,7 +1359,7 @@ export type SelenaLocalReadRouteDependencies = {
 	api: LocalReadApi;
 	authenticate(request: Request): Promise<LocalReadRouteAuth>;
 	requestId(): string;
-	/** Optional owner-managed HMAC secret; absent keeps source-only cursors unsigned. */
+	/** Owner-managed HMAC secret. Paginated read routes fail closed when it is unavailable. */
 	cursorSecret?: string;
 };
 
@@ -1409,11 +1408,25 @@ function nextCursor(
 	position: LocalReadCursorPosition | null,
 	binding: { tenantId: string; cycleId: string; resource: LocalApiCursorResource },
 	snapshotVersion: string,
-	cursorSecret?: string,
+	cursorSecret: string,
 ): string | null {
 	if (!position) return null;
 	const payload = { version: 1 as const, ...binding, snapshotVersion, position };
-	return cursorSecret ? encodeSelenaApiCursorSigned(payload, cursorSecret) : encodeSelenaApiCursor(payload);
+	return encodeSelenaApiCursorSigned(payload, cursorSecret);
+}
+
+function requireCursorSecret(cursorSecret: string | undefined): string {
+	const configuredSecret = cursorSecret ?? process.env.SELENA_LOCAL_CURSOR_HMAC_SECRET;
+	if (!configuredSecret || Buffer.byteLength(configuredSecret, "utf8") < 32) {
+		throw new SelenaApiHttpError(
+			503,
+			"OWNER_GATE_REQUIRED",
+			"Local cursor signing is unavailable until the sealed runtime secret is configured.",
+			false,
+			{ blocker: "LOCAL_CURSOR_HMAC_SECRET_UNAVAILABLE", providerCalls: 0 },
+		);
+	}
+	return configuredSecret;
 }
 
 function validateCycleId(cycleId: string): string {
@@ -1447,8 +1460,9 @@ export function createSelenaLocalReadRouteHandlers(
 				const auth = await dependencies.authenticate(request);
 				requireSelenaApiScope(auth.permissions, "local:read");
 				const validatedCycleId = validateCycleId(cycleId);
+				const cursorSecret = requireCursorSecret(dependencies.cursorSecret);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "map-results" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, cursorSecret);
 				const result = await dependencies.api.mapResults({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1462,7 +1476,7 @@ export function createSelenaLocalReadRouteHandlers(
 						...body,
 						page: {
 							limit: query.limit,
-							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, cursorSecret),
 						},
 					}),
 				);
@@ -1500,8 +1514,9 @@ export function createSelenaLocalReadRouteHandlers(
 				const auth = await dependencies.authenticate(request);
 				requireSelenaApiScope(auth.permissions, "local:read");
 				const validatedCycleId = validateCycleId(cycleId);
+				const cursorSecret = requireCursorSecret(dependencies.cursorSecret);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "ai-results" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, cursorSecret);
 				const result = await dependencies.api.aiResults({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1515,7 +1530,7 @@ export function createSelenaLocalReadRouteHandlers(
 						...body,
 						page: {
 							limit: query.limit,
-							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, cursorSecret),
 						},
 					}),
 				);
@@ -1530,8 +1545,9 @@ export function createSelenaLocalReadRouteHandlers(
 				const auth = await dependencies.authenticate(request);
 				requireSelenaApiScope(auth.permissions, "evidence:read");
 				const validatedCycleId = validateCycleId(cycleId);
+				const cursorSecret = requireCursorSecret(dependencies.cursorSecret);
 				const binding = { tenantId: auth.tenantId, cycleId: validatedCycleId, resource: "evidence" as const };
-				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, dependencies.cursorSecret);
+				const query = parseSelenaApiCursor(new URL(request.url).searchParams, binding, cursorSecret);
 				const result = await dependencies.api.evidence({
 					tenantId: auth.tenantId,
 					cycleId: validatedCycleId,
@@ -1545,7 +1561,7 @@ export function createSelenaLocalReadRouteHandlers(
 						...body,
 						page: {
 							limit: query.limit,
-							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, dependencies.cursorSecret),
+							nextCursor: nextCursor(nextPosition, binding, snapshotVersion, cursorSecret),
 						},
 					}),
 				);
