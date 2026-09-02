@@ -141,14 +141,14 @@
    Selena Systems site. */
 .selena-app,
 .selena-auth-shell {
-	--selena-ivory: #f7f2ea;
+	--selena-ivory: #ece4d8;
 	--selena-surface: #fffdf8;
 	--selena-charcoal: #181614;
 	--selena-ink: #161413;
-	--selena-muted: #6e6258;
+	--selena-muted: #574d45;
 	--selena-copper: #b9825b;
 	--selena-copper-deep: #8f5c34;
-	--selena-line: #e6ddd1;
+	--selena-line: #dccfbe;
 	background-color: var(--selena-ivory);
 	color: var(--selena-ink);
 }
@@ -177,7 +177,7 @@
 }
 
 .selena-wordmark-systems {
-	color: var(--selena-muted, #6e6258);
+	color: var(--selena-muted, #574d45);
 	font-size: 0.66rem;
 	font-weight: 650;
 	letter-spacing: 0.2em;
@@ -196,8 +196,8 @@
 }
 
 .selena-app-header {
-	border-bottom: 1px solid rgb(230 221 209 / 86%);
-	background: rgb(247 242 234 / 92%);
+	border-bottom: 1px solid rgb(220 207 190 / 86%);
+	background: rgb(236 228 216 / 92%);
 	box-shadow: 0 10px 30px -28px rgb(24 22 20 / 45%);
 }
 
@@ -240,7 +240,7 @@
 	font-size: 0.6875rem;
 	font-weight: 700;
 	letter-spacing: 0.08em;
-	color: #6e6258;
+	color: #574d45;
 }
 
 .selena-locale-switch button[aria-pressed="true"] {
@@ -355,9 +355,80 @@
 .selena-section {
 	border: 1px solid var(--selena-line);
 	border-radius: 1rem;
-	background: rgb(255 253 248 / 92%);
+	background: var(--selena-surface);
 	padding: clamp(1.35rem, 3vw, 2rem);
-	box-shadow: 0 16px 38px -32px rgb(24 22 20 / 42%);
+	box-shadow: 0 26px 50px -38px rgb(24 22 20 / 34%);
+}
+
+/*
+ * One dark card per page, at the top, carrying the same copper ring as the
+ * public site. It gives the page an anchor to read from, and the sections
+ * below it read as paper against it rather than as one continuous wash.
+ */
+.selena-section--anchor {
+	position: relative;
+	overflow: hidden;
+	border-color: var(--selena-charcoal);
+	background: var(--selena-charcoal);
+	color: #faf4ec;
+	box-shadow: 0 30px 60px -34px rgb(24 22 20 / 62%);
+}
+
+.selena-section--anchor::after {
+	position: absolute;
+	top: -5rem;
+	right: -4rem;
+	width: 16rem;
+	height: 16rem;
+	border: 1px solid rgb(185 130 91 / 34%);
+	border-radius: 999px;
+	content: "";
+}
+
+.selena-section--anchor .selena-anchor-lede {
+	color: #c9bcae;
+}
+
+.selena-section--anchor .selena-anchor-meta {
+	color: #d79f74;
+}
+
+.selena-section--anchor .selena-status-chip {
+	color: #e7d9c9;
+}
+
+/*
+ * The signal row is read at a glance, so the label is set small and spaced and
+ * the value carries the weight, the way a printed figure would.
+ */
+.selena-signal {
+	border-top: 2px solid rgb(185 130 91 / 60%);
+	padding-top: 0.9rem;
+	padding-bottom: 1rem;
+}
+
+.selena-signal-label {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+	color: #c3b5a6;
+}
+
+.selena-signal-value {
+	margin-top: 0.55rem;
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.4rem;
+	font-weight: 600;
+	line-height: 1.15;
+	color: #faf4ec;
+}
+
+.selena-signal-detail {
+	margin-top: 0.4rem;
+	font-size: 0.75rem;
+	line-height: 1.25rem;
+	color: #c9bcae;
 }
 
 .selena-success-label {
