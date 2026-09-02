@@ -58,13 +58,11 @@ export async function expectedJournalRows(migrationsFolder) {
 			const canonicalEntry = APPLIED_MIGRATION_HASH_ALIASES.get(directKey)
 				? { hash: sourceHash, acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(directKey) }
 				: [...APPLIED_MIGRATION_HASH_ALIASES.entries()].find(
-					([key, aliases]) => key.startsWith(`${createdAt}:`) && aliases.includes(sourceHash),
-				  );
-			const hash = canonicalEntry
-				? canonicalEntry.hash ?? canonicalEntry[0].slice(createdAt.length + 1)
-				: sourceHash;
+						([key, aliases]) => key.startsWith(`${createdAt}:`) && aliases.includes(sourceHash),
+					);
+			const hash = canonicalEntry ? (canonicalEntry.hash ?? canonicalEntry[0].slice(createdAt.length + 1)) : sourceHash;
 			const acceptedAppliedHashes = canonicalEntry
-				? canonicalEntry.acceptedAppliedHashes ?? canonicalEntry[1]
+				? (canonicalEntry.acceptedAppliedHashes ?? canonicalEntry[1])
 				: Object.freeze([]);
 			return {
 				createdAt,
