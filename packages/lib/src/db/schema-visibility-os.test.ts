@@ -289,6 +289,10 @@ describe("Provider dataset snapshot journal", () => {
 			new URL("./migrations/0052_provider_dataset_snapshot_journal.sql", import.meta.url),
 			"utf8",
 		);
+		const reconciliation = readFileSync(
+			new URL("./migrations/0055_provider_snapshot_resume_reconciliation.sql", import.meta.url),
+			"utf8",
+		);
 		expect(migration).toContain('ALTER TABLE "sv_provider_dataset_snapshot_events" FORCE ROW LEVEL SECURITY');
 		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_dataset_snapshot_events"');
 		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_INITIAL_PHASE_INVALID");
@@ -298,6 +302,8 @@ describe("Provider dataset snapshot journal", () => {
 		expect(migration).toContain("RETURN NULL;");
 		expect(migration).not.toContain("raw_payload");
 		expect(migration).not.toContain("GRANT ");
+		expect(reconciliation).toContain("CREATE OR REPLACE FUNCTION");
+		expect(reconciliation).toContain("NOT IN ('TRIGGERED', 'RESUMED')");
 	});
 });
 
@@ -1359,11 +1365,11 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through local attempt-count hardening as one ordered numbered migration chain", () => {
+	it("registers M2 through snapshot resume reconciliation as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-17)).toEqual([
+		expect(journal.entries.slice(-18)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1451,6 +1457,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940016000,
 				tag: "0054_journal_daily_claim_execution_lease",
+				breakpoints: true,
+			},
+			{
+				idx: 55,
+				version: "7",
+				when: 1787940017000,
+				tag: "0055_provider_snapshot_resume_reconciliation",
 				breakpoints: true,
 			},
 		]);

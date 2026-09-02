@@ -23,16 +23,28 @@ const MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '5s'";
 const MIGRATION_LOCK_SQL = "select pg_advisory_lock(1397050446, 1095587150)";
 const MIGRATION_UNLOCK_SQL = "select pg_advisory_unlock(1397050446, 1095587150) as unlocked";
 
-// Staging applied the temporary 0045 variant that introduced the legacy lock
-// ordinal before the follow-up 0053 migration was added. Drizzle keeps the
-// applied file hash immutable, so accept that one reviewed historical hash at
-// that one timestamp while requiring the canonical source hash everywhere
-// else. 0053 is idempotent across both shapes and remains the only place new
-// installations receive the ordinal.
+// Staging was initially migrated from reviewed local snapshots before the
+// service was connected to GitHub. Drizzle keeps applied file hashes immutable,
+// so accept only the exact historical hashes at their exact timestamps. The
+// forward migrations named below reconcile behavior that differs from release.
 const APPLIED_MIGRATION_HASH_ALIASES = new Map([
 	[
 		"1787940007000:321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec",
 		Object.freeze(["3b3915803095bf23f8e8b2e70134bfd71a7774d2793bf40f2e0a0bd03b1c051b"]),
+	],
+	// Commit 5ce45990 on feature/selena-visibility-v1-2-1 added an evidence
+	// acceptance superset. It contains the release 0051 contract plus historical,
+	// data-bearing objects that must not be dropped during journal recovery.
+	[
+		"1787940013000:d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+		Object.freeze(["c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768"]),
+	],
+	// Merge 9f387cad on feature/selena-visibility-v1-2-1 carried the earlier
+	// 0052 trigger that rejected an initial RESUMED event. 0055 replaces that
+	// function with the release behavior after this prefix check succeeds.
+	[
+		"1787940014000:8e8e663516d0ec16c7c70c9b0d42235b0782c3d3dd86b5d3ebea15e8924c0961",
+		Object.freeze(["3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca"]),
 	],
 ]);
 
