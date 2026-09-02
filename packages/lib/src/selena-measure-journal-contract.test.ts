@@ -55,6 +55,7 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_CLAIMED"');
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_ABANDONED"');
 		expect(allocator).toContain("interval '45 minutes'");
+		expect(allocator).not.toContain("eq(schema.svJournalDailyClaims.updatedAt, unresolved.updatedAt)");
 		expect(allocator).toContain("recordedCostUsd");
 		expect(allocator).toContain("forced: FORCE");
 		expect(claimLifecycle).not.toContain("new Date()");
