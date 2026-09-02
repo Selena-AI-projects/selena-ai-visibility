@@ -533,6 +533,10 @@ describe("reconcileHistoricalGoogleAiModeCapture", () => {
 		});
 		const committedAfterFirstRun = state.committed.length;
 		const attemptedAfterFirstRun = state.attempted.length;
+		expect(state.committed.filter((item) => item.table === schema.svSourceSnapshots)).toHaveLength(1);
+		expect(state.committed.filter((item) => item.table === schema.svAuditEvents)).toHaveLength(1);
+		expect(state.committed.filter((item) => item.table === schema.svEvidenceIndex)).toHaveLength(0);
+		expect(state.committed.filter((item) => item.table === schema.svCostEvents)).toHaveLength(0);
 		await expect(reconcileHistoricalGoogleAiModeCapture(state.db, input)).resolves.toMatchObject({
 			status: "ALREADY_RECONCILED",
 			providerCalls: 0,
