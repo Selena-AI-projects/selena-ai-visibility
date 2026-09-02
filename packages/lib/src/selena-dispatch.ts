@@ -99,6 +99,7 @@ export function assertOrderDeliverable(orderStatus: string, hasApprovedQcRecord:
 export type DispatchablePermit = {
 	id: string;
 	dispatchKey: string;
+	status: string;
 	consumedAt: Date | null;
 	expiresAt: Date;
 };
@@ -109,5 +110,7 @@ export type DispatchablePermit = {
  * both, so selecting them here would only enqueue work that must fail.
  */
 export function selectEnqueueablePermits<T extends DispatchablePermit>(permits: readonly T[], now: Date): T[] {
-	return permits.filter((permit) => permit.consumedAt === null && permit.expiresAt.getTime() > now.getTime());
+	return permits.filter(
+		(permit) => permit.status === "issued" && permit.consumedAt === null && permit.expiresAt.getTime() > now.getTime(),
+	);
 }

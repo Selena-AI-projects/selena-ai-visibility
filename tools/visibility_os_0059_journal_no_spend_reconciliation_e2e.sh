@@ -991,8 +991,8 @@ BEGIN
 END;
 $truncate_immutability$;
 SQL
- 
- # SET ROLE changes current_user inside the owner's session. This second proof is
+
+# SET ROLE changes current_user inside the owner's session. This second proof is
 # a real password-authenticated selena_app login where current_user=session_user.
 "${psql[@]}" -c 'GRANT EXECUTE ON FUNCTION public.sv_owner_reconcile_journal_no_spend(uuid, uuid[], text, text, text[], timestamptz, timestamptz, timestamptz, timestamptz, text, text) TO selena_app;' >/dev/null
 if [[ "$("${runtime_psql[@]}" -At -F '|' -c 'SELECT current_user, session_user')" != 'selena_app|selena_app' ]]; then

@@ -6,6 +6,7 @@ const now = new Date("2026-02-01T12:00:00.000Z");
 
 const permit = (overrides: Partial<DispatchablePermit> & { id: string }): DispatchablePermit => ({
 	dispatchKey: `key-${overrides.id}`,
+	status: "issued",
 	consumedAt: null,
 	expiresAt: new Date(now.getTime() + 60_000),
 	...overrides,
@@ -39,18 +40,19 @@ describe("enqueueOrderRuns", () => {
 		]);
 	});
 
-	it("skips consumed and expired permits instead of queueing work the executor refuses", async () => {
+	it("skips consumed, expired and revoked permits instead of queueing work the executor refuses", async () => {
 		const send = vi.fn<SelenaMeasureSender>(async () => "job");
 		const result = await run(
 			[
 				permit({ id: "fresh" }),
 				permit({ id: "consumed", consumedAt: new Date(now.getTime() - 1000) }),
 				permit({ id: "expired", expiresAt: new Date(now.getTime() - 1) }),
+				permit({ id: "revoked", status: "revoked" }),
 			],
 			true,
 			send,
 		);
-		expect(result).toEqual({ enqueued: 1, skipped: 2, duplicates: 0, reason: null });
+		expect(result).toEqual({ enqueued: 1, skipped: 3, duplicates: 0, reason: null });
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(send.mock.calls[0]?.[0].permitId).toBe("fresh");
 	});

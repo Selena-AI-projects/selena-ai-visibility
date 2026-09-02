@@ -1063,6 +1063,10 @@ export function createSelenaRepositories(db: Db) {
 						if (journalClaim && !providerBoundary) throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
 						return { permit, run: existing, cycle, claimed: false, providerBoundary };
 					}
+					// Reconciliation revokes every unused permission before releasing a
+					// historical HOLD. consumedAt alone is not enough: a revoked permit is
+					// deliberately unspent, but must never become executable again.
+					if (permit.status !== "issued") throw new Error("SELENA_PERMIT_NOT_ISSUED");
 					await tx
 						.update(schema.svRunPermits)
 						.set({ consumedAt: now, status: "consumed" })

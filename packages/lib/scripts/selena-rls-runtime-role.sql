@@ -1,5 +1,5 @@
 -- Owner-run staging bootstrap for the non-owner application role. Migrations
--- through 0059 must be committed first so this script can grant only known runtime
+-- through 0060 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -193,6 +193,24 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0059';
 	END IF;
 
+	IF to_regprocedure('public.sv_reconcile_journal_hold(uuid,text,text,boolean,boolean)') IS NULL
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_attribute
+			WHERE attrelid = 'public.sv_journal_daily_claims'::regclass
+				AND attname IN ('reconciled_at', 'reconciliation_reason', 'reconciled_by')
+				AND NOT attisdropped
+			GROUP BY attrelid
+			HAVING count(*) = 3
+		)
+		OR pg_catalog.pg_get_functiondef('public.sv_guard_journal_daily_claim_mutation()'::regprocedure)
+			NOT LIKE '%JOURNAL_HOLD_RECONCILIATION_FUNCTION_REQUIRED%'
+		OR pg_catalog.pg_get_functiondef('public.sv_guard_journal_daily_claim_mutation()'::regprocedure)
+			NOT LIKE '%JOURNAL_DAILY_CLAIM_NO_SPEND_CERTIFICATE_REQUIRED%'
+	THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -250,6 +268,10 @@ REVOKE ALL ON FUNCTION
 	sv_reject_journal_no_spend_provider_snapshot_insert(),
 	sv_reject_journal_no_spend_execution_truncate()
 FROM selena_app;
+
+-- 0060's ambiguous-spend reconciliation is also owner-only. The application
+-- role can observe allowlisted claim metadata but cannot invoke the owner write.
+REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app;
 
 -- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
 -- runtime allowlist: schema state is read-only, queue data is mutable, and only

@@ -373,6 +373,11 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0059");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060");
+		expect(roleBootstrap).toContain(
+			"REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app",
+		);
 		expect(roleBootstrap).toContain("GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app");
 		expect(roleBootstrap).toContain("GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text)");
 		expect(roleBootstrap).not.toMatch(/GRANT[^;]*UPDATE[^;]*sv_journal_provider_boundaries/);
@@ -1502,6 +1507,47 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_journal_provider_boundaries"');
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_journal_provider_boundaries"');
 	});
+
+	it("quarantines a reviewed journal HOLD only through an owner-scoped reconciliation", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0060_journal_hold_owner_reconciliation.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+		const claim = getTableConfig(schema.svJournalDailyClaims);
+
+		expect(claim.columns.find((column) => column.name === "reconciled_at")).toBeDefined();
+		expect(claim.columns.find((column) => column.name === "reconciliation_reason")).toBeDefined();
+		expect(claim.columns.find((column) => column.name === "reconciled_by")).toBeDefined();
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_OWNER_REQUIRED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_REQUIRES_MIGRATION_0059");
+		expect(migration).toContain("JOURNAL_DAILY_CLAIM_NO_SPEND_CERTIFICATE_REQUIRED");
+		expect(migration).toContain('FROM "public"."sv_journal_no_spend_reconciliations" AS reconciliation');
+		expect(migration).toContain("session_user <> table_owner");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_RUNTIME_NOT_QUIESCED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_ACTIVE_JOB");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_LEASE_ACTIVE");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_AMBIGUOUS_SPEND_ACK_REQUIRED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_REPLAY_IDENTITY_MISMATCH");
+		expect(migration).toContain("+ legacy_unfenced_run_count");
+		expect(migration).toContain("+ unmatched_cost_event_count");
+		expect(migration).toContain("'legacyUnfencedRunCount', legacy_unfenced_run_count");
+		expect(migration).toContain("'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count");
+		expect(migration).toContain("'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY'");
+		expect(migration).toContain("'costEventCount', cost_event_count");
+		expect(migration).toContain("'unmatchedCostEventCount', unmatched_cost_event_count");
+		expect(migration).toContain("'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'");
+		expect(migration).toContain("SET \"status\" = 'revoked'");
+		expect(migration).toContain("'UNKNOWN_WITHIN_UPPER_BOUND'");
+		expect(migration).toContain('"resolved_at"');
+		expect(migration).toContain("'recurring', false");
+		expect(migration).toContain('REVOKE ALL ON FUNCTION "sv_reconcile_journal_hold"');
+		expect(migration).not.toContain("GRANT ");
+		expect(migration).not.toContain('INSERT INTO "public"."sv_cost_events"');
+		expect(journal).toContain('"tag": "0059_journal_no_spend_reconciliation"');
+		expect(journal).toContain('"tag": "0060_journal_hold_owner_reconciliation"');
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -1671,7 +1717,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-21)).toEqual([
+		expect(journal.entries.slice(-23)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1787,6 +1833,20 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940020000,
 				tag: "0058_journal_provider_boundary_recovery",
+				breakpoints: true,
+			},
+			{
+				idx: 59,
+				version: "7",
+				when: 1787940021000,
+				tag: "0059_journal_no_spend_reconciliation",
+				breakpoints: true,
+			},
+			{
+				idx: 60,
+				version: "7",
+				when: 1787940022000,
+				tag: "0060_journal_hold_owner_reconciliation",
 				breakpoints: true,
 			},
 		]);

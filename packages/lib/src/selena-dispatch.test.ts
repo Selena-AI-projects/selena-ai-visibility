@@ -100,6 +100,7 @@ describe("selectEnqueueablePermits", () => {
 	const now = new Date("2026-02-01T12:00:00.000Z");
 	const permit = (overrides: Partial<DispatchablePermit> & { id: string }): DispatchablePermit => ({
 		dispatchKey: `key-${overrides.id}`,
+		status: "issued",
 		consumedAt: null,
 		expiresAt: new Date(now.getTime() + 60_000),
 		...overrides,
@@ -109,7 +110,8 @@ describe("selectEnqueueablePermits", () => {
 		const fresh = permit({ id: "fresh" });
 		const consumed = permit({ id: "consumed", consumedAt: new Date(now.getTime() - 60_000) });
 		const expired = permit({ id: "expired", expiresAt: new Date(now.getTime() - 1) });
-		const selected = selectEnqueueablePermits([fresh, consumed, expired], now);
+		const revoked = permit({ id: "revoked", status: "revoked" });
+		const selected = selectEnqueueablePermits([fresh, consumed, expired, revoked], now);
 		expect(selected.map((entry) => entry.id)).toEqual(["fresh"]);
 	});
 

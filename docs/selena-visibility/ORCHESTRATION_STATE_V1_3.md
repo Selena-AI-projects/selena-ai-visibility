@@ -1,5 +1,58 @@
 # Selena AI Visibility v1.3 — orchestration state
 
+## Authoritative current state — 2026-09-03
+
+- State: `GO_SOURCE / BACKUP_RESTORE_PASS / HOLD_EXACT_FCB75F54_STAGING_EXECUTION / NO_GO_PRODUCTION`.
+- Exact executable candidate:
+  `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`, integrating release
+  `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
+- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+  is open, draft, mergeable and clean. Exact-head Build
+  [33680828377](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
+  E2E/Scheduling
+  [33680828378](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
+  License [33680828409](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
+  Smoke [33680828491](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
+  and CLA [33680828405](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405)
+  passed.
+- The first E2E attempt timed out in hosted `Build images` before tests at the
+  workflow execution ceiling. The single bounded rerun passed E2E, Playwright,
+  Bruno API and worker lifecycle in `11m16s`; Scheduling remained green in
+  `3m53s`. No further rerun was made.
+- Upstream `0059` preserves an owner-certified `HOLD → NO_SPEND` only for proved
+  zero spend. `0060` separately quarantines acknowledged ambiguous HOLDs and
+  treats valid pre-`0058` runs without boundaries as legacy unfenced runs.
+  `selena_app` cannot call or spoof either reconciliation. No synthetic
+  boundary, evidence, acceptance or cost row is created.
+- Exact live-equivalent disposable proof models 75 permits, 71 issued, four
+  consumed/running legacy runs and zero boundaries. Reconciliation requires
+  owner acknowledgement, reports `providerCalls=NULL` with upper bound `4`,
+  revokes 71 permits, settles four runs, and replays without duplicates. A
+  linked cost does not double count; a truly unmatched cost adds one.
+- Local lint, full tests, build, shell/diff checks and the
+  isolated real-PostgreSQL `0059` and `0060` rehearsals passed. Independent
+  Database/Evidence audit found no remaining code P0/P1. No frontend file
+  changed, so Impeccable was not rerun.
+- Fresh backup `3585126c-a35c-452d-8540-d83b8a0e1d94` and isolated restore
+  service `88dbe261-c7f6-4733-83cf-15e579f6990e` passed. Source/restore schema
+  and bounded counts matched exactly at `59 / 0058`.
+- Shared staging remains on hosted source `b4e678b8` and migration `0058` with
+  providers, recurring jobs and billing off. No DDL, owner reconciliation,
+  deployment or paid call occurred after the restore proof.
+- Owner authorization exists for one AVLI staging measurement cycle up to USD
+  10, zero retries and no recurrence. Execution remains bounded by the stricter
+  frozen/source USD 0.50 cap (public list-price estimate USD 0.1125 for 75
+  records).
+
+Owner has acknowledged up to four possible historical provider calls under the
+old USD 0.50 lock and authorized owner reconciliation. Because the executable
+changed to close the live pre-`0058` topology, the next owner gate is exact:
+approve staging-only `0059–0060`, deploy `fcb75f54` with all execution flags
+off, run rollback-only proof, and then execute the already authorized owner
+reconciliation. Only after those receipts pass may a paid path be selected.
+PR merge, production, Social/Travel, billing and recurring jobs remain
+prohibited.
+
 ## Authoritative current state — 2026-09-02
 
 - State: `STAGING_PRELAUNCH_PASS / OWNER_DB_BINDING_HOLD / PRODUCTION_NO_GO`.

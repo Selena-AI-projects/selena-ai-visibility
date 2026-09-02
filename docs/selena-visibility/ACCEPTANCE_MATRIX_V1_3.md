@@ -1,5 +1,65 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
+## Authoritative AVLI measurement overlay — 2026-09-03
+
+- Exact executable candidate: `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`.
+- Branch: `fix/avli-journal-hold-reconciliation`; exact integrated release
+  base: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
+- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+  is `OPEN/DRAFT/MERGEABLE/CLEAN`. Exact-head checks passed:
+  [Build 33680828377](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
+  [E2E and Scheduling 33680828378](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
+  [License 33680828409](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
+  [Smoke 33680828491](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
+  and [CLA 33680828405](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405).
+- The first E2E attempt timed out in hosted `Build images` before tests at the
+  workflow execution ceiling. Exactly one bounded rerun was performed: E2E,
+  Playwright, Bruno API and worker lifecycle passed in `11m16s`; Scheduling
+  remained green in `3m53s`. No additional rerun was made.
+- Ordered migrations `0059–0060` are `PASS_SOURCE_AND_DISPOSABLE`. Upstream
+  `0059` remains the immutable certificate-backed path for proved zero spend;
+  `0060` now distinguishes boundary-backed execution from valid pre-`0058`
+  consumed/run pairs with no historical boundary. It never backfills a
+  synthetic boundary. Ordinary `selena_app` receives no raw snapshot,
+  provider-reference or owner reconciliation privilege; direct execute is
+  revoked in both migration and runtime bootstrap.
+- Disposable PostgreSQL receipts:
+  `JOURNAL_NO_SPEND_0059_DISPOSABLE_PASS provider_code_invoked=false external_network_api_calls_made=0 cleanup=verified` and
+  `JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved legacyPermits=75 legacyIssuedRevoked=71 legacyConsumed=4 boundaryUpperBound=1 legacyUnfencedUpperBound=4 unmatchedNullCostUpperBound=+1 legacyLinkedCost=not-double-counted legacyInvariantMismatch=rejected legacyReceipt=UNKNOWN_WITHIN_UPPER_BOUND legacyDryRun=rolled-back legacyReplay=idempotent legacyAudit=exact providerInvocationsDuringTest=0`.
+  Both disposable environments were removed. An independent read-only
+  Database/Evidence review found no remaining P0/P1.
+- Local gates on the executable candidate passed: lint exit `0` with the
+  registered `129 warnings / 12 infos`, tests `16/16` (`lib 1141/1141`, web
+  `448 passed / 4 skipped`), build `16/16`, shell syntax and diff checks. No
+  frontend file changed, so Impeccable was not rerun. Local Node is 22.23.0;
+  CI used required Node 24.
+- Fresh staging backup `3585126c-a35c-452d-8540-d83b8a0e1d94` completed with
+  `usedMB=120`, `referencedMB=426`, no expiry. Isolated PITR restore service
+  `88dbe261-c7f6-4733-83cf-15e579f6990e` reached `database system is ready`.
+  Source and restored read-only receipts matched exactly at migration frontier
+  `59 / 1787940020000` and counts
+  `claims/runs/cost/snapshots/audit/evidence/acceptance/canaries = 4/5258/4560/1/10647/0/0/2`.
+- Shared staging is intentionally unchanged: exact hosted implementation is
+  still `b4e678b8`, database frontier is `59 entries / 0058`, and provider
+  execution, recurring jobs and billing remain disabled.
+- The one live stale HOLD has exact topology `75 permits = 71 issued + 4
+  consumed`, four unfinished runs, zero provider-boundary rows, zero cost rows
+  and zero downstream evidence rows. The four executions predate `0058` and
+  are therefore recorded as `providerCalls=NULL /
+  UNKNOWN_WITHIN_UPPER_BOUND`, upper bound `4`, never as `PRE_TRANSPORT`.
+- Owner authorized one AVLI staging measurement cycle with an aggregate ceiling
+  of USD 10, zero retries and `recurring=false`. The executable path must keep
+  the stricter frozen/source limit: effective maximum USD 0.50; current public
+  list-price estimate for 75 records is USD 0.1125. This is authorization, not
+  evidence that a call has occurred.
+- Owner acknowledged up to four possible historical provider calls under the
+  old USD 0.50 lock and authorized owner reconciliation. Because executable
+  source changed after that approval, applying `0059–0060` and deploying exact
+  `fcb75f54` remain a new exact-SHA owner gate. No provider call, DDL,
+  reconciliation write or runtime deploy occurred in this overlay.
+
+Current decision: `GO_SOURCE / BACKUP_RESTORE_PASS / HOLD_EXACT_FCB75F54_STAGING_EXECUTION / NO_GO_PRODUCTION`.
+
 ## Authoritative source overlay — 2026-09-02
 
 This is the only current acceptance overlay. Hosted receipts in this section
