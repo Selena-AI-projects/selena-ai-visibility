@@ -100,3 +100,17 @@ provider rows.
 This decision keeps the shared `BrightDataClient`, dataset registry and
 normalizers usable while preventing a successful technical canary from silently
 becoming a data-retention or product-activation decision.
+
+## Privacy-enforcement gate audit — 2026-09-02
+
+The disposable redaction fixture passed `23/23` targeted tests and the lib
+typecheck passed. The allowlist removes unknown fields, URLs, personal text,
+transcripts, comments and media assets from the approved projection.
+
+The gate is nevertheless **`HOLD_FOR_PILOT`**, not `PASS`: the projection is
+currently exercised by the manual canary and tests, but is not yet the enforced
+boundary of a durable provider-evidence persistence path or a customer API
+route. No durable YouTube projection was written, no public exposure was
+enabled, and no provider call was made during this audit. Pilot activation must
+first add and verify that tenant-scoped persistence/API boundary under a
+separate owner-approved change.
