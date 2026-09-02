@@ -247,7 +247,7 @@ async function inPool<T, R>(items: T[], size: number, worker: (item: T) => Promi
 type DailyClaimDecision =
 	| { kind: "CLAIMED"; id: string; attempt: number; utcDay: string; abandonedAttempt?: number }
 	| { kind: "ALREADY_COMPLETED"; attempt: number; utcDay: string }
-	| { kind: "HOLD"; attempt: number; status: string; utcDay: string };
+	| { kind: "HOLD"; id: string; attempt: number; status: string; utcDay: string };
 
 const CLAIM_LEASE_MINUTES = 45;
 
@@ -290,48 +290,58 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			.orderBy(desc(schema.svJournalDailyClaims.utcDay), desc(schema.svJournalDailyClaims.attempt))
 			.limit(1);
 		let abandonedAttempt: number | undefined;
-		if (unresolved && unresolved.status !== "HOLD" && unresolved.stale) {
-			const [abandoned] = await tx
-				.update(schema.svJournalDailyClaims)
-				.set({
-					status: "ABANDONED",
-					abandonedAt: sql`CURRENT_TIMESTAMP`,
-					updatedAt: sql`CURRENT_TIMESTAMP`,
-				})
-				.where(
-					and(
-						eq(schema.svJournalDailyClaims.id, unresolved.id),
-						eq(schema.svJournalDailyClaims.organizationId, tenantId),
-						eq(schema.svJournalDailyClaims.status, unresolved.status),
-						// The lease is compared in the database rather than against the timestamp
-						// read into this process: the column keeps microseconds and a JavaScript
-						// Date keeps milliseconds, so an equality on the value read back can never
-						// match a row whose timestamp came from CURRENT_TIMESTAMP. Status and the
-						// interval are the compare-and-swap — a holder that is still alive has
-						// either moved the row on or refreshed it with a heartbeat.
-						sql`${schema.svJournalDailyClaims.updatedAt} <= CURRENT_TIMESTAMP - interval '45 minutes'`,
-					),
-				)
-				.returning({ id: schema.svJournalDailyClaims.id });
+		if (unresolved?.stale) {
+			const [spendEvidence] = unresolved.configurationLockId
+				? await tx
+						.select({
+							recordedRuns: sql<number>`count(${schema.svRuns.id})::int`,
+							recordedCostUsd: sql<string>`coalesce(sum(${schema.svRuns.costUsd}), 0)::text`,
+						})
+						.from(schema.svCycles)
+						.leftJoin(
+							schema.svRuns,
+							and(eq(schema.svRuns.cycleId, schema.svCycles.id), eq(schema.svRuns.organizationId, tenantId)),
+						)
+						.where(
+							and(
+								eq(schema.svCycles.lockId, unresolved.configurationLockId),
+								eq(schema.svCycles.organizationId, tenantId),
+							),
+						)
+				: [];
+			const recordedRuns = spendEvidence?.recordedRuns ?? 0;
+			// A hold is the fail-closed state: it exists so that a person reads the
+			// spend before the same question set is asked again. A hold whose lock
+			// recorded no run has no spend to read, and leaving it would retire the
+			// project for good, because nothing else may move that row. The database
+			// carries the same condition, so this is not the only thing between a
+			// hold and a repeat.
+			const releasable = unresolved.status !== "HOLD" || recordedRuns === 0;
+			const [abandoned] = releasable
+				? await tx
+						.update(schema.svJournalDailyClaims)
+						.set({
+							status: "ABANDONED",
+							abandonedAt: sql`CURRENT_TIMESTAMP`,
+							updatedAt: sql`CURRENT_TIMESTAMP`,
+						})
+						.where(
+							and(
+								eq(schema.svJournalDailyClaims.id, unresolved.id),
+								eq(schema.svJournalDailyClaims.organizationId, tenantId),
+								eq(schema.svJournalDailyClaims.status, unresolved.status),
+								// The lease is compared in the database rather than against the timestamp
+								// read into this process: the column keeps microseconds and a JavaScript
+								// Date keeps milliseconds, so an equality on the value read back can never
+								// match a row whose timestamp came from CURRENT_TIMESTAMP. Status and the
+								// interval are the compare-and-swap — a holder that is still alive has
+								// either moved the row on or refreshed it with a heartbeat.
+								sql`${schema.svJournalDailyClaims.updatedAt} <= CURRENT_TIMESTAMP - interval '45 minutes'`,
+							),
+						)
+						.returning({ id: schema.svJournalDailyClaims.id })
+				: [];
 			if (abandoned) {
-				const [spendEvidence] = unresolved.configurationLockId
-					? await tx
-							.select({
-								recordedRuns: sql<number>`count(${schema.svRuns.id})::int`,
-								recordedCostUsd: sql<string>`coalesce(sum(${schema.svRuns.costUsd}), 0)::text`,
-							})
-							.from(schema.svCycles)
-							.leftJoin(
-								schema.svRuns,
-								and(eq(schema.svRuns.cycleId, schema.svCycles.id), eq(schema.svRuns.organizationId, tenantId)),
-							)
-							.where(
-								and(
-									eq(schema.svCycles.lockId, unresolved.configurationLockId),
-									eq(schema.svCycles.organizationId, tenantId),
-								),
-							)
-					: [];
 				await tx.insert(schema.svAuditEvents).values({
 					organizationId: tenantId,
 					actorId: ctx.actorId,
@@ -344,7 +354,7 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 						leaseMinutes: CLAIM_LEASE_MINUTES,
 						previousUpdatedAt: unresolved.updatedAt.toISOString(),
 						configurationLockId: unresolved.configurationLockId,
-						recordedRuns: spendEvidence?.recordedRuns ?? 0,
+						recordedRuns,
 						recordedCostUsd: spendEvidence?.recordedCostUsd ?? "0",
 						providerSpendAmbiguous: unresolved.status === "EXECUTING",
 					},
@@ -355,6 +365,7 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 		if (unresolved && abandonedAttempt === undefined) {
 			return {
 				kind: "HOLD",
+				id: unresolved.id,
 				attempt: unresolved.attempt,
 				status: unresolved.status,
 				utcDay: unresolved.utcDay,
@@ -527,7 +538,7 @@ async function measure(slug: string): Promise<void> {
 	}
 	if (claim.kind === "HOLD") {
 		throw new Error(
-			`SELENA_JOURNAL_DAILY_CLAIM_HOLD: ${claim.utcDay} attempt ${claim.attempt} is ${claim.status}; inspect spend evidence before any repeat`,
+			`SELENA_JOURNAL_DAILY_CLAIM_HOLD: ${claim.utcDay} attempt ${claim.attempt} (${claim.id}) is ${claim.status}; inspect spend evidence before any repeat`,
 		);
 	}
 	if (claim.abandonedAttempt !== undefined) {
@@ -659,11 +670,27 @@ async function measure(slug: string): Promise<void> {
 			);
 		} catch (settlementError) {
 			console.error(
-				`${slug}: daily claim remains fail-closed after settlement error: ${settlementError instanceof Error ? settlementError.message : String(settlementError)}`,
+				`${slug}: daily claim remains fail-closed after settlement error: ${describeError(settlementError)}`,
 			);
 		}
 		throw error;
 	}
+}
+
+/**
+ * A database rejection arrives wrapped: the outer message names the statement
+ * and the constraint or trigger that refused it is the cause. Reporting only
+ * the outer message leaves an operator reading a failed query with no way to
+ * learn why it failed.
+ */
+function describeError(error: unknown): string {
+	const messages: string[] = [];
+	let current: unknown = error;
+	while (current instanceof Error && !messages.includes(current.message)) {
+		messages.push(current.message);
+		current = current.cause;
+	}
+	return messages.length > 0 ? messages.join(" ← ") : String(error);
 }
 
 async function main(): Promise<void> {
@@ -672,7 +699,7 @@ async function main(): Promise<void> {
 		try {
 			await measure(slug);
 		} catch (error) {
-			console.error(`${slug}: ${error instanceof Error ? error.message : String(error)}`);
+			console.error(`${slug}: ${describeError(error)}`);
 			process.exitCode = 1;
 		}
 	}
@@ -681,7 +708,7 @@ async function main(): Promise<void> {
 main().then(
 	() => process.exit(process.exitCode ?? 0),
 	(error) => {
-		console.error(error instanceof Error ? error.message : String(error));
+		console.error(describeError(error));
 		process.exit(1);
 	},
 );

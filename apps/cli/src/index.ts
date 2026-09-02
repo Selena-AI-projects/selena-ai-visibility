@@ -1415,7 +1415,7 @@ function buildDbMigrateService(options: {
 	lines.push(
 		"  environment:",
 		"    - DATABASE_URL=postgres://postgres:postgres@postgres:5432/elmo",
-		"    - SELENA_MIGRATION_MAX_INDEX=55",
+		"    - SELENA_MIGRATION_MAX_INDEX=56",
 		"  depends_on:",
 		"    postgres:",
 		"      condition: service_healthy",
