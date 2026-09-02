@@ -354,7 +354,7 @@ describe("Visibility OS provider evidence provenance", () => {
 		);
 	});
 
-	it("keeps the post-0051 runtime role bootstrap idempotent and explicitly allowlisted", () => {
+	it("keeps the post-0056 runtime role bootstrap idempotent and explicitly allowlisted", () => {
 		const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
 		const proof = readFileSync(
 			new URL("../../../../tools/visibility_os_0051_rls_schema_proof.sql", import.meta.url),
@@ -365,9 +365,18 @@ describe("Visibility OS provider evidence provenance", () => {
 			"utf8",
 		);
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0056");
+		expect(roleBootstrap).toContain("sv_provider_dataset_capabilities_owner_insert_guard");
+		expect(roleBootstrap).toContain("sv_source_snapshots_runtime_promotion_guard");
+		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_owner_guard");
+		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_audit_pair_guard");
+		expect(roleBootstrap).toContain("sv_audit_events_formal_evidence_owner_guard");
+		expect(roleBootstrap).toContain("sv_audit_events_formal_evidence_receipt_pair_guard");
 		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
 		expect(roleBootstrap).toContain("\nCOMMIT;");
-		expect(roleBootstrap).toContain("WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
+		expect(roleBootstrap).toContain(
+			"WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'selena_app')",
+		);
 		expect(roleBootstrap).toContain("\\gexec");
 		expect(roleBootstrap).toContain("NOINHERIT NOBYPASSRLS");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37");
@@ -417,6 +426,20 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).toContain("RLS_SCHEMA_PROOF_CONTENT_HASH_VISIBLE");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_ACTOR_VISIBLE");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("EVIDENCE_ACCEPTANCE_OWNER_SCOPE_REQUIRED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTED_CYCLE_MUTATION_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTED_DATASET_MUTATION_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_NULL_SCHEMA_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_ONLY_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ISOLATED_CANARY_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_BLOCKED_SUPERSESSION_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_AUDIT_WITHOUT_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_IDENTITY_FORGERY_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_UPDATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_DELETE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_TRUNCATE_ALLOWED");
 		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE");
 		expect(proof).toContain("has_schema_privilege('selena_app', 'pgboss', 'CREATE')");
 		expect(proof).toContain("'pgboss.job', 'pgboss.job_common', 'pgboss.job_dependency'");
@@ -436,6 +459,8 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(proof).not.toContain("selena_rls_schema_probe");
 		expect(proofE2e).toContain('< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql"');
 		expect(proofE2e).toContain("PGBOSS_SCHEMA_OWNER_PROVISION_FAILED");
+		expect(proofE2e).toContain("RLS_SCHEMA_PROOF_NON_BYPASS_MIGRATION_ALLOWED");
+		expect(proofE2e).toContain("EVIDENCE_ACCEPTANCE_MIGRATION_OWNER_BYPASS_REQUIRED");
 		expect(proofE2e).toContain('pnpm --dir "$repo_root/apps/worker" exec tsx');
 		expect(proofE2e).toContain("DROP OWNED BY selena_app; DROP ROLE selena_app;");
 		expect(proofE2e).toContain("trap cleanup_on_exit EXIT");
@@ -1577,11 +1602,11 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through snapshot resume reconciliation as one ordered numbered migration chain", () => {
+	it("registers M2 through formal evidence hardening as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-18)).toEqual([
+		expect(journal.entries.slice(-19)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1676,6 +1701,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940017000,
 				tag: "0055_provider_snapshot_resume_reconciliation",
+				breakpoints: true,
+			},
+			{
+				idx: 56,
+				version: "7",
+				when: 1787940018000,
+				tag: "0056_formal_evidence_acceptance_hardening",
 				breakpoints: true,
 			},
 		]);

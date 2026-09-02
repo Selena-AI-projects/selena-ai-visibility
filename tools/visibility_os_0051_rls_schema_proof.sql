@@ -136,12 +136,29 @@ BEGIN
 		WHERE tgrelid = 'public.sv_evidence_acceptance_receipts'::regclass
 			AND tgname IN (
 				'sv_evidence_acceptance_receipts_scope_guard',
+				'sv_evidence_acceptance_receipts_owner_guard',
+				'sv_evidence_acceptance_receipts_audit_pair_guard',
 				'sv_evidence_acceptance_receipts_immutable_guard',
 				'sv_evidence_acceptance_receipts_truncate_guard'
 			)
 			AND tgenabled = 'O'
-	) <> 3 THEN
+		) <> 5 THEN
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_CONTRACT_MISSING';
+	END IF;
+
+	IF (
+		SELECT count(*)
+		FROM pg_trigger
+		WHERE tgrelid = 'public.sv_audit_events'::regclass
+			AND tgname IN (
+				'sv_audit_events_formal_evidence_owner_guard',
+				'sv_audit_events_formal_evidence_receipt_pair_guard',
+				'sv_audit_events_formal_evidence_immutable_guard',
+				'sv_audit_events_formal_evidence_truncate_guard'
+			)
+			AND tgenabled = 'O'
+	) <> 4 THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_FORMAL_AUDIT_CONTRACT_MISSING';
 	END IF;
 
 	SELECT reloptions INTO provenance_options
@@ -326,6 +343,11 @@ BEGIN
 		OR has_table_privilege('selena_app', 'public.sv_provider_canary_executions', 'UPDATE')
 		OR has_table_privilege('selena_app', 'public.sv_provider_canary_executions', 'DELETE')
 		OR has_table_privilege('selena_app', 'public.sv_provider_canary_executions', 'TRUNCATE')
+		OR NOT has_table_privilege('selena_app', 'public.sv_provider_dataset_capabilities', 'SELECT')
+		OR NOT has_table_privilege('selena_app', 'public.sv_provider_dataset_capabilities', 'INSERT')
+		OR has_table_privilege('selena_app', 'public.sv_provider_dataset_capabilities', 'UPDATE')
+		OR has_table_privilege('selena_app', 'public.sv_provider_dataset_capabilities', 'DELETE')
+		OR has_table_privilege('selena_app', 'public.sv_provider_dataset_capabilities', 'TRUNCATE')
 		OR NOT has_table_privilege('selena_app', 'public.sv_source_snapshots', 'INSERT')
 		OR has_table_privilege('selena_app', 'public.sv_source_snapshots', 'SELECT')
 		OR has_table_privilege('selena_app', 'public.sv_source_snapshots', 'UPDATE')
@@ -352,6 +374,7 @@ $proof_role_attributes$;
 GRANT selena_app TO CURRENT_USER WITH INHERIT FALSE, SET TRUE;
 GRANT UPDATE, DELETE, TRUNCATE ON sv_provider_canary_executions TO selena_app;
 GRANT INSERT, UPDATE, DELETE, TRUNCATE ON sv_evidence_acceptance_receipts TO selena_app;
+GRANT UPDATE, DELETE, TRUNCATE ON sv_audit_events TO selena_app;
 
 INSERT INTO organization (id, name, slug, created_at)
 VALUES
@@ -389,9 +412,9 @@ INSERT INTO sv_provider_dataset_capabilities (
 	'AI_ANSWER',
 	'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
 	'schema-discovery-input-v1',
-	NULL,
+	'google-ai-mode-output-v1',
 	'PUBLIC',
-	'CANARY_ONLY',
+	'PILOT_ONLY',
 	'RAW_PRIVATE_POLICY_PENDING',
 	'provider-dataset-v1.3',
 	1,
@@ -431,7 +454,7 @@ INSERT INTO sv_measurement_cycles (
 	'AI',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
-	'CREATED'
+		'COMPLETED'
 );
 INSERT INTO sv_measurement_datasets (
 	id, organization_id, cycle_id, dataset_key, version
@@ -456,10 +479,10 @@ INSERT INTO sv_source_snapshots (
 	(SELECT id FROM sv_provider_dataset_capabilities
 		WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 1),
 	'private-dataset-a',
-	'schema-proof',
+	'STAGING_ACCEPTANCE',
 	'private:raw-a',
 	'schema-discovery-input-v1',
-	NULL,
+	'google-ai-mode-output-v1',
 	'2026-09-01T00:00:00Z'
 );
 INSERT INTO sv_evidence_index (
@@ -481,7 +504,15 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-a',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 	'2026-09-01T00:05:00Z',
-	'private-proof-operator-a'
+	'database-role:selena_test'
+);
+INSERT INTO sv_audit_events (
+	organization_id, actor_id, event, subject_kind, subject_id, details
+) VALUES (
+	'rls-schema-proof-org-a', 'system:provider-evidence-acceptance',
+	'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED', 'evidence',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
+	'{"providerCalls":0,"privatePayloadRead":false}'::jsonb
 );
 
 SELECT set_config('app.organization_id', 'rls-schema-proof-org-b', true);
@@ -510,9 +541,9 @@ INSERT INTO sv_provider_dataset_capabilities (
 	'AI_ANSWER',
 	'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
 	'schema-discovery-input-v1',
-	NULL,
+	'google-ai-mode-output-v1',
 	'PUBLIC',
-	'CANARY_ONLY',
+	'PILOT_ONLY',
 	'RAW_PRIVATE_POLICY_PENDING',
 	'provider-dataset-v1.3',
 	1,
@@ -552,7 +583,7 @@ INSERT INTO sv_measurement_cycles (
 	'AI',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
-	'CREATED'
+		'COMPLETED'
 );
 INSERT INTO sv_measurement_datasets (
 	id, organization_id, cycle_id, dataset_key, version
@@ -577,10 +608,10 @@ INSERT INTO sv_source_snapshots (
 	(SELECT id FROM sv_provider_dataset_capabilities
 		WHERE organization_id = 'rls-schema-proof-org-b' AND source = 'GOOGLE_AI_MODE' AND version = 1),
 	'private-dataset-b',
-	'schema-proof',
+	'STAGING_ACCEPTANCE',
 	'private:raw-b',
 	'schema-discovery-input-v1',
-	NULL,
+	'google-ai-mode-output-v1',
 	'2026-09-01T00:00:00Z'
 );
 INSERT INTO sv_evidence_index (
@@ -602,8 +633,374 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-b',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
 	'2026-09-01T00:05:00Z',
-	'private-proof-operator-b'
+	'database-role:selena_test'
 );
+INSERT INTO sv_audit_events (
+	organization_id, actor_id, event, subject_kind, subject_id, details
+) VALUES (
+	'rls-schema-proof-org-b', 'system:provider-evidence-acceptance',
+	'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED', 'evidence',
+	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
+	'{"providerCalls":0,"privatePayloadRead":false}'::jsonb
+);
+
+-- Owner-scoped eligibility is independently enforced before the runtime role
+-- is assumed. A receipt cannot predate its immutable capture.
+SELECT set_config('app.organization_id', 'rls-schema-proof-org-a', true);
+SET CONSTRAINTS
+	sv_evidence_acceptance_receipts_audit_pair_guard,
+	sv_audit_events_formal_evidence_receipt_pair_guard
+IMMEDIATE;
+SET CONSTRAINTS
+	sv_evidence_acceptance_receipts_audit_pair_guard,
+	sv_audit_events_formal_evidence_receipt_pair_guard
+DEFERRED;
+DO $proof_owner_acceptance_eligibility$
+BEGIN
+	-- A raw schema-discovery capture cannot become formal evidence.
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', NULL, 'PUBLIC', 'CANARY_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
+		);
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'10000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE', 'private:raw-schema-discovery',
+			'1000000000000000000000000000000000000000000000000000000000000001',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
+			'private-schema-discovery', 'STAGING_ACCEPTANCE', 'private:raw-schema-discovery',
+			'schema-discovery-input-v1', NULL, '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_index (
+			id, organization_id, domain_id, cycle_id, observation_ref,
+			dataset_id, source_snapshot_id, captured_at
+		) VALUES (
+			'10000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-output-schema-null',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+			'10000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
+		VALUES (
+			'rls-schema-proof-org-a', '10000000-0000-4000-8000-000000000002',
+			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_NULL_SCHEMA_ACCEPTANCE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_SCHEMA_NOT_APPROVED' THEN RAISE; END IF;
+	END;
+
+	-- A schema-known capability must still be promoted beyond CANARY_ONLY.
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'CANARY_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
+		);
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'20000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE', 'private:canary-only',
+			'2000000000000000000000000000000000000000000000000000000000000002',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
+			'private-canary-only', 'STAGING_ACCEPTANCE', 'private:canary-only',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_index (
+			id, organization_id, domain_id, cycle_id, observation_ref,
+			dataset_id, source_snapshot_id, captured_at
+		) VALUES (
+			'20000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-canary-only',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+			'20000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
+		VALUES (
+			'rls-schema-proof-org-a', '20000000-0000-4000-8000-000000000002',
+			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_CANARY_ONLY_ACCEPTANCE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_CAPABILITY_NOT_ALLOWED' THEN RAISE; END IF;
+	END;
+
+	-- An isolated paid-canary capture is never the formal acceptance source.
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
+		);
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'30000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE', 'private:isolated-canary',
+			'3000000000000000000000000000000000000000000000000000000000000003',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
+			'private-isolated-canary', 'ISOLATED_CANARY', 'private:isolated-canary',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_index (
+			id, organization_id, domain_id, cycle_id, observation_ref,
+			dataset_id, source_snapshot_id, captured_at
+		) VALUES (
+			'30000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-isolated-canary',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+			'30000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
+		VALUES (
+			'rls-schema-proof-org-a', '30000000-0000-4000-8000-000000000002',
+			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ISOLATED_CANARY_ACCEPTANCE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_CANARY_FORBIDDEN' THEN RAISE; END IF;
+	END;
+
+	-- A later BLOCKED capability supersedes an otherwise eligible capture.
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
+		);
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'40000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE', 'private:superseded',
+			'4000000000000000000000000000000000000000000000000000000000000004',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
+			'private-superseded', 'STAGING_ACCEPTANCE', 'private:superseded',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_index (
+			id, organization_id, domain_id, cycle_id, observation_ref,
+			dataset_id, source_snapshot_id, captured_at
+		) VALUES (
+			'40000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-superseded',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+			'40000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'BLOCKED',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 3, '{}'::jsonb
+		);
+		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
+		VALUES (
+			'rls-schema-proof-org-a', '40000000-0000-4000-8000-000000000002',
+			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_BLOCKED_SUPERSESSION_ACCEPTANCE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_CAPABILITY_SUPERSEDED_BY_BLOCK' THEN RAISE; END IF;
+	END;
+END;
+$proof_owner_acceptance_eligibility$;
+
+-- Even the table owner cannot commit a receipt without the matching formal
+-- audit row in the same transaction.
+DO $proof_owner_acceptance_audit_pair$
+BEGIN
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id, provider, source, surface, domain, entity_type,
+			dataset_env_key, input_schema_version, output_schema_version,
+			access_class, capability_status, retention_class, contract_version,
+			version, contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a', 'BRIGHT_DATA', 'GOOGLE_AI_MODE', 'GOOGLE_AI_MODE',
+			'AI', 'AI_ANSWER', 'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
+		);
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'50000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE', 'private:missing-audit',
+			'5000000000000000000000000000000000000000000000000000000000000005',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
+			'private-missing-audit', 'STAGING_ACCEPTANCE', 'private:missing-audit',
+			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_index (
+			id, organization_id, domain_id, cycle_id, observation_ref,
+			dataset_id, source_snapshot_id, captured_at
+		) VALUES (
+			'50000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-missing-formal-audit',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+			'50000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
+		);
+		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
+		VALUES (
+			'rls-schema-proof-org-a', '50000000-0000-4000-8000-000000000002',
+			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+		);
+		SET CONSTRAINTS sv_evidence_acceptance_receipts_audit_pair_guard IMMEDIATE;
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_AUDIT_REQUIRED' THEN RAISE; END IF;
+	END;
+	SET CONSTRAINTS sv_evidence_acceptance_receipts_audit_pair_guard DEFERRED;
+
+	BEGIN
+		INSERT INTO sv_audit_events (
+			organization_id, actor_id, event, subject_kind, subject_id, details
+		) VALUES (
+			'rls-schema-proof-org-a', 'system:provider-evidence-acceptance',
+			'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED', 'evidence',
+			'60000000-0000-4000-8000-000000000001',
+			'{"providerCalls":0,"privatePayloadRead":false}'::jsonb
+		);
+		SET CONSTRAINTS sv_audit_events_formal_evidence_receipt_pair_guard IMMEDIATE;
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_AUDIT_WITHOUT_ACCEPTANCE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'FORMAL_EVIDENCE_AUDIT_RECEIPT_REQUIRED' THEN RAISE; END IF;
+	END;
+	SET CONSTRAINTS sv_audit_events_formal_evidence_receipt_pair_guard DEFERRED;
+END;
+$proof_owner_acceptance_audit_pair$;
+
+DO $proof_owner_acceptance_time$
+BEGIN
+	BEGIN
+		INSERT INTO sv_evidence_acceptance_receipts (
+			organization_id, evidence_id, accepted_at, accepted_by
+		) VALUES (
+			'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
+			'2026-09-01T00:06:00Z',
+			'forged-owner-identity'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_IDENTITY_FORGERY_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_IDENTITY_MISMATCH' THEN
+				RAISE;
+			END IF;
+	END;
+
+	BEGIN
+		INSERT INTO sv_evidence_acceptance_receipts (
+			organization_id, evidence_id, accepted_at, accepted_by
+		) VALUES (
+			'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
+			'2026-08-31T23:59:59Z',
+			'database-role:selena_test'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE' THEN
+				RAISE;
+			END IF;
+		END;
+
+	BEGIN
+		UPDATE sv_audit_events
+		SET details = details
+		WHERE event = 'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED'
+			AND subject_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_FORMAL_AUDIT_UPDATE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'FORMAL_EVIDENCE_AUDIT_IMMUTABLE' THEN
+				RAISE;
+			END IF;
+	END;
+
+	BEGIN
+		DELETE FROM sv_audit_events
+		WHERE event = 'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED'
+			AND subject_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_FORMAL_AUDIT_DELETE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'FORMAL_EVIDENCE_AUDIT_IMMUTABLE' THEN
+				RAISE;
+			END IF;
+	END;
+
+	BEGIN
+		TRUNCATE TABLE sv_audit_events;
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_FORMAL_AUDIT_TRUNCATE_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'FORMAL_EVIDENCE_AUDIT_IMMUTABLE' THEN
+				RAISE;
+			END IF;
+	END;
+END;
+$proof_owner_acceptance_time$;
 
 -- Empty tenant context must fail closed before the runtime role selects a tenant.
 SELECT set_config('app.organization_id', '', true);
@@ -760,13 +1157,37 @@ BEGIN
 		) VALUES (
 			'rls-schema-proof-org-a',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
-			'2026-08-31T23:59:59Z',
+			'2026-09-01T00:06:00Z',
 			'private-proof-operator-a'
 		);
-		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_ACCEPTANCE_ALLOWED';
 	EXCEPTION
 		WHEN raise_exception THEN
-			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE' THEN
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_OWNER_SCOPE_REQUIRED' THEN
+				RAISE;
+			END IF;
+	END;
+
+	BEGIN
+		UPDATE sv_measurement_cycles
+		SET status = status
+		WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTED_CYCLE_MUTATION_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'ACCEPTED_EVIDENCE_CYCLE_IMMUTABLE' THEN
+				RAISE;
+			END IF;
+	END;
+
+	BEGIN
+		UPDATE sv_measurement_datasets
+		SET immutable = immutable
+		WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTED_DATASET_MUTATION_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'ACCEPTED_EVIDENCE_DATASET_IMMUTABLE' THEN
 				RAISE;
 			END IF;
 	END;
@@ -873,7 +1294,7 @@ $proof_global_canary_once$;
 
 SELECT set_config('app.organization_id', 'rls-schema-proof-org-a', true);
 
--- A same-tenant append-only version is allowed for the unprivileged role.
+-- The runtime role can append only a non-promoted same-tenant canary contract.
 INSERT INTO sv_provider_dataset_capabilities (
 	organization_id,
 	provider,
@@ -907,6 +1328,108 @@ INSERT INTO sv_provider_dataset_capabilities (
 	2,
 	'{}'::jsonb
 );
+
+DO $proof_runtime_capability_promotion_denied$
+BEGIN
+	BEGIN
+		INSERT INTO sv_provider_dataset_capabilities (
+			organization_id,
+			provider,
+			source,
+			surface,
+			domain,
+			entity_type,
+			dataset_env_key,
+			input_schema_version,
+			output_schema_version,
+			access_class,
+			capability_status,
+			retention_class,
+			contract_version,
+			version,
+			contract_metadata
+		) VALUES (
+			'rls-schema-proof-org-a',
+			'BRIGHT_DATA',
+			'GOOGLE_AI_MODE',
+			'GOOGLE_AI_MODE',
+			'AI',
+			'AI_ANSWER',
+			'SELENA_BRIGHTDATA_DATASET_GOOGLE_AI',
+			'schema-discovery-input-v1',
+			'google-ai-mode-output-v2',
+			'PUBLIC',
+			'PILOT_ONLY',
+			'RAW_PRIVATE_POLICY_PENDING',
+			'provider-dataset-v1.3',
+			3,
+			'{}'::jsonb
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_CAPABILITY_PROMOTION_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'PROVIDER_DATASET_CAPABILITY_PROMOTION_OWNER_SCOPE_REQUIRED' THEN
+				RAISE;
+			END IF;
+	END;
+END;
+$proof_runtime_capability_promotion_denied$;
+
+DO $proof_runtime_snapshot_promotion_denied$
+BEGIN
+	BEGIN
+		INSERT INTO sv_source_snapshots (
+			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			capability_id, provider_dataset_ref, environment, raw_reference,
+			input_schema_version, output_schema_version, captured_at
+		) VALUES (
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa8',
+			'rls-schema-proof-org-a',
+			'GOOGLE_AI_MODE',
+			'private:runtime-promotion-denied',
+			'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+			'{}'::jsonb,
+			(SELECT id FROM sv_provider_dataset_capabilities
+				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 1),
+			'private-dataset-a',
+			'STAGING_ACCEPTANCE',
+			'private:runtime-promotion-denied',
+			'schema-discovery-input-v1',
+			'google-ai-mode-output-v1',
+			'2026-09-01T00:00:00Z'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_SNAPSHOT_PROMOTION_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'SOURCE_SNAPSHOT_SCHEMA_PROMOTION_OWNER_SCOPE_REQUIRED' THEN
+				RAISE;
+			END IF;
+	END;
+END;
+$proof_runtime_snapshot_promotion_denied$;
+
+DO $proof_runtime_formal_audit_denied$
+BEGIN
+	BEGIN
+		INSERT INTO sv_audit_events (
+			organization_id, actor_id, event, subject_kind, subject_id, details
+		) VALUES (
+			'rls-schema-proof-org-a',
+			'runtime:forbidden',
+			'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED',
+			'evidence',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
+			'{}'::jsonb
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_FORMAL_AUDIT_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'FORMAL_EVIDENCE_AUDIT_OWNER_SCOPE_REQUIRED' THEN
+				RAISE;
+			END IF;
+	END;
+END;
+$proof_runtime_formal_audit_denied$;
 
 DO $proof_cross_tenant_write$
 BEGIN
@@ -986,7 +1509,7 @@ $proof_private_provenance$;
 DO $proof_final_counts$
 BEGIN
 	IF (SELECT count(*) FROM sv_provider_dataset_capabilities) <> 2 THEN
-		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_SAME_TENANT_INSERT_NOT_VISIBLE';
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_SAFE_CANARY_CAPABILITY_NOT_VISIBLE';
 	END IF;
 END;
 $proof_final_counts$;

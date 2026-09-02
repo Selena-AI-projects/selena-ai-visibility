@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { googleAiModeDatasetAdapter } from "../adapters/google-dataset-adapters";
 import type {
 	PreparedProviderDatasetCanary,
@@ -20,6 +20,7 @@ import {
 	type OrganizationTransaction,
 	withOrganizationTransaction,
 } from "./organization-transaction";
+import { assertOwnerScopedConnection } from "./owner-scoped-connection";
 import {
 	svAuditEvents,
 	svEvidenceIndex,
@@ -92,15 +93,6 @@ type PersistGoogleAiModeCanaryCaptureInput = Readonly<{
 	capture: ProviderDatasetRawCapture;
 	receipt: GoogleAiModeCanaryReceipt;
 }>;
-
-async function assertOwnerScopedPrivateReconciliation(tx: OrganizationTransaction): Promise<void> {
-	const result = await tx.execute(
-		sql`select current_user as role, rolsuper, rolbypassrls from pg_roles where rolname = current_user`,
-	);
-	const row = (result as { rows?: Array<{ role?: unknown; rolsuper?: unknown; rolbypassrls?: unknown }> }).rows?.[0];
-	if (!row || row.role === "selena_app" || (row.rolsuper !== true && row.rolbypassrls !== true))
-		throw new Error("GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED");
-}
 
 function assertCompleteCanaryReceipt(receipt: GoogleAiModeCanaryReceipt, capture: ProviderDatasetRawCapture): void {
 	if (
@@ -479,7 +471,7 @@ export async function reconcileHistoricalGoogleAiModeCapture(
 
 	try {
 		const status = await withOrganizationTransaction(db, input.organizationId, async (tx) => {
-			await assertOwnerScopedPrivateReconciliation(tx);
+			await assertOwnerScopedConnection(tx, "GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED");
 			const [reservation] = await tx
 				.select()
 				.from(svProviderCanaryExecutions)

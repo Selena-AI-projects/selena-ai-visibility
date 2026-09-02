@@ -22,7 +22,7 @@ function databaseReturning(rows: { id: string }[]) {
 	const values = vi.fn(() => ({ onConflictDoNothing }));
 	const insert = vi.fn(() => ({ values }));
 	const execute = vi.fn(async () => ({
-		rows: [{ role: "selena_owner", rolsuper: true, rolbypassrls: true }],
+		rows: [{ role: "selena_owner", session_role: "selena_owner", owner_role: "selena_owner" }],
 	}));
 	const transaction = vi.fn(
 		async (work: (tx: { execute: typeof execute; insert: typeof insert }) => Promise<unknown>) =>
@@ -162,7 +162,7 @@ function persistenceDatabase(options: { reservationId?: string; latestCapability
 	const reservationId = options.reservationId ?? "11111111-1111-4111-8111-111111111111";
 	const inserted = new Map<unknown, unknown[]>();
 	const execute = vi.fn(async () => ({
-		rows: [{ role: "selena_owner", rolsuper: true, rolbypassrls: true }],
+		rows: [{ role: "selena_owner", session_role: "selena_owner", owner_role: "selena_owner" }],
 	}));
 	const select = vi.fn(() => ({
 		from: (table: unknown) => ({
@@ -315,7 +315,7 @@ function historicalReconciliationDatabase() {
 	let storedSnapshot: Record<string, unknown> | undefined;
 	let storedAudit: Record<string, unknown> | undefined;
 	const execute = vi.fn(async () => ({
-		rows: [{ role: "selena_owner", rolsuper: true, rolbypassrls: true }],
+		rows: [{ role: "selena_owner", session_role: "selena_owner", owner_role: "selena_owner" }],
 	}));
 	const transaction = vi.fn(async (work: (tx: unknown) => Promise<unknown>) => {
 		const staged: Array<{ table: unknown; value: Record<string, unknown> }> = [];
@@ -489,7 +489,9 @@ describe("reconcileHistoricalGoogleAiModeCapture", () => {
 
 	it("fails closed before private reads for the least-privilege selena_app role", async () => {
 		const state = historicalReconciliationDatabase();
-		state.execute.mockResolvedValue({ rows: [{ role: "selena_app", rolsuper: false, rolbypassrls: false }] });
+		state.execute.mockResolvedValue({
+			rows: [{ role: "selena_app", session_role: "selena_owner", owner_role: "selena_owner" }],
+		});
 
 		await expect(reconcileHistoricalGoogleAiModeCapture(state.db, historicalReconciliationInput(true))).rejects.toThrow(
 			"GOOGLE_AI_MODE_HISTORICAL_OWNER_SCOPE_REQUIRED",

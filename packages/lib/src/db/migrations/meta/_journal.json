@@ -393,6 +393,13 @@
       "when": 1787940017000,
       "tag": "0055_provider_snapshot_resume_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1787940018000,
+      "tag": "0056_formal_evidence_acceptance_hardening",
+      "breakpoints": true
     }
   ]
 }

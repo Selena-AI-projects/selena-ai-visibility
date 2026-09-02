@@ -21,6 +21,7 @@
 		"./db/organization-transaction": "./src/db/organization-transaction.ts",
 		"./db/api-key-bootstrap": "./src/db/api-key-bootstrap.ts",
 		"./db/provider-canary-execution": "./src/db/provider-canary-execution.ts",
+		"./db/provider-evidence-acceptance": "./src/db/provider-evidence-acceptance.ts",
 		"./auth/server": "./src/auth/server.ts",
 		"./auth/client": "./src/auth/client.ts",
 		"./auth/permissions": "./src/auth/permissions.ts",

@@ -1,5 +1,5 @@
--- Owner-run staging bootstrap for the non-owner application role. Migration
--- 0051 must be committed first so this script can grant only known runtime
+-- Owner-run staging bootstrap for the non-owner application role. Migrations
+-- through 0056 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -21,6 +21,57 @@ BEGIN
 		OR to_regclass('public.sv_evidence_read_model') IS NULL
 		OR to_regprocedure('public.sv_resolve_api_key_context(text)') IS NULL THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051';
+	END IF;
+
+	IF to_regprocedure('public.sv_enforce_provider_capability_insert_scope()') IS NULL
+		OR to_regprocedure('public.sv_restrict_runtime_source_snapshot_promotion()') IS NULL
+		OR to_regprocedure('public.sv_require_owner_evidence_acceptance_insert()') IS NULL
+		OR to_regprocedure('public.sv_require_formal_evidence_audit_pair()') IS NULL
+		OR to_regprocedure('public.sv_require_formal_evidence_receipt_pair()') IS NULL
+		OR to_regprocedure('public.sv_enforce_formal_evidence_audit()') IS NULL
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_provider_dataset_capabilities'::regclass
+				AND tgname = 'sv_provider_dataset_capabilities_owner_insert_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_source_snapshots'::regclass
+				AND tgname = 'sv_source_snapshots_runtime_promotion_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_evidence_acceptance_receipts'::regclass
+				AND tgname = 'sv_evidence_acceptance_receipts_owner_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_evidence_acceptance_receipts'::regclass
+				AND tgname = 'sv_evidence_acceptance_receipts_audit_pair_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_audit_events'::regclass
+				AND tgname = 'sv_audit_events_formal_evidence_owner_guard'
+				AND tgenabled = 'O'
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_trigger
+			WHERE tgrelid = 'public.sv_audit_events'::regclass
+				AND tgname = 'sv_audit_events_formal_evidence_receipt_pair_guard'
+				AND tgenabled = 'O'
+		) THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0056';
 	END IF;
 
 	IF to_regnamespace('pgboss') IS NULL
@@ -53,7 +104,7 @@ SELECT format(
 	'CREATE ROLE selena_app LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS',
 	:'role_password'
 )
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')
+WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'selena_app')
 \gexec
 
 ALTER ROLE selena_app LOGIN PASSWORD :'role_password' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
