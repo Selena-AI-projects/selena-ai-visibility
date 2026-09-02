@@ -3,31 +3,38 @@
 ## Authoritative PR #120 overlay — 2026-09-03
 
 - Draft PR: [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
-- Exact executable head: `9a4d7b615d2c670c92ed7495cab75c9fcc040464`
+- Exact executable head: `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`
 - Exact integrated release: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`
 - Source verdict: `GO_SOURCE_COMMIT`; independent audit found no P0/P1.
 - CI: all six checks passed —
-  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576826),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576822),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576894),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576903)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33662576848).
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405).
 - Upstream migration `0059` retains the owner-certified proved-zero path.
   Follow-up `0060` adds a separate owner-only, tenant-scoped and replay-safe
-  stale-HOLD reconciliation for acknowledged ambiguity. The post-0060 proof
-  confirms the positive `NO_SPEND` path still works and `selena_app` has no
-  execute or private snapshot privilege.
-- The first E2E run failed before tests because a hosted runner could not finish
-  Playwright apt downloads inside one minute and retry-action received
-  `kill EPERM`. The bounded install timeout is now five minutes with at most two
-  attempts; two subsequent exact-source E2E runs passed in about 11 minutes.
-- Shared staging remains on `b4e678b8 / 0058`; no deploy, migration, provider
-  call, billing or recurring work occurred.
+  stale-HOLD reconciliation for acknowledged ambiguity. It classifies valid
+  pre-`0058` consumed/run pairs without a boundary as legacy unfenced rather
+  than fabricating `PRE_TRANSPORT`. Live-equivalent proof returns
+  `providerCalls=NULL / UNKNOWN_WITHIN_UPPER_BOUND`, upper bound `4`, revokes
+  71 issued permits and replays without duplicate audit/incident/downstream
+  rows. `selena_app` retains no execute or private snapshot privilege.
+- The first exact-head E2E attempt timed out in hosted `Build images` before
+  tests at the workflow execution ceiling. Exactly one bounded rerun completed
+  in `11m16s`: Playwright, Bruno API and worker lifecycle passed; Scheduling
+  remained green in `3m53s`. No additional rerun was made.
+- Fresh staging backup `3585126c-a35c-452d-8540-d83b8a0e1d94` and isolated
+  restore `88dbe261-c7f6-4733-83cf-15e579f6990e` passed with exact source/
+  restore count parity. Shared staging remains on `b4e678b8 / 0058`; no DDL,
+  deploy, owner reconciliation, provider call, billing or recurring work
+  occurred after that proof.
 - The owner has authorized one AVLI staging cycle up to USD 10 with zero retries
   and no recurrence. The effective candidate cap remains the stricter USD 0.50.
-  Staging `0059–0060`, exact candidate deploy and the old HOLD reconciliation
-  remain separate owner gates; the four historical pre-transport boundaries
-  require explicit ambiguous-spend acknowledgement before reconciliation.
+  Owner has acknowledged up to four possible historical calls under the old
+  USD 0.50 lock and authorized reconciliation. Because the executable changed,
+  staging `0059–0060` and deploy of exact `fcb75f54` require a renewed exact-SHA
+  approval before any DDL or runtime change.
 
 PR #120 must remain draft and unmerged until staging receipts are attached.
 
