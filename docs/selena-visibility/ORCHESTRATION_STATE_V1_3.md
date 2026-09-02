@@ -2,7 +2,7 @@
 
 ## Authoritative current state — 2026-09-02
 
-- State: `SOURCE_LOCAL_PASS / EXACT_HEAD_CI_PENDING / STAGING_0057_0058_HOLD / PRODUCTION_NO_GO`.
+- State: `SOURCE_CI_PASS / STAGING_0057_0058_HOLD / PRODUCTION_NO_GO`.
 - Exact implementation source head:
   `6c3246222d18cab655c01136e7c524dfdc912b8c`.
 - Branch: `fix/selena-v13-audit-remediation`; exact release base
@@ -29,14 +29,22 @@
   the audited execution-boundary defect. PR
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
   remains open/draft; its reviewed UI tree is integrated here. Exact-head
-  follow-up PR and Blacksmith CI are pending.
+  follow-up PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
+  is open/draft, mergeable and clean at `aebe3948`; Build
+  [33624631226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  E2E/Scheduling
+  [33624631358](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
+  License [33624631367](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
+  Smoke [33624631241](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
+  and CLA [33624631429](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429)
+  all passed.
 - Shared staging mutation/deploy/provider execution in this remediation loop:
   `0`. Production, recurring, billing and Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
-Next gate: exact-head source PR/CI. If and only if it is green and the owner
-separately authorizes the hosted step, create a fresh staging backup, prove an
+Next gate: if and only if the final documentation-only PR head remains green
+and the owner separately authorizes the hosted step, create a fresh staging backup, prove an
 isolated restore, apply only `0057–0058`, deploy the exact candidate with all
 provider/recurring/billing gates closed, then run hosted DB/RLS/API/browser
 acceptance. No such staging mutation is authorized by this ledger.

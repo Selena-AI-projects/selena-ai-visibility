@@ -23,12 +23,19 @@
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
   remains open/draft; its independently reviewed project/tool UI tree is
   integrated in this candidate.
-- Exact-head CI is pending. The PR-triggered workflows are source checks using
-  stub/no-network provider paths and do not deploy or execute a paid call.
+- Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
+  is open, mergeable and clean at evidence head `aebe3948`. All six checks pass:
+  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
+  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
+  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
+  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429).
+  These source checks use stub/no-network provider paths and do not deploy or
+  execute a paid call.
 - No shared-staging mutation, deploy, provider call, production action, billing
   or recurring job is part of this follow-up.
 
-Status: `SOURCE_LOCAL_PASS / EXACT_HEAD_CI_PENDING / STAGING_0057_0058_HOLD`.
+Status: `SOURCE_CI_PASS / STAGING_0057_0058_HOLD`.
 
 ## Current follow-up PR summary
 

@@ -1,6 +1,6 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_6C324622 / EXACT_HEAD_CI_PENDING / HOSTED_0057_0058_NOT_RUN`.
+Status: `PASS_SOURCE_6C324622 / CI_PASS_AEBE3948 / HOSTED_0057_0058_NOT_RUN`.
 
 ## Current independent overlay — 2026-09-02
 
@@ -35,12 +35,19 @@ Reviewed implementation source:
   tests pass `2/2`. Local Node 22 differs from required CI Node 24.
 - Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
   is absent; it was not installed during acceptance.
-- Exact-head GitHub/Blacksmith CI is pending. No shared staging mutation,
-  deployment, provider call, production action, billing or recurring job was
-  performed for this overlay.
+- Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
+  is mergeable and clean at `aebe3948`. Build
+  [33624631226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  E2E/Scheduling
+  [33624631358](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
+  License [33624631367](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
+  Smoke [33624631241](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
+  and CLA [33624631429](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429)
+  passed. No shared staging mutation, deployment, provider call, production
+  action, billing or recurring job was performed for this overlay.
 
-Current independent conclusion: `PASS_SOURCE_LOCAL`; `HOLD_EXACT_HEAD_CI`;
-`HOLD_STAGING_0057_0058` until fresh backup/isolated restore and separately
+Current independent conclusion: `PASS_SOURCE_CI`; `HOLD_STAGING_0057_0058`
+until fresh backup/isolated restore and separately
 authorized bounded apply; `NO_GO_PRODUCTION`.
 
 ## Historical exact-head closure — 2026-09-01

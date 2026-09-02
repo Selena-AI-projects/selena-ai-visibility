@@ -10,8 +10,8 @@ Nothing in this document authorizes a mutation. The next hosted operation needs
 a separate owner decision covering the exact source HEAD and these bounded
 staging-only steps:
 
-1. prove exact-head Blacksmith CI green and verify the release/base has not
-   moved;
+1. retain the green PR #117 implementation receipt and verify the release/base
+   has not moved before the hosted window;
 2. read names/status only for provider, recurring, billing and emergency-stop
    gates; require provider calls off, recurring off, billing off and emergency
    stop on;

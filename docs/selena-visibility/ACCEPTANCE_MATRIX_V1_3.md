@@ -20,9 +20,14 @@ historical ledger and do not prove deployment of the source candidate below.
   [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116) remains
   `OPEN/DRAFT` at `7bb1ec35`; its reviewed UI tree is integrated into this
   candidate by merge `b87287fa`.
-- Exact-head CI for this candidate: `PENDING`. The local and disposable
-  receipts below are complete; GitHub/Blacksmith links will be recorded after
-  the source-only follow-up PR runs.
+- Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
+  is `OPEN/MERGEABLE/CLEAN` at evidence head `aebe3948`, which contains exact
+  implementation `6c324622`. All six GitHub/Blacksmith checks passed:
+  [Build 33624631226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  [E2E and Scheduling 33624631358](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
+  [License 33624631367](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
+  [Smoke 33624631241](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
+  and [CLA 33624631429](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429).
 - No shared-staging read/write, deployment, provider call, billing action,
   recurring job or production action was performed for this overlay.
 
@@ -36,7 +41,7 @@ historical ledger and do not prove deployment of the source candidate below.
 | Root quality gates | `PASS_LOCAL_WITH_BASELINE_WARNINGS` | Lint exit `0` with `129 warnings / 12 infos`; typecheck `13/13`; tests `16/16` (`lib 1138`, `web 445 + 4 skipped`, `worker 26`); build `16/16`. Local Node is 22 while project CI requires Node 24. |
 | Impeccable | `NOT_SUPPORTED` | No workspace binary is installed; no dependency was added to manufacture this gate. |
 | Provider and historical canary | `NO_CALL / HOLD` | This loop made zero provider calls. The historical capture remains private and ineligible for formal acceptance; no retroactive promotion is permitted. |
-| CI | `PENDING_EXACT_HEAD` | Local proof is not a substitute for the pending Node 24 pull-request workflows. |
+| CI | `PASS_EXACT_IMPLEMENTATION` | PR head `aebe3948` contains implementation `6c324622`; Build, E2E, Scheduling, License, Smoke and CLA passed under the project CI runtime. A final documentation-only head will rerun the same gates. |
 | Shared staging / production | `HOLD / NO_GO` | `0057–0058`, exact-source deploy and hosted RLS/browser/API acceptance require a fresh owner-authorized backup/restore/apply gate. Production remains prohibited. |
 
 Chosen architecture: private reconciliation and formal acceptance remain
@@ -44,7 +49,7 @@ owner/control-plane functions. Ordinary `selena_app` gets only allowlisted
 metadata and narrowly scoped journal recovery; it never receives raw snapshot
 payload or provider-reference access.
 
-Overall decision: `GO_SOURCE_LOCAL / HOLD_EXACT_HEAD_CI / HOLD_STAGING_0057_0058 / NO_GO_PRODUCTION`.
+Overall decision: `GO_SOURCE_AND_CI / HOLD_STAGING_0057_0058 / NO_GO_PRODUCTION`.
 
 ## Historical hosted evidence ledger
 
