@@ -80,7 +80,12 @@ provider capture/journal timestamps, strict replay checks and idempotent
 - the historical interruption is explained by the former 1 MB download cap;
   source `4a1fd948` keeps control responses at 1 MB and bounds snapshot downloads
   at 4 MiB;
-- no accepted provider capture was retroactively persisted by either call;
+- the explicitly authorized staging-only reconciliation persisted one immutable
+  private source snapshot and one audit event (`PERSISTED_PRIVATE`, deployment
+  `78de5973-d6c5-446a-b8c9-390c1c273ee9`), with no evidence-index, cost or
+  acceptance rows and `providerCalls=0`;
+- a second replay reached the non-owner `selena_app` SELECT boundary on the
+  private snapshot and returned no receipt; no duplicate write was observed;
 - first-party Bright Data exports after diagnostic-2 show exactly one Google AI
   Mode Search record and `USD 0.0015` total for 1 September;
 - the pre-diagnostic evidence already contained the same one record, therefore

@@ -60,9 +60,9 @@ and excluded from every commit and archive.
 | Stream | Result | Current boundary |
 |---|---|---|
 | Provider | `PASS_HISTORICAL_PAYLOAD / HOLD_PERSISTENCE_AND_DIAGNOSTIC` | Historical identity is exactly bound to provider snapshot `sd_mtiflifw2lfu6ne28l`; its one-record payload has a non-empty answer and four normalized citations. Diagnostic-2 ended `TRIGGER_OUTCOME_UNKNOWN` without a snapshot ID, retry or new billable record. |
-| Database/Evidence | `PASS_0053_CANARY_HOLD / SOURCE_RECONCILIATION_READY` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. The offline path is locally green and unrun against staging. Both reservations remain immutable. |
+| Database/Evidence | `PASS_0053_CANARY_HOLD / PRIVATE_RECONCILED / IDEMPOTENCY_VERIFY_HOLD` | Fresh pre-`0053` backup exists; journal is `54/1787940015000`; post-`0053` schema/RLS proof passed. Historical capture persistence receipt is `PERSISTED_PRIVATE` from temporary worker deployment `78de5973-d6c5-446a-b8c9-390c1c273ee9` (one source snapshot + one audit row, no evidence/cost/acceptance rows). Replay was blocked by intentional `selena_app` SELECT denial on private snapshots; no duplicate write occurred. Both reservations remain immutable. |
 | HoReCa Product | `PASS_HOSTED_RESTORED` | Automatic `4400d435` web drift was detected and exact `100d34d8` restored. The exact-source authenticated receipt separates projects at left from tools across the top. |
-| Orchestrator | `STAGING_CORE_PASS / PROVIDER_PERSISTENCE_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload is reconciled read-only; no retroactive capture write or new call occurred. Release `4400d435` is integrated by merge `84cce314`; PR is not merged. |
+| Orchestrator | `STAGING_CORE_PASS / PRIVATE_RECONCILIATION_HOLD` | Exact staging implementation and release-integrated CI passed; worker rollback and web drift recovery are terminal `SUCCESS`. Historical provider payload has one immutable private capture and one audit row; formal evidence acceptance remains on hold, and no new provider call occurred. Release `4400d435` is integrated by merge `84cce314`; PR is not merged. |
 
 Independent Codex cross-audits found no P0/P1 in the material provider,
 database/evidence and HoReCa changes through `8cc0b87b`. Commit `d4ac606a`
@@ -122,8 +122,8 @@ check; exact-head CI is green on PR #108.
 | Diagnostic-2 lifecycle | No `snapshotReference`, record count or new lifecycle event; command terminal in `0.34s`; no retry authorized |
 | Canary cost | First-party post-diagnostic exports: Google AI Mode Search `1 record`, `USD 0.0015` total for 1 September. Because the same one record existed before diagnostic-2, diagnostic-2 added `0` records and `USD 0.0000` incremental billing. |
 | Historical payload | Read-only download: 1,543,419 bytes, file SHA-256 `bfb2ebcae1b69d20573f62e46aa5b586bacaedf8b9e617753b42a4b7a8d64c5a`; immutable schema-discovery validation passed with canonical hash `sha256:7b465dc14c050742f77fd37ecca4c64c5ff1f92eb30a945a9f60d688a8e3721f`, one record, non-empty answer and four normalized citations. |
-| Reconciliation dry-run | `DRY_RUN_ROLLED_BACK`; restored worker returned `providerCalls=0`, no evidence/cost/acceptance rows and `HOLD`; irreversible persistence commit was not run. |
-| Snapshot journal | Exact raw ID match: `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED`, first event `08:54:47.108Z`; one tenant/project/dataset; no capture persistence |
+| Reconciliation | Commit receipt `PERSISTED_PRIVATE` (`providerCalls=0`, one source snapshot + one audit row, no evidence/cost/acceptance rows); idempotent replay hit intentional non-owner SELECT denial and produced no duplicate write. |
+| Snapshot journal | Exact raw ID match: `TRIGGERED -> PENDING -> PENDING -> READY -> INTERRUPTED`, first event `08:54:47.108Z`; recovery appended `RESUMED -> READY -> DELIVERED` in the same transaction as the private capture; one tenant/project/dataset |
 | Runtime logs | Steady provider path disabled after the canary; recurring scheduler disabled; pg-boss started; handlers ready |
 | Browser | Both health endpoints 200; HoReCa unauth redirect correct; authenticated project-rail/tool-axis DOM and visual review passed; page-origin errors 0 |
 | API | Two scoped tenants isolated; invalid key 401; fixtures removed |
