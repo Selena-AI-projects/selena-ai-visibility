@@ -13,6 +13,7 @@ import {
 	pgView,
 	text,
 	timestamp,
+	unique,
 	uniqueIndex,
 	uuid,
 } from "drizzle-orm/pg-core";
@@ -395,6 +396,7 @@ export const svSourceSnapshots = pgTable(
 		organizationId: text("organization_id")
 			.notNull()
 			.references(() => organization.id),
+		projectId: uuid("project_id"),
 		sourceType: text("source_type").notNull(),
 		sourceRef: text("source_ref").notNull(),
 		contentSha256: text("content_sha256").notNull(),
@@ -413,12 +415,24 @@ export const svSourceSnapshots = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
-		orgContentHashUnique: uniqueIndex("sv_source_snapshots_org_content_sha256_unique").on(
-			table.organizationId,
-			table.contentSha256,
-		),
+		projectContentHashUnique: uniqueIndex("sv_source_snapshots_project_content_sha256_unique")
+			.on(table.organizationId, table.projectId, table.contentSha256)
+			.where(sql`${table.projectId} IS NOT NULL`),
+		legacyOrgContentHashUnique: uniqueIndex("sv_source_snapshots_legacy_org_content_sha256_unique")
+			.on(table.organizationId, table.contentSha256)
+			.where(sql`${table.projectId} IS NULL`),
 		orgCapturedIdx: index("sv_source_snapshots_org_captured_idx").on(table.organizationId, table.capturedAt),
 		idOrganizationUnique: uniqueIndex("sv_source_snapshots_id_organization_unique").on(table.id, table.organizationId),
+		idProjectOrganizationUnique: uniqueIndex("sv_source_snapshots_id_project_org_unique").on(
+			table.id,
+			table.projectId,
+			table.organizationId,
+		),
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_source_snapshots_project_org_fk",
+		}),
 		capabilityScopeReference: foreignKey({
 			columns: [table.capabilityId, table.organizationId],
 			foreignColumns: [svProviderDatasetCapabilities.id, svProviderDatasetCapabilities.organizationId],
@@ -431,7 +445,11 @@ export const svSourceSnapshots = pgTable(
 		),
 		providerCaptureMetadataCheck: check(
 			"sv_source_snapshots_provider_capture_metadata_check",
-			sql`((${table.capabilityId} IS NULL AND ${table.providerDatasetRef} IS NULL AND ${table.environment} IS NULL AND ${table.rawReference} IS NULL AND ${table.inputSchemaVersion} IS NULL AND ${table.outputSchemaVersion} IS NULL) OR (${table.capabilityId} IS NOT NULL AND length(trim(${table.providerDatasetRef})) > 0 AND length(trim(${table.environment})) > 0 AND length(trim(${table.rawReference})) > 0 AND length(trim(${table.inputSchemaVersion})) > 0 AND (${table.outputSchemaVersion} IS NULL OR length(trim(${table.outputSchemaVersion})) > 0))) IS TRUE`,
+			sql`((${table.capabilityId} IS NULL AND ${table.providerDatasetRef} IS NULL AND ${table.environment} IS NULL AND ${table.rawReference} IS NULL AND ${table.inputSchemaVersion} IS NULL AND ${table.outputSchemaVersion} IS NULL) OR (${table.capabilityId} IS NOT NULL AND ${table.providerDatasetRef} = btrim(${table.providerDatasetRef}) AND length(${table.providerDatasetRef}) > 0 AND ${table.environment} IN ('ISOLATED_CANARY', 'STAGING_ACCEPTANCE', 'PRODUCTION') AND ${table.rawReference} = btrim(${table.rawReference}) AND length(${table.rawReference}) > 0 AND ${table.inputSchemaVersion} = btrim(${table.inputSchemaVersion}) AND length(${table.inputSchemaVersion}) > 0 AND (${table.outputSchemaVersion} IS NULL OR (${table.outputSchemaVersion} = btrim(${table.outputSchemaVersion}) AND length(${table.outputSchemaVersion}) > 0)))) IS TRUE`,
+		),
+		providerProjectCheck: check(
+			"sv_source_snapshots_provider_project_check",
+			sql`${table.capabilityId} IS NULL OR ${table.projectId} IS NOT NULL`,
 		),
 	}),
 ).enableRLS();
@@ -443,6 +461,7 @@ export const svEvidenceIndex = pgTable(
 		organizationId: text("organization_id")
 			.notNull()
 			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
 		domainId: text("domain_id")
 			.notNull()
 			.references(() => svMeasurementDomains.domainId),
@@ -457,10 +476,22 @@ export const svEvidenceIndex = pgTable(
 	},
 	(table) => ({
 		idOrganizationUnique: uniqueIndex("sv_evidence_index_id_organization_unique").on(table.id, table.organizationId),
-		domainObservationUnique: uniqueIndex("sv_evidence_index_domain_observation_unique").on(
-			table.domainId,
-			table.observationRef,
-		),
+		formalIdentityUnique: unique("sv_evidence_index_formal_identity_unique")
+			.on(
+				table.organizationId,
+				table.projectId,
+				table.domainId,
+				table.cycleId,
+				table.datasetId,
+				table.sourceSnapshotId,
+				table.observationRef,
+			)
+			.nullsNotDistinct(),
+		projectOrganizationReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_evidence_index_project_org_fk",
+		}),
 		cycleDomainReference: foreignKey({
 			columns: [table.cycleId, table.domainId, table.organizationId],
 			foreignColumns: [svMeasurementCycles.id, svMeasurementCycles.domainId, svMeasurementCycles.organizationId],
@@ -472,9 +503,9 @@ export const svEvidenceIndex = pgTable(
 			name: "sv_evidence_index_dataset_cycle_org_fk",
 		}),
 		sourceSnapshotScopeReference: foreignKey({
-			columns: [table.sourceSnapshotId, table.organizationId],
-			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.organizationId],
-			name: "sv_evidence_index_source_snapshot_org_fk",
+			columns: [table.sourceSnapshotId, table.projectId, table.organizationId],
+			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.projectId, svSourceSnapshots.organizationId],
+			name: "sv_evidence_index_source_snapshot_project_org_fk",
 		}),
 		orgCycleIdx: index("sv_evidence_index_org_cycle_idx").on(table.organizationId, table.cycleId),
 	}),

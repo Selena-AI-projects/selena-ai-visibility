@@ -365,7 +365,7 @@ describe("Visibility OS provider evidence provenance", () => {
 			"utf8",
 		);
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
-		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0056");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057");
 		expect(roleBootstrap).toContain("sv_provider_dataset_capabilities_owner_insert_guard");
 		expect(roleBootstrap).toContain("sv_source_snapshots_runtime_promotion_guard");
 		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_owner_guard");
@@ -962,10 +962,16 @@ describe("Visibility OS local domain and attempt expand", () => {
 			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_dataset_cycle_org_fk")
 			?.reference();
 		const evidenceSourceReference = getTableConfig(schema.svEvidenceIndex)
-			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_source_snapshot_org_fk")
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_source_snapshot_project_org_fk")
 			?.reference();
 		const sourceIdentityIndex = getTableConfig(schema.svSourceSnapshots).indexes.find(
 			(index) => index.config.name === "sv_source_snapshots_id_organization_unique",
+		);
+		const sourceProjectIdentityIndex = getTableConfig(schema.svSourceSnapshots).indexes.find(
+			(index) => index.config.name === "sv_source_snapshots_id_project_org_unique",
+		);
+		const evidenceFormalIdentityIndex = getTableConfig(schema.svEvidenceIndex).uniqueConstraints.find(
+			(constraint) => constraint.name === "sv_evidence_index_formal_identity_unique",
 		);
 		const projectOrganizationReference = lockConfig.foreignKeys
 			.find((foreignKey) => foreignKey.getName() === "sv_configuration_locks_project_organization_fk")
@@ -1046,10 +1052,29 @@ describe("Visibility OS local domain and attempt expand", () => {
 		]);
 		expect(evidenceSourceReference?.columns.map((column) => column.name)).toEqual([
 			"source_snapshot_id",
+			"project_id",
 			"organization_id",
 		]);
-		expect(evidenceSourceReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(evidenceSourceReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"project_id",
+			"organization_id",
+		]);
 		expect(sourceIdentityIndex?.config.unique).toBe(true);
+		expect(sourceProjectIdentityIndex?.config.unique).toBe(true);
+		expect(
+			sourceProjectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+		).toEqual(["id", "project_id", "organization_id"]);
+		expect(evidenceFormalIdentityIndex?.nullsNotDistinct).toBe(true);
+		expect(evidenceFormalIdentityIndex?.columns.map((column) => column.name)).toEqual([
+			"organization_id",
+			"project_id",
+			"domain_id",
+			"cycle_id",
+			"dataset_id",
+			"source_snapshot_id",
+			"observation_ref",
+		]);
 		expect(projectOrganizationReference?.columns.map((column) => column.name)).toEqual([
 			"project_id",
 			"organization_id",
@@ -1606,7 +1631,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-19)).toEqual([
+		expect(journal.entries.slice(-20)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1708,6 +1733,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				version: "7",
 				when: 1787940018000,
 				tag: "0056_formal_evidence_acceptance_hardening",
+				breakpoints: true,
+			},
+			{
+				idx: 57,
+				version: "7",
+				when: 1787940019000,
+				tag: "0057_evidence_project_identity_hardening",
 				breakpoints: true,
 			},
 		]);

@@ -88,6 +88,7 @@ export type ReconcileHistoricalGoogleAiModeCaptureInput = Readonly<{
 
 type PersistGoogleAiModeCanaryCaptureInput = Readonly<{
 	organizationId: string;
+	projectId: string;
 	executionIdentity: string;
 	prepared: PreparedProviderDatasetCanary;
 	capture: ProviderDatasetRawCapture;
@@ -146,6 +147,7 @@ export async function persistGoogleAiModeCanaryCapture(
 	input: PersistGoogleAiModeCanaryCaptureInput,
 ): Promise<GoogleAiModeCanaryCapturePersistenceReceipt> {
 	if (!input.organizationId.trim()) throw new Error("GOOGLE_AI_MODE_CANARY_ORGANIZATION_REQUIRED");
+	if (!input.projectId.trim()) throw new Error("GOOGLE_AI_MODE_CANARY_PROJECT_REQUIRED");
 	if (input.executionIdentity !== GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY)
 		throw new Error("GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY_INVALID");
 	assertCompleteCanaryReceipt(input.receipt, input.capture);
@@ -226,6 +228,7 @@ export async function persistGoogleAiModeCanaryCapture(
 			.insert(svSourceSnapshots)
 			.values({
 				organizationId: input.organizationId,
+				projectId: input.projectId,
 				sourceType: evidence.source,
 				sourceRef: evidence.rawReference,
 				contentSha256: evidence.rawContentHash,
@@ -508,6 +511,7 @@ export async function reconcileHistoricalGoogleAiModeCapture(
 					.where(
 						and(
 							eq(svSourceSnapshots.organizationId, input.organizationId),
+							eq(svSourceSnapshots.projectId, input.projectId),
 							eq(svSourceSnapshots.contentSha256, evidence.rawContentHash),
 						),
 					)
@@ -580,6 +584,7 @@ export async function reconcileHistoricalGoogleAiModeCapture(
 				.insert(svSourceSnapshots)
 				.values({
 					organizationId: input.organizationId,
+					projectId: input.projectId,
 					sourceType: evidence.source,
 					sourceRef: evidence.rawReference,
 					contentSha256: evidence.rawContentHash,

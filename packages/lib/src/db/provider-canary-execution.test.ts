@@ -218,6 +218,7 @@ describe("persistGoogleAiModeCanaryCapture", () => {
 
 		const persistence = await persistGoogleAiModeCanaryCapture(db, {
 			organizationId: "tenant-1",
+			projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 			executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 			prepared: fixture.prepared,
 			capture: fixture.capture,
@@ -250,6 +251,7 @@ describe("persistGoogleAiModeCanaryCapture", () => {
 		const sourceSnapshot = inserted.get(schema.svSourceSnapshots)?.[0];
 		expect(sourceSnapshot).toMatchObject({
 			organizationId: "tenant-1",
+			projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 			sourceType: "GOOGLE_AI_MODE",
 			providerDatasetRef: "gd_fixture123",
 			environment: "ISOLATED_CANARY",
@@ -280,6 +282,7 @@ describe("persistGoogleAiModeCanaryCapture", () => {
 		await expect(
 			persistGoogleAiModeCanaryCapture(db, {
 				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 				executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 				prepared: fixture.prepared,
 				capture: fixture.capture,

@@ -1,5 +1,5 @@
 -- Owner-run staging bootstrap for the non-owner application role. Migrations
--- through 0056 must be committed first so this script can grant only known runtime
+-- through 0057 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -29,6 +29,55 @@ BEGIN
 		OR to_regprocedure('public.sv_require_formal_evidence_audit_pair()') IS NULL
 		OR to_regprocedure('public.sv_require_formal_evidence_receipt_pair()') IS NULL
 		OR to_regprocedure('public.sv_enforce_formal_evidence_audit()') IS NULL
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_attribute
+			WHERE attrelid = 'public.sv_source_snapshots'::regclass
+				AND attname = 'project_id'
+				AND NOT attisdropped
+		)
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_attribute
+			WHERE attrelid = 'public.sv_evidence_index'::regclass
+				AND attname = 'project_id'
+				AND attnotnull
+				AND NOT attisdropped
+		)
+		OR to_regclass('public.sv_source_snapshots_project_content_sha256_unique') IS NULL
+		OR to_regclass('public.sv_source_snapshots_legacy_org_content_sha256_unique') IS NULL
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_constraint
+			WHERE conrelid = 'public.sv_evidence_index'::regclass
+				AND conname = 'sv_evidence_index_formal_identity_unique'
+				AND convalidated
+		)
+		OR (
+			SELECT count(*)
+			FROM pg_catalog.pg_constraint
+			WHERE conname IN (
+				'sv_source_snapshots_project_org_fk',
+				'sv_evidence_index_project_org_fk',
+				'sv_evidence_index_source_snapshot_project_org_fk',
+				'sv_source_snapshots_provider_capture_metadata_check'
+			)
+				AND convalidated
+		) <> 4
+		OR pg_catalog.pg_get_functiondef('public.sv_enforce_evidence_capability_domain()'::regprocedure)
+			NOT LIKE '%cycle_project_id%'
+		OR pg_catalog.pg_get_functiondef('public.sv_enforce_evidence_acceptance_receipt()'::regprocedure)
+			NOT LIKE '%EVIDENCE_ACCEPTANCE_ENVIRONMENT_NOT_APPROVED%'
+		OR pg_catalog.pg_get_functiondef('public.sv_enforce_formal_evidence_audit()'::regprocedure)
+			NOT LIKE '%FORMAL_EVIDENCE_AUDIT_DETAILS_INVALID%'
+		OR NOT EXISTS (
+			SELECT 1
+			FROM pg_catalog.pg_class
+			WHERE oid = 'public.sv_evidence_read_model'::regclass
+				AND 'security_invoker=true' = ANY (coalesce(reloptions, ARRAY[]::text[]))
+		)
+		OR pg_catalog.pg_get_viewdef('public.sv_evidence_read_model'::regclass, true)
+			NOT LIKE '%lock.project_id = evidence.project_id%'
 		OR NOT EXISTS (
 			SELECT 1
 			FROM pg_catalog.pg_trigger
@@ -71,7 +120,7 @@ BEGIN
 				AND tgname = 'sv_audit_events_formal_evidence_receipt_pair_guard'
 				AND tgenabled = 'O'
 		) THEN
-		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0056';
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057';
 	END IF;
 
 	IF to_regnamespace('pgboss') IS NULL
@@ -198,7 +247,7 @@ REVOKE SELECT (
 	source_ref, content_sha256, snapshot, provider_dataset_ref, environment, raw_reference
 ) ON sv_source_snapshots FROM selena_app;
 GRANT SELECT (
-	id, organization_id, source_type, capability_id,
+	id, organization_id, project_id, source_type, capability_id,
 	input_schema_version, output_schema_version, content_sha256_format_valid,
 	captured_at, immutable, created_at
 ) ON sv_source_snapshots TO selena_app;

@@ -110,7 +110,7 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 			: undefined,
 	});
 	if (result.receipt.status === "COMPLETE") {
-		if (!organizationId || !result.capture || !result.prepared) {
+		if (!organizationId || !projectId || !result.capture || !result.prepared) {
 			process.stdout.write(
 				`${JSON.stringify(
 					failedGoogleAiModeCanaryPersistenceReceipt(result.receipt, "CAPTURE_PERSISTENCE_INPUT_MISSING"),
@@ -121,6 +121,7 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 		try {
 			const persistence = await persistGoogleAiModeCanaryCapture(db, {
 				organizationId,
+				projectId,
 				executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 				prepared: result.prepared,
 				capture: result.capture,
