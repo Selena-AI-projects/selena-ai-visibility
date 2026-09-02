@@ -293,6 +293,12 @@
 	background: rgb(255 253 248 / 72%);
 }
 
+.selena-project-link:focus-visible {
+	border-color: var(--selena-copper-deep);
+	outline: 2px solid var(--selena-copper-deep);
+	outline-offset: 2px;
+}
+
 .selena-project-link[data-selected] {
 	border-color: var(--selena-charcoal);
 	background: var(--selena-charcoal);
