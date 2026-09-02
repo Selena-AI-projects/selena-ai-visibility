@@ -1,6 +1,43 @@
 # Selena AI Visibility v1.3 — staging/runtime gate plan
 
-Updated after execution on `2026-09-01`. Runtime/source anchor:
+## Current owner-gated plan — 2026-09-02
+
+Implementation source candidate:
+`6c3246222d18cab655c01136e7c524dfdc912b8c`; exact release base:
+`6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
+
+Nothing in this document authorizes a mutation. The next hosted operation needs
+a separate owner decision covering the exact source HEAD and these bounded
+staging-only steps:
+
+1. prove exact-head Blacksmith CI green and verify the release/base has not
+   moved;
+2. read names/status only for provider, recurring, billing and emergency-stop
+   gates; require provider calls off, recurring off, billing off and emergency
+   stop on;
+3. create a fresh staging backup and prove an isolated restore before any DDL;
+4. use the owner/control-plane connection to count legacy state and apply only
+   pending migrations `0057–0058` with the bounded runner; never down-migrate;
+5. prove actual `selena_app` is non-owner/no-bypass, has only allowlisted
+   metadata plus narrow recovery execution, cannot read private payload/provider
+   locators and cannot execute private reconciliation or formal acceptance;
+6. deploy web/worker from the exact candidate with provider, recurring and
+   billing paths still sealed; run marked test-tenant DB/RLS/API/browser checks;
+7. on any failed postcondition, stop worker/provider paths and restore the prior
+   exact runtime; use the isolated restore for investigation rather than a blind
+   rollback of forward migrations.
+
+The hosted acceptance must return the journal frontier before/after, migration
+postconditions, `selena_app` privilege/RLS receipts, browser/API results, exact
+deployment IDs and cleanup counts. It must not promote the historical private
+canary to formal evidence. Provider calls, production, billing, recurring jobs
+and Social/Travel remain prohibited.
+
+Current decision: `HOLD_OWNER_AUTHORIZATION_FOR_STAGING_0057_0058`.
+
+## Historical executed plan — 2026-09-01
+
+Historical runtime/source anchor:
 `2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
 
 ## Executed gates

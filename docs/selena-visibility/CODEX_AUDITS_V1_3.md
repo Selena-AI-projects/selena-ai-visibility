@@ -1,50 +1,47 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_B9D967B6 / CI_PASS_A8522067 / MERGED_A8B15116 / HOSTED_0056_NOT_RUN`.
+Status: `PASS_SOURCE_6C324622 / EXACT_HEAD_CI_PENDING / HOSTED_0057_0058_NOT_RUN`.
 
 ## Current independent overlay — 2026-09-02
 
 Reviewed implementation source:
-`b9d967b668ba884b524ee7202060f5446abb58ad`.
+`6c3246222d18cab655c01136e7c524dfdc912b8c`; exact release base:
+`6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
 
-- Database/Evidence independent verdict: `P0=0`, `P1=0` after the final
-  preflight fix. Migration `0056` requires direct session identity, ownership
-  of both acceptance tables and `SUPERUSER/BYPASSRLS` before any DDL; FORCE RLS
-  cannot conceal legacy acceptance state from migration review.
-- Receipt and formal audit references are reciprocal deferred constraints;
-  accepted cycle/dataset metadata is immutable; runtime `selena_app` has no raw
-  payload/provider path and no formal-acceptance privilege.
-- Disposable PostgreSQL proof passed migration apply, FORCE-RLS owner rejection,
-  legacy-state rollback without DDL residue, runtime payload/forgery denial and
-  clean teardown.
-- Provider/evidence focused verification passed `74/74`; root test and build
-  passed `16/16` tasks. Lint has `0 errors`; `129 warnings / 12 infos` are the
-  registered non-blocking web baseline.
-- HoReCa source navigation has a complementary project rail and top tool axis,
-  visible project focus, `aria-current` and locale/project route preservation.
-  Its targeted route test passed.
-- Local Maps stability replay passed three independent `11/11` runs with no
-  provider call.
+- Three non-overlapping implementation/review streams report residual
+  `P0=0 / P1=0 / P2=0` after the final project-binding proof.
+- `0051` converges four evidenced historical/release schema variants.
+  `0057` adds project identity, delivered-journal binding and Local Maps formal
+  evidence eligibility while rejecting legacy acceptance and the historical
+  canary. `0058` persists the provider boundary and bounded crash recovery.
+- `selena_app` remains non-owner/no-bypass with allowlisted metadata only. It
+  cannot read private payload/provider locators, mutate immutable canary state,
+  execute private reconciliation or forge formal acceptance.
+- Independent review found and closed a same-tenant cross-project replay gap:
+  new canary reservations are bound to organization+project; legacy projectless
+  reservations remain readable only as historical rows and fail closed before
+  persistence; audit details bind the project without private payload.
+- Observable PostgreSQL assertions prove a pre-0058 `NULL project_id` row
+  survives, a new projectless row is rejected and a cross-organization
+  project binding violates the composite FK. All assertions run against each
+  of the four variants.
+- Disposable results: variants, actual-role 0051, formal-evidence 0057 and
+  journal-boundary 0058 all pass with verified cleanup. Provider calls and cost
+  rows remain `0`; catalog digest is
+  `2ccfdc3a033d1f4d95d34b5ba567d0a6`.
+- Root results: lint `0 errors / 129 warnings / 12 infos`, typecheck `13/13`,
+  tests `16/16` (`lib 1138`, `web 445 + 4 skipped`, `worker 26`) and build
+  `16/16`. Focused project-binding tests pass `84/84`; auth poster/fallback
+  tests pass `2/2`. Local Node 22 differs from required CI Node 24.
 - Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
   is absent; it was not installed during acceptance.
-- CI passed on PR head `a8522067`, which contains exact implementation
-  `b9d967b6`: Build, E2E, Scheduling, License, Smoke and CLA are green. The
-  preceding Scheduling run failed on a stale disposable ceiling and directly
-  motivated the source-frontier regression test in `b9d967b6`.
-- The owner merged PR #96 at `2026-09-02T06:31:55Z`; GitHub recorded squash
-  merge commit `a8b151162a849eec899382b550a948edb40b399c` on the release branch.
-- Railway read-only review found automatic staging web deployment `638ec631…`
-  at the exact merge commit in `SUCCESS`, with both public setup-status endpoints
-  returning 200 and no bounded error-level web logs. Automatic staging measure
-  deployment `99d1717e…` stopped at
-  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`; the execution guard remained
-  closed. Worker deployment remained `9cf426fe…`.
-- No shared staging migration/deploy, provider call, production action, billing,
-  recurring job or PR merge was performed for this overlay.
+- Exact-head GitHub/Blacksmith CI is pending. No shared staging mutation,
+  deployment, provider call, production action, billing or recurring job was
+  performed for this overlay.
 
-Current independent conclusion: `PASS_SOURCE_CI_AND_MERGE`; `NO_GO_STAGING_0056`
-until a fresh backup/read-only legacy count and a separately authorized bounded
-apply; `NO_GO_PRODUCTION`.
+Current independent conclusion: `PASS_SOURCE_LOCAL`; `HOLD_EXACT_HEAD_CI`;
+`HOLD_STAGING_0057_0058` until fresh backup/isolated restore and separately
+authorized bounded apply; `NO_GO_PRODUCTION`.
 
 ## Historical exact-head closure — 2026-09-01
 

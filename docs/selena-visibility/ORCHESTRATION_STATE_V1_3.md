@@ -2,58 +2,44 @@
 
 ## Authoritative current state — 2026-09-02
 
-- State: `SOURCE_CI_MERGE_PASS / STAGING_0056_HOLD / PRODUCTION_NO_GO`.
+- State: `SOURCE_LOCAL_PASS / EXACT_HEAD_CI_PENDING / STAGING_0057_0058_HOLD / PRODUCTION_NO_GO`.
 - Exact implementation source head:
-  `b9d967b668ba884b524ee7202060f5446abb58ad`.
-- Branch: `feature/selena-visibility-v1-2-1`; exact implementation
-  `b9d967b6`, green documentation overlay and PR head `a8522067`.
-- Release lineage: pre-merge release `223f2681`, local integration merge
-  `81721f6d`, owner squash merge and current release head `a8b15116`.
-- Source database frontier: `57 entries / 0056`; last evidenced shared staging
-  frontier: `54 entries / 0053`.
-- `0056` architecture: direct owner/control-plane session only, table-owner
-  identity plus `SUPERUSER/BYPASSRLS`, fail-closed preflight before DDL, no
-  `selena_app` raw-payload grant, reciprocal immutable receipt/audit rows.
-- Exact source tests: first reconciliation creates one private snapshot and one
-  audit row; dry-run rolls back; replay returns `ALREADY_RECONCILED`; duplicate
-  snapshot/audit/evidence/cost/acceptance rows remain zero; provider calls `0`.
-- Local quality: focused final suite `74/74`, disposable PostgreSQL proof
-  `PASS`, root tests `16/16`, root build `16/16`, lint `0 errors` with `129`
-  warnings and `12` infos, Local Maps stability `3 × 11/11`.
+  `6c3246222d18cab655c01136e7c524dfdc912b8c`.
+- Branch: `fix/selena-v13-audit-remediation`; exact release base
+  `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
+- Source database frontier: `59 entries / 0058`. Hosted frontier was not
+  re-read and is not promoted in this source-only loop.
+- `0051` now bridges all four evidenced schema variants to one catalog while
+  rejecting any legacy formal acceptance state before migration.
+- `0057` makes formal evidence tenant-and-project scoped, binds acceptance to
+  delivered journal state and permits Local Maps while permanently excluding
+  the historical canary from formal acceptance.
+- `0058` persists the provider execution boundary: `NO_SPEND` is available only
+  before transport; post-boundary `EXECUTING` remains fail-closed unless the
+  same claim can be completed from durable terminal evidence.
+- `selena_app` remains non-owner/no-bypass, has only allowlisted safe metadata,
+  cannot read raw private payload/provider locators, and cannot execute private
+  reconciliation or formal acceptance.
+- Local quality: disposable variants/0051/0057/0058 all `PASS`; root tests
+  `16/16`, root build `16/16`, typecheck `13/13`, lint `0 errors` with `129`
+  warnings and `12` infos. Provider calls and cost rows are `0`.
 - Impeccable: `NOT_SUPPORTED` because no workspace binary exists.
-- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96):
-  `MERGED` at `2026-09-02T06:31:55Z`; all six checks passed; merge commit
-  `a8b151162a849eec899382b550a948edb40b399c`.
-- PR [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108):
-  `OPEN`, remote head `a4d05d47`, `CONFLICTING/DIRTY`; its green checks are
-  historical and do not cover `970aa54d`.
-- CI for implementation `b9d967b6` plus overlay `a8522067`: `PASS`. Build
-  [33596500999](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999),
-  E2E/Scheduling
-  [33596501001](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001),
-  License [33596501017](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017),
-  Smoke [33596501053](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053)
-  and CLA [33596500997](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997)
-  all succeeded. Run
-  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
-  on the preceding PR head failed only because the disposable replay ceiling
-  was stale at `54`; `b9d967b6` raises that CI-only ceiling to source index `56`
-  and locks the invariant with a test.
-- Post-merge Railway read-only receipt: staging web deployment `638ec631…` at
-  exact release `a8b15116` is `SUCCESS`; app and staging setup-status endpoints
-  return HTTP 200 and bounded error logs are empty. Automatic measure deployment
-  `99d1717e…` stopped fail-closed at
-  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. Worker remains `9cf426fe…`.
-- Shared staging mutation/deploy/provider execution in this source closure:
-  no orchestrator-issued mutation or deploy and no provider execution path;
-  Railway auto-deploys caused by the owner merge are recorded above. Production,
-  recurring, billing and Social/Travel remain prohibited.
+- PR [#112](https://github.com/parkourcafe/selena-ai-visibility/pull/112)
+  remains open and conflicting; its successful historical checks do not close
+  the audited execution-boundary defect. PR
+  [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
+  remains open/draft; its reviewed UI tree is integrated here. Exact-head
+  follow-up PR and Blacksmith CI are pending.
+- Shared staging mutation/deploy/provider execution in this remediation loop:
+  `0`. Production, recurring, billing and Social/Travel remain prohibited.
 - Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`: untouched, untracked,
   excluded from every commit.
 
-Next gate: documentation-only PR #114 CI, then authenticated browser recheck and
-owner-gated shared-staging `0054–0056` preconditions. No database mutation is
-authorized by this ledger.
+Next gate: exact-head source PR/CI. If and only if it is green and the owner
+separately authorizes the hosted step, create a fresh staging backup, prove an
+isolated restore, apply only `0057–0058`, deploy the exact candidate with all
+provider/recurring/billing gates closed, then run hosted DB/RLS/API/browser
+acceptance. No such staging mutation is authorized by this ledger.
 
 ## Historical orchestration ledger
 

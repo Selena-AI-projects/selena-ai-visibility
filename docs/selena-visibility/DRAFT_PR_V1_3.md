@@ -1,53 +1,46 @@
-# Selena AI Visibility v1.3 — post-merge evidence follow-up
+# Selena AI Visibility v1.3 — audit remediation follow-up
 
 ## Authoritative source candidate — 2026-09-02
 
 - Exact implementation source head:
-  `b9d967b668ba884b524ee7202060f5446abb58ad`.
-- Pre-merge release `223f2681` was integrated by merge `81721f6d`; PR #96 was
-  then squash-merged to release commit `a8b15116` by the owner.
-- Source frontier is `57 entries / 0056`; shared staging remains at the last
-  evidenced `54 entries / 0053` and must not be advanced by this PR alone.
-- Formal evidence acceptance now requires a direct owner/control-plane
-  connection. `selena_app` remains unable to read raw private snapshot payload,
-  provider references or forge receipt/audit acceptance.
-- Local source gates: focused `74/74`, disposable PostgreSQL/RLS proof `PASS`,
-  root test/build `16/16`, lint `0 errors` (`129 warnings / 12 infos` baseline),
-  Local Maps replay `3 × 11/11`, provider calls `0`.
-- PR [#96](https://github.com/parkourcafe/selena-ai-visibility/pull/96) is
-  `MERGED`; green PR head `a8522067` became release squash commit `a8b15116`.
-  PR
-  [#108](https://github.com/parkourcafe/selena-ai-visibility/pull/108) is also
-  `OPEN/CONFLICTING`; its checks cover only historical head `a4d05d47`.
-- CI for implementation `b9d967b6` and documentation overlay `a8522067`:
-  `PASS` — [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500999),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501001),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501017),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596501053)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596500997).
-  The preceding run
-  [33596117669](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33596117669)
-  correctly rejected a stale disposable replay ceiling. The candidate aligns
-  that ceiling to source index `56` and adds a regression test.
+  `6c3246222d18cab655c01136e7c524dfdc912b8c`.
+- Exact release base: `6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
+- Source frontier is `59 entries / 0058`; this PR does not authorize or perform
+  a shared-staging migration.
+- `0051` converges four evidenced historical/release schema variants. `0057`
+  adds tenant-and-project formal-evidence identity and delivered-journal
+  binding. `0058` persists the no-spend/provider-execution boundary and makes
+  recovery idempotent without reopening a provider path.
+- `selena_app` remains non-owner/no-bypass, has allowlisted metadata only, and
+  cannot read raw private snapshot payload/provider locators, execute private
+  reconciliation or forge formal acceptance.
+- Local source gates: four-variant migration matrix, actual-role RLS proof,
+  formal-evidence replay and journal-recovery replay all `PASS`; root lint
+  `0 errors` (`129 warnings / 12 infos` baseline), typecheck `13/13`, tests
+  `16/16`, build `16/16`; provider calls and cost rows `0`.
+- PR [#112](https://github.com/parkourcafe/selena-ai-visibility/pull/112)
+  remains open/conflicting and is superseded by this remediation. PR
+  [#116](https://github.com/parkourcafe/selena-ai-visibility/pull/116)
+  remains open/draft; its independently reviewed project/tool UI tree is
+  integrated in this candidate.
+- Exact-head CI is pending. The PR-triggered workflows are source checks using
+  stub/no-network provider paths and do not deploy or execute a paid call.
 - No shared-staging mutation, deploy, provider call, production action, billing
-  or recurring job is part of this post-merge documentation update.
-- Read-only post-merge runtime verification records automatic staging web
-  deployment `638ec631…` at exact release `a8b15116` as `SUCCESS`, both public
-  setup-status endpoints as HTTP 200, and automatic measure deployment
-  `99d1717e…` as fail-closed at
-  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. No orchestrator deploy or
-  provider call was issued.
+  or recurring job is part of this follow-up.
 
-Status: `SOURCE_CI_MERGE_PASS / FOLLOW_UP_DOCS_PENDING / STAGING_0056_HOLD`.
+Status: `SOURCE_LOCAL_PASS / EXACT_HEAD_CI_PENDING / STAGING_0057_0058_HOLD`.
 
 ## Current follow-up PR summary
 
-- record the exact owner merge commit and green PR receipts;
-- record automatic staging web/measure side effects and the measurement guard;
-- preserve `b9d967b6` as the exact implementation anchor and `a8b15116` as the
-  accepted release anchor;
-- keep shared staging `0056`, production, Social/Travel, recurring execution,
-  billing and provider calls closed.
+- reconcile the four historical/release migration shapes without rewriting
+  already-delivered migrations;
+- make formal evidence identity tenant-and-project scoped and fail closed for
+  legacy or historical-canary rows;
+- persist an immutable journal boundary so crash recovery cannot relabel a
+  possibly-spent execution as `NO_SPEND`;
+- preserve the reviewed HoReCa project rail and top tool axis;
+- keep shared staging `0057–0058`, production, Social/Travel, recurring
+  execution, billing and provider calls closed.
 
 ## Historical PR ledger
 
@@ -75,7 +68,7 @@ provider capture/journal timestamps, strict replay checks and idempotent
 
 ## Proposed title
 
-`fix(visibility): harden v1.3 pre-production gates`
+`fix(visibility): close v1.3 evidence and journal audit gaps`
 
 ## Proposed PR body
 
