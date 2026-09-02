@@ -86,3 +86,29 @@ The approved one-shot canary ran after an automatically generated, read-only `CL
 | Perplexity | Existing visibility workflow | OUT OF SCOPE | OUT OF SCOPE | Existing integration not revalidated here | OUT OF SCOPE | OUT OF SCOPE | Existing policy unchanged | UNKNOWN | HOLD; no calls made |
 
 **Overall canary decision: `PASS` (bounded technical canary).** The transport, input, response, IDs, cardinality, latency and dated Bright Usage cost reconciliation are validated within the `$0.50` cap. Activation, scoring, UI, tariffs, public product composition and all other datasets remain unchanged. Durable raw retention remains disabled; privacy/architecture review is still required before any pilot activation.
+
+## Final acceptance follow-up
+
+The post-canary runtime reconciliation was completed on 2026-09-02 without a
+provider call:
+
+- Live staging worker deployment `587c496c-3862-4bde-a558-5d4245d1cb46` is
+  `SUCCESS`; startup reached `pg-boss started`, queue creation, handler
+  registration and `worker is ready` with no subsequent pg-boss errors.
+- The only runtime drift found was service-owned `pgboss` ACLs. The owner-run
+  provisioning contract now grants `selena_app` queue-maintenance DML while
+  preserving database ownership; the contract is recorded in commit
+  `651c7e60be11a6fef87cd63aec6a098a60b8be97`.
+- The same provisioning block was applied to the isolated restored copy and
+  verified with a transactionally rolled-back `selena_app` runtime smoke. The
+  migration journal remained unchanged at 56 entries through `0055`.
+- No scoring, UI, tariff, public-product, automatic source activation or
+  migration-journal edits were introduced. The canary script remains manual and
+  is not imported by the worker startup path.
+- Targeted Bright Data/lib tests passed (`39/39`); worker typecheck and build
+  passed. The repository is clean and the branch is pushed to `origin`.
+
+**Final technical acceptance: `PASS`.** The bounded YouTube discovery evidence
+and runtime prerequisites are complete. **Product activation remains
+`HOLD_FOR_PILOT`** until the separately approved privacy-enforcement and
+workflow decision is made; all other datasets remain unlaunched.
