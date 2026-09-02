@@ -189,6 +189,73 @@ INSERT INTO sv_source_snapshots (
 SQL
 }
 
+seed_legacy_projectless_canary() {
+	local database="$1"
+	"${admin[@]}" -d "$database" <<'SQL' >/dev/null
+INSERT INTO sv_provider_canary_executions (
+	id, organization_id, execution_identity
+) VALUES (
+	'58000000-0000-4000-8000-000000000001',
+	'migration-variant',
+	'legacy-projectless-canary'
+);
+SQL
+}
+
+assert_0058_canary_project_binding() {
+	local database="$1"
+	"${admin[@]}" -d "$database" <<'SQL' >/dev/null
+DO $proof$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM sv_provider_canary_executions
+		WHERE id = '58000000-0000-4000-8000-000000000001'
+			AND project_id IS NULL
+	) THEN
+		RAISE EXCEPTION 'MIGRATION_VARIANT_LEGACY_PROJECTLESS_CANARY_NOT_PRESERVED';
+	END IF;
+
+	BEGIN
+		INSERT INTO sv_provider_canary_executions (
+			organization_id, execution_identity
+		) VALUES (
+			'migration-variant', 'new-projectless-canary'
+		);
+		RAISE EXCEPTION 'MIGRATION_VARIANT_NEW_PROJECTLESS_CANARY_ALLOWED';
+	EXCEPTION
+		WHEN check_violation THEN NULL;
+	END;
+END;
+$proof$;
+
+INSERT INTO organization (id, name, slug, created_at)
+VALUES ('migration-variant-other', 'Migration Variant Other', 'migration-variant-other', clock_timestamp());
+INSERT INTO sv_projects (id, organization_id, name, category, country, languages, status)
+VALUES (
+	'58000000-0000-4000-8000-000000000002', 'migration-variant-other',
+	'Migration Variant Other', 'fixture', 'ID', ARRAY['en'], 'DRAFT'
+);
+
+DO $proof$
+BEGIN
+	BEGIN
+		INSERT INTO sv_provider_canary_executions (
+			organization_id, project_id, execution_identity
+		) VALUES (
+			'migration-variant',
+			'58000000-0000-4000-8000-000000000002',
+			'cross-organization-project-canary'
+		);
+		RAISE EXCEPTION 'MIGRATION_VARIANT_CROSS_ORGANIZATION_CANARY_ALLOWED';
+	EXCEPTION
+		WHEN foreign_key_violation THEN NULL;
+	END;
+END;
+$proof$;
+SQL
+}
+
 catalog_fingerprint() {
 	local database="$1"
 	"${admin[@]}" -d "$database" -At <<'SQL'
@@ -306,9 +373,11 @@ run_variant() {
 		"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/compat/0051_release_short_to_feature_superset.sql" >/dev/null
 	fi
 	seed_legacy_project_rows "$database"
+	seed_legacy_projectless_canary "$database"
 	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0056_formal_evidence_acceptance_hardening.sql" >/dev/null
 	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0057_evidence_project_identity_hardening.sql" >/dev/null
 	"${admin[@]}" -d "$database" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0058_journal_provider_boundary_recovery.sql" >/dev/null
+	assert_0058_canary_project_binding "$database"
 	backfill_receipt="$("${admin[@]}" -d "$database" -Atc "SELECT (SELECT project_id::text FROM sv_evidence_index WHERE id = '57000000-0000-4000-8000-000000000006') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000005') || ':' || (SELECT project_id::text FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000008') || ':' || (SELECT project_id IS NULL FROM sv_source_snapshots WHERE id = '57000000-0000-4000-8000-000000000009') || ':' || (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'sv_evidence_index'::regclass AND tgname = 'sv_evidence_index_immutable_guard') || ':' || (SELECT tgenabled::text FROM pg_trigger WHERE tgrelid = 'sv_source_snapshots'::regclass AND tgname = 'sv_source_snapshots_immutable_guard')")"
 	if [[ "$backfill_receipt" != '57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:57000000-0000-4000-8000-000000000001:true:O:O' ]]; then
 		printf 'MIGRATION_VARIANT_LEGACY_BACKFILL_FAILED database=%s receipt=%s\n' "$database" "$backfill_receipt" >&2

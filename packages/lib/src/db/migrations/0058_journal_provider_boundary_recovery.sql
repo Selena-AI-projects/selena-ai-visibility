@@ -431,3 +431,17 @@ $$;
 REVOKE ALL ON FUNCTION "sv_journal_claim_recovery_state"(uuid) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION "sv_recover_journal_daily_claim"(uuid, text) FROM PUBLIC;
+--> statement-breakpoint
+ALTER TABLE "sv_provider_canary_executions"
+	ADD COLUMN "project_id" uuid;
+--> statement-breakpoint
+ALTER TABLE "sv_provider_canary_executions"
+	ADD CONSTRAINT "sv_provider_canary_executions_project_required"
+		CHECK ("project_id" IS NOT NULL) NOT VALID,
+	ADD CONSTRAINT "sv_provider_canary_executions_project_org_fk"
+		FOREIGN KEY ("project_id", "organization_id")
+		REFERENCES "sv_projects"("id", "organization_id") NOT VALID;
+--> statement-breakpoint
+CREATE INDEX "sv_provider_canary_executions_project_org_idx"
+	ON "sv_provider_canary_executions" ("project_id", "organization_id")
+	WHERE "project_id" IS NOT NULL;

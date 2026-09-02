@@ -171,6 +171,12 @@ describe("Visibility OS provider evidence provenance", () => {
 			"source",
 			"execution_identity",
 		]);
+		expect(table.columns.find((column) => column.name === "project_id")?.notNull).toBe(false);
+		const projectReference = table.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_provider_canary_executions_project_org_fk")
+			?.reference();
+		expect(projectReference?.columns.map((column) => column.name)).toEqual(["project_id", "organization_id"]);
+		expect(projectReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
 		const contract = table.checks.find(
 			(candidate) => candidate.name === "sv_provider_canary_executions_contract_check",
 		);
@@ -1485,6 +1491,10 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).toContain("JOURNAL_EXECUTING_ABANDONMENT_BLOCKED");
 		expect(migration).toContain("JOURNAL_CLAIM_NO_SPEND_PROOF_REQUIRED");
 		expect(migration).toContain("JOURNAL_PROVIDER_BOUNDARY_REQUIRED");
+		expect(migration).toContain('ADD COLUMN "project_id" uuid');
+		expect(migration).toContain('CONSTRAINT "sv_provider_canary_executions_project_required"');
+		expect(migration).toContain('CONSTRAINT "sv_provider_canary_executions_project_org_fk"');
+		expect(migration).toContain("NOT VALID");
 		expect(migration).toContain("providerCalls");
 		expect(migration).toContain("'providerCalls', 0");
 		expect(migration).toContain("pg_try_advisory_xact_lock");

@@ -304,6 +304,9 @@ export const svProviderCanaryExecutions = pgTable(
 		organizationId: text("organization_id")
 			.notNull()
 			.references(() => organization.id),
+		// Nullable only for immutable reservations created before migration 0058.
+		// The database NOT VALID check still requires every new row to bind a project.
+		projectId: uuid("project_id"),
 		executionIdentity: text("execution_identity").notNull(),
 		source: text("source").notNull().default("GOOGLE_AI_MODE"),
 		approvedCapUsd: numeric("approved_cap_usd", { precision: 12, scale: 6 }).notNull().default("0.250000"),
@@ -313,6 +316,11 @@ export const svProviderCanaryExecutions = pgTable(
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
+		projectOrganizationReference: foreignKey({
+			name: "sv_provider_canary_executions_project_org_fk",
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+		}),
 		identityUnique: uniqueIndex("sv_provider_canary_executions_identity_unique").on(
 			table.source,
 			table.executionIdentity,

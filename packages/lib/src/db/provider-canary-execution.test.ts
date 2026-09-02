@@ -6,6 +6,7 @@ import { createBrightDataDatasetClient } from "../providers/brightdata-dataset-c
 import {
 	GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 	type GoogleAiModeCanaryReceipt,
+	runGoogleAiModeOneShotCanary,
 } from "../providers/google-ai-mode-one-shot-canary";
 import { providerDatasetContentHash } from "../providers/provider-dataset-authority";
 import {
@@ -16,7 +17,10 @@ import {
 } from "./provider-canary-execution";
 import * as schema from "./schema";
 
-function databaseReturning(rows: { id: string }[]) {
+function databaseReturning(
+	rows: { id: string }[],
+	existingReservation?: { id: string; organizationId: string; projectId: string | null },
+) {
 	const returning = vi.fn(async () => rows);
 	const onConflictDoNothing = vi.fn(() => ({ returning }));
 	const values = vi.fn(() => ({ onConflictDoNothing }));
@@ -24,13 +28,18 @@ function databaseReturning(rows: { id: string }[]) {
 	const execute = vi.fn(async () => ({
 		rows: [{ role: "selena_owner", session_role: "selena_owner", owner_role: "selena_owner" }],
 	}));
+	const select = vi.fn(() => ({
+		from: () => ({
+			where: () => ({ limit: async () => (existingReservation ? [existingReservation] : []) }),
+		}),
+	}));
 	const transaction = vi.fn(
-		async (work: (tx: { execute: typeof execute; insert: typeof insert }) => Promise<unknown>) =>
-			work({ execute, insert }),
+		async (work: (tx: { execute: typeof execute; insert: typeof insert; select: typeof select }) => Promise<unknown>) =>
+			work({ execute, insert, select }),
 	);
 	return {
 		db: { transaction } as unknown as NodePgDatabase<typeof schema>,
-		spies: { transaction, insert, values, onConflictDoNothing, returning },
+		spies: { transaction, insert, values, onConflictDoNothing, returning, select },
 	};
 }
 
@@ -40,6 +49,7 @@ describe("reserveGoogleAiModeCanaryExecution", () => {
 		await expect(
 			reserveGoogleAiModeCanaryExecution(db, {
 				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 				executionIdentity: "release-0e00df4f-google-ai-mode-owner-canary-1",
 			}),
 		).resolves.toEqual({
@@ -52,6 +62,7 @@ describe("reserveGoogleAiModeCanaryExecution", () => {
 		expect(spies.values).toHaveBeenCalledWith(
 			expect.objectContaining({
 				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 				source: "GOOGLE_AI_MODE",
 				approvedCapUsd: "0.250000",
 				recurring: false,
@@ -63,19 +74,127 @@ describe("reserveGoogleAiModeCanaryExecution", () => {
 	});
 
 	it("fails closed when the execution identity was reserved before", async () => {
-		const { db } = databaseReturning([]);
+		const { db } = databaseReturning([], {
+			id: "reservation-1",
+			organizationId: "tenant-1",
+			projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		});
 		await expect(
 			reserveGoogleAiModeCanaryExecution(db, {
 				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 				executionIdentity: "release-0e00df4f-google-ai-mode-owner-canary-1",
 			}),
 		).resolves.toEqual({ status: "ALREADY_RESERVED" });
 	});
 
+	it("rejects an existing execution identity bound to a different project", async () => {
+		const { db } = databaseReturning([], {
+			id: "reservation-1",
+			organizationId: "tenant-1",
+			projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		});
+		await expect(
+			reserveGoogleAiModeCanaryExecution(db, {
+				organizationId: "tenant-1",
+				projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+				executionIdentity: "release-0e00df4f-google-ai-mode-owner-canary-1",
+			}),
+		).rejects.toThrow("GOOGLE_AI_MODE_CANARY_PROJECT_MISMATCH");
+	});
+
+	it("blocks a cross-project reservation replay before provider transport", async () => {
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", "true");
+		vi.stubEnv("SELENA_EMERGENCY_STOP", "false");
+		const { db } = databaseReturning([], {
+			id: "reservation-1",
+			organizationId: "tenant-1",
+			projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+		});
+		const transport = {
+			preflight: vi.fn(async () => undefined),
+			trigger: vi.fn(async () => ({ snapshotId: "must-not-execute" })),
+			progress: vi.fn(async () => ({ status: "ready" })),
+			download: vi.fn(async () => []),
+			cancel: vi.fn(async () => undefined),
+		};
+
+		try {
+			await expect(
+				runGoogleAiModeOneShotCanary({
+					access: {
+						mode: "CANARY",
+						environment: "ISOLATED_CANARY",
+						ownerApproved: true,
+						schemaDiscoveryOnly: true,
+						providerCalls: 1,
+						recurring: false,
+						worstCaseCostUsd: 0.1,
+						approvedCostCapUsd: 0.25,
+						redactionPolicyApproved: true,
+					},
+					environment: { SELENA_BRIGHTDATA_DATASET_GOOGLE_AI: "gd_fixture123" },
+					providerInput: { query: "fixture" },
+					transport,
+					journal: { record: vi.fn(async () => undefined), claimResume: vi.fn(async () => false) },
+					costPreflight: {
+						schemaVersion: "google-ai-mode-cost-preflight-v1",
+						verifiedWorstCaseUsd: 0.1,
+						enforcedMaximumUsd: 0.25,
+						remainingAuthorizedBudgetUsd: 0.25,
+						enforcement: "PROVIDER_ACCOUNT_HARD_CAP",
+						evidenceReference: "cost-preflight:fixture-12345678",
+						verifiedAt: new Date().toISOString(),
+					},
+					reserveOnce: async () => {
+						const reservation = await reserveGoogleAiModeCanaryExecution(db, {
+							organizationId: "tenant-1",
+							projectId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+							executionIdentity: "release-0e00df4f-google-ai-mode-owner-canary-1",
+						});
+						return reservation.status === "ALREADY_RESERVED"
+							? reservation
+							: {
+									status: "RESERVED" as const,
+									reservationReference: `db:${reservation.reservationId}`,
+									approvedCapUsd: reservation.approvedCapUsd,
+									remainingAuthorizedUsd: reservation.remainingAuthorizedUsd,
+								};
+					},
+				}),
+			).resolves.toMatchObject({
+				receipt: { status: "PREFLIGHT_BLOCKED", reason: "DURABLE_RESERVATION_UNAVAILABLE", providerCalls: 0 },
+			});
+			expect(transport.preflight).not.toHaveBeenCalled();
+			expect(transport.trigger).not.toHaveBeenCalled();
+		} finally {
+			vi.unstubAllEnvs();
+		}
+	});
+
+	it("fails closed for a legacy unbound reservation", async () => {
+		const { db } = databaseReturning([], {
+			id: "reservation-1",
+			organizationId: "tenant-1",
+			projectId: null,
+		});
+		await expect(
+			reserveGoogleAiModeCanaryExecution(db, {
+				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+				executionIdentity: "release-0e00df4f-google-ai-mode-owner-canary-1",
+			}),
+		).rejects.toThrow("GOOGLE_AI_MODE_CANARY_PROJECT_MISMATCH");
+	});
+
 	it("rejects malformed identities before opening a transaction", async () => {
 		const { db, spies } = databaseReturning([]);
 		await expect(
-			reserveGoogleAiModeCanaryExecution(db, { organizationId: "tenant-1", executionIdentity: " short " }),
+			reserveGoogleAiModeCanaryExecution(db, {
+				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+				executionIdentity: " short ",
+			}),
 		).rejects.toThrow("PROVIDER_CANARY_EXECUTION_IDENTITY_INVALID");
 		expect(spies.transaction).not.toHaveBeenCalled();
 	});
@@ -158,7 +277,13 @@ async function privateCaptureFixture() {
 	return { prepared, capture: collected.capture };
 }
 
-function persistenceDatabase(options: { reservationId?: string; latestCapability?: Record<string, unknown> } = {}) {
+function persistenceDatabase(
+	options: {
+		reservationId?: string;
+		reservationProjectId?: string | null;
+		latestCapability?: Record<string, unknown>;
+	} = {},
+) {
 	const reservationId = options.reservationId ?? "11111111-1111-4111-8111-111111111111";
 	const inserted = new Map<unknown, unknown[]>();
 	const execute = vi.fn(async () => ({
@@ -172,6 +297,10 @@ function persistenceDatabase(options: { reservationId?: string; latestCapability
 						? [
 								{
 									id: reservationId,
+									projectId:
+										options.reservationProjectId === undefined
+											? "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+											: options.reservationProjectId,
 									approvedCapUsd: "0.250000",
 									recurring: false,
 									automaticRetries: 0,
@@ -265,6 +394,7 @@ describe("persistGoogleAiModeCanaryCapture", () => {
 		expect(audit).toMatchObject({
 			event: "GOOGLE_AI_MODE_CANARY_CAPTURE_PERSISTED",
 			details: {
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
 				evidenceIndexStatus: "NOT_ELIGIBLE",
 				costStatus: "UNKNOWN",
 				acceptance: "HOLD",
@@ -289,6 +419,31 @@ describe("persistGoogleAiModeCanaryCapture", () => {
 				receipt: completeReceipt("99999999-9999-4999-8999-999999999999"),
 			}),
 		).rejects.toThrow("GOOGLE_AI_MODE_CANARY_RESERVATION_MISMATCH");
+		expect(inserted.size).toBe(0);
+	});
+
+	it.each([
+		["a different project", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+		["a legacy unbound reservation", null],
+	])("rejects %s before any persistence write", async (_label, reservationProjectId) => {
+		const fixture = await privateCaptureFixture();
+		const { db, inserted } = persistenceDatabase({ reservationProjectId });
+
+		await expect(
+			persistGoogleAiModeCanaryCapture(db, {
+				organizationId: "tenant-1",
+				projectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+				executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
+				prepared: fixture.prepared,
+				capture: fixture.capture,
+				receipt: completeReceipt(),
+			}),
+		).rejects.toThrow("GOOGLE_AI_MODE_CANARY_PROJECT_MISMATCH");
+		expect(inserted.has(schema.svSourceSnapshots)).toBe(false);
+		expect(inserted.has(schema.svAuditEvents)).toBe(false);
+		expect(inserted.has(schema.svEvidenceIndex)).toBe(false);
+		expect(inserted.has(schema.svCostEvents)).toBe(false);
+		expect(inserted.has(schema.svEvidenceAcceptanceReceipts)).toBe(false);
 		expect(inserted.size).toBe(0);
 	});
 });

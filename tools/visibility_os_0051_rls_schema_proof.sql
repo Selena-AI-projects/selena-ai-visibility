@@ -1232,8 +1232,12 @@ BEGIN
 END;
 $proof_runtime_journal_recovery_acl$;
 
-INSERT INTO sv_provider_canary_executions (organization_id, execution_identity)
-VALUES ('rls-schema-proof-org-a', 'release-0e00df4f-google-ai-mode-owner-canary-1');
+INSERT INTO sv_provider_canary_executions (organization_id, project_id, execution_identity)
+VALUES (
+	'rls-schema-proof-org-a',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+	'release-0e00df4f-google-ai-mode-owner-canary-1'
+);
 
 DO $proof_same_tenant_read$
 BEGIN
@@ -1441,8 +1445,12 @@ DO $proof_global_canary_once$
 DECLARE
 	inserted integer;
 BEGIN
-	INSERT INTO sv_provider_canary_executions (organization_id, execution_identity)
-	VALUES ('rls-schema-proof-org-b', 'release-0e00df4f-google-ai-mode-owner-canary-1')
+	INSERT INTO sv_provider_canary_executions (organization_id, project_id, execution_identity)
+	VALUES (
+		'rls-schema-proof-org-b',
+		'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+		'release-0e00df4f-google-ai-mode-owner-canary-1'
+	)
 	ON CONFLICT (source, execution_identity) DO NOTHING;
 	GET DIAGNOSTICS inserted = ROW_COUNT;
 	IF inserted <> 0 THEN

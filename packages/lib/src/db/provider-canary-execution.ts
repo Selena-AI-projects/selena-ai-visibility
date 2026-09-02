@@ -169,6 +169,7 @@ export async function persistGoogleAiModeCanaryCapture(
 			)
 			.limit(1);
 		if (!reservation) throw new Error("GOOGLE_AI_MODE_CANARY_RESERVATION_MISMATCH");
+		if (reservation.projectId !== input.projectId) throw new Error("GOOGLE_AI_MODE_CANARY_PROJECT_MISMATCH");
 		if (
 			reservation.approvedCapUsd !== "0.250000" ||
 			reservation.recurring !== false ||
@@ -255,6 +256,7 @@ export async function persistGoogleAiModeCanaryCapture(
 				subjectId: snapshot.id,
 				details: {
 					schemaVersion: "google-ai-mode-canary-persistence-receipt-v1.3",
+					projectId: input.projectId,
 					executionIdentity: input.executionIdentity,
 					reservationId: reservation.id,
 					source: "GOOGLE_AI_MODE",
@@ -652,8 +654,10 @@ export async function reconcileHistoricalGoogleAiModeCapture(
  */
 export async function reserveGoogleAiModeCanaryExecution(
 	db: OrganizationDatabase,
-	input: Readonly<{ organizationId: string; executionIdentity: string }>,
+	input: Readonly<{ organizationId: string; projectId: string; executionIdentity: string }>,
 ): Promise<GoogleAiModeCanaryReservation> {
+	if (!input.organizationId.trim()) throw new Error("PROVIDER_CANARY_ORGANIZATION_REQUIRED");
+	if (!input.projectId.trim()) throw new Error("PROVIDER_CANARY_PROJECT_REQUIRED");
 	if (input.executionIdentity.length < 8 || input.executionIdentity.length > 128)
 		throw new Error("PROVIDER_CANARY_EXECUTION_IDENTITY_INVALID");
 	if (input.executionIdentity !== input.executionIdentity.trim())
@@ -664,6 +668,7 @@ export async function reserveGoogleAiModeCanaryExecution(
 			.insert(svProviderCanaryExecutions)
 			.values({
 				organizationId: input.organizationId,
+				projectId: input.projectId,
 				executionIdentity: input.executionIdentity,
 				source: "GOOGLE_AI_MODE",
 				approvedCapUsd: "0.250000",
@@ -675,7 +680,25 @@ export async function reserveGoogleAiModeCanaryExecution(
 				target: [svProviderCanaryExecutions.source, svProviderCanaryExecutions.executionIdentity],
 			})
 			.returning({ id: svProviderCanaryExecutions.id });
-		return reserved?.id ?? null;
+		if (reserved?.id) return reserved.id;
+
+		const [existing] = await tx
+			.select({
+				id: svProviderCanaryExecutions.id,
+				organizationId: svProviderCanaryExecutions.organizationId,
+				projectId: svProviderCanaryExecutions.projectId,
+			})
+			.from(svProviderCanaryExecutions)
+			.where(
+				and(
+					eq(svProviderCanaryExecutions.organizationId, input.organizationId),
+					eq(svProviderCanaryExecutions.executionIdentity, input.executionIdentity),
+					eq(svProviderCanaryExecutions.source, "GOOGLE_AI_MODE"),
+				),
+			)
+			.limit(1);
+		if (existing && existing.projectId !== input.projectId) throw new Error("GOOGLE_AI_MODE_CANARY_PROJECT_MISMATCH");
+		return null;
 	});
 
 	return reservationId
