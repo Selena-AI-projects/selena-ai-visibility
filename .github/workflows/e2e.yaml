@@ -85,8 +85,11 @@ jobs:
       - name: Install Playwright browsers
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 1
-          max_attempts: 3
+          # apt/browser downloads regularly exceed one minute on the hosted
+          # runner. Keep the step bounded without forcing retry-action to kill
+          # a still-healthy privileged dependency install.
+          timeout_minutes: 5
+          max_attempts: 2
           command: pnpm -C apps/web exec playwright install chromium --with-deps
 
       - name: Build elmo CLI
