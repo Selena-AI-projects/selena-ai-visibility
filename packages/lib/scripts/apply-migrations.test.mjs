@@ -61,6 +61,20 @@ describe("bounded migration journal acceptance", () => {
 		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
 	});
 
+	it("normalizes reviewed 0051 and 0052 feature hashes to canonical release hashes", async () => {
+		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
+		expect(rows[51]).toEqual({
+			createdAt: "1787940013000",
+			hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+			acceptedAppliedHashes: ["c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768"],
+		});
+		expect(rows[52]).toEqual({
+			createdAt: "1787940014000",
+			hash: "8e8e663516d0ec16c7c70c9b0d42235b0782c3d3dd86b5d3ebea15e8924c0961",
+			acceptedAppliedHashes: ["3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca"],
+		});
+	});
+
 	it("requires the exact reviewed journal as the postcondition", () => {
 		expect(() => assertJournalPostcondition(expected, expected)).not.toThrow();
 		expect(() => assertJournalPostcondition(expected.slice(0, 2), expected)).toThrow(

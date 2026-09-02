@@ -34,6 +34,14 @@ const APPLIED_MIGRATION_HASH_ALIASES = new Map([
 		"1787940007000:321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec",
 		Object.freeze(["3b3915803095bf23f8e8b2e70134bfd71a7774d2793bf40f2e0a0bd03b1c051b"]),
 	],
+	[
+		"1787940013000:d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+		Object.freeze(["c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768"]),
+	],
+	[
+		"1787940014000:8e8e663516d0ec16c7c70c9b0d42235b0782c3d3dd86b5d3ebea15e8924c0961",
+		Object.freeze(["3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca"]),
+	],
 ]);
 
 export async function expectedJournalRows(migrationsFolder) {
@@ -43,13 +51,25 @@ export async function expectedJournalRows(migrationsFolder) {
 	const rows = await Promise.all(
 		journal.entries.map(async (entry) => {
 			const createdAt = String(entry.when);
-			const hash = createHash("sha256")
+			const sourceHash = createHash("sha256")
 				.update(await readFile(resolve(migrationsFolder, `${entry.tag}.sql`), "utf8"))
 				.digest("hex");
+			const directKey = `${createdAt}:${sourceHash}`;
+			const canonicalEntry = APPLIED_MIGRATION_HASH_ALIASES.get(directKey)
+				? { hash: sourceHash, acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(directKey) }
+				: [...APPLIED_MIGRATION_HASH_ALIASES.entries()].find(
+					([key, aliases]) => key.startsWith(`${createdAt}:`) && aliases.includes(sourceHash),
+				  );
+			const hash = canonicalEntry
+				? canonicalEntry.hash ?? canonicalEntry[0].slice(createdAt.length + 1)
+				: sourceHash;
+			const acceptedAppliedHashes = canonicalEntry
+				? canonicalEntry.acceptedAppliedHashes ?? canonicalEntry[1]
+				: Object.freeze([]);
 			return {
 				createdAt,
 				hash,
-				acceptedAppliedHashes: APPLIED_MIGRATION_HASH_ALIASES.get(`${createdAt}:${hash}`) ?? Object.freeze([]),
+				acceptedAppliedHashes,
 			};
 		}),
 	);
