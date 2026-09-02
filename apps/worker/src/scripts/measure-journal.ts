@@ -29,6 +29,7 @@
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
+import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
 import * as schema from "@workspace/lib/db/schema";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
@@ -252,8 +253,6 @@ type DailyClaimDecision =
 	| { kind: "ALREADY_COMPLETED"; attempt: number; utcDay: string }
 	| { kind: "HOLD"; attempt: number; status: string; utcDay: string };
 
-const CLAIM_LEASE_MINUTES = 45;
-
 /**
  * Claim one project/version/UTC-day before any provider-capable chain exists.
  *
@@ -265,7 +264,7 @@ const CLAIM_LEASE_MINUTES = 45;
 async function acquireDailyClaim(projectId: string, version: string): Promise<DailyClaimDecision> {
 	return db.transaction(async (tx) => {
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
-		const clockResult = await tx.execute(sql`SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS utc_day`);
+		const clockResult = await tx.execute(sql`SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date::text AS utc_day`);
 		const clock = clockResult.rows?.[0] as { utc_day?: string } | undefined;
 		if (!clock?.utc_day) throw new Error("SELENA_JOURNAL_DATABASE_CLOCK_UNAVAILABLE");
 		const utcDay = clock.utc_day;
@@ -276,11 +275,9 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			.select({
 				id: schema.svJournalDailyClaims.id,
 				attempt: schema.svJournalDailyClaims.attempt,
-				configurationLockId: schema.svJournalDailyClaims.configurationLockId,
+				questionSetVersion: schema.svJournalDailyClaims.questionSetVersion,
 				status: schema.svJournalDailyClaims.status,
 				utcDay: schema.svJournalDailyClaims.utcDay,
-				updatedAt: schema.svJournalDailyClaims.updatedAt,
-				stale: sql<boolean>`${schema.svJournalDailyClaims.updatedAt} <= CURRENT_TIMESTAMP - interval '45 minutes'`,
 			})
 			.from(schema.svJournalDailyClaims)
 			.where(
@@ -293,75 +290,21 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			.orderBy(desc(schema.svJournalDailyClaims.utcDay), desc(schema.svJournalDailyClaims.attempt))
 			.limit(1);
 		let abandonedAttempt: number | undefined;
-		if (unresolved && unresolved.status !== "HOLD" && unresolved.stale) {
-			const [abandoned] = await tx
-				.update(schema.svJournalDailyClaims)
-				.set({
-					status: "ABANDONED",
-					abandonedAt: sql`CURRENT_TIMESTAMP`,
-					updatedAt: sql`CURRENT_TIMESTAMP`,
-				})
-				.where(
-					and(
-						eq(schema.svJournalDailyClaims.id, unresolved.id),
-						eq(schema.svJournalDailyClaims.organizationId, tenantId),
-						eq(schema.svJournalDailyClaims.status, unresolved.status),
-						// The lease is compared in the database rather than against the timestamp
-						// read into this process: the column keeps microseconds and a JavaScript
-						// Date keeps milliseconds, so an equality on the value read back can never
-						// match a row whose timestamp came from CURRENT_TIMESTAMP. Status and the
-						// interval are the compare-and-swap — a holder that is still alive has
-						// either moved the row on or refreshed it with a heartbeat.
-						sql`${schema.svJournalDailyClaims.updatedAt} <= CURRENT_TIMESTAMP - interval '45 minutes'`,
-					),
-				)
-				.returning({ id: schema.svJournalDailyClaims.id });
-			if (abandoned) {
-				const [spendEvidence] = unresolved.configurationLockId
-					? await tx
-							.select({
-								recordedRuns: sql<number>`count(${schema.svRuns.id})::int`,
-								recordedCostUsd: sql<string>`coalesce(sum(${schema.svRuns.costUsd}), 0)::text`,
-							})
-							.from(schema.svCycles)
-							.leftJoin(
-								schema.svRuns,
-								and(eq(schema.svRuns.cycleId, schema.svCycles.id), eq(schema.svRuns.organizationId, tenantId)),
-							)
-							.where(
-								and(
-									eq(schema.svCycles.lockId, unresolved.configurationLockId),
-									eq(schema.svCycles.organizationId, tenantId),
-								),
-							)
-					: [];
-				await tx.insert(schema.svAuditEvents).values({
-					organizationId: tenantId,
-					actorId: ctx.actorId,
-					event: "JOURNAL_DAILY_CLAIM_ABANDONED",
-					subjectKind: "journal_daily_claim",
-					subjectId: unresolved.id,
-					details: {
-						fromStatus: unresolved.status,
-						toStatus: "ABANDONED",
-						leaseMinutes: CLAIM_LEASE_MINUTES,
-						previousUpdatedAt: unresolved.updatedAt.toISOString(),
-						configurationLockId: unresolved.configurationLockId,
-						recordedRuns: spendEvidence?.recordedRuns ?? 0,
-						recordedCostUsd: spendEvidence?.recordedCostUsd ?? "0",
-						providerSpendAmbiguous: unresolved.status === "EXECUTING",
-					},
-				});
+		if (unresolved) {
+			const recovery = await recoverJournalDailyClaim(tx, { claimId: unresolved.id, actorId: ctx.actorId });
+			if (recovery === "COMPLETED") {
+				if (!FORCE && unresolved.questionSetVersion === version && unresolved.utcDay === utcDay)
+					return { kind: "ALREADY_COMPLETED", attempt: unresolved.attempt, utcDay: unresolved.utcDay };
+			} else if (recovery === "ABANDONED") {
 				abandonedAttempt = unresolved.attempt;
+			} else {
+				return {
+					kind: "HOLD",
+					attempt: unresolved.attempt,
+					status: recovery === "BUSY" ? "RECOVERY_BUSY" : unresolved.status,
+					utcDay: unresolved.utcDay,
+				};
 			}
-		}
-		if (unresolved && abandonedAttempt === undefined) {
-			return {
-				kind: "HOLD",
-				attempt: unresolved.attempt,
-				status: unresolved.status,
-				utcDay: unresolved.utcDay,
-			};
 		}
 		const [completed] = await tx
 			.select({ attempt: schema.svJournalDailyClaims.attempt })
@@ -378,8 +321,7 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			.orderBy(desc(schema.svJournalDailyClaims.attempt))
 			.limit(1);
 
-		if (completed && !FORCE && abandonedAttempt === undefined)
-			return { kind: "ALREADY_COMPLETED", attempt: completed.attempt, utcDay };
+		if (completed && !FORCE) return { kind: "ALREADY_COMPLETED", attempt: completed.attempt, utcDay };
 
 		const [prior] = await tx
 			.select({ attempt: schema.svJournalDailyClaims.attempt, status: schema.svJournalDailyClaims.status })
@@ -425,7 +367,7 @@ async function linkDailyClaim(claimId: string, configurationLockId: string): Pro
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
 		const [linked] = await tx
 			.update(schema.svJournalDailyClaims)
-			.set({ configurationLockId, updatedAt: sql`CURRENT_TIMESTAMP` })
+			.set({ configurationLockId, updatedAt: sql`clock_timestamp()` })
 			.where(
 				and(
 					eq(schema.svJournalDailyClaims.id, claimId),
@@ -450,8 +392,8 @@ async function transitionDailyClaim(
 			.update(schema.svJournalDailyClaims)
 			.set({
 				status,
-				completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null,
-				updatedAt: sql`CURRENT_TIMESTAMP`,
+				completedAt: status === "COMPLETED" ? sql`clock_timestamp()` : null,
+				updatedAt: sql`clock_timestamp()`,
 			})
 			.where(
 				and(
@@ -478,7 +420,7 @@ async function heartbeatDailyClaim(claimId: string): Promise<void> {
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
 		const [heartbeat] = await tx
 			.update(schema.svJournalDailyClaims)
-			.set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+			.set({ updatedAt: sql`clock_timestamp()` })
 			.where(
 				and(
 					eq(schema.svJournalDailyClaims.id, claimId),
@@ -488,6 +430,13 @@ async function heartbeatDailyClaim(claimId: string): Promise<void> {
 			)
 			.returning({ id: schema.svJournalDailyClaims.id });
 		if (!heartbeat) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+	});
+}
+
+async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDONED" | "HOLD" | "BUSY"> {
+	return db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		return recoverJournalDailyClaim(tx, { claimId, actorId: ctx.actorId });
 	});
 }
 
@@ -655,11 +604,12 @@ async function measure(slug: string): Promise<void> {
 		await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED");
 	} catch (error) {
 		try {
-			await transitionDailyClaim(
-				claim.id,
-				providerBoundaryCrossed ? "EXECUTING" : "CLAIMED",
-				providerBoundaryCrossed ? "HOLD" : "NO_SPEND",
-			);
+			// Once execution begins, only the database may interpret the committed
+			// run/boundary/cost ledgers. It can finish a terminal claim and otherwise
+			// leaves EXECUTING fail-closed for later evidence, rather than freezing an
+			// exact state into the immutable HOLD terminal.
+			if (providerBoundaryCrossed) await recoverDailyClaim(claim.id);
+			else await transitionDailyClaim(claim.id, "CLAIMED", "NO_SPEND");
 		} catch (settlementError) {
 			console.error(
 				`${slug}: daily claim remains fail-closed after settlement error: ${settlementError instanceof Error ? settlementError.message : String(settlementError)}`,

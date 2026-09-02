@@ -10,6 +10,7 @@ import {
 	svMeasurementCycles,
 	svMeasurementDatasets,
 	svProviderDatasetCapabilities,
+	svProviderDatasetSnapshotEvents,
 	svSourceSnapshots,
 } from "./schema";
 
@@ -22,7 +23,7 @@ export type AcceptProviderEvidenceInput = Readonly<{
 	datasetKey: string;
 	datasetVersion: number;
 	sourceSnapshotId: string;
-	observationRef: string;
+	nativeObservationRef: string;
 	expectedSource: string;
 	expectedOutputSchemaVersion: string;
 	dryRun: boolean;
@@ -52,6 +53,12 @@ function requiredTrimmed(value: string, code: string, maximum = 256): string {
 function requiredUuid(value: string, code: string): string {
 	if (!uuidPattern.test(value)) throw new Error(code);
 	return value;
+}
+
+function databaseTimestamp(value: unknown, code: string): Date {
+	const timestamp = value instanceof Date ? value : typeof value === "string" ? new Date(value) : null;
+	if (!timestamp || !Number.isFinite(timestamp.getTime())) throw new Error(code);
+	return timestamp;
 }
 
 function capabilityDomainMatchesEvidence(capabilityDomain: string, evidenceDomain: string): boolean {
@@ -96,22 +103,25 @@ function assertAcceptanceAudit(
 		value.datasetId !== input.datasetId ||
 		value.datasetKey !== input.datasetKey ||
 		value.datasetVersion !== input.datasetVersion ||
-		value.observationRef !== input.observationRef ||
+		value.organizationId !== input.organizationId ||
+		value.nativeObservationRef !== input.nativeObservationRef ||
 		value.source !== input.expectedSource ||
 		value.outputSchemaVersion !== input.expectedOutputSchemaVersion ||
 		value.capturedAt !== capturedAt.toISOString() ||
 		value.acceptedAt !== acceptedAt.toISOString() ||
 		value.providerCalls !== 0 ||
+		value.acceptanceProviderCalls !== 0 ||
 		value.recurring !== false ||
-		value.privatePayloadRead !== false
+		value.privatePayloadRead !== false ||
+		value.costRows !== 0
 	)
 		throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_IDEMPOTENCY_MISMATCH");
 }
 
 /**
- * Atomically links and accepts schema-approved provider evidence. Snapshot
- * payload, hashes and provider locators are intentionally absent from every
- * projection in this service.
+ * Atomically links and accepts schema-approved provider evidence. The owner
+ * control plane reads only the provider locators needed to prove the matching
+ * DELIVERED journal row; snapshot payload and content hashes are never read.
  */
 export async function acceptProviderEvidence(
 	db: OrganizationDatabase,
@@ -126,7 +136,7 @@ export async function acceptProviderEvidence(
 	if (!Number.isSafeInteger(input.datasetVersion) || input.datasetVersion < 1)
 		throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_DATASET_VERSION_INVALID");
 	requiredUuid(input.sourceSnapshotId, "PROVIDER_EVIDENCE_ACCEPTANCE_SNAPSHOT_INVALID");
-	requiredTrimmed(input.observationRef, "PROVIDER_EVIDENCE_ACCEPTANCE_OBSERVATION_INVALID", 512);
+	requiredTrimmed(input.nativeObservationRef, "PROVIDER_EVIDENCE_ACCEPTANCE_OBSERVATION_INVALID", 512);
 	requiredTrimmed(input.expectedSource, "PROVIDER_EVIDENCE_ACCEPTANCE_SOURCE_INVALID");
 	requiredTrimmed(input.expectedOutputSchemaVersion, "PROVIDER_EVIDENCE_ACCEPTANCE_OUTPUT_SCHEMA_INVALID");
 
@@ -136,20 +146,30 @@ export async function acceptProviderEvidence(
 				tx,
 				"PROVIDER_EVIDENCE_ACCEPTANCE_OWNER_SCOPE_REQUIRED",
 			);
+			const formalIdentity = JSON.stringify([
+				input.organizationId,
+				input.projectId,
+				input.domainId,
+				input.cycleId,
+				input.datasetId,
+				input.sourceSnapshotId,
+				input.nativeObservationRef,
+			]);
 			const lock = await tx.execute(
-				sql`select pg_try_advisory_xact_lock(hashtextextended(${`${input.domainId}|${input.observationRef}`}, 0)) as acquired, transaction_timestamp() as accepted_at`,
+				sql`select pg_advisory_xact_lock(hashtextextended(${formalIdentity}, 0)), true as acquired, transaction_timestamp() as accepted_at`,
 			);
 			const lockRow = (lock as { rows?: Array<{ acquired?: unknown; accepted_at?: unknown }> }).rows?.[0];
 			if (lockRow?.acquired !== true) throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_LOCK_BUSY");
-			if (!(lockRow.accepted_at instanceof Date) || !Number.isFinite(lockRow.accepted_at.getTime()))
-				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_DATABASE_TIME_INVALID");
-			const acceptedAt = lockRow.accepted_at;
+			const acceptedAt = databaseTimestamp(lockRow.accepted_at, "PROVIDER_EVIDENCE_ACCEPTANCE_DATABASE_TIME_INVALID");
 
 			const [snapshot] = await tx
 				.select({
 					id: svSourceSnapshots.id,
 					organizationId: svSourceSnapshots.organizationId,
+					projectId: svSourceSnapshots.projectId,
 					sourceType: svSourceSnapshots.sourceType,
+					providerDatasetRef: svSourceSnapshots.providerDatasetRef,
+					rawReference: svSourceSnapshots.rawReference,
 					capabilityId: svSourceSnapshots.capabilityId,
 					inputSchemaVersion: svSourceSnapshots.inputSchemaVersion,
 					outputSchemaVersion: svSourceSnapshots.outputSchemaVersion,
@@ -167,6 +187,7 @@ export async function acceptProviderEvidence(
 			if (!snapshot) throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_SNAPSHOT_NOT_FOUND");
 			if (
 				snapshot.organizationId !== input.organizationId ||
+				snapshot.projectId !== input.projectId ||
 				snapshot.sourceType !== input.expectedSource ||
 				!snapshot.capabilityId ||
 				!snapshot.inputSchemaVersion ||
@@ -176,11 +197,34 @@ export async function acceptProviderEvidence(
 				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_SNAPSHOT_NOT_ELIGIBLE");
 			if (acceptedAt.getTime() < snapshot.capturedAt.getTime())
 				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_TIME_BEFORE_CAPTURE");
+			if (!snapshot.providerDatasetRef || !snapshot.rawReference)
+				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED");
+
+			const [deliveredJournal] = await tx
+				.select({
+					id: svProviderDatasetSnapshotEvents.id,
+					provider: svProviderDatasetSnapshotEvents.provider,
+					observedAt: svProviderDatasetSnapshotEvents.observedAt,
+				})
+				.from(svProviderDatasetSnapshotEvents)
+				.where(
+					and(
+						eq(svProviderDatasetSnapshotEvents.organizationId, input.organizationId),
+						eq(svProviderDatasetSnapshotEvents.projectId, input.projectId),
+						eq(svProviderDatasetSnapshotEvents.source, snapshot.sourceType),
+						eq(svProviderDatasetSnapshotEvents.providerDatasetId, snapshot.providerDatasetRef),
+						eq(svProviderDatasetSnapshotEvents.phase, "DELIVERED"),
+						sql`'brightdata:snapshot:' || ${svProviderDatasetSnapshotEvents.snapshotId} = ${snapshot.rawReference}`,
+					),
+				)
+				.limit(1);
+			if (!deliveredJournal) throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED");
 
 			const [capability] = await tx
 				.select({
 					id: svProviderDatasetCapabilities.id,
 					organizationId: svProviderDatasetCapabilities.organizationId,
+					provider: svProviderDatasetCapabilities.provider,
 					source: svProviderDatasetCapabilities.source,
 					domain: svProviderDatasetCapabilities.domain,
 					inputSchemaVersion: svProviderDatasetCapabilities.inputSchemaVersion,
@@ -207,6 +251,11 @@ export async function acceptProviderEvidence(
 				capability.immutable !== true
 			)
 				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_CAPABILITY_NOT_ELIGIBLE");
+			if (
+				deliveredJournal.provider !== capability.provider ||
+				deliveredJournal.observedAt.getTime() < snapshot.capturedAt.getTime()
+			)
+				throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED");
 
 			const [cycle] = await tx
 				.select({
@@ -283,6 +332,7 @@ export async function acceptProviderEvidence(
 				.select({
 					id: svEvidenceIndex.id,
 					organizationId: svEvidenceIndex.organizationId,
+					projectId: svEvidenceIndex.projectId,
 					domainId: svEvidenceIndex.domainId,
 					cycleId: svEvidenceIndex.cycleId,
 					observationRef: svEvidenceIndex.observationRef,
@@ -292,7 +342,15 @@ export async function acceptProviderEvidence(
 				})
 				.from(svEvidenceIndex)
 				.where(
-					and(eq(svEvidenceIndex.domainId, input.domainId), eq(svEvidenceIndex.observationRef, input.observationRef)),
+					and(
+						eq(svEvidenceIndex.organizationId, input.organizationId),
+						eq(svEvidenceIndex.projectId, input.projectId),
+						eq(svEvidenceIndex.domainId, input.domainId),
+						eq(svEvidenceIndex.cycleId, input.cycleId),
+						eq(svEvidenceIndex.datasetId, input.datasetId),
+						eq(svEvidenceIndex.sourceSnapshotId, input.sourceSnapshotId),
+						eq(svEvidenceIndex.observationRef, input.nativeObservationRef),
+					),
 				)
 				.limit(2);
 
@@ -303,9 +361,10 @@ export async function acceptProviderEvidence(
 					existingEvidence.length !== 1 ||
 					!evidence ||
 					evidence.organizationId !== input.organizationId ||
+					evidence.projectId !== input.projectId ||
 					evidence.domainId !== input.domainId ||
 					evidence.cycleId !== input.cycleId ||
-					evidence.observationRef !== input.observationRef ||
+					evidence.observationRef !== input.nativeObservationRef ||
 					evidence.datasetId !== input.datasetId ||
 					evidence.sourceSnapshotId !== input.sourceSnapshotId ||
 					evidence.capturedAt.getTime() !== snapshot.capturedAt.getTime()
@@ -317,12 +376,21 @@ export async function acceptProviderEvidence(
 					.insert(svEvidenceIndex)
 					.values({
 						organizationId: input.organizationId,
+						projectId: input.projectId,
 						domainId: input.domainId,
 						cycleId: input.cycleId,
-						observationRef: input.observationRef,
+						observationRef: input.nativeObservationRef,
 						datasetId: input.datasetId,
 						sourceSnapshotId: input.sourceSnapshotId,
-						capturedAt: snapshot.capturedAt,
+						// Preserve PostgreSQL microseconds. A JavaScript Date is only
+						// millisecond-precise, while the acceptance trigger intentionally
+						// requires exact equality with the immutable snapshot timestamp.
+						capturedAt: sql`(
+							SELECT "source"."captured_at"
+							FROM "sv_source_snapshots" AS "source"
+							WHERE "source"."id" = ${input.sourceSnapshotId}
+								AND "source"."organization_id" = ${input.organizationId}
+						)`,
 					})
 					.returning({ id: svEvidenceIndex.id });
 				if (!evidence) throw new Error("PROVIDER_EVIDENCE_ACCEPTANCE_EVIDENCE_PERSISTENCE_FAILED");
@@ -398,6 +466,7 @@ export async function acceptProviderEvidence(
 					details: {
 						schemaVersion: "provider-evidence-acceptance-receipt-v1.3",
 						evidenceId,
+						organizationId: input.organizationId,
 						sourceSnapshotId: input.sourceSnapshotId,
 						projectId: input.projectId,
 						domainId: input.domainId,
@@ -405,14 +474,16 @@ export async function acceptProviderEvidence(
 						datasetId: input.datasetId,
 						datasetKey: input.datasetKey,
 						datasetVersion: input.datasetVersion,
-						observationRef: input.observationRef,
+						nativeObservationRef: input.nativeObservationRef,
 						source: input.expectedSource,
 						outputSchemaVersion: input.expectedOutputSchemaVersion,
 						capturedAt: snapshot.capturedAt.toISOString(),
 						acceptedAt: acceptedAt.toISOString(),
 						providerCalls: 0,
+						acceptanceProviderCalls: 0,
 						recurring: false,
 						privatePayloadRead: false,
+						costRows: 0,
 					},
 				})
 				.returning({ id: svAuditEvents.id });

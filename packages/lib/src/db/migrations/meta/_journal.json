@@ -400,6 +400,20 @@
       "when": 1787940018000,
       "tag": "0056_formal_evidence_acceptance_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1787940019000,
+      "tag": "0057_evidence_project_identity_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1787940020000,
+      "tag": "0058_journal_provider_boundary_recovery",
+      "breakpoints": true
     }
   ]
 }

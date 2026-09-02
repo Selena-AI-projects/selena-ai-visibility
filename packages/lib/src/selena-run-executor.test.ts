@@ -198,10 +198,12 @@ describe("Selena measurement runner", () => {
 	const ctx: Ctx = { tenantId: "org-1" };
 
 	function storeFor(permit = permitFor()) {
-		const claim = vi.fn(async () => ({
+		const claim = vi.fn(async (_ctx: Ctx, _permitId: string, opts?: { journalClaimId?: string }) => ({
 			permit,
 			run: { id: "run-1" },
 			cycle: { id: "cycle-1", status: "RUNNING" },
+			claimed: true,
+			providerBoundary: opts?.journalClaimId ? { journalClaimId: opts.journalClaimId, runId: "run-1" } : undefined,
 		}));
 		const complete = vi.fn(async () => ({ id: "run-1" }));
 		return { store: { claim, complete } satisfies MeasurementRunStore<Ctx>, claim, complete };
@@ -321,6 +323,32 @@ describe("Selena measurement runner", () => {
 		expect(complete).not.toHaveBeenCalled();
 	});
 
+	it("does not reach an adapter unless the journal provider boundary was durably committed", async () => {
+		const { store, claim, complete } = storeFor();
+		claim.mockResolvedValueOnce({
+			permit: permitFor(),
+			run: { id: "run-1" },
+			cycle: { id: "cycle-1", status: "RUNNING" },
+			claimed: true,
+			providerBoundary: undefined,
+		});
+		const { adapter, execute } = spyAdapter();
+
+		await expect(
+			runMeasurementForPermit({
+				permitId: "permit-1",
+				journalClaimId: "claim-1",
+				ctx,
+				store,
+				adapters: { noop: adapter },
+				config: { enabled: true, adapter: "noop" },
+				now,
+			}),
+		).rejects.toThrow("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
+		expect(execute).not.toHaveBeenCalled();
+		expect(complete).not.toHaveBeenCalled();
+	});
+
 	it("records completion time after provider execution instead of reusing the claim time", async () => {
 		const { store, complete } = storeFor();
 		const { adapter } = spyAdapter();
@@ -341,8 +369,16 @@ describe("Selena measurement runner", () => {
 		});
 	});
 
-	it("records a blocked run as failed instead of retrying a spent permit", async () => {
-		const { store, complete } = storeFor(permitFor({ consumedAt: new Date(now.getTime() - 1000) }));
+	it("returns an already-consumed permit idempotently without rewriting its existing run", async () => {
+		const consumedPermit = permitFor({ consumedAt: new Date(now.getTime() - 1000) });
+		const { store, claim, complete } = storeFor(consumedPermit);
+		claim.mockResolvedValueOnce({
+			permit: consumedPermit,
+			run: { id: "run-1" },
+			cycle: { id: "cycle-1", status: "RUNNING" },
+			claimed: false,
+			providerBoundary: undefined,
+		});
 		const { adapter, execute } = spyAdapter();
 		const result = await runMeasurementForPermit({
 			permitId: "permit-1",
@@ -352,14 +388,36 @@ describe("Selena measurement runner", () => {
 			config: { enabled: true, adapter: "noop" },
 			now,
 		});
-		expect(result).toEqual({ status: "failed", runId: "run-1", reason: "SELENA_PERMIT_ALREADY_CONSUMED" });
+		expect(result).toEqual({ status: "skipped", reason: "SELENA_PERMIT_ALREADY_CONSUMED" });
 		expect(execute).not.toHaveBeenCalled();
-		expect(complete).toHaveBeenCalledWith(
-			ctx,
-			"run-1",
-			expect.objectContaining({ status: "FAILED", validity: "INVALID" }),
-			{ now: expect.any(Date) },
-		);
+		expect(complete).not.toHaveBeenCalled();
+	});
+
+	it("replays a fenced journal permit without a second adapter call or run mutation", async () => {
+		const consumedPermit = permitFor({ consumedAt: new Date(now.getTime() - 1000) });
+		const { store, claim, complete } = storeFor(consumedPermit);
+		claim.mockResolvedValueOnce({
+			permit: consumedPermit,
+			run: { id: "run-1" },
+			cycle: { id: "cycle-1", status: "RUNNING" },
+			claimed: false,
+			providerBoundary: { journalClaimId: "claim-1", runId: "run-1" },
+		});
+		const { adapter, execute } = spyAdapter();
+
+		await expect(
+			runMeasurementForPermit({
+				permitId: "permit-1",
+				journalClaimId: "claim-1",
+				ctx,
+				store,
+				adapters: { noop: adapter },
+				config: { enabled: true, adapter: "noop" },
+				now,
+			}),
+		).resolves.toEqual({ status: "skipped", reason: "SELENA_PERMIT_ALREADY_CONSUMED" });
+		expect(execute).not.toHaveBeenCalled();
+		expect(complete).not.toHaveBeenCalled();
 	});
 
 	it("stops a claimed run when its cycle is stopped", async () => {
@@ -368,6 +426,8 @@ describe("Selena measurement runner", () => {
 			permit: permitFor(),
 			run: { id: "run-1" },
 			cycle: { id: "cycle-1", status: "STOPPED" },
+			claimed: true,
+			providerBoundary: undefined,
 		});
 		const { adapter, execute } = spyAdapter();
 		const result = await runMeasurementForPermit({

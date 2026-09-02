@@ -35,7 +35,7 @@ describe("bounded migration runner", () => {
 		const result = spawnSync(process.execPath, [runner, "--prepare-only"], {
 			env: {
 				...process.env,
-				SELENA_MIGRATION_MAX_INDEX: "56",
+				SELENA_MIGRATION_MAX_INDEX: "58",
 				SELENA_BOUNDED_MIGRATIONS_DIR: targetDirectory,
 			},
 			encoding: "utf8",
@@ -43,9 +43,9 @@ describe("bounded migration runner", () => {
 
 		expect(result.status).toBe(0);
 		const journal = JSON.parse(readFileSync(resolve(targetDirectory, "meta/_journal.json"), "utf8"));
-		expect(journal.entries.at(-1)).toMatchObject({ idx: 56, tag: "0056_formal_evidence_acceptance_hardening" });
-		expect(readdirSync(targetDirectory)).toContain("0056_formal_evidence_acceptance_hardening.sql");
-		expect(readdirSync(targetDirectory)).not.toContain("0057_placeholder.sql");
+		expect(journal.entries.at(-1)).toMatchObject({ idx: 58, tag: "0058_journal_provider_boundary_recovery" });
+		expect(readdirSync(targetDirectory)).toContain("0058_journal_provider_boundary_recovery.sql");
+		expect(readdirSync(targetDirectory)).not.toContain("0058_placeholder.sql");
 	});
 
 	it("fails before invoking drizzle-kit when no maximum is configured", () => {
@@ -62,7 +62,7 @@ describe("bounded migration runner", () => {
 		const result = spawnSync(process.execPath, [runner, "--prepare-only"], {
 			env: {
 				...process.env,
-				SELENA_MIGRATION_MAX_INDEX: "55",
+				SELENA_MIGRATION_MAX_INDEX: "56",
 				SELENA_BOUNDED_MIGRATIONS_DIR: "/",
 			},
 			encoding: "utf8",

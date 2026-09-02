@@ -28,6 +28,15 @@ describe("ENV_REGISTRY", () => {
 		expect(wrong.map((spec) => spec.name)).toEqual([]);
 	});
 
+	it("keeps the Local cursor signing key server-only and outside tenant credential overrides", () => {
+		const cursorSecret = ENV_REGISTRY.find((spec) => spec.name === "SELENA_LOCAL_CURSOR_HMAC_SECRET");
+		expect(cursorSecret).toMatchObject({
+			scope: "server",
+			requiredBy: "optional",
+		});
+		expect(cursorSecret?.credential).not.toBe(true);
+	});
+
 	it("declares a provider id exactly on dynamic-scrape-targets entries", () => {
 		const wrong = ENV_REGISTRY.filter(
 			(spec) => (spec.requiredBy === "dynamic-scrape-targets") !== (spec.provider !== undefined),

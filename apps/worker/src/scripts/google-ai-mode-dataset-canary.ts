@@ -92,25 +92,27 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 				? createPostgresBrightDataSnapshotJournal({ db, organizationId, projectId })
 				: undefined,
 		costPreflight,
-		reserveOnce: organizationId
-			? async () => {
-					const reservation = await reserveGoogleAiModeCanaryExecution(db, {
-						organizationId,
-						executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
-					});
-					return reservation.status === "ALREADY_RESERVED"
-						? reservation
-						: {
-								status: "RESERVED" as const,
-								reservationReference: `db:${reservation.reservationId}`,
-								approvedCapUsd: reservation.approvedCapUsd,
-								remainingAuthorizedUsd: reservation.remainingAuthorizedUsd,
-							};
-				}
-			: undefined,
+		reserveOnce:
+			organizationId && projectId
+				? async () => {
+						const reservation = await reserveGoogleAiModeCanaryExecution(db, {
+							organizationId,
+							projectId,
+							executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
+						});
+						return reservation.status === "ALREADY_RESERVED"
+							? reservation
+							: {
+									status: "RESERVED" as const,
+									reservationReference: `db:${reservation.reservationId}`,
+									approvedCapUsd: reservation.approvedCapUsd,
+									remainingAuthorizedUsd: reservation.remainingAuthorizedUsd,
+								};
+					}
+				: undefined,
 	});
 	if (result.receipt.status === "COMPLETE") {
-		if (!organizationId || !result.capture || !result.prepared) {
+		if (!organizationId || !projectId || !result.capture || !result.prepared) {
 			process.stdout.write(
 				`${JSON.stringify(
 					failedGoogleAiModeCanaryPersistenceReceipt(result.receipt, "CAPTURE_PERSISTENCE_INPUT_MISSING"),
@@ -121,6 +123,7 @@ export async function executeGoogleAiModeDatasetCanaryCommand(): Promise<number>
 		try {
 			const persistence = await persistGoogleAiModeCanaryCapture(db, {
 				organizationId,
+				projectId,
 				executionIdentity: GOOGLE_AI_MODE_CANARY_EXECUTION_IDENTITY,
 				prepared: result.prepared,
 				capture: result.capture,

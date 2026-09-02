@@ -22,17 +22,22 @@ const routerHarness = vi.hoisted(() => ({
 		},
 		generatedAt: "2026-09-01T00:00:00.000Z",
 	},
-	search: { locale: "en" as const, project: "11111111-1111-4111-8111-111111111111" },
+	search: {
+		locale: "en" as const,
+		project: "11111111-1111-4111-8111-111111111111",
+		evidence: undefined as string | undefined,
+	},
 }));
 
 vi.mock("@tanstack/react-router", () => {
-	const toHref = (to: string, search?: Record<string, string | undefined>) => {
+	const toHref = (to: string, search?: Record<string, string | undefined>, hash?: string) => {
 		const params = new URLSearchParams();
 		for (const [key, value] of Object.entries(search ?? {})) {
 			if (value) params.set(key, value);
 		}
 		const query = params.toString();
-		return query ? `${to}?${query}` : to;
+		const href = query ? `${to}?${query}` : to;
+		return hash ? `${href}#${hash}` : href;
 	};
 
 	return {
@@ -44,13 +49,15 @@ vi.mock("@tanstack/react-router", () => {
 		Link: ({
 			to,
 			search,
+			hash,
 			children,
 			...props
 		}: {
 			to: string;
 			search?: Record<string, string | undefined>;
+			hash?: string;
 			children: ReactNode;
-		}) => createElement("a", { ...props, href: toHref(to, search) }, children),
+		}) => createElement("a", { ...props, "data-router-link": "true", href: toHref(to, search, hash) }, children),
 	};
 });
 
@@ -78,5 +85,26 @@ describe("HoReCa project rail", () => {
 		expect(avli).toContain('aria-current="page"');
 		expect(kora).toContain(`href="/app/selena-horeca?locale=en&amp;project=${projectIds.kora}"`);
 		expect(kora).not.toContain("aria-current");
+		const visibility = projectLinkAttributes(html, "Visibility");
+		expect(visibility).toContain('data-router-link="true"');
+		expect(html).toContain(`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}#visibility"`);
+	});
+
+	it("keeps evidence and selected project context in workspace tool links", () => {
+		const previousSearch = routerHarness.search;
+		routerHarness.search = {
+			locale: "en",
+			project: projectIds.avli,
+			evidence: "33333333-3333-4333-8333-333333333333",
+		};
+		try {
+			const component = (Route as unknown as { options: { component: () => ReactNode } }).options.component;
+			const html = renderToStaticMarkup(createElement(component));
+			expect(html).toContain(
+				`href="/app/selena-horeca?locale=en&amp;project=${projectIds.avli}&amp;evidence=33333333-3333-4333-8333-333333333333#actions"`,
+			);
+		} finally {
+			routerHarness.search = previousSearch;
+		}
 	});
 });

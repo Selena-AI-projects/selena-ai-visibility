@@ -26,7 +26,7 @@ function acceptanceInput(dryRun = false) {
 		datasetKey: "google-ai-mode-answers",
 		datasetVersion: 1,
 		sourceSnapshotId: ids.snapshot,
-		observationRef: "GOOGLE_AI_MODE|question-1|repeat-0",
+		nativeObservationRef: "GOOGLE_AI_MODE|question-1|repeat-0",
 		expectedSource: "GOOGLE_AI_MODE",
 		expectedOutputSchemaVersion: "google-ai-mode-output-v1",
 		dryRun,
@@ -39,13 +39,19 @@ function acceptanceDatabase(
 		outputSchemaVersion?: string | null;
 		capabilityStatus?: string;
 		cycleStatus?: string;
-		lockAcquired?: boolean;
+		snapshotProjectId?: string | null;
+		deliveredJournal?: boolean;
+		deliveredProvider?: string;
+		deliveredObservedAt?: Date;
 	}> = {},
 ) {
 	const snapshot = {
 		id: ids.snapshot,
 		organizationId: "tenant-a",
+		projectId: options.snapshotProjectId === undefined ? ids.project : options.snapshotProjectId,
 		sourceType: "GOOGLE_AI_MODE",
+		providerDatasetRef: "gd_google_ai_mode",
+		rawReference: "brightdata:snapshot:snapshot-1",
 		capabilityId: ids.capability,
 		inputSchemaVersion: "google-ai-mode-input-v1",
 		outputSchemaVersion:
@@ -56,6 +62,7 @@ function acceptanceDatabase(
 	const capability = {
 		id: ids.capability,
 		organizationId: "tenant-a",
+		provider: "BRIGHT_DATA",
 		source: "GOOGLE_AI_MODE",
 		domain: "AI",
 		inputSchemaVersion: "google-ai-mode-input-v1",
@@ -96,7 +103,7 @@ function acceptanceDatabase(
 			return {
 				rows: [
 					{
-						acquired: options.lockAcquired ?? true,
+						acquired: true,
 						accepted_at: new Date("2026-09-02T04:00:00.000Z"),
 					},
 				],
@@ -120,6 +127,16 @@ function acceptanceDatabase(
 					where: () => ({
 						limit: async (limit: number) => {
 							if (table === schema.svSourceSnapshots) return [snapshot].slice(0, limit);
+							if (table === schema.svProviderDatasetSnapshotEvents)
+								return options.deliveredJournal === false
+									? []
+									: [
+											{
+												id: "journal-delivered",
+												provider: options.deliveredProvider ?? "BRIGHT_DATA",
+												observedAt: options.deliveredObservedAt ?? new Date("2026-09-02T03:01:00.000Z"),
+											},
+										].slice(0, limit);
 							if (table === schema.svProviderDatasetCapabilities) return [capability].slice(0, limit);
 							if (table === schema.svMeasurementCycles) return [cycle].slice(0, limit);
 							if (table === schema.svConfigurationLocks) return [configurationLock].slice(0, limit);
@@ -142,7 +159,14 @@ function acceptanceDatabase(
 						: table === schema.svEvidenceAcceptanceReceipts
 							? ids.acceptance
 							: ids.audit;
-				staged.push({ table, value: { id, ...value } });
+				staged.push({
+					table,
+					value: {
+						id,
+						...value,
+						...(table === schema.svEvidenceIndex ? { capturedAt: snapshot.capturedAt } : {}),
+					},
+				});
 				return { returning: async () => [{ id }] };
 			},
 		}));
@@ -202,31 +226,55 @@ describe("acceptProviderEvidence", () => {
 		expect(snapshotProjection?.keys).toEqual([
 			"id",
 			"organizationId",
+			"projectId",
 			"sourceType",
+			"providerDatasetRef",
+			"rawReference",
 			"capabilityId",
 			"inputSchemaVersion",
 			"outputSchemaVersion",
 			"capturedAt",
 			"immutable",
 		]);
-		for (const privateColumn of [
-			"snapshot",
-			"sourceRef",
-			"contentSha256",
-			"providerDatasetRef",
-			"environment",
-			"rawReference",
-		])
+		for (const privateColumn of ["snapshot", "sourceRef", "contentSha256", "environment"])
 			expect(snapshotProjection?.keys).not.toContain(privateColumn);
 	});
 
-	it("fails closed immediately when the global observation lock is busy", async () => {
-		const state = acceptanceDatabase({ lockAcquired: false });
+	it("uses the complete tenant/project evidence tuple with a blocking transaction lock", async () => {
+		const state = acceptanceDatabase();
+		await acceptProviderEvidence(state.db, acceptanceInput(true));
+		const serviceSource = readFileSync(new URL("./provider-evidence-acceptance.ts", import.meta.url), "utf8");
+		expect(serviceSource).toContain("pg_advisory_xact_lock");
+		expect(serviceSource).not.toContain("pg_try_advisory_xact_lock");
+		expect(serviceSource).toContain("input.organizationId");
+		expect(serviceSource).toContain("input.projectId");
+		expect(state.execute).toHaveBeenCalled();
+	});
 
+	it("rejects a snapshot from another project before creating evidence", async () => {
+		const state = acceptanceDatabase({ snapshotProjectId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
 		await expect(acceptProviderEvidence(state.db, acceptanceInput())).rejects.toThrow(
-			"PROVIDER_EVIDENCE_ACCEPTANCE_LOCK_BUSY",
+			"PROVIDER_EVIDENCE_ACCEPTANCE_SNAPSHOT_NOT_ELIGIBLE",
 		);
-		expect(state.selections).toHaveLength(0);
+		expect(state.attempted).toHaveLength(0);
+	});
+
+	it("requires a project-matching DELIVERED snapshot journal", async () => {
+		const state = acceptanceDatabase({ deliveredJournal: false });
+		await expect(acceptProviderEvidence(state.db, acceptanceInput())).rejects.toThrow(
+			"PROVIDER_EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED",
+		);
+		expect(state.attempted).toHaveLength(0);
+	});
+
+	it.each([
+		["another provider", { deliveredProvider: "OTHER_PROVIDER" }],
+		["delivery before capture", { deliveredObservedAt: new Date("2026-09-02T02:59:59.000Z") }],
+	])("rejects %s as delivered provenance", async (_label, options) => {
+		const state = acceptanceDatabase(options);
+		await expect(acceptProviderEvidence(state.db, acceptanceInput())).rejects.toThrow(
+			"PROVIDER_EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED",
+		);
 		expect(state.attempted).toHaveLength(0);
 	});
 
@@ -260,7 +308,16 @@ describe("acceptProviderEvidence", () => {
 		expect(state.durable.audits[0]).toMatchObject({
 			event: "PROVIDER_EVIDENCE_FORMALLY_ACCEPTED",
 			actorId: "system:provider-evidence-acceptance",
-			details: { providerCalls: 0, recurring: false, privatePayloadRead: false },
+			details: {
+				organizationId: "tenant-a",
+				projectId: ids.project,
+				nativeObservationRef: "GOOGLE_AI_MODE|question-1|repeat-0",
+				providerCalls: 0,
+				acceptanceProviderCalls: 0,
+				recurring: false,
+				privatePayloadRead: false,
+				costRows: 0,
+			},
 		});
 		expect(state.durable.acceptances[0]).toMatchObject({ acceptedBy: "database-role:postgres" });
 		expect(JSON.stringify(state.durable.audits)).not.toContain("database-role:postgres");
@@ -318,6 +375,10 @@ describe("formal evidence acceptance migration", () => {
 		new URL("./migrations/0056_formal_evidence_acceptance_hardening.sql", import.meta.url),
 		"utf8",
 	);
+	const projectIdentityMigration = readFileSync(
+		new URL("./migrations/0057_evidence_project_identity_hardening.sql", import.meta.url),
+		"utf8",
+	);
 	const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
 
 	it("enforces eligibility independently of the owner service", () => {
@@ -347,7 +408,7 @@ describe("formal evidence acceptance migration", () => {
 		expect(migration).toContain("NEW.\"capability_status\" <> 'CANARY_ONLY'");
 		expect(migration).toContain('NEW."output_schema_version" IS NOT NULL');
 		expect(roleBootstrap).toContain("GRANT SELECT, INSERT ON\n\tsv_audit_events, sv_provider_dataset_capabilities");
-		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0056");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057");
 	});
 
 	it("makes the formal audit unique and freezes accepted provenance dependencies", () => {
@@ -357,5 +418,16 @@ describe("formal evidence acceptance migration", () => {
 		expect(migration).toContain("ACCEPTED_EVIDENCE_DATASET_IMMUTABLE");
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_measurement_cycles"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_measurement_datasets"');
+	});
+
+	it("scopes formal identity to tenant and project-bound delivered provenance", () => {
+		expect(projectIdentityMigration).toContain('ADD COLUMN IF NOT EXISTS "project_id" uuid');
+		expect(projectIdentityMigration).toContain("EVIDENCE_PROJECT_IDENTITY_LEGACY_ACCEPTANCE_REVIEW_REQUIRED");
+		expect(projectIdentityMigration).toContain('ADD CONSTRAINT "sv_evidence_index_formal_identity_unique"');
+		expect(projectIdentityMigration).toContain('"organization_id", "project_id", "domain_id", "cycle_id"');
+		expect(projectIdentityMigration).toContain("EVIDENCE_ACCEPTANCE_DELIVERED_JOURNAL_REQUIRED");
+		expect(projectIdentityMigration).toContain("EVIDENCE_ACCEPTANCE_ENVIRONMENT_NOT_APPROVED");
+		expect(projectIdentityMigration).toContain("PROVIDER_DATASET_EVIDENCE_PROJECT_MISMATCH");
+		expect(projectIdentityMigration).toContain("NEW.\"domain_id\" IN ('LOCAL', 'LOCAL_MAPS')");
 	});
 });

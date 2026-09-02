@@ -1,8 +1,8 @@
--- RLS_SCHEMA_PROOF_ONLY for the migration frontier through 0051.
+-- RLS_SCHEMA_PROOF_ONLY for the migration frontier through 0058.
 --
 -- Source-only acceptance artifact. This file does not connect to a database.
 -- Do not execute it against shared staging without separate owner approval, a
--- verified restorable checkpoint, and a migration receipt ending at 0051.
+-- verified restorable checkpoint, and a migration receipt ending at 0058.
 -- Run with psql as a database administration role that can CREATE ROLE and
 -- grant table privileges, after applying selena-rls-runtime-role.sql. The proof
 -- is deliberately one transaction and ends with ROLLBACK, so its temporary
@@ -362,7 +362,18 @@ BEGIN
 		OR has_table_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'DELETE')
 		OR has_table_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'TRUNCATE')
 		OR NOT has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_at', 'SELECT')
-		OR has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_by', 'SELECT') THEN
+		OR has_column_privilege('selena_app', 'public.sv_evidence_acceptance_receipts', 'accepted_by', 'SELECT')
+		OR NOT has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'SELECT')
+		OR NOT has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'INSERT')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'UPDATE')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'DELETE')
+		OR has_table_privilege('selena_app', 'public.sv_journal_provider_boundaries', 'TRUNCATE')
+		OR NOT has_function_privilege(
+			'selena_app', 'public.sv_journal_claim_recovery_state(uuid)', 'EXECUTE'
+		)
+		OR NOT has_function_privilege(
+			'selena_app', 'public.sv_recover_journal_daily_claim(uuid,text)', 'EXECUTE'
+		) THEN
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE';
 	END IF;
 END;
@@ -465,13 +476,54 @@ INSERT INTO sv_measurement_datasets (
 	'rls-evidence-a',
 	1
 );
+CREATE OR REPLACE FUNCTION pg_temp.seed_provider_delivery(
+	p_organization_id text,
+	p_project_id uuid,
+	p_source text,
+	p_provider_dataset_id text,
+	p_snapshot_id text,
+	p_seed text,
+	p_captured_at timestamptz
+) RETURNS void
+LANGUAGE plpgsql AS $seed_provider_delivery$
+DECLARE
+	phase_name text;
+	phase_ordinal integer := 0;
+BEGIN
+	FOREACH phase_name IN ARRAY ARRAY['TRIGGERED', 'READY', 'DELIVERED'] LOOP
+		INSERT INTO sv_provider_dataset_snapshot_events (
+			organization_id, project_id, provider, source, provider_dataset_id,
+			snapshot_id, phase, provider_status, record_count, observed_at, event_hash
+		) VALUES (
+			p_organization_id, p_project_id, 'BRIGHT_DATA', p_source, p_provider_dataset_id,
+			p_snapshot_id, phase_name,
+			CASE WHEN phase_name = 'READY' THEN 'ready' ELSE NULL END,
+			CASE WHEN phase_name = 'DELIVERED' THEN 1 ELSE NULL END,
+			p_captured_at + ((phase_ordinal + 1) * interval '1 second'),
+			'sha256:' || repeat(md5(p_seed || ':' || phase_name), 2)
+		);
+		phase_ordinal := phase_ordinal + 1;
+	END LOOP;
+END;
+$seed_provider_delivery$;
+
+SELECT pg_temp.seed_provider_delivery(
+	'rls-schema-proof-org-a',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+	'GOOGLE_AI_MODE',
+	'private-dataset-a',
+	'rls-evidence-a',
+	'rls-evidence-a',
+	'2026-09-01T00:00:00Z'
+);
 INSERT INTO sv_source_snapshots (
-	id, organization_id, source_type, source_ref, content_sha256, snapshot,
+	id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 	capability_id, provider_dataset_ref, environment, raw_reference,
 	input_schema_version, output_schema_version, captured_at
 ) VALUES (
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6',
 	'rls-schema-proof-org-a',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 	'GOOGLE_AI_MODE',
 	'private:rls-evidence-a',
 	'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -480,17 +532,18 @@ INSERT INTO sv_source_snapshots (
 		WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 1),
 	'private-dataset-a',
 	'STAGING_ACCEPTANCE',
-	'private:raw-a',
+	'brightdata:snapshot:rls-evidence-a',
 	'schema-discovery-input-v1',
 	'google-ai-mode-output-v1',
 	'2026-09-01T00:00:00Z'
 );
 INSERT INTO sv_evidence_index (
-	id, organization_id, domain_id, cycle_id, observation_ref,
+	id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 	dataset_id, source_snapshot_id, captured_at
 ) VALUES (
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 	'rls-schema-proof-org-a',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 	'AI',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
 	'rls-evidence-a',
@@ -504,7 +557,7 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-a',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 	'2026-09-01T00:05:00Z',
-	'database-role:selena_test'
+	'database-role:' || current_user
 );
 INSERT INTO sv_audit_events (
 	organization_id, actor_id, event, subject_kind, subject_id, details
@@ -512,7 +565,28 @@ INSERT INTO sv_audit_events (
 	'rls-schema-proof-org-a', 'system:provider-evidence-acceptance',
 	'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED', 'evidence',
 	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
-	'{"providerCalls":0,"privatePayloadRead":false}'::jsonb
+	jsonb_build_object(
+		'schemaVersion', 'provider-evidence-acceptance-receipt-v1.3',
+		'evidenceId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
+		'organizationId', 'rls-schema-proof-org-a',
+		'sourceSnapshotId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6',
+		'projectId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+		'domainId', 'AI',
+		'cycleId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3',
+		'datasetId', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
+		'datasetKey', 'rls-evidence-a',
+		'datasetVersion', 1,
+		'nativeObservationRef', 'rls-evidence-a',
+		'source', 'GOOGLE_AI_MODE',
+		'outputSchemaVersion', 'google-ai-mode-output-v1',
+		'capturedAt', '2026-09-01T00:00:00Z',
+		'acceptedAt', '2026-09-01T00:05:00Z',
+		'providerCalls', 0,
+		'acceptanceProviderCalls', 0,
+		'recurring', false,
+		'privatePayloadRead', false,
+		'costRows', 0
+	)
 );
 
 SELECT set_config('app.organization_id', 'rls-schema-proof-org-b', true);
@@ -594,13 +668,23 @@ INSERT INTO sv_measurement_datasets (
 	'rls-evidence-b',
 	1
 );
+SELECT pg_temp.seed_provider_delivery(
+	'rls-schema-proof-org-b',
+	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+	'GOOGLE_AI_MODE',
+	'private-dataset-b',
+	'rls-evidence-b',
+	'rls-evidence-b',
+	'2026-09-01T00:00:00Z'
+);
 INSERT INTO sv_source_snapshots (
-	id, organization_id, source_type, source_ref, content_sha256, snapshot,
+	id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 	capability_id, provider_dataset_ref, environment, raw_reference,
 	input_schema_version, output_schema_version, captured_at
 ) VALUES (
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6',
 	'rls-schema-proof-org-b',
+	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
 	'GOOGLE_AI_MODE',
 	'private:rls-evidence-b',
 	'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -609,17 +693,18 @@ INSERT INTO sv_source_snapshots (
 		WHERE organization_id = 'rls-schema-proof-org-b' AND source = 'GOOGLE_AI_MODE' AND version = 1),
 	'private-dataset-b',
 	'STAGING_ACCEPTANCE',
-	'private:raw-b',
+	'brightdata:snapshot:rls-evidence-b',
 	'schema-discovery-input-v1',
 	'google-ai-mode-output-v1',
 	'2026-09-01T00:00:00Z'
 );
 INSERT INTO sv_evidence_index (
-	id, organization_id, domain_id, cycle_id, observation_ref,
+	id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 	dataset_id, source_snapshot_id, captured_at
 ) VALUES (
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
 	'rls-schema-proof-org-b',
+	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
 	'AI',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3',
 	'rls-evidence-b',
@@ -633,7 +718,7 @@ INSERT INTO sv_evidence_acceptance_receipts (
 	'rls-schema-proof-org-b',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
 	'2026-09-01T00:05:00Z',
-	'database-role:selena_test'
+	'database-role:' || current_user
 );
 INSERT INTO sv_audit_events (
 	organization_id, actor_id, event, subject_kind, subject_id, details
@@ -641,7 +726,28 @@ INSERT INTO sv_audit_events (
 	'rls-schema-proof-org-b', 'system:provider-evidence-acceptance',
 	'PROVIDER_EVIDENCE_FORMALLY_ACCEPTED', 'evidence',
 	'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
-	'{"providerCalls":0,"privatePayloadRead":false}'::jsonb
+	jsonb_build_object(
+		'schemaVersion', 'provider-evidence-acceptance-receipt-v1.3',
+		'evidenceId', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7',
+		'organizationId', 'rls-schema-proof-org-b',
+		'sourceSnapshotId', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6',
+		'projectId', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+		'domainId', 'AI',
+		'cycleId', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3',
+		'datasetId', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb5',
+		'datasetKey', 'rls-evidence-b',
+		'datasetVersion', 1,
+		'nativeObservationRef', 'rls-evidence-b',
+		'source', 'GOOGLE_AI_MODE',
+		'outputSchemaVersion', 'google-ai-mode-output-v1',
+		'capturedAt', '2026-09-01T00:00:00Z',
+		'acceptedAt', '2026-09-01T00:05:00Z',
+		'providerCalls', 0,
+		'acceptanceProviderCalls', 0,
+		'recurring', false,
+		'privatePayloadRead', false,
+		'costRows', 0
+	)
 );
 
 -- Owner-scoped eligibility is independently enforced before the runtime role
@@ -670,25 +776,32 @@ BEGIN
 			'schema-discovery-input-v1', NULL, 'PUBLIC', 'CANARY_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
 		);
+		PERFORM pg_temp.seed_provider_delivery(
+			'rls-schema-proof-org-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+			'GOOGLE_AI_MODE', 'private-schema-discovery', 'raw-schema-discovery',
+			'raw-schema-discovery', '2026-09-01T00:00:00Z'
+		);
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'10000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE', 'private:raw-schema-discovery',
 			'1000000000000000000000000000000000000000000000000000000000000001',
 			'{}'::jsonb,
 			(SELECT id FROM sv_provider_dataset_capabilities
 				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
-			'private-schema-discovery', 'STAGING_ACCEPTANCE', 'private:raw-schema-discovery',
+			'private-schema-discovery', 'STAGING_ACCEPTANCE', 'brightdata:snapshot:raw-schema-discovery',
 			'schema-discovery-input-v1', NULL, '2026-09-01T00:00:00Z'
 		);
 		INSERT INTO sv_evidence_index (
-			id, organization_id, domain_id, cycle_id, observation_ref,
+			id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 			dataset_id, source_snapshot_id, captured_at
 		) VALUES (
-			'10000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'10000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'AI',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-output-schema-null',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
 			'10000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
@@ -696,7 +809,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '10000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_NULL_SCHEMA_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -717,25 +830,32 @@ BEGIN
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'CANARY_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
 		);
+		PERFORM pg_temp.seed_provider_delivery(
+			'rls-schema-proof-org-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+			'GOOGLE_AI_MODE', 'private-canary-only', 'canary-only',
+			'canary-only', '2026-09-01T00:00:00Z'
+		);
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'20000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE', 'private:canary-only',
 			'2000000000000000000000000000000000000000000000000000000000000002',
 			'{}'::jsonb,
 			(SELECT id FROM sv_provider_dataset_capabilities
 				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
-			'private-canary-only', 'STAGING_ACCEPTANCE', 'private:canary-only',
+			'private-canary-only', 'STAGING_ACCEPTANCE', 'brightdata:snapshot:canary-only',
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
 		);
 		INSERT INTO sv_evidence_index (
-			id, organization_id, domain_id, cycle_id, observation_ref,
+			id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 			dataset_id, source_snapshot_id, captured_at
 		) VALUES (
-			'20000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'20000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'AI',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-canary-only',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
 			'20000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
@@ -743,7 +863,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '20000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_CANARY_ONLY_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -764,25 +884,32 @@ BEGIN
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
 		);
+		PERFORM pg_temp.seed_provider_delivery(
+			'rls-schema-proof-org-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+			'GOOGLE_AI_MODE', 'private-isolated-canary', 'isolated-canary',
+			'isolated-canary', '2026-09-01T00:00:00Z'
+		);
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'30000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE', 'private:isolated-canary',
 			'3000000000000000000000000000000000000000000000000000000000000003',
 			'{}'::jsonb,
 			(SELECT id FROM sv_provider_dataset_capabilities
 				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
-			'private-isolated-canary', 'ISOLATED_CANARY', 'private:isolated-canary',
+			'private-isolated-canary', 'ISOLATED_CANARY', 'brightdata:snapshot:isolated-canary',
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
 		);
 		INSERT INTO sv_evidence_index (
-			id, organization_id, domain_id, cycle_id, observation_ref,
+			id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 			dataset_id, source_snapshot_id, captured_at
 		) VALUES (
-			'30000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'30000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'AI',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-isolated-canary',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
 			'30000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
@@ -790,12 +917,12 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '30000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ISOLATED_CANARY_ACCEPTANCE_ALLOWED';
 	EXCEPTION
 		WHEN raise_exception THEN
-			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_CANARY_FORBIDDEN' THEN RAISE; END IF;
+			IF SQLERRM <> 'EVIDENCE_ACCEPTANCE_ENVIRONMENT_NOT_APPROVED' THEN RAISE; END IF;
 	END;
 
 	-- A later BLOCKED capability supersedes an otherwise eligible capture.
@@ -811,25 +938,32 @@ BEGIN
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
 		);
+		PERFORM pg_temp.seed_provider_delivery(
+			'rls-schema-proof-org-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+			'GOOGLE_AI_MODE', 'private-superseded', 'superseded',
+			'superseded', '2026-09-01T00:00:00Z'
+		);
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'40000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE', 'private:superseded',
 			'4000000000000000000000000000000000000000000000000000000000000004',
 			'{}'::jsonb,
 			(SELECT id FROM sv_provider_dataset_capabilities
 				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
-			'private-superseded', 'STAGING_ACCEPTANCE', 'private:superseded',
+			'private-superseded', 'STAGING_ACCEPTANCE', 'brightdata:snapshot:superseded',
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
 		);
 		INSERT INTO sv_evidence_index (
-			id, organization_id, domain_id, cycle_id, observation_ref,
+			id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 			dataset_id, source_snapshot_id, captured_at
 		) VALUES (
-			'40000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'40000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'AI',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-superseded',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
 			'40000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
@@ -848,7 +982,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '40000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_BLOCKED_SUPERSESSION_ACCEPTANCE_ALLOWED';
 	EXCEPTION
@@ -874,25 +1008,32 @@ BEGIN
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', 'PUBLIC', 'PILOT_ONLY',
 			'RAW_PRIVATE_POLICY_PENDING', 'provider-dataset-v1.3', 2, '{}'::jsonb
 		);
+		PERFORM pg_temp.seed_provider_delivery(
+			'rls-schema-proof-org-a', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+			'GOOGLE_AI_MODE', 'private-missing-audit', 'missing-audit',
+			'missing-audit', '2026-09-01T00:00:00Z'
+		);
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'50000000-0000-4000-8000-000000000001', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE', 'private:missing-audit',
 			'5000000000000000000000000000000000000000000000000000000000000005',
 			'{}'::jsonb,
 			(SELECT id FROM sv_provider_dataset_capabilities
 				WHERE organization_id = 'rls-schema-proof-org-a' AND source = 'GOOGLE_AI_MODE' AND version = 2),
-			'private-missing-audit', 'STAGING_ACCEPTANCE', 'private:missing-audit',
+			'private-missing-audit', 'STAGING_ACCEPTANCE', 'brightdata:snapshot:missing-audit',
 			'schema-discovery-input-v1', 'google-ai-mode-output-v1', '2026-09-01T00:00:00Z'
 		);
 		INSERT INTO sv_evidence_index (
-			id, organization_id, domain_id, cycle_id, observation_ref,
+			id, organization_id, project_id, domain_id, cycle_id, observation_ref,
 			dataset_id, source_snapshot_id, captured_at
 		) VALUES (
-			'50000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a', 'AI',
+			'50000000-0000-4000-8000-000000000002', 'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'AI',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', 'negative-missing-formal-audit',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5',
 			'50000000-0000-4000-8000-000000000001', '2026-09-01T00:00:00Z'
@@ -900,7 +1041,7 @@ BEGIN
 		INSERT INTO sv_evidence_acceptance_receipts (organization_id, evidence_id, accepted_at, accepted_by)
 		VALUES (
 			'rls-schema-proof-org-a', '50000000-0000-4000-8000-000000000002',
-			'2026-09-01T00:05:00Z', 'database-role:selena_test'
+			'2026-09-01T00:05:00Z', 'database-role:' || current_user
 		);
 		SET CONSTRAINTS sv_evidence_acceptance_receipts_audit_pair_guard IMMEDIATE;
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED';
@@ -955,7 +1096,7 @@ BEGIN
 			'rls-schema-proof-org-a',
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa7',
 			'2026-08-31T23:59:59Z',
-			'database-role:selena_test'
+			'database-role:' || current_user
 		);
 		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED';
 	EXCEPTION
@@ -1073,8 +1214,30 @@ $proof_missing_tenant$;
 
 SELECT set_config('app.organization_id', 'rls-schema-proof-org-a', true);
 
-INSERT INTO sv_provider_canary_executions (organization_id, execution_identity)
-VALUES ('rls-schema-proof-org-a', 'release-0e00df4f-google-ai-mode-owner-canary-1');
+DO $proof_runtime_journal_recovery_acl$
+BEGIN
+	IF (SELECT count(*) FROM sv_journal_provider_boundaries) <> 0 THEN
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_BOUNDARY_SCOPE_FAILED';
+	END IF;
+	BEGIN
+		PERFORM sv_recover_journal_daily_claim(
+			'00000000-0000-4000-8000-000000000000',
+			'rls-schema-proof-runtime'
+		);
+		RAISE EXCEPTION 'RLS_SCHEMA_PROOF_RUNTIME_RECOVERY_MISSING_CLAIM_ALLOWED';
+	EXCEPTION
+		WHEN raise_exception THEN
+			IF SQLERRM <> 'JOURNAL_RECOVERY_CLAIM_NOT_FOUND' THEN RAISE; END IF;
+	END;
+END;
+$proof_runtime_journal_recovery_acl$;
+
+INSERT INTO sv_provider_canary_executions (organization_id, project_id, execution_identity)
+VALUES (
+	'rls-schema-proof-org-a',
+	'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+	'release-0e00df4f-google-ai-mode-owner-canary-1'
+);
 
 DO $proof_same_tenant_read$
 BEGIN
@@ -1282,8 +1445,12 @@ DO $proof_global_canary_once$
 DECLARE
 	inserted integer;
 BEGIN
-	INSERT INTO sv_provider_canary_executions (organization_id, execution_identity)
-	VALUES ('rls-schema-proof-org-b', 'release-0e00df4f-google-ai-mode-owner-canary-1')
+	INSERT INTO sv_provider_canary_executions (organization_id, project_id, execution_identity)
+	VALUES (
+		'rls-schema-proof-org-b',
+		'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+		'release-0e00df4f-google-ai-mode-owner-canary-1'
+	)
 	ON CONFLICT (source, execution_identity) DO NOTHING;
 	GET DIAGNOSTICS inserted = ROW_COUNT;
 	IF inserted <> 0 THEN
@@ -1379,12 +1546,13 @@ DO $proof_runtime_snapshot_promotion_denied$
 BEGIN
 	BEGIN
 		INSERT INTO sv_source_snapshots (
-			id, organization_id, source_type, source_ref, content_sha256, snapshot,
+			id, organization_id, project_id, source_type, source_ref, content_sha256, snapshot,
 			capability_id, provider_dataset_ref, environment, raw_reference,
 			input_schema_version, output_schema_version, captured_at
 		) VALUES (
 			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa8',
 			'rls-schema-proof-org-a',
+			'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
 			'GOOGLE_AI_MODE',
 			'private:runtime-promotion-denied',
 			'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',

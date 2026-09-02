@@ -991,6 +991,7 @@ export function createSelenaRepositories(db: Db) {
 				writable(ctx);
 				const now = opts?.now ?? new Date();
 				return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					let journalClaim: { id: string; projectId: string; configurationLockId: string } | undefined;
 					const [permit] = await tx
 						.select()
 						.from(schema.svRunPermits)
@@ -1006,7 +1007,7 @@ export function createSelenaRepositories(db: Db) {
 					if (opts?.journalClaimId) {
 						const [lease] = await tx
 							.update(schema.svJournalDailyClaims)
-							.set({ updatedAt: sql`CURRENT_TIMESTAMP` })
+							.set({ updatedAt: sql`clock_timestamp()` })
 							.where(
 								and(
 									eq(schema.svJournalDailyClaims.id, opts.journalClaimId),
@@ -1015,8 +1016,18 @@ export function createSelenaRepositories(db: Db) {
 									eq(schema.svJournalDailyClaims.status, "EXECUTING"),
 								),
 							)
-							.returning({ id: schema.svJournalDailyClaims.id });
+							.returning({
+								id: schema.svJournalDailyClaims.id,
+								projectId: schema.svJournalDailyClaims.projectId,
+								configurationLockId: schema.svJournalDailyClaims.configurationLockId,
+							});
 						if (!lease) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+						if (!lease.configurationLockId) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LOCK_MISSING");
+						journalClaim = {
+							id: lease.id,
+							projectId: lease.projectId,
+							configurationLockId: lease.configurationLockId,
+						};
 					}
 					const runFor = async (dispatchKey: string) =>
 						(
@@ -1032,7 +1043,25 @@ export function createSelenaRepositories(db: Db) {
 					if (permit.consumedAt) {
 						const existing = await runFor(permit.dispatchKey);
 						if (!existing) throw new Error("SELENA_PERMIT_CONSUMED_WITHOUT_RUN");
-						return { permit, run: existing, cycle, claimed: false };
+						const [providerBoundary] = journalClaim
+							? await tx
+									.select({
+										journalClaimId: schema.svJournalProviderBoundaries.journalClaimId,
+										runId: schema.svJournalProviderBoundaries.runId,
+									})
+									.from(schema.svJournalProviderBoundaries)
+									.where(
+										and(
+											eq(schema.svJournalProviderBoundaries.journalClaimId, journalClaim.id),
+											eq(schema.svJournalProviderBoundaries.permitId, permit.id),
+											eq(schema.svJournalProviderBoundaries.runId, existing.id),
+											eq(schema.svJournalProviderBoundaries.organizationId, ctx.tenantId),
+										),
+									)
+									.limit(1)
+							: [];
+						if (journalClaim && !providerBoundary) throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
+						return { permit, run: existing, cycle, claimed: false, providerBoundary };
 					}
 					await tx
 						.update(schema.svRunPermits)
@@ -1054,6 +1083,27 @@ export function createSelenaRepositories(db: Db) {
 						.onConflictDoNothing({ target: schema.svRuns.dispatchKey });
 					const run = await runFor(permit.dispatchKey);
 					if (!run) throw new Error("SELENA_RUN_CLAIM_FAILED");
+					const [providerBoundary] = journalClaim
+						? await tx
+								.insert(schema.svJournalProviderBoundaries)
+								.values({
+									organizationId: ctx.tenantId,
+									projectId: journalClaim.projectId,
+									journalClaimId: journalClaim.id,
+									configurationLockId: journalClaim.configurationLockId,
+									cycleId: cycle.id,
+									permitId: permit.id,
+									runId: run.id,
+									dispatchKey: permit.dispatchKey,
+									channel: permit.channel,
+									systemId: permit.systemId,
+								})
+								.returning({
+									journalClaimId: schema.svJournalProviderBoundaries.journalClaimId,
+									runId: schema.svJournalProviderBoundaries.runId,
+								})
+						: [];
+					if (journalClaim && !providerBoundary) throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
 					await recordAudit(tx, ctx, "RUN_CLAIMED", "sv_runs", run.id, {
 						permitId,
 						cycleId: permit.cycleId,
@@ -1061,7 +1111,7 @@ export function createSelenaRepositories(db: Db) {
 					});
 					// The permit object predates the consumedAt write above: the
 					// executor re-checks this snapshot before an adapter may see it.
-					return { permit, run, cycle, claimed: true };
+					return { permit, run, cycle, claimed: true, providerBoundary };
 				});
 			},
 			complete: async (ctx: SelenaRepositoryContext, runId: string, outcome: RunOutcome, opts?: { now?: Date }) => {

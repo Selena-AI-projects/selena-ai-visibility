@@ -11,6 +11,8 @@ if [[ ! "$compose_project" =~ ^selena-visibility-rehearsal-[a-z0-9][a-z0-9_-]+$ 
 fi
 
 psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U selena_test -d selena_visibility_test -v ON_ERROR_STOP=1)
+owner_neutral_role='selena_owner_neutral'
+owner_psql=("${compose_cli[@]}" -p "$compose_project" -f "$compose_file" exec -T postgres psql -U "$owner_neutral_role" -d selena_visibility_test -v ON_ERROR_STOP=1)
 pgboss_plan=''
 
 cleanup_runtime_role() {
@@ -18,6 +20,21 @@ cleanup_runtime_role() {
 	role_exists="$("${psql[@]}" -Atc "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')")"
 	if [[ "$role_exists" == "t" ]]; then
 		"${psql[@]}" -c 'DROP OWNED BY selena_app; DROP ROLE selena_app;' >/dev/null
+	fi
+}
+
+cleanup_owner_neutral_role() {
+	local role_exists
+	role_exists="$("${psql[@]}" -Atc "SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '$owner_neutral_role')")"
+	if [[ "$role_exists" == "t" ]]; then
+		"${psql[@]}" -c "
+			ALTER TABLE sv_provider_dataset_capabilities OWNER TO selena_test;
+			ALTER TABLE sv_source_snapshots OWNER TO selena_test;
+			ALTER TABLE sv_evidence_acceptance_receipts OWNER TO selena_test;
+			ALTER TABLE sv_audit_events OWNER TO selena_test;
+			DROP OWNED BY $owner_neutral_role;
+			DROP ROLE $owner_neutral_role;
+		" >/dev/null
 	fi
 }
 
@@ -29,6 +46,10 @@ cleanup_on_exit() {
 	fi
 	if ! cleanup_runtime_role; then
 		printf 'RLS_SCHEMA_PROOF_RUNTIME_ROLE_CLEANUP_FAILED\n' >&2
+		if ((exit_code == 0)); then exit_code=1; fi
+	fi
+	if ! cleanup_owner_neutral_role; then
+		printf 'RLS_SCHEMA_PROOF_OWNER_NEUTRAL_CLEANUP_FAILED\n' >&2
 		if ((exit_code == 0)); then exit_code=1; fi
 	fi
 	exit "$exit_code"
@@ -82,6 +103,15 @@ if [[ "$("${psql[@]}" -Atc "SELECT to_regprocedure('public.sv_require_owner_evid
 fi
 "${psql[@]}" -c "DELETE FROM sv_audit_events WHERE organization_id = 'rls-schema-proof-legacy-upgrade'; DELETE FROM organization WHERE id = 'rls-schema-proof-legacy-upgrade';" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0056_formal_evidence_acceptance_hardening.sql" >/dev/null
+for migration in \
+	0052_provider_dataset_snapshot_journal \
+	0053_configuration_lock_legacy_collision_ordinal \
+	0054_journal_daily_claim_execution_lease \
+	0055_provider_snapshot_resume_reconciliation \
+	0057_evidence_project_identity_hardening \
+	0058_journal_provider_boundary_recovery; do
+	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
+done
 
 # Generate the owner-managed schema from the pinned pg-boss package instead of
 # maintaining a second hand-written copy. The construction plan is applied by
@@ -100,12 +130,43 @@ fi
 
 "${psql[@]}" -v role_password=selena_disposable_role_proof_only \
 	< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql" >/dev/null
-"${psql[@]}" < "$repo_root/tools/visibility_os_0051_rls_schema_proof.sql"
+
+# Run the behavioral proof through a direct session whose owner identity differs
+# from the bootstrap database user. This prevents a hard-coded selena_test actor
+# from passing locally while failing under a differently named staging owner.
+"${psql[@]}" -c "
+	CREATE ROLE $owner_neutral_role LOGIN SUPERUSER;
+	ALTER TABLE sv_provider_dataset_capabilities OWNER TO $owner_neutral_role;
+	ALTER TABLE sv_source_snapshots OWNER TO $owner_neutral_role;
+	ALTER TABLE sv_evidence_acceptance_receipts OWNER TO $owner_neutral_role;
+	ALTER TABLE sv_audit_events OWNER TO $owner_neutral_role;
+" >/dev/null
+owner_session_valid="$("${owner_psql[@]}" -Atc "
+	SELECT current_user = session_user
+		AND current_user = '$owner_neutral_role'
+		AND current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_provider_dataset_capabilities'::regclass)
+		AND current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_source_snapshots'::regclass)
+		AND current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_evidence_acceptance_receipts'::regclass)
+		AND current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_audit_events'::regclass)
+")"
+if [[ "$owner_session_valid" != "t" ]]; then
+	owner_session_receipt="$("${owner_psql[@]}" -Atc "
+		SELECT concat_ws(',', current_user, session_user,
+			(SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_provider_dataset_capabilities'::regclass),
+			(SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_source_snapshots'::regclass),
+			(SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_evidence_acceptance_receipts'::regclass),
+			(SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'sv_audit_events'::regclass))
+	")"
+	printf 'RLS_SCHEMA_PROOF_OWNER_NEUTRAL_SESSION_INVALID: %s\n' "$owner_session_receipt" >&2
+	exit 1
+fi
+"${owner_psql[@]}" < "$repo_root/tools/visibility_os_0051_rls_schema_proof.sql"
 cleanup_runtime_role
+cleanup_owner_neutral_role
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_provider_dataset_capabilities') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app') AND NOT EXISTS (SELECT 1 FROM organization WHERE id IN ('rls-schema-proof-org-a', 'rls-schema-proof-org-b'))")" != "t" ]]; then
 	printf 'RLS_SCHEMA_PROOF_ROLLBACK_RECEIPT_FAILED\n' >&2
 	exit 1
 fi
 
-printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migrations=0051,0056 runtime_role=validated cleanup=verified\n'
+printf 'RLS_SCHEMA_PROOF_DISPOSABLE_PASS migrations=0051-0058 owner_identity=neutral runtime_role=validated cleanup=verified\n'

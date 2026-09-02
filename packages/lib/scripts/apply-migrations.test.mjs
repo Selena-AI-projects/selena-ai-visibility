@@ -1,11 +1,16 @@
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
 	assertJournalPostcondition,
 	assertJournalPrefix,
 	expectedJournalRows,
+	reconcileHistoricalMigrationVariants,
 	runMigrationCycleWithLock,
 } from "./apply-migrations.mjs";
+import { prepareBoundedMigrations } from "./run-bounded-migrations.mjs";
 
 const expected = [
 	{ hash: "hash-0049", createdAt: "1787940011000" },
@@ -14,6 +19,20 @@ const expected = [
 ];
 
 describe("bounded migration journal acceptance", () => {
+	it("ships the release-short compatibility bridge only when 0056 is inside the sealed ceiling", () => {
+		const root = mkdtempSync(join(tmpdir(), "selena-bounded-compat-test-"));
+		const through55 = join(root, "selena-through-55");
+		const through56 = join(root, "selena-through-56");
+		try {
+			prepareBoundedMigrations({ maximumIndex: 55, targetDirectory: through55 });
+			expect(existsSync(join(through55, "compat/0051_release_short_to_feature_superset.sql"))).toBe(false);
+			prepareBoundedMigrations({ maximumIndex: 56, targetDirectory: through56 });
+			expect(existsSync(join(through56, "compat/0051_release_short_to_feature_superset.sql"))).toBe(true);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("accepts only the exact ordered reviewed prefix before migration", () => {
 		expect(() => assertJournalPrefix(expected.slice(0, 2), expected)).not.toThrow();
 		expect(() =>
@@ -76,6 +95,102 @@ describe("bounded migration journal acceptance", () => {
 		expect(() =>
 			assertJournalPrefix([{ createdAt: rows[52].createdAt, hash: rows[51].acceptedAppliedHashes[0] }], [rows[52]]),
 		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+	});
+
+	it("bridges the exact release-short 0051 schema before 0056", async () => {
+		const queries = [];
+		const bridged = await reconcileHistoricalMigrationVariants({
+			client: { query: async (statement) => queries.push(statement) },
+			actualRows: [
+				{
+					createdAt: "1787940013000",
+					hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+				},
+			],
+			expectedRows: [{ createdAt: "1787940018000", hash: "0056-requested" }],
+			migrationsFolder: "/reviewed-migrations",
+			readCompatibilitySource: async (path, encoding) => {
+				expect(path).toBe("/reviewed-migrations/compat/0051_release_short_to_feature_superset.sql");
+				expect(encoding).toBe("utf8");
+				return "SELECT 1;\n--> statement-breakpoint\nSELECT 2;";
+			},
+			log: () => {},
+		});
+
+		expect(bridged).toBe(true);
+		expect(queries).toEqual(["BEGIN", "SELECT 1;", "SELECT 2;", "COMMIT"]);
+	});
+
+	it("does not bridge a full 0051 or a database already through 0056", async () => {
+		const options = {
+			client: { query: async () => undefined },
+			expectedRows: [{ createdAt: "1787940018000", hash: "0056-requested" }],
+			migrationsFolder: "/reviewed-migrations",
+			readCompatibilitySource: async () => {
+				throw new Error("compatibility source must not be read");
+			},
+			log: () => {},
+		};
+		await expect(
+			reconcileHistoricalMigrationVariants({
+				...options,
+				actualRows: [
+					{
+						createdAt: "1787940013000",
+						hash: "c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768",
+					},
+				],
+			}),
+		).resolves.toBe(false);
+		await expect(
+			reconcileHistoricalMigrationVariants({
+				...options,
+				actualRows: [
+					{
+						createdAt: "1787940013000",
+						hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+					},
+					{ createdAt: "1787940018000", hash: "0056-applied" },
+				],
+			}),
+		).resolves.toBe(false);
+		await expect(
+			reconcileHistoricalMigrationVariants({
+				...options,
+				expectedRows: [{ createdAt: "1787940017000", hash: "0055-requested" }],
+				actualRows: [
+					{
+						createdAt: "1787940013000",
+						hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+					},
+				],
+			}),
+		).resolves.toBe(false);
+	});
+
+	it("rolls back an incomplete release-short compatibility bridge", async () => {
+		const queries = [];
+		await expect(
+			reconcileHistoricalMigrationVariants({
+				client: {
+					query: async (statement) => {
+						queries.push(statement);
+						if (statement === "BROKEN;") throw new Error("EXPECTED_BRIDGE_FAILURE");
+					},
+				},
+				actualRows: [
+					{
+						createdAt: "1787940013000",
+						hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
+					},
+				],
+				expectedRows: [{ createdAt: "1787940018000", hash: "0056-requested" }],
+				migrationsFolder: "/reviewed-migrations",
+				readCompatibilitySource: async () => "SELECT 1;\n--> statement-breakpoint\nBROKEN;",
+				log: () => {},
+			}),
+		).rejects.toThrow("EXPECTED_BRIDGE_FAILURE");
+		expect(queries).toEqual(["BEGIN", "SELECT 1;", "BROKEN;", "ROLLBACK"]);
 	});
 
 	it("requires the exact reviewed journal as the postcondition", () => {
