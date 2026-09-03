@@ -52,6 +52,20 @@ const APPLIED_MIGRATION_HASH_ALIASES = new Map([
 		"1787940014000:8e8e663516d0ec16c7c70c9b0d42235b0782c3d3dd86b5d3ebea15e8924c0961",
 		Object.freeze(["3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca"]),
 	],
+	// Staging applied 0060 from `fix/selena-0060-cancelled-permits` at 5d8eb47,
+	// which never merged. Its only difference is a wider
+	// sv_run_permits_status_check that also admits 'cancelled', and the matching
+	// arm of the guard function. The release admits three statuses, and no
+	// release code writes or reads a fourth, so the applied database is
+	// permissive where the release is strict rather than behaving differently.
+	// Accepting the exact historical digest is what lets the journal move again;
+	// whether the release should carry the wider constraint is a separate
+	// decision, and it depends on whether any permit row already holds
+	// 'cancelled'.
+	[
+		"1787940022000:b3f720b1e03cb163e2ac379efddb1593c80e3e222097a8f72b7c9ff8d82a72d6",
+		Object.freeze(["5b5f21235bf75ee1f39f7946fca5a7fd537a9d768396d114e7a6d2f0e570adf1"]),
+	],
 ]);
 
 export async function expectedJournalRows(migrationsFolder) {
