@@ -42,6 +42,36 @@ approval expires with the next commit. See
 [`PLATFORM_AUDIT_2026-09-03.md`](PLATFORM_AUDIT_2026-09-03.md) for the full
 audit this correction came from.
 
+### Staging's `0060` is not the release's `0060`
+
+Migrations stopped applying to staging at `2026-09-03T05:31Z` and stayed stopped
+for every deploy after it. The migrator now names the row: index `60`
+(`0060_journal_hold_owner_reconciliation`), applied digest
+`5b5f21235bf7…`, release file `b3f720b1e03c…`.
+
+That applied digest belongs to `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476` on
+`fix/selena-0060-cancelled-permits` — the branch this handoff names as the local
+checkout, and one that never merged. The release digest is identical at
+`fcb75f54`, at PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)'s
+head `e58499f5` and on the release branch today, so the release has been
+consistent throughout; staging is what diverged.
+
+The whole difference is two lines:
+
+| | `sv_run_permits_status_check` |
+|---|---|
+| Applied to staging | `'issued', 'consumed', 'revoked', 'cancelled'` |
+| Shipped in the release | `'issued', 'consumed', 'revoked'` |
+
+with the guard function's matching arm changed the same way. No release code
+writes or reads a `cancelled` permit, so the applied database is permissive
+where the release is strict rather than behaving differently.
+
+Accepting the exact historical digest through the existing alias mechanism is
+what lets the journal move again. It does not answer whether the release should
+carry the wider constraint — that depends on whether any permit row already
+holds `'cancelled'`, which needs a database read nobody has taken.
+
 No write of any kind was made to staging, production or GitHub while
 establishing the above.
 

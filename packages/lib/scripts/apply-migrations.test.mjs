@@ -99,6 +99,38 @@ describe("bounded migration journal acceptance", () => {
 		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
 	});
 
+	/**
+	 * The digest staging applied for 0060 and the one the release ships. Binding
+	 * this exact pair is what lets that database keep moving; binding anything
+	 * else would let an edited migration pass unnoticed.
+	 */
+	it("binds the staging 0060 variant to the release manifest", async () => {
+		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
+		expect(rows[60]).toMatchObject({
+			createdAt: "1787940022000",
+			hash: "b3f720b1e03cb163e2ac379efddb1593c80e3e222097a8f72b7c9ff8d82a72d6",
+			acceptedAppliedHashes: ["5b5f21235bf75ee1f39f7946fca5a7fd537a9d768396d114e7a6d2f0e570adf1"],
+		});
+		expect(() =>
+			assertJournalPrefix(
+				[{ createdAt: "1787940022000", hash: rows[60].acceptedAppliedHashes[0] }],
+				[rows[60]],
+			),
+		).not.toThrow();
+	});
+
+	it("accepts the 0060 variant only at its own timestamp", () => {
+		const shipped = {
+			createdAt: "1787940022000",
+			hash: "b3f720b1e03cb163e2ac379efddb1593c80e3e222097a8f72b7c9ff8d82a72d6",
+			acceptedAppliedHashes: ["5b5f21235bf75ee1f39f7946fca5a7fd537a9d768396d114e7a6d2f0e570adf1"],
+			tag: "0060_journal_hold_owner_reconciliation",
+		};
+		expect(() =>
+			assertJournalPrefix([{ createdAt: "1787940023000", hash: shipped.acceptedAppliedHashes[0] }], [shipped]),
+		).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+	});
+
 	it("bridges the exact release-short 0051 schema before 0056", async () => {
 		const queries = [];
 		const bridged = await reconcileHistoricalMigrationVariants({
