@@ -1,5 +1,50 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
+## Correction overlay — 2026-09-03, read-only audit
+
+The overlay below records shared staging as intentionally unchanged at
+migration frontier `0058`, PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
+as `OPEN/DRAFT`, and no DDL, reconciliation write or runtime deploy in that
+loop. Read-only checks against GitHub and Railway contradict all three. The
+earlier text is left in place as the record of what was believed at the time;
+this section is what actually happened.
+
+- PR #120 is `merged`, not draft: merged `2026-09-02T23:42:13Z` by
+  `parkourcafe`, head `e58499f5`, into `release/selena-visibility-mvp`. Merge
+  commit `c71bf0eb` — the same SHA the handoff lists as "last observed release
+  base" without noting it is that merge.
+- The merge auto-deployed staging: `measure` at `2026-09-02T23:42:55Z`,
+  `migrate` at `2026-09-03T00:11:21Z`, `web` at `00:34:34Z`, `worker` at
+  `00:40:10Z`, all `SUCCESS`.
+- Migrations `0059` and `0060` **were applied to shared staging** by that
+  deploy. Log of `migrate` deployment `934cacb6-5436-461d-80d2-6d0805c8df0a`:
+  `journal before: 59/1787940020000` → `prepared 61 migrations through index 60`
+  → `journal after: 61/1787940022000` → `migrations complete`.
+  **Current staging frontier is `0060`, not `0058`.** No exact-SHA owner
+  approval preceded it; nothing in the pipeline asked for one.
+- The disposable and restore PostgreSQL services are **not removed and not
+  scaled to zero**. Seven are online with volumes in the project:
+  `Postgres-selena-v13-0059-0060-isolated-20260903` (service
+  `88dbe261-c7f6-4733-83cf-15e579f6990e`, the one recorded as scaled to zero,
+  reporting one running replica), `Postgres-selena-v13-0058-isolated-20260902`,
+  `Postgres-selena-v13-0056-restore-20260902`, `canary-clean-20260902`,
+  `reconciliation-0054-20260902`, `Postgres-selena-v13-restore-20260901`, and
+  `Postgres-W_9y`.
+- The `production` environment runs only `Postgres-W_9y`, online since
+  `2026-08-15`. No production application deployment exists, which the record
+  states correctly.
+
+What this changes, beyond the numbers: the owner gate was documentary. A merge
+walked past it. Migration `0061` onwards is now gated in code — on a hosted
+environment the migrator refuses pending migrations unless
+`SELENA_MIGRATION_APPROVED_SHA` names the commit being deployed, and the
+approval expires with the next commit. See
+[`PLATFORM_AUDIT_2026-09-03.md`](PLATFORM_AUDIT_2026-09-03.md) for the full
+audit this correction came from.
+
+No write of any kind was made to staging, production or GitHub while
+establishing the above.
+
 ## Authoritative AVLI measurement overlay — 2026-09-03
 
 - Exact executable candidate: `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`.
