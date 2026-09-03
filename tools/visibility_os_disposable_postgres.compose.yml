@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: selena_test
       POSTGRES_USER: selena_test
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U selena_test -d selena_visibility_test"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U selena_test -d selena_visibility_test"]
       interval: 1s
       timeout: 3s
       retries: 30
