@@ -28,8 +28,7 @@ export default function FullPageCard({
 	backButtonHref = "/app",
 	backButtonText = "Go Back",
 	customBackButton,
-	// A fixed `w-md` is 28rem whatever the screen is, so on a phone the card was
-	// wider than the viewport and the page scrolled sideways.
+	// Capped rather than fixed: a fixed width wider than a phone scrolls the page sideways.
 	className = "w-full max-w-md",
 	scene,
 }: FullPageCardProps) {
@@ -81,7 +80,7 @@ export default function FullPageCard({
 						</div>
 						{body}
 					</div>
-					{/* Centred, so the panel keeps its own aspect instead of stretching to the viewport height. */}
+					{/* Centred, so the panel keeps its own aspect rather than the viewport's height. */}
 					<div className="hidden lg:flex lg:items-center">
 						<AuthScene scene={scene} variant="panel" />
 					</div>

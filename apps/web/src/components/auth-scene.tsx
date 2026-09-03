@@ -1,17 +1,9 @@
 /**
  * Still from the Selena Systems public site, shown beside the auth form.
  *
- * The previous version cropped a 16:9 frame into a full-height portrait
- * column. `object-cover` scaled it to the panel's height and kept only the
- * middle third of the width — for the two-doors frame that middle third was
- * the empty wall between the doors, so the desktop panel showed a blank blue
- * field while the narrow-screen strip, which crops nothing horizontally,
- * showed the shot intact. The panel height also came from the viewport, so
- * how much survived changed with every window size.
- *
- * Both variants now declare their own aspect ratio, so the crop is fixed and
- * checkable at any viewport, and the subject is centred rather than left to
- * whatever the column height produces.
+ * Each variant fixes its own aspect ratio so the crop is the same at every
+ * window size: a panel sized by its container's height crops a 16:9 frame by
+ * an amount nobody chose, and the subject can fall outside it entirely.
  */
 
 const SCENES = {
