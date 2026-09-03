@@ -392,9 +392,9 @@ describe("owner approval before applying DDL", () => {
 });
 
 /**
- * What a mismatch has to tell whoever reads the deploy log. Until this existed
- * a failure said only that the applied journal and the shipped migrations
- * disagree somewhere, which is not something an operator can act on.
+ * What a mismatch has to tell whoever reads the deploy log: enough to pick a
+ * repair without opening a database. The three shapes below need different
+ * ones, so each has to be distinguishable from the message alone.
  */
 describe("naming the row that disagrees", () => {
 	const shipped = [

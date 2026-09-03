@@ -259,11 +259,9 @@ export async function runMigrationCycleWithLock({
 }
 
 /**
- * A mismatch used to be a bare code, which said that the applied journal and
- * the shipped migrations disagree somewhere in 61 rows and nothing more. That
- * is not enough to act on: the operator cannot tell whether a file was edited
- * after it was applied, whether the ordering slipped, or which migration to
- * look at. The row is named here, with what disagrees about it.
+ * What an operator needs in order to act on a mismatch: which row, and whether
+ * a file was edited after it was applied, the ordering slipped, or the row is
+ * one the release does not carry. Those three lead to different repairs.
  *
  * Digests are of migration files that ship in the repository, so printing a
  * prefix of one reveals nothing that `git show` does not.
