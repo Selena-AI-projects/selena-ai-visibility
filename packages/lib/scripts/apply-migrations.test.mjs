@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import {
 	assertJournalPostcondition,
 	assertJournalPrefix,
+	assertMigrationApproval,
 	expectedJournalRows,
+	MIGRATION_APPROVAL_ENV,
 	reconcileHistoricalMigrationVariants,
 	runMigrationCycleWithLock,
 } from "./apply-migrations.mjs";
@@ -301,5 +303,90 @@ describe("bounded migration journal acceptance", () => {
 		).rejects.toThrow("EXPECTED_MIGRATION_FAILURE");
 
 		expect(queries.at(-1)).toContain("pg_advisory_unlock");
+	});
+});
+
+/**
+ * The gate that turns "no DDL without an exact-SHA decision" from a sentence in
+ * an acceptance document into something the deploy cannot walk past.
+ */
+describe("owner approval before applying DDL", () => {
+	const hosted = { RAILWAY_ENVIRONMENT_NAME: "staging", RAILWAY_GIT_COMMIT_SHA: "c71bf0ebb2617411a18b5b0291d53fcf27ae8f09" };
+	const silent = () => {};
+	const applied = expected.slice(0, 2);
+
+	it("refuses pending migrations on a hosted environment with no approval", () => {
+		expect(() =>
+			assertMigrationApproval({ actualRows: applied, expectedRows: expected, env: hosted, log: silent }),
+		).toThrow("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
+	});
+
+	it("accepts an approval naming the commit being deployed, short form included", () => {
+		for (const approval of ["c71bf0e", "C71BF0EBB2617411A18B5B0291D53FCF27AE8F09"]) {
+			expect(
+				assertMigrationApproval({
+					actualRows: applied,
+					expectedRows: expected,
+					env: { ...hosted, [MIGRATION_APPROVAL_ENV]: approval },
+					log: silent,
+				}),
+			).toEqual({ pending: 1, gated: true });
+		}
+	});
+
+	// An approval left behind from the previous release must not carry over: the
+	// next merge is a different commit, which is what makes the gate self-expiring.
+	it("refuses an approval for some other commit", () => {
+		expect(() =>
+			assertMigrationApproval({
+				actualRows: applied,
+				expectedRows: expected,
+				env: { ...hosted, [MIGRATION_APPROVAL_ENV]: "5d8eb47" },
+				log: silent,
+			}),
+		).toThrow("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
+	});
+
+	it("refuses an approval too short to name one commit", () => {
+		expect(() =>
+			assertMigrationApproval({
+				actualRows: applied,
+				expectedRows: expected,
+				env: { ...hosted, [MIGRATION_APPROVAL_ENV]: "c71" },
+				log: silent,
+			}),
+		).toThrow("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
+	});
+
+	it("refuses when the deployed commit cannot be identified at all", () => {
+		expect(() =>
+			assertMigrationApproval({
+				actualRows: applied,
+				expectedRows: expected,
+				env: { RAILWAY_ENVIRONMENT_NAME: "staging", [MIGRATION_APPROVAL_ENV]: "c71bf0e" },
+				log: silent,
+			}),
+		).toThrow("SELENA_MIGRATION_SOURCE_SHA_UNKNOWN");
+	});
+
+	it("asks nothing when the deploy carries no new migrations", () => {
+		expect(assertMigrationApproval({ actualRows: expected, expectedRows: expected, env: hosted, log: silent })).toEqual({
+			pending: 0,
+			gated: false,
+		});
+	});
+
+	it("asks nothing of a database with no history to protect", () => {
+		expect(assertMigrationApproval({ actualRows: null, expectedRows: expected, env: hosted, log: silent })).toEqual({
+			pending: 3,
+			gated: false,
+		});
+	});
+
+	it("leaves a developer's own database alone", () => {
+		expect(assertMigrationApproval({ actualRows: applied, expectedRows: expected, env: {}, log: silent })).toEqual({
+			pending: 1,
+			gated: false,
+		});
 	});
 });
