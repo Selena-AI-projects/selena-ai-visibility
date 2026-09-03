@@ -141,6 +141,60 @@ export async function reconcileHistoricalMigrationVariants({
 	return true;
 }
 
+/**
+ * The owner gate, enforced rather than promised.
+ *
+ * A merge into the release branch redeploys the migrate service, and until
+ * this existed that deploy applied whatever DDL the merge carried to shared
+ * staging — while the acceptance documents recorded the database as untouched
+ * and the change as awaiting an exact-SHA decision. A rule the pipeline can
+ * walk past is not a gate, so the check lives here, on the last statement
+ * before the migration runs.
+ *
+ * It engages on any hosted environment and asks for one thing: an approval
+ * naming the exact commit being deployed. Approval cannot be left switched on,
+ * because the next commit has a different SHA. Nothing is asked when there is
+ * nothing pending, so an ordinary redeploy of unchanged migrations still goes
+ * through untouched.
+ *
+ * A fresh database has no history to protect and no approval to give — CI, a
+ * disposable replay and a developer's first boot all migrate normally.
+ */
+export const MIGRATION_APPROVAL_ENV = "SELENA_MIGRATION_APPROVED_SHA";
+
+export function migrationApprovalRequired(env) {
+	return Boolean(env.RAILWAY_ENVIRONMENT_NAME) || env.SELENA_MIGRATION_APPROVAL_REQUIRED === "true";
+}
+
+function deployedCommit(env) {
+	return (env.RAILWAY_GIT_COMMIT_SHA ?? env.SELENA_MIGRATION_SOURCE_SHA ?? "").trim().toLowerCase();
+}
+
+export function assertMigrationApproval({ actualRows, expectedRows, env, log = console.log }) {
+	const applied = actualRows?.length ?? 0;
+	const pending = expectedRows.length - applied;
+	if (pending <= 0) return { pending: 0, gated: false };
+	if (applied === 0) return { pending, gated: false };
+	if (!migrationApprovalRequired(env)) return { pending, gated: false };
+
+	const commit = deployedCommit(env);
+	if (!commit) throw new Error("SELENA_MIGRATION_SOURCE_SHA_UNKNOWN");
+
+	const approval = (env[MIGRATION_APPROVAL_ENV] ?? "").trim().toLowerCase();
+	// A short SHA is what an owner copies out of a merge notification, so one is
+	// accepted — as a prefix of the commit actually being deployed, never as a
+	// substring of it, and never short enough to match more than one commit.
+	const approvalUsable = /^[0-9a-f]{7,40}$/.test(approval) && commit.startsWith(approval);
+	if (!approvalUsable) {
+		log(
+			`migration approval required: ${pending} pending. Set ${MIGRATION_APPROVAL_ENV}=${commit} on this service and redeploy.`,
+		);
+		throw new Error("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
+	}
+	log(`migration approval accepted for ${commit}: applying ${pending}`);
+	return { pending, gated: true };
+}
+
 export async function runMigrationCycleWithLock({
 	client,
 	expectedRows,
@@ -148,6 +202,7 @@ export async function runMigrationCycleWithLock({
 	createDatabase = drizzle,
 	migrateDatabase = migrate,
 	readCompatibilitySource = readFile,
+	env = process.env,
 	log = console.log,
 }) {
 	let lockAcquired = false;
@@ -161,6 +216,7 @@ export async function runMigrationCycleWithLock({
 		log(
 			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
 		);
+		assertMigrationApproval({ actualRows: before, expectedRows, env, log });
 		if (before) {
 			assertJournalPrefix(before, expectedRows);
 			await reconcileHistoricalMigrationVariants({

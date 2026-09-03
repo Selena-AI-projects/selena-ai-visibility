@@ -3,6 +3,7 @@ import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openroute
 import { db } from "@workspace/lib/db/db";
 import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
+import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import { createNoopMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
 	assertDispatchModes,
@@ -134,6 +135,10 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 			store: repositories.runs,
 			adapters,
 			config,
+			// The cumulative ceiling for this scope, held before the permit is
+			// claimed. A scope nobody funded refuses, which is why the runbook
+			// funds `measure` before the first live order rather than after it.
+			spend: createMeasurementSpendMeter(db, job.data.organizationId),
 			cycleState: { globalEmergencyStop: isGlobalProviderStopEngaged(process.env) },
 		});
 		// A failure is already recorded as a terminal run; rethrowing would only

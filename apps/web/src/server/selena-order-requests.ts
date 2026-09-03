@@ -2,12 +2,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svAuditEvents, svOrderRequests, svProjects, svScenarios } from "@workspace/lib/db/schema";
+import { redeemPilotInvite } from "@workspace/lib/selena-pilot-invites";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import {
 	decideFreeAutoDispatch,
 	type FreeAutoDispatchStatus,
 	freeAutoDispatchConfigFromEnv,
-	promoCodeApplies,
 	SELENA_CATALOG,
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -20,8 +20,10 @@ const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
 // A request is a lead. The operator reads these on the admin desk and builds
 // the paid order there, so the money path keeps its single human gate. The one
-// exception is a request a promo code already made free: it may start itself,
-// under caps and behind a default-off flag.
+// exception is a request an issued pilot seat already made free: it may start
+// itself, under caps and behind a default-off flag. A seat is a row the
+// operator minted, spendable once, bound to one plan and to an expiry — never
+// a string compared against a list of live codes in the environment.
 
 export const orderRequestPlanIds = ["visitor-local", "full-ai-landscape"] as const;
 
@@ -144,9 +146,18 @@ export const createSelenaOrderRequestFn = createServerFn({ method: "POST" })
 		const context = await resolveSessionAuthContext();
 		const project = await repositories.projects.get(context, data.projectId);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
-		const promoApplied = promoCodeApplies(data.promoCode, process.env);
-		const [row] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			tx
+		// Claiming the seat and saving the lead commit together: a seat consumed
+		// by a request that was never stored would be a seat nobody can use again.
+		const { row, promoApplied } = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+			const seat = data.promoCode?.trim()
+				? await redeemPilotInvite(tx, {
+						code: data.promoCode,
+						planId: data.planId,
+						organizationId: context.tenantId,
+						userId: context.actorId,
+					})
+				: null;
+			const [inserted] = await tx
 				.insert(svOrderRequests)
 				.values({
 					organizationId: context.tenantId,
@@ -155,11 +166,15 @@ export const createSelenaOrderRequestFn = createServerFn({ method: "POST" })
 					contactName: data.contactName,
 					contactChannel: data.contactChannel,
 					comment: data.comment || null,
-					promoCode: data.promoCode?.trim() ? data.promoCode.trim().toUpperCase() : null,
-					promoApplied,
+					// The submitted code is never stored. Which seat was spent is
+					// recorded on the invite itself, against this organization, so the
+					// lead table cannot become a list of working codes.
+					promoCode: null,
+					promoApplied: seat !== null,
 				})
-				.returning({ id: svOrderRequests.id }),
-		);
+				.returning({ id: svOrderRequests.id });
+			return { row: inserted, promoApplied: seat !== null };
+		});
 
 		const auto = await autoDispatchFreeRequest({
 			context,

@@ -61,3 +61,31 @@ Activation order is migration SUCCESS → web SUCCESS and `/api/setup-status` HT
 - Read-only Railway review confirmed staging remains healthy and production environment `72cd278f-af7c-4802-8da3-20a143d0ba1e` currently contains zero services.
 - Production PostgreSQL backup/PITR cannot be verified because no production PostgreSQL service exists. No production service, migration, secret, domain, or deployment was created.
 - Required rollback plan before production boot: retain the immutable release tag, take a provider-confirmed database backup/PITR checkpoint, apply migrations as a one-shot job, verify health, and roll back application services to the prior immutable release without destructive database changes. This plan is pending the production database and backup/PITR capability.
+
+## Leftover proof databases (2026-09-03)
+
+Six disposable and restore PostgreSQL services from the 0054–0060 proof runs are
+still online in the `staging` environment, each holding a volume with a copy of
+the database. The acceptance record states they were removed or scaled to zero;
+they are neither. They cost money and widen where tenant data sits.
+
+Deleting a service destroys its volume, so this is an owner action and is listed
+here rather than performed:
+
+| Service | Id | Created |
+|---|---|---|
+| `Postgres-selena-v13-0059-0060-isolated-20260903` | `88dbe261-c7f6-4733-83cf-15e579f6990e` | 2026-09-02 21:49Z |
+| `Postgres-selena-v13-0058-isolated-20260902` | `9bec47ee-bebe-49e6-bb0e-ae29fa39ce3c` | 2026-09-02 12:08Z |
+| `Postgres-selena-v13-0056-restore-20260902` | `eda9ad35-e488-477a-bc25-96afeecebdf8` | 2026-09-02 07:12Z |
+| `canary-clean-20260902` | `bb4c60d1-9529-4de1-8792-075d195199cf` | 2026-09-02 06:21Z |
+| `reconciliation-0054-20260902` | `bbcbf014-7c66-4254-8cea-f912e6f3f7b2` | 2026-09-02 00:02Z |
+| `Postgres-selena-v13-restore-20260901` | `a34b2749-130a-47f3-8da3-8f58e3775fe9` | 2026-09-01 01:35Z |
+
+**Do not delete** `Postgres` (`280e3b59-77c3-46e0-8c2c-75955b7f9a40`) — that is
+the staging database itself — or the `web`, `worker`, `migrate`, `measure` and
+`publish` services beside it.
+
+Separately, the `production` environment runs `Postgres-W_9y`
+(`1d67db6f-7df7-44d6-a9d7-3d7058afafff`) with no application in front of it,
+online since 2026-08-15. It holds the PITR and restore evidence the production
+gate rests on, so it is a keep-or-drop decision of its own rather than cleanup.

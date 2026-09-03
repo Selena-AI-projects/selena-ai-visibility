@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/node";
+import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { getDeployment } from "@workspace/deployment";
 import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
@@ -11,6 +12,9 @@ import { registerHandlers } from "./handlers";
 import { reconcileAndStartRecurringSchedules } from "./recurring-schedules";
 import { isOwnerManagedPgBossRuntime } from "./runtime-boss-options";
 import { shutdownTelemetry } from "./telemetry";
+
+// A gate nobody reads is a gate nobody has. Say so before consuming a queue.
+reportUnknownSelenaEnv();
 
 if (process.env.SENTRY_DSN) {
 	Sentry.init({

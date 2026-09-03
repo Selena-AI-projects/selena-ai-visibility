@@ -295,7 +295,21 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: "optional",
 		description:
-			"Set to 'true' to let strangers create their own accounts in local mode, each in their own workspace. Off by default, where only the first signup on an empty database is allowed.",
+			"Set to 'true' to open registration to the pilot guest list in local mode, each guest in their own workspace. Off by default, where only the first signup on an empty database is allowed. On its own it opens nothing: SELENA_PILOT_SIGNUP_ALLOWLIST and SELENA_PILOT_SEAT_CAP decide who may register.",
+	},
+	{
+		name: "SELENA_PILOT_SIGNUP_ALLOWLIST",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Comma-separated exact email addresses invited to the pilot. Wildcards and '@domain' entries are ignored on purpose — a closed pilot admits named guests, not a domain. Unset admits nobody.",
+	},
+	{
+		name: "SELENA_PILOT_SEAT_CAP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"How many pilot accounts may exist, stated independently of the guest list so the two must agree. A guest list longer than this cap is refused rather than trusted. Unset admits nobody.",
 	},
 	{
 		name: "SELENA_LOCAL_VISIBILITY_ENABLED",
@@ -441,13 +455,6 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Set to 'true' to let the worker delete raw answer texts whose retention window (CABINET_MODEL §4a) has passed. Unset means off: deleting customer evidence is an owner decision.",
 	},
 	{
-		name: "SELENA_SUGGEST_BUDGET_USD",
-		scope: "server",
-		requiredBy: "optional",
-		description:
-			"Monthly USD ceiling for profile-suggestion LLM spending, deployment-wide. Unset means no ceiling — the budget-class gate alone decides, as before.",
-	},
-	{
 		name: "SELENA_LOCAL_CURSOR_HMAC_SECRET",
 		scope: "server",
 		requiredBy: "optional",
@@ -520,6 +527,258 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: ["cloud"],
 		description: "Google OAuth client secret.",
+	},
+	{
+		name: "SELENA_EMERGENCY_STOP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to refuse every provider call — measurement, canary and suggestion alike. Unset means the stop is not engaged; the per-path gates still decide on their own.",
+	},
+	{
+		name: "SELENA_MEASUREMENT_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let approved orders execute against providers. Anything else, a misspelling included, keeps paid execution off.",
+	},
+	{
+		name: "SELENA_MEASUREMENT_ADAPTER",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Names the adapter an approved run may use, from the owner-approved allowlist. Unset runs the inert noop adapter, which spends nothing.",
+	},
+	{
+		name: "SELENA_MEASUREMENT_APPROVED_COMMIT_SHA",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Commit the owner approved measurement for. The deployment gate refuses to execute any other one.",
+	},
+	{
+		name: "SELENA_MEASUREMENT_APPROVED_ENVIRONMENT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Environment name that measurement approval covers.",
+	},
+	{
+		name: "SELENA_RECURRING_JOBS_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let pg-boss keep recurring schedules. Anything else removes every managed schedule at boot.",
+	},
+	{
+		name: "SELENA_PGBOSS_OWNER_MANAGED_SCHEMA",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' when the pg-boss schema is owned and migrated by the owner instead of created by the worker.",
+	},
+	{
+		name: "SELENA_PAYMENTS_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to accept payment writes. Off by design while there is no live checkout.",
+	},
+	{
+		name: "SELENA_PAYMENT_MODE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Which payment path is in effect. Fixture mode while live payments are off.",
+	},
+	{
+		name: "SELENA_PROVIDER_BUDGET_USD",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Ceiling for one order's worst-case provider cost, checked at preflight. Not a running total — cumulative spending is metered in sv_provider_spend_budgets, where the runtime cannot raise it.",
+	},
+	{
+		name: "SELENA_FREE_AUTO_DISPATCH_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let a request that a pilot seat already made free start its own measurement instead of waiting on the order desk.",
+	},
+	{
+		name: "SELENA_FREE_AUTO_DISPATCH_MAX_PER_DAY",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Daily ceiling on free auto-dispatch across every account, because a leaked code is used from fresh ones. Default 3.",
+	},
+	{
+		name: "SELENA_FREE_AUTO_DISPATCH_MAX_PER_PROJECT_PER_DAY",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Daily ceiling on free auto-dispatch for one project. Default 1.",
+	},
+	{
+		name: "SELENA_ANONYMOUS_SUGGEST_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let a visitor with no account request a profile suggestion.",
+	},
+	{
+		name: "SELENA_ANONYMOUS_SUGGEST_MAX_PER_DAY",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Daily ceiling on anonymous suggestions across every visitor.",
+	},
+	{
+		name: "SELENA_ANONYMOUS_SUGGEST_MAX_PER_VISITOR_PER_DAY",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Daily ceiling on anonymous suggestions for one visitor.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_ENDPOINT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Overrides the Bright Data dataset endpoint. Unset uses the vendor default.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_CHATGPT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the ChatGPT surface. A dataset id names a public collector, not a secret; unset means the surface is not registered and the family is refused before a permit is claimed.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_GEMINI",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Gemini surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_PERPLEXITY",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Perplexity surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_AI",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Google AI Mode surface.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_OWNER_APPROVED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Owner approval for one Google AI Mode canary execution. Unset refuses the run.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_ORGANIZATION_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Organization the approved canary is attributed to.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_PROJECT_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Project the approved canary is attributed to.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_INPUT_JSON",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Exact input the approved canary sends, as JSON. Nothing is inferred when it is absent.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_COST_PREFLIGHT_JSON",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Cost preflight the owner approved for the canary, as JSON.",
+	},
+	{
+		name: "SELENA_GOOGLE_AI_MODE_CANARY_REDACTION_APPROVED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Owner approval for the redaction applied to the canary's stored payload.",
+	},
+	{
+		name: "SELENA_JOURNAL_PUBLISH_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let the worker publish the build journal. Unset means it is written and not published.",
+	},
+	{
+		name: "SELENA_JOURNAL_PROJECTS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Projects the journal publisher covers.",
+	},
+	{
+		name: "SELENA_JOURNAL_SITE_REPO",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Repository the published journal is written to.",
+	},
+	{
+		name: "SELENA_JOURNAL_SITE_BASE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Base path the published journal is served under.",
+	},
+	{
+		name: "SELENA_JOURNAL_FORCE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to republish a journal entry that is already present.",
+	},
+	{
+		name: "SELENA_SUGGEST_LLM",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Names the budget class that pays for the onboarding suggestion's LLM call. Unset is off, and so is any value other than 'free_budget': the button is free to the customer and is a real round trip on a live key.",
+	},
+	{
+		name: "SELENA_JOURNAL_MAX_COST_USD",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Ceiling the measure-journal entrypoint refuses to start above. Required by that script, which has no default.",
+	},
+	{
+		name: "SELENA_SEARCH_VISIBILITY_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Feature flag for the Search Visibility surface. The surface has no runtime adapter, so the shared guard refuses it even when this is set.",
+	},
+	{
+		name: "SELENA_REPUTATION_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Feature flag for the Reputation surface. The surface has no runtime adapter, so the shared guard refuses it even when this is set.",
 	},
 	{
 		name: "RESEND_FROM_EMAIL",

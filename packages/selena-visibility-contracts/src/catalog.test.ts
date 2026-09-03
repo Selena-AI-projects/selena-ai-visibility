@@ -141,3 +141,32 @@ describe("monthlyAnswerAllowance", () => {
 		expect(monthlyAnswerAllowance("growth-90-days")).toBeNull();
 	});
 });
+
+/**
+ * The Founding Restaurant Pilot sells the AI answer path and nothing else. The
+ * owner took Local Visibility, Search, Reputation, the Visibility Map and the
+ * Outcome layer out of scope on 2026-09-03 because none of them can measure:
+ * there is no runtime executor behind them, and the write and admin APIs refuse
+ * a Local cycle before anything is queued.
+ *
+ * This is the guard on that decision. A plan a customer can request must never
+ * name a system the platform cannot actually measure — that is the difference
+ * between a pilot and a promise.
+ */
+describe("what a requestable plan may promise", () => {
+	const requestable = ["visitor-local", "full-ai-landscape"] as const;
+	const measurable = new Set<string>(apiSystems);
+
+	it.each(requestable)("names only systems with a real adapter behind them: %s", (planId) => {
+		const outside = getPlan(planId).systems.filter((system) => !measurable.has(system));
+		expect(outside, `${planId} promises systems nothing can measure`).toEqual([]);
+	});
+
+	it("does not sell a Maps rank, a local pack or a review metric", () => {
+		const forbidden = /maps|local pack|geo|grid|review|outcome/i;
+		for (const planId of requestable) {
+			const named = getPlan(planId).systems.filter((system) => forbidden.test(system));
+			expect(named, `${planId} names an out-of-scope surface`).toEqual([]);
+		}
+	});
+});

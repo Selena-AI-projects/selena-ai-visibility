@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getEnvRequirements, requireEnvVars, validateEnvRequirements } from "./env";
+import { getEnvRequirements, reportUnknownSelenaEnv, requireEnvVars, validateEnvRequirements } from "./env";
 
 // Vars required specifically because the deployment is cloud.
 const CLOUD_ONLY_VARS = [
@@ -89,5 +89,37 @@ describe("requireEnvVars", () => {
 	it("returns the resolved values when every var is present", () => {
 		const env = { VITE_APP_NAME: "Acme", VITE_APP_URL: "https://app.elmo.com" };
 		expect(requireEnvVars(["VITE_APP_NAME", "VITE_APP_URL"], env)).toEqual(env);
+	});
+});
+
+describe("unrecognised Selena variables", () => {
+	it("names a variable nothing reads, with the name it was probably meant to be", () => {
+		const lines: string[] = [];
+		reportUnknownSelenaEnv({ SELENA_EMERGENCE_STOP: "true" }, (message) => lines.push(message));
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toContain("SELENA_EMERGENCE_STOP");
+		expect(lines[0]).toContain("did you mean SELENA_EMERGENCY_STOP?");
+	});
+
+	it("says nothing about the variables the app actually reads", () => {
+		const lines: string[] = [];
+		reportUnknownSelenaEnv(
+			{ SELENA_EMERGENCY_STOP: "true", SELENA_MEASUREMENT_ENABLED: "false", DATABASE_URL: "postgres://x" },
+			(message) => lines.push(message),
+		);
+		expect(lines).toEqual([]);
+	});
+
+	// The migration runner has its own settings and is not the app's business.
+	it("leaves the migration runner's own settings alone", () => {
+		const lines: string[] = [];
+		reportUnknownSelenaEnv({ SELENA_MIGRATION_APPROVED_SHA: "c71bf0e" }, (message) => lines.push(message));
+		expect(lines).toEqual([]);
+	});
+
+	it("reports a name too far from anything known without guessing", () => {
+		const lines: string[] = [];
+		reportUnknownSelenaEnv({ SELENA_QQQQQQQQQQQQ: "1" }, (message) => lines.push(message));
+		expect(lines[0]).not.toContain("did you mean");
 	});
 });

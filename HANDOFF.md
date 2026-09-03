@@ -51,7 +51,7 @@ Names only; values live in Railway. The owner guide explains each one.
 | Service | Variable |
 |---|---|
 | worker | `SELENA_MEASUREMENT_ENABLED`, `SELENA_MEASUREMENT_ADAPTER`, `BRIGHTDATA_API_TOKEN`, `OPENROUTER_API_KEY` |
-| web | `SELENA_MEASUREMENT_ENABLED`, `SELENA_PAYMENTS_ENABLED`, `SELENA_PROMO_CODES`, `SELENA_FREE_AUTO_DISPATCH_ENABLED` |
+| web | `SELENA_MEASUREMENT_ENABLED`, `SELENA_PAYMENTS_ENABLED`, `SELENA_PILOT_SIGNUP_ALLOWLIST`, `SELENA_PILOT_SEAT_CAP`, `SELENA_FREE_AUTO_DISPATCH_ENABLED` |
 
 `SELENA_MEASUREMENT_ADAPTER=brightdata` and `=auto` are **families** that route
 per permit; a plain name pins one adapter for every permit and mismeasures a

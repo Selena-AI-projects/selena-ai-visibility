@@ -456,3 +456,132 @@ describe("zero provider surface invariant", () => {
 		}
 	});
 });
+
+/**
+ * The ceiling on the paid path. Budget is held before the permit is claimed,
+ * because claiming spends the permit: a refusal has to arrive while it is still
+ * unspent, or the customer loses an answer they paid for to a bookkeeping stop.
+ */
+describe("metered measurement", () => {
+	type Ctx = { tenantId: string };
+	const ctx: Ctx = { tenantId: "org-1" };
+	const enabled = { enabled: true, adapter: "noop" };
+
+	function storeFor(claimed = true) {
+		const claim = vi.fn(async () => ({
+			permit: permitFor(),
+			run: { id: "run-1" },
+			cycle: { id: "cycle-1", status: "RUNNING" },
+			claimed,
+		}));
+		const complete = vi.fn(async () => ({ id: "run-1" }));
+		return { store: { claim, complete } satisfies MeasurementRunStore<Ctx>, claim };
+	}
+
+	function meter() {
+		const calls: string[] = [];
+		return {
+			calls,
+			reserve: vi.fn(async () => {
+				calls.push("reserve");
+			}),
+			settle: vi.fn(async () => {
+				calls.push("settle");
+			}),
+			release: vi.fn(async () => {
+				calls.push("release");
+			}),
+		};
+	}
+
+	it("holds budget, runs, then settles", async () => {
+		const { store } = storeFor();
+		const { adapter } = spyAdapter();
+		const spend = meter();
+		const result = await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: enabled,
+			spend,
+			now,
+		});
+		expect(result.status).toBe("completed");
+		expect(spend.calls).toEqual(["reserve", "settle"]);
+	});
+
+	it("never claims the permit when the ceiling refuses", async () => {
+		const { store, claim } = storeFor();
+		const { adapter, execute } = spyAdapter();
+		const spend = meter();
+		spend.reserve.mockRejectedValueOnce(new Error("PROVIDER_SPEND_REFUSED_OVER_CAP"));
+		await expect(
+			runMeasurementForPermit({
+				permitId: "permit-1",
+				ctx,
+				store,
+				adapters: { noop: adapter },
+				config: enabled,
+				spend,
+				now,
+			}),
+		).rejects.toThrow("PROVIDER_SPEND_REFUSED_OVER_CAP");
+		expect(claim).not.toHaveBeenCalled();
+		expect(execute).not.toHaveBeenCalled();
+	});
+
+	// A failed run may still have reached the provider, so the estimate stays
+	// committed. Only a permit somebody else already ran gets its budget back.
+	it("settles a failure rather than handing the budget back", async () => {
+		const { store } = storeFor();
+		const { adapter } = spyAdapter();
+		adapter.execute = vi.fn(async () => {
+			throw new Error("SELENA_PROVIDER_TIMEOUT");
+		});
+		const spend = meter();
+		const result = await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: enabled,
+			spend,
+			now,
+		});
+		expect(result.status).toBe("failed");
+		expect(spend.calls).toEqual(["reserve", "settle"]);
+	});
+
+	it("releases the hold for a permit somebody else already ran", async () => {
+		const { store } = storeFor(false);
+		const { adapter } = spyAdapter();
+		const spend = meter();
+		const result = await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: enabled,
+			spend,
+			now,
+		});
+		expect(result.status).toBe("skipped");
+		expect(spend.calls).toEqual(["reserve", "release"]);
+	});
+
+	it("leaves spending unmetered when no meter is supplied", async () => {
+		const { store, claim } = storeFor();
+		const { adapter } = spyAdapter();
+		const result = await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: enabled,
+			now,
+		});
+		expect(result.status).toBe("completed");
+		expect(claim).toHaveBeenCalledTimes(1);
+	});
+});

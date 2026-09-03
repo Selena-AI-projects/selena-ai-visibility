@@ -41,14 +41,29 @@ Every other value leaves measurement off. While it is off, the worker records
 nothing, reads nothing and calls no adapter — a permit queued by mistake is
 simply dropped.
 
-`SELENA_MEASUREMENT_ADAPTER=noop` selects which adapter executes a permit. Only
-adapters that hold no credentials and perform no provider call — `noop`,
-`stub` — can be selected this way. Naming a live provider adapter is refused
-even after it is registered in the worker: turning on real spend is a code
-change the owner makes deliberately, alongside supplying credentials, and can
-never be the side effect of setting one variable. Until then the noop adapter
-records every run as `INVALID`, so an accidental run cannot produce something
-that reads like a real measurement.
+`SELENA_MEASUREMENT_ADAPTER=noop` selects which adapter executes a permit. The
+name is checked twice: the adapter must be registered in the worker, and it must
+be on the owner-approved list in `measurement-execution.ts`. Putting a provider
+adapter on that list is the deliberate code change; naming one that is not there
+is refused with `SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO`, so real spend can never
+be the side effect of a typo in a variable.
+
+The list currently holds the inert adapters, `openrouter`, and the three Visitor
+View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
+`brightdata-perplexity` — so `brightdata` as a family name does select a live
+paid path, and the credentials are the remaining requirement. While `noop` is
+selected every run is recorded as `INVALID`, so an accidental run cannot produce
+something that reads like a real measurement.
+
+Spending is metered separately. Each permit holds a reservation in the `measure`
+scope before it is claimed and settles when the run reaches a terminal state, so
+the ceiling is a running total rather than a per-order guess. A scope nobody
+funded refuses every reservation, which means funding it is a step in turning
+measurement on, not an afterthought:
+
+```
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
+```
 
 `SELENA_EMERGENCY_STOP=1` (also `true` or `yes`, with surrounding whitespace
 ignored) blocks execution at the point a provider would be contacted, including
@@ -65,18 +80,50 @@ While it is off the server function refuses with `SUGGEST_LLM_NOT_BUDGETED`
 before anything is queued, and a job that was already queued refuses in the
 worker.
 
-That class is a gate, not a meter: nothing counts the calls or the dollars, so
-the limit that actually holds is the spend cap on the provider account.
+That class is a gate, not a meter. The meter is separate and now exists: the
+`suggest` scope has a ceiling stored in the database, and every suggestion
+holds budget against it before the model is called, settles what the call cost
+afterwards, and gives the hold back if the call produced nothing. Reservations
+are serialized per scope, so two requests cannot both pass on the same
+remaining balance, and a retry reuses its own reservation rather than taking a
+second one.
 
-`SELENA_PROMO_CODES` is a comma-separated list of codes that let a plan request
-through free of charge while there is no online checkout — `AUGUST2026,FRIENDS`
-accepts either, matched case-insensitively. Unset means no code works and every
-request says the payment will be arranged by hand. A code marks the request
+Set and inspect the ceiling as the owner:
+
+```
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest 50
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest
+```
+
+An unfunded scope is not an unlimited one: with no ceiling stored, every
+reservation is refused with `PROVIDER_SPEND_REFUSED_NO_BUDGET`. The runtime
+holds no privilege on the budget table and cannot raise its own limit.
+
+A **pilot invite** is what lets a plan request through free of charge while
+there is no online checkout. Each one is a row the owner minted: one plan, one
+expiry, spendable once. Issue them from a file so the codes never reach a shell
+history or an argument list:
+
+```
+pnpm -C packages/lib exec tsx scripts/issue-pilot-invites.ts seats.csv 30
+```
+
+with `CODE,planId[,label]` per line. Only the SHA-256 digest is stored, the
+runtime can spend a seat but cannot enumerate or mint one, and the code the
+customer types is never written to the lead. An unknown, expired, already-spent
+or wrong-plan code all read the same from outside. A seat marks the request
 free; on its own it starts nothing, because a request is a lead and the paid
 order is still built on the desk.
 
+Who may register at all is a separate list: `SELENA_PILOT_SIGNUP_ALLOWLIST` is
+the exact addresses invited to the pilot and `SELENA_PILOT_SEAT_CAP` is how many
+accounts may exist. Both unset admits nobody, a `*` or `@domain` entry is
+dropped rather than honoured, and a guest list longer than the cap is refused as
+a configuration error. `SELENA_SELF_SERVE_SIGNUP_ENABLED=true` on its own opens
+nothing.
+
 `SELENA_FREE_AUTO_DISPATCH_ENABLED=true` is what changes that, and only for a
-request a promo code already made free: the customer's own questions from their
+request a pilot seat already made free: the customer's own questions from their
 own confirmed profile are approved, ordered and queued in one step, and they see
 "the measurement has already started" instead of a promise to get back to them.
 A paid request is untouched by this and still goes through the desk.
