@@ -1,44 +1,47 @@
 # Selena AI Visibility v1.3 — audit remediation follow-up
 
-## Authoritative PR #120 overlay — 2026-09-03
+## Authoritative PR #123 overlay — 2026-09-03
 
-- Draft PR: [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
-- Exact executable head: `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`
-- Exact integrated release: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`
-- Source verdict: `GO_SOURCE_COMMIT`; independent audit found no P0/P1.
-- CI: all six checks passed —
-  [Build](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
-  [E2E/Scheduling](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
-  [License](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
-  [Smoke](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
-  and [CLA](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405).
-- Upstream migration `0059` retains the owner-certified proved-zero path.
-  Follow-up `0060` adds a separate owner-only, tenant-scoped and replay-safe
-  stale-HOLD reconciliation for acknowledged ambiguity. It classifies valid
-  pre-`0058` consumed/run pairs without a boundary as legacy unfenced rather
-  than fabricating `PRE_TRANSPORT`. Live-equivalent proof returns
-  `providerCalls=NULL / UNKNOWN_WITHIN_UPPER_BOUND`, upper bound `4`, revokes
-  71 issued permits and replays without duplicate audit/incident/downstream
-  rows. `selena_app` retains no execute or private snapshot privilege.
-- The first exact-head E2E attempt timed out in hosted `Build images` before
-  tests at the workflow execution ceiling. Exactly one bounded rerun completed
-  in `11m16s`: Playwright, Bruno API and worker lifecycle passed; Scheduling
-  remained green in `3m53s`. No additional rerun was made.
-- Fresh staging backup `3585126c-a35c-452d-8540-d83b8a0e1d94` and isolated
-  restore `88dbe261-c7f6-4733-83cf-15e579f6990e` passed with exact source/
-  restore count parity. Shared staging remains on `b4e678b8 / 0058`; no DDL,
-  deploy, owner reconciliation, provider call, billing or recurring work
-  occurred after that proof.
-- The owner has authorized one AVLI staging cycle up to USD 10 with zero retries
-  and no recurrence. The effective candidate cap remains the stricter USD 0.50.
-  Owner has acknowledged up to four possible historical calls under the old
-  USD 0.50 lock and authorized reconciliation. Because the executable changed,
-  staging `0059–0060` and deploy of exact `fcb75f54` require a renewed exact-SHA
-  approval before any DDL or runtime change.
+- Draft PR: [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123),
+  exact executable/source head `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476`,
+  branch `fix/selena-0060-cancelled-permits`; status is
+  `OPEN/DRAFT/MERGEABLE` and merge is prohibited.
+- All six checks pass: [Build run 33697256321](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256321),
+  [E2E/Scheduling run 33697256316](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256316),
+  [License run 33697256296](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256296),
+  [Smoke run 33697256314](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256314)
+  and [CLA run 33697256344](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256344).
+- Read-only backup/restore precondition passed: backup
+  `3585126c-a35c-452d-8540-d83b8a0e1d94` (426 MB referenced, 222 MB used, no
+  expiry), isolated restore service `88dbe261-c7f6-4733-83cf-15e579f6990e`,
+  deployment `114b84eb-5f78-43ae-a8a4-d981a8897599`, restored marker and
+  WAL-from-bucket evidence.
+- Migration deployment `934cacb6-5436-461d-80d2-6d0805c8df0a` applied only
+  `0059–0060` and advanced the journal `59→61` with TLS verification and exit
+  `0`. Rollback-only owner proof returned upper bound `4` and rolled back with
+  no count changes; the authorized owner reconciliation committed exactly once
+  and replay returned `ALREADY_RECONCILED`.
+- Reconciliation outcome: claim `RECONCILED`; cycle `STOPPED` (`75/75/4`);
+  permits `4 consumed/71 revoked`; four runs marked failed-invalid with the
+  legacy interruption reason; audit `3→4`, incidents `0→1`; no new snapshot,
+  evidence, acceptance, provider-boundary or cost rows. Provider calls stayed
+  `0`.
+- Runtime safety remains explicit: `selena_app` cannot read private snapshot
+  payload/provider references or execute reconciliation; only allowlisted
+  metadata is readable. Exact staging web deployment
+  `c239da91-2b5b-413b-a77a-7d9c4394c635` and worker deployment
+  `14cff336-1549-4ea9-a572-3e576b7db16a` are `SUCCESS`, with provider,
+  billing and recurring execution disabled.
+- Hosted API/browser acceptance passed: setup health `200 ready=true`, scoped
+  unauthenticated project API `401`, AVLI/HoReCa browser shell with left
+  project rail and separate horizontal Workspace tools, Local-first read-only,
+  Social/Travel absent. Global pre-existing cost baseline remains
+  `4560` rows / USD `32.162867`.
+- Source and hosted decision: `GO_STAGING_ACCEPTANCE / NO_GO_PRODUCTION`.
+  No provider call, retry, billing, recurring job, production action or merge
+  occurred. Keep this PR draft until a separately authorized release decision.
 
-PR #120 must remain draft and unmerged until staging receipts are attached.
-
-## Authoritative hosted candidate — 2026-09-02
+## Historical PR #120 overlay — 2026-09-03
 
 - Exact hosted implementation source head:
   `b4e678b812b42623d20a4211a0ae6f6d657420b3`.

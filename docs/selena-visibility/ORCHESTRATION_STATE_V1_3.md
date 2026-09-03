@@ -2,58 +2,56 @@
 
 ## Authoritative current state — 2026-09-03
 
-- State: `GO_SOURCE / BACKUP_RESTORE_PASS / HOLD_EXACT_FCB75F54_STAGING_EXECUTION / NO_GO_PRODUCTION`.
-- Exact executable candidate:
-  `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`, integrating release
-  `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
-- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
-  is open, draft, mergeable and clean. Exact-head Build
-  [33680828377](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
-  E2E/Scheduling
-  [33680828378](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
-  License [33680828409](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
-  Smoke [33680828491](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
-  and CLA [33680828405](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405)
-  passed.
-- The first E2E attempt timed out in hosted `Build images` before tests at the
-  workflow execution ceiling. The single bounded rerun passed E2E, Playwright,
-  Bruno API and worker lifecycle in `11m16s`; Scheduling remained green in
-  `3m53s`. No further rerun was made.
-- Upstream `0059` preserves an owner-certified `HOLD → NO_SPEND` only for proved
-  zero spend. `0060` separately quarantines acknowledged ambiguous HOLDs and
-  treats valid pre-`0058` runs without boundaries as legacy unfenced runs.
-  `selena_app` cannot call or spoof either reconciliation. No synthetic
-  boundary, evidence, acceptance or cost row is created.
-- Exact live-equivalent disposable proof models 75 permits, 71 issued, four
-  consumed/running legacy runs and zero boundaries. Reconciliation requires
-  owner acknowledgement, reports `providerCalls=NULL` with upper bound `4`,
-  revokes 71 permits, settles four runs, and replays without duplicates. A
-  linked cost does not double count; a truly unmatched cost adds one.
-- Local lint, full tests, build, shell/diff checks and the
-  isolated real-PostgreSQL `0059` and `0060` rehearsals passed. Independent
-  Database/Evidence audit found no remaining code P0/P1. No frontend file
-  changed, so Impeccable was not rerun.
-- Fresh backup `3585126c-a35c-452d-8540-d83b8a0e1d94` and isolated restore
-  service `88dbe261-c7f6-4733-83cf-15e579f6990e` passed. Source/restore schema
-  and bounded counts matched exactly at `59 / 0058`.
-- Shared staging remains on hosted source `b4e678b8` and migration `0058` with
-  providers, recurring jobs and billing off. No DDL, owner reconciliation,
-  deployment or paid call occurred after the restore proof.
-- Owner authorization exists for one AVLI staging measurement cycle up to USD
-  10, zero retries and no recurrence. Execution remains bounded by the stricter
-  frozen/source USD 0.50 cap (public list-price estimate USD 0.1125 for 75
-  records).
+- State: `GO_STAGING_ACCEPTANCE / NO_GO_PRODUCTION`.
+- Exact executable/source HEAD is `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476`
+  on `fix/selena-0060-cancelled-permits`. PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
+  is `OPEN/DRAFT/MERGEABLE`; merge is prohibited.
+- PR #123 checks are green: Build `33697256321`, E2E and Scheduling
+  `33697256316`, License `33697256296`, Smoke `33697256314`, and CLA
+  `33697256344`.
+- Read-only backup recheck passed for
+  `3585126c-a35c-452d-8540-d83b8a0e1d94` (426 MB referenced, 222 MB used, no
+  expiry). Isolated restore `88dbe261-c7f6-4733-83cf-15e579f6990e` and
+  deployment `114b84eb-5f78-43ae-a8a4-d981a8897599` reached PostgreSQL ready
+  with restored marker and WAL-from-bucket proof.
+- Migration deployment `934cacb6-5436-461d-80d2-6d0805c8df0a` applied only
+  `0059–0060`; journal moved `59/1787940020000 → 61/1787940022000`, TLS
+  verification passed and the runner exited `0`.
+- Rollback-only transaction proof returned `RECONCILED`, upper bound `4`,
+  `providerCalls=NULL / UNKNOWN_WITHIN_UPPER_BOUND`, and rolled back. Counts
+  before/after were identical: claim `HOLD`, permits `71 issued/4 consumed`,
+  four unfinished runs, audit `3`, incidents `0`, boundaries `0`, cost `0`,
+  snapshots `0`, acceptance `0`.
+- Authorized owner reconciliation committed once and replayed idempotently:
+  claim `RECONCILED`, cycle `STOPPED` (`75/75/4`), permits `4 consumed/71
+  revoked`, four runs failed-invalid with
+  `OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY`, audit `3→4`,
+  incidents `0→1`, and no new boundary/cost/snapshot/evidence/acceptance row.
+  The identical replay returned `ALREADY_RECONCILED`; provider calls stayed `0`.
+- `selena_app` has no private snapshot or reconciliation SELECT/execute and
+  reads only allowlisted metadata. Owner/control-plane reconciliation remains
+  separate from ordinary runtime access.
+- Exact staging web deployment `c239da91-2b5b-413b-a77a-7d9c4394c635` and
+  worker deployment `14cff336-1549-4ea9-a572-3e576b7db16a` are `SUCCESS`.
+  Worker logs show providers, recurring scheduler and billing are disabled.
+  API health returned `200 {"ready":true}`; unauthenticated project API
+  returned `401`. AVLI/HoReCa browser acceptance passed with the left project
+  rail and separate horizontal Workspace tools; Local-first is read-only and
+  Social/Travel are absent.
+- Target counts after reconciliation: snapshots `0`, evidence `0`, acceptance
+  `0`, boundaries `0`, cost `0`, audit `4`, incidents `1`; global pre-existing
+  cost baseline remains `4560` rows / USD `32.162867`. No provider call, retry,
+  billing, recurring, production or merge action occurred.
+- Root lint/typecheck/tests/build and CI are green; registered root
+  format-and-lint baseline `310 errors / 350 warnings / 16 infos` remains
+  documented and unsuppressed.
+  Protected `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md` is untouched.
 
-Owner has acknowledged up to four possible historical provider calls under the
-old USD 0.50 lock and authorized owner reconciliation. Because the executable
-changed to close the live pre-`0058` topology, the next owner gate is exact:
-approve staging-only `0059–0060`, deploy `fcb75f54` with all execution flags
-off, run rollback-only proof, and then execute the already authorized owner
-reconciliation. Only after those receipts pass may a paid path be selected.
-PR merge, production, Social/Travel, billing and recurring jobs remain
-prohibited.
+Next gate: keep PR #123 draft and production closed. Any future owner-scoped
+maintenance must first reconcile the rotated owner DB binding; no provider,
+billing or recurring activation is implied by this staging acceptance.
 
-## Authoritative current state — 2026-09-02
+## Historical current state — 2026-09-02
 
 - State: `STAGING_PRELAUNCH_PASS / OWNER_DB_BINDING_HOLD / PRODUCTION_NO_GO`.
 - Exact hosted implementation source head:
