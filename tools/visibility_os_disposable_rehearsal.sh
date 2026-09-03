@@ -134,9 +134,14 @@ trap 'exit 143' TERM
 cleanup_required=true
 "${compose[@]}" up -d --pull never postgres
 
+# Probe over TCP, not the socket. The postgres image runs a temporary server on
+# the same unix socket while initdb and the init scripts run, and answers
+# pg_isready from it; the suite would then start in the window after that server
+# is shut down and before the real one binds. The temporary server is started
+# with listen_addresses='', so only the real one ever answers on TCP.
 ready=false
 for _ in {1..60}; do
-	if "${compose[@]}" exec -T postgres pg_isready -U selena_test -d selena_visibility_test >/dev/null 2>&1; then
+	if "${compose[@]}" exec -T postgres pg_isready -h 127.0.0.1 -p 5432 -U selena_test -d selena_visibility_test >/dev/null 2>&1; then
 		ready=true
 		break
 	fi
