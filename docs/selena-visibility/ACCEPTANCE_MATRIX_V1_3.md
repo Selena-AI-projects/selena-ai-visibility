@@ -1,69 +1,68 @@
 # Selena AI Visibility v1.3 — hosted acceptance matrix
 
-## Authoritative AVLI measurement overlay — 2026-09-03
+## Authoritative hosted acceptance overlay — 2026-09-03
 
-- Exact executable candidate: `fcb75f54eba5810ac41a6c6d130ea80293cb5df5`.
-- Branch: `fix/avli-journal-hold-reconciliation`; exact integrated release
-  base: `f75542c4028d0ff15c425e4f99057fb5f1cf2376`.
-- Draft PR [#120](https://github.com/parkourcafe/selena-ai-visibility/pull/120)
-  is `OPEN/DRAFT/MERGEABLE/CLEAN`. Exact-head checks passed:
-  [Build 33680828377](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828377),
-  [E2E and Scheduling 33680828378](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828378),
-  [License 33680828409](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828409),
-  [Smoke 33680828491](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828491)
-  and [CLA 33680828405](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33680828405).
-- The first E2E attempt timed out in hosted `Build images` before tests at the
-  workflow execution ceiling. Exactly one bounded rerun was performed: E2E,
-  Playwright, Bruno API and worker lifecycle passed in `11m16s`; Scheduling
-  remained green in `3m53s`. No additional rerun was made.
-- Ordered migrations `0059–0060` are `PASS_SOURCE_AND_DISPOSABLE`. Upstream
-  `0059` remains the immutable certificate-backed path for proved zero spend;
-  `0060` now distinguishes boundary-backed execution from valid pre-`0058`
-  consumed/run pairs with no historical boundary. It never backfills a
-  synthetic boundary. Ordinary `selena_app` receives no raw snapshot,
-  provider-reference or owner reconciliation privilege; direct execute is
-  revoked in both migration and runtime bootstrap.
-- Disposable PostgreSQL receipts:
-  `JOURNAL_NO_SPEND_0059_DISPOSABLE_PASS provider_code_invoked=false external_network_api_calls_made=0 cleanup=verified` and
-  `JOURNAL_0060_DISPOSABLE_PASS ownerOnly=true runtimeExecute=false noSpendCompatibility=preserved runtimeQuiesced=true ambiguousSpend=preserved legacyPermits=75 legacyIssuedRevoked=71 legacyConsumed=4 boundaryUpperBound=1 legacyUnfencedUpperBound=4 unmatchedNullCostUpperBound=+1 legacyLinkedCost=not-double-counted legacyInvariantMismatch=rejected legacyReceipt=UNKNOWN_WITHIN_UPPER_BOUND legacyDryRun=rolled-back legacyReplay=idempotent legacyAudit=exact providerInvocationsDuringTest=0`.
-  Both disposable environments were removed. An independent read-only
-  Database/Evidence review found no remaining P0/P1.
-- Local gates on the executable candidate passed: lint exit `0` with the
-  registered `129 warnings / 12 infos`, tests `16/16` (`lib 1141/1141`, web
-  `448 passed / 4 skipped`), build `16/16`, shell syntax and diff checks. No
-  frontend file changed, so Impeccable was not rerun. Local Node is 22.23.0;
-  CI used required Node 24.
-- Fresh staging backup `3585126c-a35c-452d-8540-d83b8a0e1d94` completed with
-  `usedMB=120`, `referencedMB=426`, no expiry. Isolated PITR restore service
-  `88dbe261-c7f6-4733-83cf-15e579f6990e` reached `database system is ready`.
-  Source and restored read-only receipts matched exactly at migration frontier
-  `59 / 1787940020000` and counts
-  `claims/runs/cost/snapshots/audit/evidence/acceptance/canaries = 4/5258/4560/1/10647/0/0/2`.
-- Shared staging is intentionally unchanged: exact hosted implementation is
-  still `b4e678b8`, database frontier is `59 entries / 0058`, and provider
-  execution, recurring jobs and billing remain disabled.
-- The one live stale HOLD has exact topology `75 permits = 71 issued + 4
-  consumed`, four unfinished runs, zero provider-boundary rows, zero cost rows
-  and zero downstream evidence rows. The four executions predate `0058` and
-  are therefore recorded as `providerCalls=NULL /
-  UNKNOWN_WITHIN_UPPER_BOUND`, upper bound `4`, never as `PRE_TRANSPORT`.
-- Owner authorized one AVLI staging measurement cycle with an aggregate ceiling
-  of USD 10, zero retries and `recurring=false`. The executable path must keep
-  the stricter frozen/source limit: effective maximum USD 0.50; current public
-  list-price estimate for 75 records is USD 0.1125. This is authorization, not
-  evidence that a call has occurred.
-- Owner acknowledged up to four possible historical provider calls under the
-  old USD 0.50 lock and authorized owner reconciliation. Because executable
-  source changed after that approval, applying `0059–0060` and deploying exact
-  `fcb75f54` remain a new exact-SHA owner gate. No provider call, DDL,
-  reconciliation write or runtime deploy occurred in this overlay.
+- Exact deployed staging executable: `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476` on
+  `fix/selena-0060-cancelled-permits`. Current PR/source HEAD is
+  `5f655456c648656678bee10ba272b1135f5530cd`; that follow-up changes only
+  disposable 0060 fixture UTC-day alignment and does not change the deployed
+  runtime. PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
+  is `OPEN/DRAFT/MERGEABLE` and must not be merged.
+- All six checks for the current source HEAD are green: [Build run 33702194620](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194620),
+  [E2E/Scheduling run 33702194622](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194622),
+  [License run 33702194564](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194564),
+  [Smoke run 33702194563](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194563)
+  and [CLA run 33702194570](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194570).
+- Fresh backup `3585126c-a35c-452d-8540-d83b8a0e1d94` was rechecked without
+  reading secrets (426 MB referenced, 222 MB used, no expiry). Isolated restore
+  service `88dbe261-c7f6-4733-83cf-15e579f6990e`, deployment
+  `114b84eb-5f78-43ae-a8a4-d981a8897599`, reached PostgreSQL ready with the
+  restored marker and WAL-from-bucket proof.
+- Migration deployment `934cacb6-5436-461d-80d2-6d0805c8df0a` applied only
+  `0059–0060`: journal advanced `59/1787940020000 → 61/1787940022000`, TLS
+  verification passed and the runner exited `0`.
+- Rollback-only owner proof returned `RECONCILED`, upper bound `4`,
+  `providerCalls=NULL / UNKNOWN_WITHIN_UPPER_BOUND`, with the transaction
+  rolled back. Before and after counts were identical: claim `HOLD`, permits
+  `issued=71/consumed=4`, unfinished runs `4`, audit `3`, incidents `0`,
+  boundaries `0`, cost `0`, snapshots `0`, acceptance `0`.
+- The separately authorized owner reconciliation then committed exactly once:
+  claim `RECONCILED`, cycle `STOPPED` (`75/75/4` expected/created/completed),
+  permits `consumed=4/revoked=71`, runs `FAILED+INVALID=4` with reason
+  `OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY`, audit `3→4`,
+  incidents `0→1`, and no boundary, cost, snapshot, evidence or acceptance
+  rows. The identical replay returned `ALREADY_RECONCILED`; all counts stayed
+  unchanged and provider calls remained `0`.
+- `selena_app` remains least-privilege: no raw/private snapshot SELECT, no
+  reconciliation SELECT or execute, and only the allowlisted metadata columns
+  are readable. Owner reconciliation is executable only by the owner/control
+  plane. This is the required protection against runtime private-payload reads.
+- Exact staging web deployment `c239da91-2b5b-413b-a77a-7d9c4394c635` and worker
+  deployment `14cff336-1549-4ea9-a572-3e576b7db16a` are `SUCCESS`. Worker logs
+  confirm provider execution and recurring scheduler are disabled; billing and
+  production remain untouched.
+- API acceptance: `/api/setup-status` returned HTTP `200` with `{"ready":true}`;
+  unauthenticated `/api/v1/selena/projects` returned HTTP `401` and the scoped
+  API-key requirement. Browser acceptance passed AVLI and HoReCa: project rail
+  is left-aligned, Workspace tools are a separate horizontal axis, Local-first
+  views are read-only, Social/Travel are absent, and no measurement was started.
+- Target post-reconciliation counts are snapshots `0`, evidence `0`, acceptance
+  `0`, provider-boundary rows `0`, cost rows `0`, audit `4`, incidents `1`.
+  Global pre-existing cost baseline remains `4560` rows / USD `32.162867`; no
+  new provider snapshot or cost row was created. No provider call, retry,
+  billing action, recurring job, production action or merge occurred.
+- Root local lint/typecheck/tests/build and the PR checks are green; the root
+  format-and-lint baseline still reports its registered pre-existing `310
+  errors / 350 warnings / 16 infos` and is recorded rather than suppressed.
+  `HANDOFF_PERPLEXITY_RECOVERY_2026-08-30.md`
+  remains untouched and excluded.
 
-Current decision: `GO_SOURCE / BACKUP_RESTORE_PASS / HOLD_EXACT_FCB75F54_STAGING_EXECUTION / NO_GO_PRODUCTION`.
+Current decision: `GO_STAGING_ACCEPTANCE / NO_GO_PRODUCTION`.
 
-## Authoritative source overlay — 2026-09-02
+## Historical source overlay — 2026-09-02
 
-This is the only current acceptance overlay. Hosted receipts in this section
-prove the exact staging runtime named below; the older ledger remains historical.
+This section is historical. Its hosted receipts prove the exact staging runtime
+that was current on 2026-09-02; the 2026-09-03 overlay above is authoritative.
 
 - Exact hosted implementation source head:
   `b4e678b812b42623d20a4211a0ae6f6d657420b3`.

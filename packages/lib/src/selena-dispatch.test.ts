@@ -111,7 +111,8 @@ describe("selectEnqueueablePermits", () => {
 		const consumed = permit({ id: "consumed", consumedAt: new Date(now.getTime() - 60_000) });
 		const expired = permit({ id: "expired", expiresAt: new Date(now.getTime() - 1) });
 		const revoked = permit({ id: "revoked", status: "revoked" });
-		const selected = selectEnqueueablePermits([fresh, consumed, expired, revoked], now);
+		const cancelled = permit({ id: "cancelled", status: "cancelled" });
+		const selected = selectEnqueueablePermits([fresh, consumed, expired, revoked, cancelled], now);
 		expect(selected.map((entry) => entry.id)).toEqual(["fresh"]);
 	});
 

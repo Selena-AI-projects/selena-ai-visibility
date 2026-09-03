@@ -55,7 +55,7 @@ ALTER TABLE "sv_journal_daily_claims"
 --> statement-breakpoint
 ALTER TABLE "sv_run_permits"
 	ADD CONSTRAINT "sv_run_permits_status_check"
-	CHECK ("status" IN ('issued', 'consumed', 'revoked')) NOT VALID;
+	CHECK ("status" IN ('issued', 'consumed', 'revoked', 'cancelled')) NOT VALID;
 --> statement-breakpoint
 ALTER TABLE "sv_run_permits"
 	VALIDATE CONSTRAINT "sv_run_permits_status_check";
@@ -482,7 +482,7 @@ BEGIN
 					) <> 1
 				)
 				OR (
-					permit."status" IN ('issued', 'revoked')
+					permit."status" IN ('issued', 'revoked', 'cancelled')
 					AND EXISTS (
 						SELECT 1 FROM "public"."sv_runs" AS run
 						WHERE run."permit_id" = permit."id"

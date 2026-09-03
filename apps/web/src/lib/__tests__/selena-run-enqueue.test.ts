@@ -40,7 +40,7 @@ describe("enqueueOrderRuns", () => {
 		]);
 	});
 
-	it("skips consumed, expired and revoked permits instead of queueing work the executor refuses", async () => {
+	it("skips consumed, expired, revoked and cancelled permits instead of queueing work the executor refuses", async () => {
 		const send = vi.fn<SelenaMeasureSender>(async () => "job");
 		const result = await run(
 			[
@@ -48,11 +48,12 @@ describe("enqueueOrderRuns", () => {
 				permit({ id: "consumed", consumedAt: new Date(now.getTime() - 1000) }),
 				permit({ id: "expired", expiresAt: new Date(now.getTime() - 1) }),
 				permit({ id: "revoked", status: "revoked" }),
+				permit({ id: "cancelled", status: "cancelled" }),
 			],
 			true,
 			send,
 		);
-		expect(result).toEqual({ enqueued: 1, skipped: 3, duplicates: 0, reason: null });
+		expect(result).toEqual({ enqueued: 1, skipped: 4, duplicates: 0, reason: null });
 		expect(send).toHaveBeenCalledTimes(1);
 		expect(send.mock.calls[0]?.[0].permitId).toBe("fresh");
 	});
