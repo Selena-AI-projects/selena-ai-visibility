@@ -676,6 +676,90 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Collector id for the Google AI Mode surface.",
 	},
 	{
+		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_SERP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Google search results surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_MAPS_PLACE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Google Maps place surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_MAPS_REVIEWS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Google Maps reviews surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_HOTELS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Google Hotels surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_PROFILES",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Instagram profile surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_POSTS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Instagram post surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_REELS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Instagram reel surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_COMMENTS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Instagram comment surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_TIKTOK_PROFILES",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the TikTok profile surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_TIKTOK_POSTS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the TikTok post surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_REDDIT_POSTS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the Reddit post surface.",
+	},
+	{
+		name: "SELENA_BRIGHTDATA_DATASET_YOUTUBE_VIDEOS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Collector id for the YouTube video surface.",
+	},
+	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_OWNER_APPROVED",
 		scope: "server",
 		requiredBy: "optional",
