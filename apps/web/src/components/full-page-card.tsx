@@ -28,7 +28,8 @@ export default function FullPageCard({
 	backButtonHref = "/app",
 	backButtonText = "Go Back",
 	customBackButton,
-	className = "w-md",
+	// Capped rather than fixed: a fixed width wider than a phone scrolls the page sideways.
+	className = "w-full max-w-md",
 	scene,
 }: FullPageCardProps) {
 	const context = useRouteContext({ strict: false }) as { clientConfig?: ClientConfig };
@@ -72,13 +73,15 @@ export default function FullPageCard({
 		return (
 			<div className="selena-auth-shell min-h-screen">
 				<div className="mx-auto grid min-h-screen w-full max-w-6xl gap-6 p-4 lg:grid-cols-2 lg:gap-10 lg:p-8">
-					<div className="flex flex-col justify-center gap-6">
+					{/* min-w-0: a grid column will not shrink past its content's intrinsic width without it. */}
+					<div className="flex min-w-0 flex-col justify-center gap-6">
 						<div className="lg:hidden">
 							<AuthScene scene={scene} variant="strip" />
 						</div>
 						{body}
 					</div>
-					<div className="hidden lg:block">
+					{/* Centred, so the panel keeps its own aspect rather than the viewport's height. */}
+					<div className="hidden lg:flex lg:items-center">
 						<AuthScene scene={scene} variant="panel" />
 					</div>
 				</div>

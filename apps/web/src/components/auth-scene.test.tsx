@@ -4,20 +4,19 @@ import { describe, expect, it } from "vitest";
 import { AuthScene } from "./auth-scene";
 
 describe("AuthScene", () => {
-	it("keeps the mobile strip poster-only", () => {
-		const html = renderToStaticMarkup(createElement(AuthScene, { scene: "doors", variant: "strip" }));
+	it("shows the still and its caption on the desktop panel", () => {
+		const html = renderToStaticMarkup(createElement(AuthScene, { scene: "lens", variant: "panel" }));
 
-		expect(html).toContain('src="/media/cinematic/doors.webp"');
-		expect(html).toContain('alt="Two lit doorways at the end of a dark corridor"');
+		expect(html).toContain('src="/media/cinematic/lens.webp"');
+		expect(html).toContain("A workspace for what AI systems say about your brand.");
 		expect(html).not.toContain("<video");
 	});
 
-	it("keeps the desktop poster as the server-rendered reduced-motion-safe fallback", () => {
-		const html = renderToStaticMarkup(createElement(AuthScene, { scene: "doors", variant: "panel" }));
+	it("shows the same still, described, on the narrow-screen strip", () => {
+		const html = renderToStaticMarkup(createElement(AuthScene, { scene: "lens", variant: "strip" }));
 
-		expect(html).toContain('src="/media/cinematic/doors.webp"');
-		expect(html).toContain("Every report inside is dated and sourced.");
+		expect(html).toContain('src="/media/cinematic/lens.webp"');
+		expect(html).toContain('alt="A lens barrel standing on a dark surface, its glass lit from within"');
 		expect(html).not.toContain("<video");
-		expect(html).not.toContain("doors-loop");
 	});
 });
