@@ -64,7 +64,7 @@ describe("bounded migration journal acceptance", () => {
 
 	it("binds the staging 0045 alias to the canonical migration manifest", async () => {
 		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
-		expect(rows[45]).toEqual({
+		expect(rows[45]).toMatchObject({
 			createdAt: "1787940007000",
 			hash: "321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec",
 			acceptedAppliedHashes: ["3b3915803095bf23f8e8b2e70134bfd71a7774d2793bf40f2e0a0bd03b1c051b"],
@@ -84,12 +84,12 @@ describe("bounded migration journal acceptance", () => {
 
 	it("binds the reviewed feature snapshot aliases to 0051 and 0052 only", async () => {
 		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
-		expect(rows[51]).toEqual({
+		expect(rows[51]).toMatchObject({
 			createdAt: "1787940013000",
 			hash: "d66be78072020b4be7303db0a030f2f158759c94a4285f8f3af08d02f8b5a395",
 			acceptedAppliedHashes: ["c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768"],
 		});
-		expect(rows[52]).toEqual({
+		expect(rows[52]).toMatchObject({
 			createdAt: "1787940014000",
 			hash: "8e8e663516d0ec16c7c70c9b0d42235b0782c3d3dd86b5d3ebea15e8924c0961",
 			acceptedAppliedHashes: ["3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca"],
@@ -388,5 +388,45 @@ describe("owner approval before applying DDL", () => {
 			pending: 1,
 			gated: false,
 		});
+	});
+});
+
+/**
+ * What a mismatch has to tell whoever reads the deploy log. Until this existed
+ * a failure said only that the applied journal and the shipped migrations
+ * disagree somewhere, which is not something an operator can act on.
+ */
+describe("naming the row that disagrees", () => {
+	const shipped = [
+		{ hash: "aaaa000000000000", createdAt: "1787940011000", tag: "0049_first" },
+		{ hash: "bbbb111111111111", createdAt: "1787940012000", tag: "0050_second" },
+	];
+
+	it("names the migration whose file changed after it was applied", () => {
+		const applied = [shipped[0], { hash: "cccc222222222222", createdAt: "1787940012000" }];
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow(/0050_second/);
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow(/changed after it was applied/);
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow("SELENA_MIGRATION_JOURNAL_MISMATCH");
+	});
+
+	it("distinguishes a timestamp that slipped from a file that changed", () => {
+		const applied = [shipped[0], { hash: "bbbb111111111111", createdAt: "1787940099000" }];
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow(/applied at 1787940099000/);
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow(/shipped journal says 1787940012000/);
+	});
+
+	it("says when the database holds a migration the release does not ship", () => {
+		const applied = [...shipped, { hash: "dddd333333333333", createdAt: "1787940013000" }];
+		expect(() => assertJournalPrefix(applied, shipped)).toThrow(/3 applied, 2 shipped/);
+	});
+
+	it("mentions the historical hashes a row is also allowed to carry", () => {
+		const withAlias = [{ ...shipped[0], acceptedAppliedHashes: ["eeee444444444444"] }];
+		const applied = [{ hash: "ffff555555555555", createdAt: "1787940011000" }];
+		expect(() => assertJournalPrefix(applied, withAlias)).toThrow(/also accepts eeee44444444/);
+	});
+
+	it("still accepts a journal that matches", () => {
+		expect(() => assertJournalPrefix(shipped, shipped)).not.toThrow();
 	});
 });

@@ -78,6 +78,8 @@ export async function expectedJournalRows(migrationsFolder) {
 				createdAt,
 				hash,
 				acceptedAppliedHashes,
+				// Only ever used to say which migration a mismatch is about.
+				tag: entry.tag,
 			};
 		}),
 	);
@@ -216,9 +218,13 @@ export async function runMigrationCycleWithLock({
 		log(
 			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
 		);
+		// Integrity first. Approval decides whether new DDL may be applied; a
+		// journal that already disagrees with the shipped migrations is a
+		// different failure, and asking for a SHA would hide it behind a
+		// question the operator can answer without noticing.
+		if (before) assertJournalPrefix(before, expectedRows);
 		assertMigrationApproval({ actualRows: before, expectedRows, env, log });
 		if (before) {
-			assertJournalPrefix(before, expectedRows);
 			await reconcileHistoricalMigrationVariants({
 				client,
 				actualRows: before,
@@ -252,14 +258,38 @@ export async function runMigrationCycleWithLock({
 	if (unlockError) throw unlockError;
 }
 
+/**
+ * A mismatch used to be a bare code, which said that the applied journal and
+ * the shipped migrations disagree somewhere in 61 rows and nothing more. That
+ * is not enough to act on: the operator cannot tell whether a file was edited
+ * after it was applied, whether the ordering slipped, or which migration to
+ * look at. The row is named here, with what disagrees about it.
+ *
+ * Digests are of migration files that ship in the repository, so printing a
+ * prefix of one reveals nothing that `git show` does not.
+ */
+function describeJournalMismatch(index, actual, expected) {
+	const where = `index ${index}${expected?.tag ? ` (${expected.tag})` : ""}`;
+	if (!expected) return `${where}: applied but absent from the shipped journal`;
+	if (actual.createdAt !== expected.createdAt)
+		return `${where}: applied at ${actual.createdAt}, shipped journal says ${expected.createdAt}`;
+	const accepted = expected.acceptedAppliedHashes?.length
+		? ` (also accepts ${expected.acceptedAppliedHashes.map((hash) => hash.slice(0, 12)).join(", ")})`
+		: "";
+	return `${where}: applied hash ${actual.hash.slice(0, 12)}, file hashes to ${expected.hash.slice(0, 12)}${accepted} — the file changed after it was applied`;
+}
+
 export function assertJournalPrefix(actualRows, expectedRows) {
-	if (actualRows.length > expectedRows.length) throw new Error("SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED");
+	if (actualRows.length > expectedRows.length)
+		throw new Error(
+			`SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED: ${actualRows.length} applied, ${expectedRows.length} shipped`,
+		);
 	for (const [index, actual] of actualRows.entries()) {
 		const expected = expectedRows[index];
 		const hashMatches =
 			expected && (actual.hash === expected.hash || expected.acceptedAppliedHashes?.includes(actual.hash));
 		if (!expected || actual.createdAt !== expected.createdAt || !hashMatches)
-			throw new Error("SELENA_MIGRATION_JOURNAL_MISMATCH");
+			throw new Error(`SELENA_MIGRATION_JOURNAL_MISMATCH: ${describeJournalMismatch(index, actual, expected)}`);
 	}
 }
 
