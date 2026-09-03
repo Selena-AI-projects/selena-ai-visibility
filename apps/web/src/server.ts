@@ -3,6 +3,7 @@ import { wrapFetchWithSentry } from "@sentry/tanstackstart-react";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
+import { callerKey, createRateLimiter, policyForRequest, tooManyRequests } from "@/lib/rate-limit";
 
 // A gate nobody reads is a gate nobody has: a misspelled flag name is not a
 // broken ceiling, it is no ceiling, and every gate here fails closed on the
@@ -56,9 +57,18 @@ function addSecurityHeaders(response: Response): Response {
 	});
 }
 
+const rateLimiter = createRateLimiter();
+
 export default createServerEntry(
 	wrapFetchWithSentry({
 		async fetch(request: Request) {
+			const policy = policyForRequest(request);
+			if (policy) {
+				const decision = rateLimiter.check(callerKey(request), policy);
+				// Refused before the handler runs: the point is to not do the work,
+				// not to do it and discard the answer.
+				if (!decision.allowed) return addSecurityHeaders(tooManyRequests(decision.retryAfterSeconds));
+			}
 			const response = await handler.fetch(request);
 			return addSecurityHeaders(response);
 		},
