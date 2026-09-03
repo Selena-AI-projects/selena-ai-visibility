@@ -65,18 +65,50 @@ While it is off the server function refuses with `SUGGEST_LLM_NOT_BUDGETED`
 before anything is queued, and a job that was already queued refuses in the
 worker.
 
-That class is a gate, not a meter: nothing counts the calls or the dollars, so
-the limit that actually holds is the spend cap on the provider account.
+That class is a gate, not a meter. The meter is separate and now exists: the
+`suggest` scope has a ceiling stored in the database, and every suggestion
+holds budget against it before the model is called, settles what the call cost
+afterwards, and gives the hold back if the call produced nothing. Reservations
+are serialized per scope, so two requests cannot both pass on the same
+remaining balance, and a retry reuses its own reservation rather than taking a
+second one.
 
-`SELENA_PROMO_CODES` is a comma-separated list of codes that let a plan request
-through free of charge while there is no online checkout — `AUGUST2026,FRIENDS`
-accepts either, matched case-insensitively. Unset means no code works and every
-request says the payment will be arranged by hand. A code marks the request
+Set and inspect the ceiling as the owner:
+
+```
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest 50
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest
+```
+
+An unfunded scope is not an unlimited one: with no ceiling stored, every
+reservation is refused with `PROVIDER_SPEND_REFUSED_NO_BUDGET`. The runtime
+holds no privilege on the budget table and cannot raise its own limit.
+
+A **pilot invite** is what lets a plan request through free of charge while
+there is no online checkout. Each one is a row the owner minted: one plan, one
+expiry, spendable once. Issue them from a file so the codes never reach a shell
+history or an argument list:
+
+```
+pnpm -C packages/lib exec tsx scripts/issue-pilot-invites.ts seats.csv 30
+```
+
+with `CODE,planId[,label]` per line. Only the SHA-256 digest is stored, the
+runtime can spend a seat but cannot enumerate or mint one, and the code the
+customer types is never written to the lead. An unknown, expired, already-spent
+or wrong-plan code all read the same from outside. A seat marks the request
 free; on its own it starts nothing, because a request is a lead and the paid
 order is still built on the desk.
 
+Who may register at all is a separate list: `SELENA_PILOT_SIGNUP_ALLOWLIST` is
+the exact addresses invited to the pilot and `SELENA_PILOT_SEAT_CAP` is how many
+accounts may exist. Both unset admits nobody, a `*` or `@domain` entry is
+dropped rather than honoured, and a guest list longer than the cap is refused as
+a configuration error. `SELENA_SELF_SERVE_SIGNUP_ENABLED=true` on its own opens
+nothing.
+
 `SELENA_FREE_AUTO_DISPATCH_ENABLED=true` is what changes that, and only for a
-request a promo code already made free: the customer's own questions from their
+request a pilot seat already made free: the customer's own questions from their
 own confirmed profile are approved, ordered and queued in one step, and they see
 "the measurement has already started" instead of a promise to get back to them.
 A paid request is untouched by this and still goes through the desk.

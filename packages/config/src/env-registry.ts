@@ -455,13 +455,6 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Set to 'true' to let the worker delete raw answer texts whose retention window (CABINET_MODEL §4a) has passed. Unset means off: deleting customer evidence is an owner decision.",
 	},
 	{
-		name: "SELENA_SUGGEST_BUDGET_USD",
-		scope: "server",
-		requiredBy: "optional",
-		description:
-			"Monthly USD ceiling for profile-suggestion LLM spending, deployment-wide. Unset means no ceiling — the budget-class gate alone decides, as before.",
-	},
-	{
 		name: "SELENA_LOCAL_CURSOR_HMAC_SECRET",
 		scope: "server",
 		requiredBy: "optional",

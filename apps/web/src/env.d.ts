@@ -85,7 +85,6 @@ declare global {
 			readonly SENTRY_AUTH_TOKEN?: string;
 			readonly DISABLE_TELEMETRY?: string;
 			readonly SELENA_ANSWER_RETENTION_ENABLED?: string;
-			readonly SELENA_SUGGEST_BUDGET_USD?: string;
 			readonly SELENA_LOCAL_CURSOR_HMAC_SECRET?: string;
 			readonly SELENA_EVIDENCE_S3_ENDPOINT?: string;
 			readonly SELENA_EVIDENCE_S3_BUCKET?: string;

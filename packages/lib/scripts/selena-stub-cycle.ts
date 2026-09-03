@@ -23,7 +23,13 @@ import { expireAnswerTexts } from "../src/selena-answer-retention";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "../src/selena-extraction-context";
 import { computeLedgerReport, type LedgerScenarioKind } from "../src/selena-ledger-metrics";
 import { runMeasurementForPermit } from "../src/selena-run-executor";
-import { assertSuggestBudget, recordSuggestCost } from "../src/selena-suggest-metering";
+import {
+	bookSuggestCostEvent,
+	releaseSuggestSpend,
+	reserveSuggestSpend,
+	settleSuggestSpend,
+	SUGGEST_SPEND_SCOPE,
+} from "../src/selena-suggest-metering";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "../src/selena-visibility-repositories";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -248,10 +254,20 @@ async function main(): Promise<void> {
 		scenarioSnapshot: [],
 	});
 
-	// The suggest-spend meter: every suggestion books an estimated ledger row,
-	// and the monthly ceiling refuses the call that would cross it.
+	// The suggest-spend meter: budget is held before the call, settled after it,
+	// and the ceiling refuses the reservation that would cross it. The cap lives
+	// in the database, so this block funds the scope the way an owner would.
 	{
-		await recordSuggestCost(db, { organizationId: ORG, provider: "onboarding-llm" });
+		await db.execute(sql`
+			INSERT INTO sv_provider_spend_budgets ("scope", "cap_usd")
+			VALUES (${SUGGEST_SPEND_SCOPE}, 0.12)
+			ON CONFLICT ("scope") DO UPDATE SET "cap_usd" = excluded."cap_usd", "updated_at" = now()
+		`);
+
+		const first = { organizationId: ORG, requestKey: `stub-suggest-${randomUUID()}` };
+		await reserveSuggestSpend(db, first);
+		await settleSuggestSpend(db, first);
+		await bookSuggestCostEvent(db, { organizationId: ORG, provider: "onboarding-llm" });
 		const [meterRow] = await db
 			.select()
 			.from(schema.svCostEvents)
@@ -260,14 +276,26 @@ async function main(): Promise<void> {
 			meterRow !== undefined && meterRow.basis === "estimated" && meterRow.cycleId === null,
 			"the suggestion booked an estimated ledger row outside any cycle",
 		);
-		await assertSuggestBudget(db, { SELENA_SUGGEST_BUDGET_USD: "100" });
+
+		// Same key, no second bite: a retry rides on its own reservation.
+		const replay = await reserveSuggestSpend(db, first);
+		check(replay.decision === "ALREADY_RESERVED", "a repeated request reuses its reservation instead of adding one");
+
+		const second = { organizationId: ORG, requestKey: `stub-suggest-${randomUUID()}` };
+		await reserveSuggestSpend(db, second);
+		const third = { organizationId: ORG, requestKey: `stub-suggest-${randomUUID()}` };
 		let refused = false;
 		try {
-			await assertSuggestBudget(db, { SELENA_SUGGEST_BUDGET_USD: "0.05" });
+			await reserveSuggestSpend(db, third);
 		} catch (error) {
-			refused = error instanceof Error && error.message === "SUGGEST_BUDGET_EXHAUSTED";
+			refused = error instanceof Error && error.message === "PROVIDER_SPEND_REFUSED_OVER_CAP";
 		}
-		check(refused, "the ceiling refuses the next call once spending reaches it");
+		check(refused, "the ceiling refuses the reservation that would cross it");
+
+		// Releasing an unspent hold makes its budget available again.
+		await releaseSuggestSpend(db, second);
+		await reserveSuggestSpend(db, third);
+		check(true, "a released reservation returns its budget to the scope");
 	}
 
 	// The question-approval path (cabinet step 2): only a PROPOSED question can

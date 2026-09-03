@@ -47,6 +47,7 @@
 		"./run-policy": "./src/run-policy/index.ts",
 		"./run-policy/controlled-cycle": "./src/run-policy/controlled-cycle.ts",
 		"./usage": "./src/usage/cost.ts",
+		"./selena-provider-spend": "./src/selena-provider-spend.ts",
 		"./selena-pilot-invites": "./src/selena-pilot-invites.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
 		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",
