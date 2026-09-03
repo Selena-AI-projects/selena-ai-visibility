@@ -1,7 +1,13 @@
 import "../instrument.server.mjs";
 import { wrapFetchWithSentry } from "@sentry/tanstackstart-react";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
+import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
+
+// A gate nobody reads is a gate nobody has: a misspelled flag name is not a
+// broken ceiling, it is no ceiling, and every gate here fails closed on the
+// exact string. Say which variables are set and unread before serving.
+reportUnknownSelenaEnv();
 
 // Not awaited: the app has to serve sign-in and settings whether or not the
 // credential store is reachable.
