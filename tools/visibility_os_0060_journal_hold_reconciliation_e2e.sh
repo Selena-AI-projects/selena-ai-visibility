@@ -41,7 +41,7 @@ INSERT INTO sv_journal_daily_claims (
 ) VALUES (
 	'60000000-0000-4000-8000-000000000014', 'journal-hold-0060',
 	'60000000-0000-4000-8000-000000000004', 'legacy-unfenced-0060',
-	(clock_timestamp() AT TIME ZONE 'UTC')::date, 1,
+	((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date, 1,
 	clock_timestamp() - interval '2 hours', clock_timestamp() - interval '2 hours'
 );
 INSERT INTO sv_configuration_locks (
@@ -51,7 +51,7 @@ INSERT INTO sv_configuration_locks (
 	'60000000-0000-4000-8000-000000000004', 1,
 	jsonb_build_object('journalClaim', jsonb_build_object(
 		'id', '60000000-0000-4000-8000-000000000014',
-		'utcDay', (clock_timestamp() AT TIME ZONE 'UTC')::date::text,
+		'utcDay', ((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date::text,
 		'attempt', 1
 	)), 'legacy-unfenced-0060', 75, 0.5, 'disposable-0060'
 );
@@ -191,7 +191,7 @@ INSERT INTO sv_journal_daily_claims (
 ) VALUES (
 	'60000000-0000-4000-8000-000000000010', 'journal-hold-0060',
 	'60000000-0000-4000-8000-000000000001', 'avli-0060',
-	(clock_timestamp() AT TIME ZONE 'UTC')::date, 1,
+	((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date, 1,
 	clock_timestamp() - interval '2 hours', clock_timestamp() - interval '2 hours'
 );
 INSERT INTO sv_configuration_locks (
@@ -201,7 +201,7 @@ INSERT INTO sv_configuration_locks (
 	'60000000-0000-4000-8000-000000000001', 1,
 	jsonb_build_object('journalClaim', jsonb_build_object(
 		'id', '60000000-0000-4000-8000-000000000010',
-		'utcDay', (clock_timestamp() AT TIME ZONE 'UTC')::date::text,
+		'utcDay', ((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date::text,
 		'attempt', 1
 	)), '0060', 2, 0.5, 'disposable-0060'
 );
@@ -265,7 +265,7 @@ INSERT INTO sv_journal_daily_claims (
 ) VALUES (
 	'60000000-0000-4000-8000-000000000012', 'journal-hold-0060',
 	'60000000-0000-4000-8000-000000000002', 'legacy-cost-0060',
-	(clock_timestamp() AT TIME ZONE 'UTC')::date, 1,
+	((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date, 1,
 	clock_timestamp() - interval '2 hours', clock_timestamp() - interval '2 hours'
 );
 INSERT INTO sv_configuration_locks (
@@ -275,7 +275,7 @@ INSERT INTO sv_configuration_locks (
 	'60000000-0000-4000-8000-000000000002', 1,
 	jsonb_build_object('journalClaim', jsonb_build_object(
 		'id', '60000000-0000-4000-8000-000000000012',
-		'utcDay', (clock_timestamp() AT TIME ZONE 'UTC')::date::text,
+		'utcDay', ((clock_timestamp() - interval '2 hours') AT TIME ZONE 'UTC')::date::text,
 		'attempt', 1
 	)), '0060-legacy-cost', 1, 0.5, 'disposable-0060'
 );
