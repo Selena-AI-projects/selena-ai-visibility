@@ -3,12 +3,14 @@
 ## Authoritative current state — 2026-09-03
 
 - State: `GO_STAGING_ACCEPTANCE / NO_GO_PRODUCTION`.
-- Exact executable/source HEAD is `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476`
-  on `fix/selena-0060-cancelled-permits`. PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
+- Exact deployed staging executable is `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476`
+  on `fix/selena-0060-cancelled-permits`; current PR/source HEAD is
+  `5f655456c648656678bee10ba272b1135f5530cd`, a disposable UTC-day fixture
+  fix only. PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
   is `OPEN/DRAFT/MERGEABLE`; merge is prohibited.
-- PR #123 checks are green: Build `33697256321`, E2E and Scheduling
-  `33697256316`, License `33697256296`, Smoke `33697256314`, and CLA
-  `33697256344`.
+- PR #123 checks for the current source HEAD are green: Build `33702194620`,
+  E2E and Scheduling `33702194622`, License `33702194564`, Smoke `33702194563`,
+  and CLA `33702194570`.
 - Read-only backup recheck passed for
   `3585126c-a35c-452d-8540-d83b8a0e1d94` (426 MB referenced, 222 MB used, no
   expiry). Isolated restore `88dbe261-c7f6-4733-83cf-15e579f6990e` and

@@ -2,14 +2,17 @@
 
 ## Authoritative hosted acceptance overlay — 2026-09-03
 
-- Exact executable/source HEAD: `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476` on
-  `fix/selena-0060-cancelled-permits`; PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
+- Exact deployed staging executable: `5d8eb47ded32eb7dfe60b2c548a1eb40f8411476` on
+  `fix/selena-0060-cancelled-permits`. Current PR/source HEAD is
+  `5f655456c648656678bee10ba272b1135f5530cd`; that follow-up changes only
+  disposable 0060 fixture UTC-day alignment and does not change the deployed
+  runtime. PR [#123](https://github.com/parkourcafe/selena-ai-visibility/pull/123)
   is `OPEN/DRAFT/MERGEABLE` and must not be merged.
-- All six PR checks are green: [Build run 33697256321](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256321),
-  [E2E/Scheduling run 33697256316](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256316),
-  [License run 33697256296](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256296),
-  [Smoke run 33697256314](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256314)
-  and [CLA run 33697256344](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33697256344).
+- All six checks for the current source HEAD are green: [Build run 33702194620](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194620),
+  [E2E/Scheduling run 33702194622](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194622),
+  [License run 33702194564](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194564),
+  [Smoke run 33702194563](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194563)
+  and [CLA run 33702194570](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33702194570).
 - Fresh backup `3585126c-a35c-452d-8540-d83b8a0e1d94` was rechecked without
   reading secrets (426 MB referenced, 222 MB used, no expiry). Isolated restore
   service `88dbe261-c7f6-4733-83cf-15e579f6990e`, deployment
