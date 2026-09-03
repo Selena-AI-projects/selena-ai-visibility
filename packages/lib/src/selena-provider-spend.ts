@@ -134,3 +134,35 @@ export async function releaseProviderSpend(executor: SqlExecutor, request: Spend
 		"receipt",
 	);
 }
+
+/** The scope the paid measurement path spends under. */
+export const MEASURE_SPEND_SCOPE = "measure";
+
+/**
+ * Adapts the ledger to the runner's structural port, bound to one tenant.
+ *
+ * A permit is the request key: one permit authorizes one provider call, so a
+ * redelivered job reuses the reservation that permit already holds instead of
+ * booking a second one against the ceiling.
+ */
+export function createMeasurementSpendMeter(
+	executor: SqlExecutor,
+	organizationId: string,
+): {
+	reserve(request: { requestKey: string; estimatedUsd: number }): Promise<void>;
+	settle(request: { requestKey: string; actualUsd: number }): Promise<void>;
+	release(request: { requestKey: string }): Promise<void>;
+} {
+	const scope = MEASURE_SPEND_SCOPE;
+	return {
+		async reserve({ requestKey, estimatedUsd }) {
+			await assertProviderSpendReserved(executor, { scope, organizationId, requestKey, estimatedUsd });
+		},
+		async settle({ requestKey, actualUsd }) {
+			await settleProviderSpend(executor, { scope, organizationId, requestKey, actualUsd });
+		},
+		async release({ requestKey }) {
+			await releaseProviderSpend(executor, { scope, organizationId, requestKey });
+		},
+	};
+}

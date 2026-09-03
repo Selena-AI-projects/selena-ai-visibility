@@ -41,14 +41,29 @@ Every other value leaves measurement off. While it is off, the worker records
 nothing, reads nothing and calls no adapter — a permit queued by mistake is
 simply dropped.
 
-`SELENA_MEASUREMENT_ADAPTER=noop` selects which adapter executes a permit. Only
-adapters that hold no credentials and perform no provider call — `noop`,
-`stub` — can be selected this way. Naming a live provider adapter is refused
-even after it is registered in the worker: turning on real spend is a code
-change the owner makes deliberately, alongside supplying credentials, and can
-never be the side effect of setting one variable. Until then the noop adapter
-records every run as `INVALID`, so an accidental run cannot produce something
-that reads like a real measurement.
+`SELENA_MEASUREMENT_ADAPTER=noop` selects which adapter executes a permit. The
+name is checked twice: the adapter must be registered in the worker, and it must
+be on the owner-approved list in `measurement-execution.ts`. Putting a provider
+adapter on that list is the deliberate code change; naming one that is not there
+is refused with `SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO`, so real spend can never
+be the side effect of a typo in a variable.
+
+The list currently holds the inert adapters, `openrouter`, and the three Visitor
+View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
+`brightdata-perplexity` — so `brightdata` as a family name does select a live
+paid path, and the credentials are the remaining requirement. While `noop` is
+selected every run is recorded as `INVALID`, so an accidental run cannot produce
+something that reads like a real measurement.
+
+Spending is metered separately. Each permit holds a reservation in the `measure`
+scope before it is claimed and settles when the run reaches a terminal state, so
+the ceiling is a running total rather than a per-order guess. A scope nobody
+funded refuses every reservation, which means funding it is a step in turning
+measurement on, not an afterthought:
+
+```
+pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
+```
 
 `SELENA_EMERGENCY_STOP=1` (also `true` or `yes`, with surrounding whitespace
 ignored) blocks execution at the point a provider would be contacted, including
