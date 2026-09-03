@@ -2,10 +2,10 @@
  * /app/selena-order - the customer asks for a paid measurement plan.
  *
  * There is no online checkout yet, so this page collects a request — project,
- * plan, contact — and a promo code stands in for payment: a valid code (env
- * SELENA_PROMO_CODES) makes the request free of charge. The operator sees
- * every request on the admin desk and builds the actual order there; nothing
- * on this page touches quotes, orders or the queue.
+ * plan, contact — and a pilot invite code stands in for payment: an unspent,
+ * unexpired seat issued for this plan makes the request free of charge, once.
+ * The operator sees every request on the admin desk and builds the actual
+ * order there; nothing on this page touches quotes, orders or the queue.
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@workspace/ui/components/button";

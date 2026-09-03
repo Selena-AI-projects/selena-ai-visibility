@@ -295,7 +295,21 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: "optional",
 		description:
-			"Set to 'true' to let strangers create their own accounts in local mode, each in their own workspace. Off by default, where only the first signup on an empty database is allowed.",
+			"Set to 'true' to open registration to the pilot guest list in local mode, each guest in their own workspace. Off by default, where only the first signup on an empty database is allowed. On its own it opens nothing: SELENA_PILOT_SIGNUP_ALLOWLIST and SELENA_PILOT_SEAT_CAP decide who may register.",
+	},
+	{
+		name: "SELENA_PILOT_SIGNUP_ALLOWLIST",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Comma-separated exact email addresses invited to the pilot. Wildcards and '@domain' entries are ignored on purpose — a closed pilot admits named guests, not a domain. Unset admits nobody.",
+	},
+	{
+		name: "SELENA_PILOT_SEAT_CAP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"How many pilot accounts may exist, stated independently of the guest list so the two must agree. A guest list longer than this cap is refused rather than trusted. Unset admits nobody.",
 	},
 	{
 		name: "SELENA_LOCAL_VISIBILITY_ENABLED",

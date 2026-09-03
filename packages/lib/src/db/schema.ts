@@ -592,6 +592,23 @@ export const svOrderRequests = pgTable("sv_order_requests", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(), organizationId: text("organization_id").notNull().references(() => organization.id), projectId: uuid("project_id").notNull().references(() => svProjects.id), planId: text("plan_id").notNull(), contactName: text("contact_name").notNull(), contactChannel: text("contact_channel").notNull(), comment: text("comment"), promoCode: text("promo_code"), promoApplied: boolean("promo_applied").default(false).notNull(), status: text("status").default("NEW").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(), updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ orgCreatedIdx: index("sv_order_requests_org_created_idx").on(table.organizationId, table.createdAt) })).enableRLS();
 
+// An operator-issued pilot seat. It exists before the organization that will
+// spend it, so it carries no organization_id until redemption. Only the
+// SHA-256 digest of the code is stored, and the runtime role holds no
+// privilege on this table: seats are claimed through sv_redeem_pilot_invite,
+// which is the only statement allowed to mark one spent.
+export const svPilotInvites = pgTable("sv_pilot_invites", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	codeHash: text("code_hash").notNull(),
+	planId: text("plan_id").notNull(),
+	label: text("label"),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+	redeemedByOrganizationId: text("redeemed_by_organization_id"),
+	redeemedByUserId: text("redeemed_by_user_id"),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({ codeHashKey: unique("sv_pilot_invites_code_hash_key").on(table.codeHash) })).enableRLS();
+
 export type SvProject = typeof svProjects.$inferSelect;
 export type NewSvProject = typeof svProjects.$inferInsert;
 export type SvScenario = typeof svScenarios.$inferSelect;

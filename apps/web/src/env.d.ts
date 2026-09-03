@@ -44,6 +44,8 @@ declare global {
 			readonly DEPLOYMENT_MODE: string;
 			readonly SELENA_LOCAL_VISIBILITY_ENABLED?: string;
 			readonly SELENA_SELF_SERVE_SIGNUP_ENABLED?: string;
+			readonly SELENA_PILOT_SIGNUP_ALLOWLIST?: string;
+			readonly SELENA_PILOT_SEAT_CAP?: string;
 			readonly SELENA_RUNTIME_DATABASE_CA_PEM?: string;
 			readonly DATABASE_URL: string;
 			readonly APP_URL?: string;
