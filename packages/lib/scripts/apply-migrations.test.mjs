@@ -100,10 +100,9 @@ describe("bounded migration journal acceptance", () => {
 	});
 
 	/**
-	 * The digest staging actually applied for 0060, and the one the release
-	 * ships. Binding them is what lets a database migrated from the unmerged
-	 * cancelled-permits branch keep moving; binding anything else would let an
-	 * edited migration pass unnoticed.
+	 * The digest staging applied for 0060 and the one the release ships. Binding
+	 * this exact pair is what lets that database keep moving; binding anything
+	 * else would let an edited migration pass unnoticed.
 	 */
 	it("binds the staging 0060 variant to the release manifest", async () => {
 		const rows = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
