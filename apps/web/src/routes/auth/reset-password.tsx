@@ -33,7 +33,7 @@ function ResetPasswordPage() {
 
 	if (searchError || !token) {
 		return (
-			<FullPageCard title="Reset link invalid or expired" scene="doors">
+			<FullPageCard title="Reset link invalid or expired" scene="lens">
 				<p className="text-center text-sm text-muted-foreground w-full">
 					<Link to="/auth/forgot-password" className="text-primary hover:underline font-medium">
 						Request a new reset link
@@ -67,7 +67,7 @@ function ResetPasswordPage() {
 	}
 
 	return (
-		<FullPageCard title="Choose a new password" scene="doors">
+		<FullPageCard title="Choose a new password" scene="lens">
 			<form onSubmit={handleSubmit} className="space-y-4 w-full">
 				{error && (
 					<Alert variant="destructive">
