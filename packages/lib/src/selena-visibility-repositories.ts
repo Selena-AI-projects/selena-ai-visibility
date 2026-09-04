@@ -822,13 +822,17 @@ export function createSelenaRepositories(db: Db) {
 				},
 			) => {
 				writable(ctx);
-				const order = await getOrderOwned(ctx, orderId);
+				// Both reads are tenant reads, and the RLS policies match on a setting
+				// that exists only inside an organization transaction. On the pool
+				// connection the policy matches nothing, so the order the caller owns
+				// reads back as someone else's and minting refuses.
+				const order = await withOrganizationTransaction(db, ctx.tenantId, (tx) => getOrderOwned(ctx, orderId, tx));
 				// QUEUED is accepted only as the replay of a dispatch that already
 				// succeeded; every other non-APPROVED status must not mint permits.
 				const approvingFrom = opts?.approval?.fromStatus;
 				if (order.status !== "APPROVED" && order.status !== "QUEUED" && order.status !== approvingFrom)
 					throw new Error("SELENA_ORDER_NOT_APPROVED");
-				const lock = await getLockOwned(ctx, order.lockId);
+				const lock = await withOrganizationTransaction(db, ctx.tenantId, (tx) => getLockOwned(ctx, order.lockId, tx));
 				const scope = parseMeasurementScope(lock.snapshot);
 				if (!scope) throw new Error("SELENA_LOCK_SCOPE_MISSING");
 				const expected = assertLockExpectedRuns(scope, lock.expectedRuns);
