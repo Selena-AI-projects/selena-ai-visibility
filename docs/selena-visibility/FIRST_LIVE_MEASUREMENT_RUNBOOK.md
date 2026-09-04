@@ -7,8 +7,16 @@ a funded scope before it is claimed, rather than relying on the per-order
 preflight cap and the Bright Data account limit alone — which was the gap the
 audit named.
 
-Steps 1 to 3 are done on staging; step 4 has its tooling and has not been run.
-What remains is one order, the worker's paid path, and two clicks at the desk.
+A read-only staging readback on 2026-09-04 found the `measure` scope at a
+`$2` lifetime cap with `$0` committed and no open reservations. That is not the
+`$20` standing limit selected below, so the funding step remains on hold.
+
+The read-only `discover` phase has run twice. A staging rehearsal then created
+and approved questions and built one 30-answer order chain with a zero-dollar
+test payment. The order is `PAID_REVIEW_REQUIRED`; it has no cycle, permits,
+runs, provider boundary, or cost event. What remains is to reconcile the scope
+cap, review and enqueue exactly that order, open the worker's paid path, and
+close it again after the terminal evidence is checked.
 
 ## What one run costs
 
@@ -31,12 +39,16 @@ spending twenty-six times more.
 2. **Approve the migration.** Done. Approval is asked only when there is new
    DDL to apply — `assertMigrationApproval` returns as soon as nothing is
    pending — so a redeploy of an unchanged migration set passes without a
-   question. The `migrate` deploy on `49fbace` logged `journal before: 63`,
-   `journal after: 63`, `migrations complete`. When a deploy does refuse it
-   prints the commit to approve: set `SELENA_MIGRATION_APPROVED_SHA` to that
-   and redeploy.
-3. **Fund the scope.** Done. The `measure` scope is funded at **`20` dollars**,
-   chosen by the owner on 2026-09-04 as this runbook's standing limit.
+   question. The `migrate` deploy on `1f0ae937` logged `journal before:
+   63/1787940024000`, `journal after: 63/1787940024000`, `migrations complete`.
+   When a deploy does refuse it prints the commit to approve: set
+   `SELENA_MIGRATION_APPROVED_SHA` to that and redeploy.
+3. **Fund the scope.** **HOLD at the intended standing limit.** The owner chose
+   **`20` dollars** on 2026-09-04, but the database readback still reports a
+   `measure` cap of **`2` dollars**, `$0` committed, and zero open reservations.
+   No cap was changed during the reconciliation. Although `$2` covers the
+   bounded run's `$0.09` retry-inclusive estimate, do not cross a paid boundary
+   while the approved limit and the database source of truth disagree.
 
    Read it as a lifetime total, not an allowance per order or per venue. This
    is the only ceiling that accumulates: `--max-runs` bounds one invocation of
@@ -46,7 +58,7 @@ spending twenty-six times more.
    spending reaches the cap the meter refuses, and raising it is a deliberate
    act.
 
-   | | Cost | Fits in `$20` |
+   | | Cost | Fits in intended `$20` |
    |---|---:|---:|
    | One bounded run, one venue: 10 × 3 × 1 | `$0.045` | ~440 |
    | Full Visitor Local plan, one venue: 100 × 3 × 1 | `$0.45` | ~44 |
@@ -62,9 +74,9 @@ spending twenty-six times more.
    settled when the run reaches a terminal state, so the ceiling is a real
    running total rather than a per-order guess.
 
-4. **Build the order.** Not one screen: a measurement hangs off a chain of
-   five records, each with an endpoint of its own and none with a page that
-   creates the next.
+4. **Build the order.** **Done for one staging rehearsal; not enqueued.** A
+   measurement hangs off a chain of five records, each with an endpoint of its
+   own and none with a page that creates the next.
 
    | Record | Endpoint |
    |---|---|
@@ -96,6 +108,24 @@ spending twenty-six times more.
    project. It stops at the order and creates no permits. Run either phase
    without `--confirm` first — it prints the planned answer count and writes
    nothing.
+
+   The read-only `discover` phase ran successfully in Actions on 2026-09-04 as
+   runs [33847588901](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847588901)
+   and [33847858297](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847858297).
+   It performs only versioned API reads and created none of the records below.
+   The subsequent staging readback found:
+
+   - 35 scenarios created that day, all `APPROVED`;
+   - the newest lock freezes 10 of those approved scenarios across 3 systems
+     and 1 repeat, for 30 expected runs, with order cap `$2` and engine SHA
+     `70ff5b8efdd26505553a79f40a06cdb2b480d1ab`;
+   - an `ISSUED` zero-dollar quote, an order at `PAID_REVIEW_REQUIRED`, and a
+     matching `$0` `test` payment at `SUCCEEDED`;
+   - zero cycles, journal claims, run permits, runs, provider boundaries, and
+     cost events created that day.
+
+   Those zeros are the stop line: the commercial path has been assembled, but
+   no measurement has been dispatched and no provider-spend evidence exists.
 5. **Open the paid path.** On the staging `worker` service:
 
    | Variable | Value | Why |
