@@ -109,6 +109,11 @@ spending twenty-six times more.
    without `--confirm` first — it prints the planned answer count and writes
    nothing.
 
+   The `First live measurement order` workflow runs the script from CI, where
+   the API key is a secret nobody has to hold in a shell. Its `discover` phase
+   reads `/projects` and a family's questions, which is where the project and
+   family ids the other two phases need come from.
+
    The read-only `discover` phase ran successfully in Actions on 2026-09-04 as
    runs [33847588901](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847588901)
    and [33847858297](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847858297).
