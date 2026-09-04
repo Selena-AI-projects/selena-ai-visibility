@@ -7,9 +7,10 @@ a funded scope before it is claimed, rather than relying on the per-order
 preflight cap and the Bright Data account limit alone — which was the gap the
 audit named.
 
-Steps 1 to 3 are done on staging, and step 4 has its tooling but has not been
-run. What remains is one order, the worker's paid path, and two deliberate
-clicks at the desk.
+Steps 1 and 2 are done on staging. Step 3 is funded, at an amount this page
+does not agree with; step 4 has its tooling and has not been run. What remains
+is that decision, one order, the worker's paid path, and two clicks at the
+desk.
 
 ## What one run costs
 
@@ -29,26 +30,24 @@ spending twenty-six times more.
 
 1. **Merge the branch.** Done — `0061` and `0062` are in
    `release/selena-visibility-mvp`.
-2. **Approve the migration.** Done, and the gate is narrower than this runbook
-   used to claim: it asks for a SHA only when there is new DDL to apply.
-   `assertMigrationApproval` returns early once nothing is pending, so an
-   ordinary redeploy of an unchanged migration set passes without a question —
-   the `migrate` deploy on `49fbace` logged `journal before: 63`,
-   `journal after: 63`, `migrations complete`. Set
-   `SELENA_MIGRATION_APPROVED_SHA` to the SHA the log names only when a deploy
-   actually refuses.
-3. **Fund the scope.** Done — but not at the amount written below. The `measure`
-   scope reads a ceiling of `20` dollars with nothing committed and no open
-   reservations, while this runbook asks for `2`.
+2. **Approve the migration.** Done. Approval is asked only when there is new
+   DDL to apply — `assertMigrationApproval` returns as soon as nothing is
+   pending — so a redeploy of an unchanged migration set passes without a
+   question. The `migrate` deploy on `49fbace` logged `journal before: 63`,
+   `journal after: 63`, `migrations complete`. When a deploy does refuse it
+   prints the commit to approve: set `SELENA_MIGRATION_APPROVED_SHA` to that
+   and redeploy.
+3. **Fund the scope.** Funded, but not settled: the `measure` scope carries a
+   ceiling of `20` dollars with nothing committed and no open reservations,
+   while the command below sets `2`. Decide which one before the first order.
 
-   Twenty dollars is over thirteen thousand answers at the measured rate,
-   against a first run of thirty. It is the outermost of four ceilings — the
-   script's `--max-runs`, the per-order preflight cap, this scope cap, and the
-   Bright Data account limit — so it exposes nothing the inner three do not
-   already allow. It is still ten times the figure this page states, and a spend
-   ceiling that disagrees with its own runbook is the kind of gap the audit was
-   about. Either lower it with the command below, or change this page to `20`
-   on purpose.
+   The gap matters more than the amount suggests, because this is the only
+   ceiling that accumulates. `--max-runs` bounds one invocation of the order
+   script and `orderCap` bounds one order; `sv_provider_spend_committed` sums
+   every reservation the scope has ever held, with no order or time window. So
+   the scope cap is what stands between a second order and a hundredth, and at
+   `20` the meter permits ten times the aggregate this page intends — over
+   thirteen thousand answers at the measured rate.
 
    ```
    pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
@@ -105,10 +104,11 @@ spending twenty-six times more.
    | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight. |
    | `BRIGHTDATA_API_TOKEN` | present | Sealed; never read back. |
 
-   Leave `SELENA_RECURRING_JOBS_ENABLED` and `SELENA_PAYMENTS_ENABLED` off **on
-   `worker`**. That is not the flag step 4 turns on: the one there is on `web`,
-   which serves the payment endpoint, and this one would only let the worker
-   start paid work on its own.
+   Leave `SELENA_RECURRING_JOBS_ENABLED` off. `SELENA_PAYMENTS_ENABLED` belongs
+   to `web`, which serves the payment endpoints; no code path in the worker
+   reads it, so setting it here neither enables nor prevents anything. What
+   governs the worker is the measurement, adapter, emergency-stop and
+   scheduling flags in the table above.
 6. **Enqueue exactly one order** from the desk. Nothing runs on a timer; a
    commercial run starts from an explicit admin action.
 7. **Close the path again.** Set `SELENA_EMERGENCY_STOP=true` as soon as the run
