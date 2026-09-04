@@ -1,14 +1,15 @@
 # First live measurement — runbook
 
-Owner authorized real provider calls on the AI answer path on 2026-09-03, and
-separately chose to review this branch as a pull request before anything is
-applied to staging. Those two together set the order: **the live run comes after
-the merge**, because the spend meter it should run under is migration `0062`,
-which is in this branch and not yet applied.
+Owner authorized real provider calls on the AI answer path on 2026-09-03.
+Staging's journal now stands at 63 entries through index 62, so migration `0062`
+is applied and the spend meter is live: every permit takes a reservation against
+a funded scope before it is claimed, rather than relying on the per-order
+preflight cap and the Bright Data account limit alone — which was the gap the
+audit named.
 
-Running before that is possible and is not recommended. Without `0062` the only
-ceilings are the per-order preflight cap and the limit configured on the Bright
-Data account itself — which is exactly the gap the audit named.
+Steps 1 to 3 are done on staging, and step 4 has its tooling but has not been
+run. What remains is one order, the worker's paid path, and two deliberate
+clicks at the desk.
 
 ## What one run costs
 
@@ -26,15 +27,28 @@ spending twenty-six times more.
 
 ## Order of operations
 
-1. **Merge this branch.** Migrations `0061` and `0062` become part of the
-   release.
-2. **Approve the migration.** The `migrate` deploy will refuse and print the
-   exact SHA to use; set `SELENA_MIGRATION_APPROVED_SHA` to it on the `migrate`
-   service and redeploy. Confirm the log reads `journal after: 63/…` and
-   `migrations complete` — 63 entries is the chain through `0062`.
-3. **Fund the scope.** The paid measurement path spends under the `measure`
-   scope, and an unfunded scope refuses every reservation — so this comes before
-   the first order, not after it. As the owner, against staging:
+1. **Merge the branch.** Done — `0061` and `0062` are in
+   `release/selena-visibility-mvp`.
+2. **Approve the migration.** Done, and the gate is narrower than this runbook
+   used to claim: it asks for a SHA only when there is new DDL to apply.
+   `assertMigrationApproval` returns early once nothing is pending, so an
+   ordinary redeploy of an unchanged migration set passes without a question —
+   the `migrate` deploy on `49fbace` logged `journal before: 63`,
+   `journal after: 63`, `migrations complete`. Set
+   `SELENA_MIGRATION_APPROVED_SHA` to the SHA the log names only when a deploy
+   actually refuses.
+3. **Fund the scope.** Done — but not at the amount written below. The `measure`
+   scope reads a ceiling of `20` dollars with nothing committed and no open
+   reservations, while this runbook asks for `2`.
+
+   Twenty dollars is over thirteen thousand answers at the measured rate,
+   against a first run of thirty. It is the outermost of four ceilings — the
+   script's `--max-runs`, the per-order preflight cap, this scope cap, and the
+   Bright Data account limit — so it exposes nothing the inner three do not
+   already allow. It is still ten times the figure this page states, and a spend
+   ceiling that disagrees with its own runbook is the kind of gap the audit was
+   about. Either lower it with the command below, or change this page to `20`
+   on purpose.
 
    ```
    pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
@@ -60,8 +74,9 @@ spending twenty-six times more.
 
    The customer-facing form at `/app/selena-order` does not build these — it
    files a lead, and says so on the page. Test payments need
-   `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` on `web`;
-   `live` is refused unconditionally, so neither value can charge anyone.
+   `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` **on `web`**,
+   which serves these endpoints; both are set on staging. `live` is refused
+   unconditionally, so neither value can charge anyone.
 
    `packages/lib/scripts/selena-first-live-order.ts` walks them, in two phases
    because a question is reviewed between them:
@@ -90,7 +105,10 @@ spending twenty-six times more.
    | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight. |
    | `BRIGHTDATA_API_TOKEN` | present | Sealed; never read back. |
 
-   Leave `SELENA_RECURRING_JOBS_ENABLED` and `SELENA_PAYMENTS_ENABLED` off.
+   Leave `SELENA_RECURRING_JOBS_ENABLED` and `SELENA_PAYMENTS_ENABLED` off **on
+   `worker`**. That is not the flag step 4 turns on: the one there is on `web`,
+   which serves the payment endpoint, and this one would only let the worker
+   start paid work on its own.
 6. **Enqueue exactly one order** from the desk. Nothing runs on a timer; a
    commercial run starts from an explicit admin action.
 7. **Close the path again.** Set `SELENA_EMERGENCY_STOP=true` as soon as the run
