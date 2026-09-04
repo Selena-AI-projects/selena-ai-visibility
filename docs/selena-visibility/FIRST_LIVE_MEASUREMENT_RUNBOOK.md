@@ -63,11 +63,22 @@ spending twenty-six times more.
    `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` on `web`;
    `live` is refused unconditionally, so neither value can charge anyone.
 
-   `packages/lib/scripts/selena-first-live-order.ts` walks the five in order and
-   refuses a question set whose answers would exceed `--max-runs`, so a full
-   plan cannot be ordered by reaching for the wrong list. It stops at the order
-   and creates no permits. Run it without `--confirm` first — it prints the
-   planned answer count and writes nothing.
+   `packages/lib/scripts/selena-first-live-order.ts` walks them, in two phases
+   because a question is reviewed between them:
+
+   - `propose --questions <file>` creates the scenarios and prints their ids.
+   - A reviewer approves them in the workspace. Permit creation trusts the ids
+     frozen into the lock and never rechecks their status, so this is the only
+     point where an unapproved question can still be caught.
+   - `build --scenarios <file>` refuses any id that is not `APPROVED`, then
+     assembles lock, quote, order and payment.
+
+   It refuses a question set whose answers would exceed `--max-runs`, so a full
+   plan cannot be ordered by reaching for the wrong list, and it derives the
+   lock version from the project's existing locks rather than assuming a fresh
+   project. It stops at the order and creates no permits. Run either phase
+   without `--confirm` first — it prints the planned answer count and writes
+   nothing.
 5. **Open the paid path.** On the staging `worker` service:
 
    | Variable | Value | Why |
