@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { getDeployment } from "@workspace/deployment";
-import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
+import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
 import { isLegacyProviderExecutionEnabled, isMaintenanceEnabled } from "@workspace/lib/run-policy";
@@ -92,14 +92,14 @@ async function main() {
 	// plus snapshot cancellation and the terminal database transaction.
 	await boss.createQueue("selena-measure", {
 		retryLimit: 0,
-		expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	});
 	// createQueue is idempotent but does not reconcile options on an existing
 	// pg-boss queue. Keep deployed upgrades from retaining the old 15-minute
 	// expiry after the Perplexity snapshot allowance changes.
 	await boss.updateQueue("selena-measure", {
 		retryLimit: 0,
-		expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	});
 	await boss.createQueue("selena-answer-retention", {
 		retryLimit: 1,
