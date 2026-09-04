@@ -1,8 +1,11 @@
 # Elmo 
 # Supports: web app (Nitro server) and worker
 
-# Build-time selector used by the final runtime stage.
+# Build-time selector used by the final runtime stage. Railway supplies the
+# service name automatically; an isolated acceptance runtime can explicitly
+# select a target without taking an existing service name.
 ARG RAILWAY_SERVICE_NAME=web
+ARG SELENA_RUNTIME_TARGET=${RAILWAY_SERVICE_NAME}
 
 # Base stage with Node.js
 FROM node:24-alpine AS base
@@ -154,5 +157,7 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
-# The service name selects the final runtime stage: web or worker.
-FROM ${RAILWAY_SERVICE_NAME} AS final
+# Existing services retain name-selected targets. Isolated acceptance services
+# use SELENA_RUNTIME_TARGET so their unique Railway names cannot select a
+# non-existent Docker stage.
+FROM ${SELENA_RUNTIME_TARGET} AS final
