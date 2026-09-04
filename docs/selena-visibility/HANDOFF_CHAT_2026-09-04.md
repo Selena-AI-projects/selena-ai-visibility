@@ -3,7 +3,8 @@
 **Дата handoff:** 2026-09-04
 **Основной репозиторий:** `parkourcafe/selena-ai-visibility`
 **Рабочая ветка:** `fix/migration-journal-mismatch`
-**Последний отправленный commit:** `7676728f` — `feat: add guarded durable YouTube projection`
+**Последний implementation commit:** `7676728f` — `feat: add guarded durable YouTube projection`
+**Handoff commit:** `cbff9032` — `Document full chat handoff`
 **Состояние:** source implementation завершена; live activation остаётся отдельным operational gate.
 
 ## 1. Итог в одном абзаце
