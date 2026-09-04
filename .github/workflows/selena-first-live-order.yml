@@ -35,6 +35,10 @@ on:
         description: "Question family. Required by propose and build; discover lists a family's questions when given one"
         required: false
         type: string
+      read_path:
+        description: "discover only: one more path under /api/v1/selena to read, e.g. /profiles?projectId=…"
+        required: false
+        type: string
       scenario_ids:
         description: "Required by build: the approved scenario ids, one per line"
         required: false
@@ -89,6 +93,8 @@ jobs:
       # the ids the other two phases need are printed by this one.
       - name: List projects and question families
         if: inputs.phase == 'discover'
+        env:
+          READ_PATH: ${{ inputs.read_path }}
         run: |
           set -o pipefail
           base="${SELENA_API_BASE%/}"
@@ -102,6 +108,16 @@ jobs:
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
             curl -sS --fail-with-body -H "authorization: Bearer $SELENA_API_KEY" \
               "$base/api/v1/selena/scenarios?familyId=$SELENA_FAMILY_ID" | jq . | tee -a "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # Whether a project can be ordered at all is decided by records that
+          # have their own endpoints — a confirmed profile, its questions — and
+          # reading one should not need a new workflow each time.
+          if [ -n "$READ_PATH" ]; then
+            echo "## $READ_PATH" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            curl -sS --fail-with-body -H "authorization: Bearer $SELENA_API_KEY" \
+              "$base/api/v1/selena/${READ_PATH#/}" | jq . | tee -a "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
 
