@@ -46,9 +46,39 @@ spending twenty-six times more.
    One permit holds one reservation, taken before the permit is claimed and
    settled when the run reaches a terminal state, so the ceiling is a real
    running total across the whole order rather than a per-order guess.
-4. **Prepare the order.** One project, one plan (`visitor-local`), ten approved
-   questions. Build the order on the admin desk as usual and check the preflight
-   reports the cardinality you expect — `30` planned answers, not `300`.
+4. **Build the order.** Not one screen: a measurement hangs off a chain of
+   five records, each with an endpoint of its own and none with a page that
+   creates the next.
+
+   | Record | Endpoint |
+   |---|---|
+   | Scenarios — the questions | `POST /api/v1/selena/scenarios` |
+   | Configuration lock | `POST /api/v1/selena/locks` |
+   | Quote | `POST /api/v1/selena/quotes` |
+   | Order | `POST /api/v1/selena/orders` |
+   | Recorded payment | `POST /api/v1/selena/payments/test` |
+
+   The customer-facing form at `/app/selena-order` does not build these — it
+   files a lead, and says so on the page. Test payments need
+   `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` on `web`;
+   `live` is refused unconditionally, so neither value can charge anyone.
+
+   `packages/lib/scripts/selena-first-live-order.ts` walks them, in two phases
+   because a question is reviewed between them:
+
+   - `propose --questions <file>` creates the scenarios and prints their ids.
+   - A reviewer approves them in the workspace. Permit creation trusts the ids
+     frozen into the lock and never rechecks their status, so this is the only
+     point where an unapproved question can still be caught.
+   - `build --scenarios <file>` refuses any id that is not `APPROVED`, then
+     assembles lock, quote, order and payment.
+
+   It refuses a question set whose answers would exceed `--max-runs`, so a full
+   plan cannot be ordered by reaching for the wrong list, and it derives the
+   lock version from the project's existing locks rather than assuming a fresh
+   project. It stops at the order and creates no permits. Run either phase
+   without `--confirm` first — it prints the planned answer count and writes
+   nothing.
 5. **Open the paid path.** On the staging `worker` service:
 
    | Variable | Value | Why |
