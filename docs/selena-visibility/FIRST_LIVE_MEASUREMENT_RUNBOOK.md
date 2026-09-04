@@ -79,6 +79,11 @@ spending twenty-six times more.
    project. It stops at the order and creates no permits. Run either phase
    without `--confirm` first — it prints the planned answer count and writes
    nothing.
+
+   The `First live measurement order` workflow runs it from CI, where the API
+   key is a secret nobody has to hold in a shell. Its `discover` phase reads
+   `/projects` and a family's questions, which is where the project and family
+   ids the other two phases need come from.
 5. **Open the paid path.** On the staging `worker` service:
 
    | Variable | Value | Why |
