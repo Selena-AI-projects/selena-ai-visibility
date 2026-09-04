@@ -7,10 +7,8 @@ a funded scope before it is claimed, rather than relying on the per-order
 preflight cap and the Bright Data account limit alone — which was the gap the
 audit named.
 
-Steps 1 and 2 are done on staging. Step 3 is funded, at an amount this page
-does not agree with; step 4 has its tooling and has not been run. What remains
-is that decision, one order, the worker's paid path, and two clicks at the
-desk.
+Steps 1 to 3 are done on staging; step 4 has its tooling and has not been run.
+What remains is one order, the worker's paid path, and two clicks at the desk.
 
 ## What one run costs
 
@@ -37,28 +35,33 @@ spending twenty-six times more.
    `journal after: 63`, `migrations complete`. When a deploy does refuse it
    prints the commit to approve: set `SELENA_MIGRATION_APPROVED_SHA` to that
    and redeploy.
-3. **Fund the scope.** Funded, but not settled: the `measure` scope carries a
-   ceiling of `20` dollars with nothing committed and no open reservations,
-   while the command below sets `2`. Decide which one before the first order.
+3. **Fund the scope.** Done. The `measure` scope is funded at **`20` dollars**,
+   chosen by the owner on 2026-09-04 as this runbook's standing limit.
 
-   The gap matters more than the amount suggests, because this is the only
-   ceiling that accumulates. `--max-runs` bounds one invocation of the order
-   script and `orderCap` bounds one order; `sv_provider_spend_committed` sums
-   every reservation the scope has ever held, with no order or time window. So
-   the scope cap is what stands between a second order and a hundredth, and at
-   `20` the meter permits ten times the aggregate this page intends — over
-   thirteen thousand answers at the measured rate.
+   Read it as a lifetime total, not an allowance per order or per venue. This
+   is the only ceiling that accumulates: `--max-runs` bounds one invocation of
+   the order script and `orderCap` bounds one order, while
+   `sv_provider_spend_committed` sums every reservation the scope has ever
+   held, with no order and no time window. Nothing resets it — when committed
+   spending reaches the cap the meter refuses, and raising it is a deliberate
+   act.
+
+   | | Cost | Fits in `$20` |
+   |---|---:|---:|
+   | One bounded run, one venue: 10 × 3 × 1 | `$0.045` | ~440 |
+   | Full Visitor Local plan, one venue: 100 × 3 × 1 | `$0.45` | ~44 |
+   | Ten pilot venues, full plan each | `$4.50` | 4 times over |
+
+   Set it, or read it back with no amount:
 
    ```
-   pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
+   pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 20
    ```
-
-   Two dollars is more than forty bounded runs and far under the plan cap. Read
-   it back with the same command and no amount.
 
    One permit holds one reservation, taken before the permit is claimed and
    settled when the run reaches a terminal state, so the ceiling is a real
-   running total across the whole order rather than a per-order guess.
+   running total rather than a per-order guess.
+
 4. **Build the order.** Not one screen: a measurement hangs off a chain of
    five records, each with an endpoint of its own and none with a page that
    creates the next.
