@@ -105,6 +105,9 @@ import { Route as ApiV1SelenaAdminLocalMapRunsRunIdRetryRouteImport } from './ro
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+import { Route as ApiV1SelenaAdminOrdersOrderIdApproveRouteImport } from './routes/api/v1/selena/admin/orders/$orderId/approve'
+import { Route as ApiV1SelenaAdminOrdersOrderIdEnqueueRouteImport } from './routes/api/v1/selena/admin/orders/$orderId/enqueue'
+import { Route as ApiV1SelenaAdminOrdersOrderIdPreflightRouteImport } from './routes/api/v1/selena/admin/orders/$orderId/preflight'
 import { Route as ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport } from './routes/api/v1/selena/admin/providers/$providerId/canary'
 import { Route as ApiV1SelenaAdminProvidersProviderIdCapabilitiesRouteImport } from './routes/api/v1/selena/admin/providers/$providerId/capabilities'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
@@ -633,6 +636,24 @@ const ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute =
     path: '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaAdminOrdersOrderIdApproveRoute =
+  ApiV1SelenaAdminOrdersOrderIdApproveRouteImport.update({
+    id: '/api/v1/selena/admin/orders/$orderId/approve',
+    path: '/api/v1/selena/admin/orders/$orderId/approve',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminOrdersOrderIdEnqueueRoute =
+  ApiV1SelenaAdminOrdersOrderIdEnqueueRouteImport.update({
+    id: '/api/v1/selena/admin/orders/$orderId/enqueue',
+    path: '/api/v1/selena/admin/orders/$orderId/enqueue',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaAdminOrdersOrderIdPreflightRoute =
+  ApiV1SelenaAdminOrdersOrderIdPreflightRouteImport.update({
+    id: '/api/v1/selena/admin/orders/$orderId/preflight',
+    path: '/api/v1/selena/admin/orders/$orderId/preflight',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaAdminProvidersProviderIdCanaryRoute =
   ApiV1SelenaAdminProvidersProviderIdCanaryRouteImport.update({
     id: '/api/v1/selena/admin/providers/$providerId/canary',
@@ -778,6 +799,9 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/orders/$orderId/approve': typeof ApiV1SelenaAdminOrdersOrderIdApproveRoute
+  '/api/v1/selena/admin/orders/$orderId/enqueue': typeof ApiV1SelenaAdminOrdersOrderIdEnqueueRoute
+  '/api/v1/selena/admin/orders/$orderId/preflight': typeof ApiV1SelenaAdminOrdersOrderIdPreflightRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
@@ -879,6 +903,9 @@ export interface FileRoutesByTo {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/orders/$orderId/approve': typeof ApiV1SelenaAdminOrdersOrderIdApproveRoute
+  '/api/v1/selena/admin/orders/$orderId/enqueue': typeof ApiV1SelenaAdminOrdersOrderIdEnqueueRoute
+  '/api/v1/selena/admin/orders/$orderId/preflight': typeof ApiV1SelenaAdminOrdersOrderIdPreflightRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
@@ -986,6 +1013,9 @@ export interface FileRoutesById {
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop': typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  '/api/v1/selena/admin/orders/$orderId/approve': typeof ApiV1SelenaAdminOrdersOrderIdApproveRoute
+  '/api/v1/selena/admin/orders/$orderId/enqueue': typeof ApiV1SelenaAdminOrdersOrderIdEnqueueRoute
+  '/api/v1/selena/admin/orders/$orderId/preflight': typeof ApiV1SelenaAdminOrdersOrderIdPreflightRoute
   '/api/v1/selena/admin/providers/$providerId/canary': typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   '/api/v1/selena/admin/providers/$providerId/capabilities': typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsExportRoute
@@ -1093,6 +1123,9 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/orders/$orderId/approve'
+    | '/api/v1/selena/admin/orders/$orderId/enqueue'
+    | '/api/v1/selena/admin/orders/$orderId/preflight'
     | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
@@ -1194,6 +1227,9 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/orders/$orderId/approve'
+    | '/api/v1/selena/admin/orders/$orderId/enqueue'
+    | '/api/v1/selena/admin/orders/$orderId/preflight'
     | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
@@ -1300,6 +1336,9 @@ export interface FileRouteTypes {
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/preflight'
     | '/api/v1/selena/admin/local-scan-cycles/$cycleId/stop'
+    | '/api/v1/selena/admin/orders/$orderId/approve'
+    | '/api/v1/selena/admin/orders/$orderId/enqueue'
+    | '/api/v1/selena/admin/orders/$orderId/preflight'
     | '/api/v1/selena/admin/providers/$providerId/canary'
     | '/api/v1/selena/admin/providers/$providerId/capabilities'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results/export'
@@ -1368,6 +1407,9 @@ export interface RootRouteChildren {
   ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRoute
   ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute
   ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute
+  ApiV1SelenaAdminOrdersOrderIdApproveRoute: typeof ApiV1SelenaAdminOrdersOrderIdApproveRoute
+  ApiV1SelenaAdminOrdersOrderIdEnqueueRoute: typeof ApiV1SelenaAdminOrdersOrderIdEnqueueRoute
+  ApiV1SelenaAdminOrdersOrderIdPreflightRoute: typeof ApiV1SelenaAdminOrdersOrderIdPreflightRoute
   ApiV1SelenaAdminProvidersProviderIdCanaryRoute: typeof ApiV1SelenaAdminProvidersProviderIdCanaryRoute
   ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute: typeof ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute
   ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute: typeof ApiV1SelenaLocationsLocationIdLocalScanQuoteRoute
@@ -2050,6 +2092,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaAdminLocalScanCyclesCycleIdStopRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/admin/orders/$orderId/approve': {
+      id: '/api/v1/selena/admin/orders/$orderId/approve'
+      path: '/api/v1/selena/admin/orders/$orderId/approve'
+      fullPath: '/api/v1/selena/admin/orders/$orderId/approve'
+      preLoaderRoute: typeof ApiV1SelenaAdminOrdersOrderIdApproveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/orders/$orderId/enqueue': {
+      id: '/api/v1/selena/admin/orders/$orderId/enqueue'
+      path: '/api/v1/selena/admin/orders/$orderId/enqueue'
+      fullPath: '/api/v1/selena/admin/orders/$orderId/enqueue'
+      preLoaderRoute: typeof ApiV1SelenaAdminOrdersOrderIdEnqueueRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/admin/orders/$orderId/preflight': {
+      id: '/api/v1/selena/admin/orders/$orderId/preflight'
+      path: '/api/v1/selena/admin/orders/$orderId/preflight'
+      fullPath: '/api/v1/selena/admin/orders/$orderId/preflight'
+      preLoaderRoute: typeof ApiV1SelenaAdminOrdersOrderIdPreflightRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/admin/providers/$providerId/canary': {
       id: '/api/v1/selena/admin/providers/$providerId/canary'
       path: '/api/v1/selena/admin/providers/$providerId/canary'
@@ -2350,6 +2413,12 @@ const rootRouteChildren: RootRouteChildren = {
     ApiV1SelenaAdminLocalScanCyclesCycleIdPreflightRoute,
   ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute:
     ApiV1SelenaAdminLocalScanCyclesCycleIdStopRoute,
+  ApiV1SelenaAdminOrdersOrderIdApproveRoute:
+    ApiV1SelenaAdminOrdersOrderIdApproveRoute,
+  ApiV1SelenaAdminOrdersOrderIdEnqueueRoute:
+    ApiV1SelenaAdminOrdersOrderIdEnqueueRoute,
+  ApiV1SelenaAdminOrdersOrderIdPreflightRoute:
+    ApiV1SelenaAdminOrdersOrderIdPreflightRoute,
   ApiV1SelenaAdminProvidersProviderIdCanaryRoute:
     ApiV1SelenaAdminProvidersProviderIdCanaryRoute,
   ApiV1SelenaAdminProvidersProviderIdCapabilitiesRoute:

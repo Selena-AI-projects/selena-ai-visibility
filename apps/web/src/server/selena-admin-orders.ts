@@ -118,7 +118,10 @@ function providerBudgetRemaining(): number {
 	return Number.isFinite(configured) && configured > 0 ? configured : 0;
 }
 
-async function collectPreflight(context: SelenaRepositoryContext, orderId: string): Promise<PreflightEvaluation> {
+export async function collectPreflight(
+	context: SelenaRepositoryContext,
+	orderId: string,
+): Promise<PreflightEvaluation> {
 	const order = await getOwnedOrder(context, orderId);
 	const { lock, quote, permitCount, jobCount, payment } = await withOrganizationTransaction(
 		await database(),
