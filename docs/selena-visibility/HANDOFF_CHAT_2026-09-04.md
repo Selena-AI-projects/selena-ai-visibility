@@ -5,6 +5,7 @@
 **Рабочая ветка:** `fix/migration-journal-mismatch`
 **Последний implementation commit:** `7676728f` — `feat: add guarded durable YouTube projection`
 **Handoff commit:** `cbff9032` — `Document full chat handoff`
+**Последнее обновление remote-статуса:** `1e6b6c67` — `Record confirmed Hetzner server`
 **Состояние:** source implementation завершена; live activation остаётся отдельным operational gate.
 
 ## 1. Итог в одном абзаце
