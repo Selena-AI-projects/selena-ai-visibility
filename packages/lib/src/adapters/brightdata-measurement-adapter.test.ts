@@ -15,9 +15,10 @@ import {
 	brightDataVisitorSurface,
 	buildBrightDataRequestBody,
 	createBrightDataAdapter,
+	describeUnreadablePayload,
 	extractBrightDataSources,
-	PERPLEXITY_MEASUREMENT_DEADLINE_MS,
-	PERPLEXITY_QUEUE_LEASE_SECONDS,
+	SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS,
+	SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	parseBrightDataAnswer,
 	resolveBrightDataCost,
 } from "./brightdata-measurement-adapter";
@@ -322,9 +323,55 @@ describe("Bright Data measurement adapter", () => {
 		}
 	});
 
-	it("keeps the queue lease beyond the Perplexity deadline and cleanup reserve", () => {
-		expect(PERPLEXITY_MEASUREMENT_DEADLINE_MS).toBe(25 * 60_000);
-		expect(PERPLEXITY_QUEUE_LEASE_SECONDS * 1_000).toBeGreaterThan(PERPLEXITY_MEASUREMENT_DEADLINE_MS + 5 * 60_000);
+	it("keeps the queue lease beyond the slow-collector deadline and cleanup reserve", () => {
+		expect(SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS).toBe(25 * 60_000);
+		expect(SLOW_COLLECTOR_QUEUE_LEASE_SECONDS * 1_000).toBeGreaterThan(
+			SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS + 5 * 60_000,
+		);
+	});
+
+	// Two Gemini answers of the KORA cycle were produced, billed, and then
+	// discarded as SNAPSHOT_NOT_READY at the twelve-minute default.
+	it("collects a Gemini snapshot that arrives after the default twelve minutes", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-08-19T10:00:00.000Z"));
+		const readyAt = Date.now() + 14 * 60_000;
+		const fetchSpy = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+			const url = String(input);
+			if (url.includes("/scrape")) return jsonResponse({ snapshot_id: "s_slow_gemini" });
+			if (url.includes("/progress/")) return jsonResponse({ status: Date.now() >= readyAt ? "ready" : "running" });
+			if (url.includes("/snapshot/"))
+				return jsonResponse([{ answer_html: "<p>KORA Food Hall is one of them.</p>" }]);
+			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
+		});
+		const fetchImpl = fetchSpy as unknown as typeof fetch;
+
+		try {
+			const outcomePromise = adapterWith(fetchImpl, { system: "gemini" }).execute(permitFor({ systemId: "Gemini" }));
+			await vi.advanceTimersByTimeAsync(14 * 60_000);
+			const outcome = await outcomePromise;
+
+			expect(outcome).toMatchObject({
+				status: "SUCCEEDED",
+				validity: "VALID",
+				answer: { text: "KORA Food Hall is one of them." },
+			});
+			expect(fetchSpy.mock.calls.some(([url]) => String(url).endsWith("/cancel"))).toBe(false);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("says what an unreadable payload carried, without quoting it or the key", () => {
+		const scrub = (value: string) => value.split("secret-key").join("[redacted-credential]");
+
+		expect(describeUnreadablePayload([{ status: "running", message: "Snapshot is not ready yet, try again in 30s" }], scrub)).toBe(
+			"keys=status,message status=running message=Snapshot is not ready yet, try again in 30s",
+		);
+		expect(describeUnreadablePayload({ warning: "used secret-key" }, scrub)).toBe(
+			"keys=warning warning=used [redacted-credential]",
+		);
+		expect(describeUnreadablePayload("<html>gateway timeout</html>", scrub)).toBe("body: text, 28 chars");
 	});
 
 	it("keeps polling a Perplexity snapshot beyond the observed sixteen-minute collection", async () => {
