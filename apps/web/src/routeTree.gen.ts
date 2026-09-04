@@ -89,6 +89,7 @@ import { Route as ApiV1SelenaProjectsIndexRouteImport } from './routes/api/v1/se
 import { Route as ApiV1SelenaQuotesIndexRouteImport } from './routes/api/v1/selena/quotes/index'
 import { Route as ApiV1SelenaReadinessVerifyRouteImport } from './routes/api/v1/selena/readiness/verify'
 import { Route as ApiV1SelenaScenariosIndexRouteImport } from './routes/api/v1/selena/scenarios/index'
+import { Route as ApiV1SelenaCyclesCycleIdRunsRouteImport } from './routes/api/v1/selena/cycles/$cycleId/runs'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdAiResultsRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdEvidenceRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/evidence'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdMapResultsRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/map-results'
@@ -540,6 +541,12 @@ const ApiV1SelenaScenariosIndexRoute =
     path: '/api/v1/selena/scenarios/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaCyclesCycleIdRunsRoute =
+  ApiV1SelenaCyclesCycleIdRunsRouteImport.update({
+    id: '/api/v1/selena/cycles/$cycleId/runs',
+    path: '/api/v1/selena/cycles/$cycleId/runs',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute =
   ApiV1SelenaLocalScanCyclesCycleIdAiResultsRouteImport.update({
     id: '/api/v1/selena/local-scan-cycles/$cycleId/ai-results',
@@ -783,6 +790,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/projects/': typeof ApiV1SelenaProjectsIndexRoute
   '/api/v1/selena/quotes/': typeof ApiV1SelenaQuotesIndexRoute
   '/api/v1/selena/scenarios/': typeof ApiV1SelenaScenariosIndexRoute
+  '/api/v1/selena/cycles/$cycleId/runs': typeof ApiV1SelenaCyclesCycleIdRunsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/ai-results': typeof ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/evidence': typeof ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsRouteWithChildren
@@ -887,6 +895,7 @@ export interface FileRoutesByTo {
   '/api/v1/selena/projects': typeof ApiV1SelenaProjectsIndexRoute
   '/api/v1/selena/quotes': typeof ApiV1SelenaQuotesIndexRoute
   '/api/v1/selena/scenarios': typeof ApiV1SelenaScenariosIndexRoute
+  '/api/v1/selena/cycles/$cycleId/runs': typeof ApiV1SelenaCyclesCycleIdRunsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/ai-results': typeof ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/evidence': typeof ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsRouteWithChildren
@@ -997,6 +1006,7 @@ export interface FileRoutesById {
   '/api/v1/selena/projects/': typeof ApiV1SelenaProjectsIndexRoute
   '/api/v1/selena/quotes/': typeof ApiV1SelenaQuotesIndexRoute
   '/api/v1/selena/scenarios/': typeof ApiV1SelenaScenariosIndexRoute
+  '/api/v1/selena/cycles/$cycleId/runs': typeof ApiV1SelenaCyclesCycleIdRunsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/ai-results': typeof ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/evidence': typeof ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute
   '/api/v1/selena/local-scan-cycles/$cycleId/map-results': typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsRouteWithChildren
@@ -1107,6 +1117,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/projects/'
     | '/api/v1/selena/quotes/'
     | '/api/v1/selena/scenarios/'
+    | '/api/v1/selena/cycles/$cycleId/runs'
     | '/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
     | '/api/v1/selena/local-scan-cycles/$cycleId/evidence'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results'
@@ -1211,6 +1222,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/projects'
     | '/api/v1/selena/quotes'
     | '/api/v1/selena/scenarios'
+    | '/api/v1/selena/cycles/$cycleId/runs'
     | '/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
     | '/api/v1/selena/local-scan-cycles/$cycleId/evidence'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results'
@@ -1320,6 +1332,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/projects/'
     | '/api/v1/selena/quotes/'
     | '/api/v1/selena/scenarios/'
+    | '/api/v1/selena/cycles/$cycleId/runs'
     | '/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
     | '/api/v1/selena/local-scan-cycles/$cycleId/evidence'
     | '/api/v1/selena/local-scan-cycles/$cycleId/map-results'
@@ -1391,6 +1404,7 @@ export interface RootRouteChildren {
   ApiV1SelenaProjectsIndexRoute: typeof ApiV1SelenaProjectsIndexRoute
   ApiV1SelenaQuotesIndexRoute: typeof ApiV1SelenaQuotesIndexRoute
   ApiV1SelenaScenariosIndexRoute: typeof ApiV1SelenaScenariosIndexRoute
+  ApiV1SelenaCyclesCycleIdRunsRoute: typeof ApiV1SelenaCyclesCycleIdRunsRoute
   ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute: typeof ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute
   ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute: typeof ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute
   ApiV1SelenaLocalScanCyclesCycleIdMapResultsRoute: typeof ApiV1SelenaLocalScanCyclesCycleIdMapResultsRouteWithChildren
@@ -1980,6 +1994,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaScenariosIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/cycles/$cycleId/runs': {
+      id: '/api/v1/selena/cycles/$cycleId/runs'
+      path: '/api/v1/selena/cycles/$cycleId/runs'
+      fullPath: '/api/v1/selena/cycles/$cycleId/runs'
+      preLoaderRoute: typeof ApiV1SelenaCyclesCycleIdRunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/local-scan-cycles/$cycleId/ai-results': {
       id: '/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
       path: '/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
@@ -2382,6 +2403,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1SelenaProjectsIndexRoute: ApiV1SelenaProjectsIndexRoute,
   ApiV1SelenaQuotesIndexRoute: ApiV1SelenaQuotesIndexRoute,
   ApiV1SelenaScenariosIndexRoute: ApiV1SelenaScenariosIndexRoute,
+  ApiV1SelenaCyclesCycleIdRunsRoute: ApiV1SelenaCyclesCycleIdRunsRoute,
   ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute:
     ApiV1SelenaLocalScanCyclesCycleIdAiResultsRoute,
   ApiV1SelenaLocalScanCyclesCycleIdEvidenceRoute:
