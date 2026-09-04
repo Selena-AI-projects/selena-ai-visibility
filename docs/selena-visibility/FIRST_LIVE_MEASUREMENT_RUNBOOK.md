@@ -1,14 +1,22 @@
 # First live measurement — runbook
 
-Owner authorized real provider calls on the AI answer path on 2026-09-03, and
-separately chose to review this branch as a pull request before anything is
-applied to staging. Those two together set the order: **the live run comes after
-the merge**, because the spend meter it should run under is migration `0062`,
-which is in this branch and not yet applied.
+Owner authorized real provider calls on the AI answer path on 2026-09-03.
+Staging's journal now stands at 63 entries through index 62, so migration `0062`
+is applied and the spend meter is live: every permit takes a reservation against
+a funded scope before it is claimed, rather than relying on the per-order
+preflight cap and the Bright Data account limit alone — which was the gap the
+audit named.
 
-Running before that is possible and is not recommended. Without `0062` the only
-ceilings are the per-order preflight cap and the limit configured on the Bright
-Data account itself — which is exactly the gap the audit named.
+A read-only staging readback on 2026-09-04 found the `measure` scope at a
+`$2` lifetime cap with `$0` committed and no open reservations. That is not the
+`$20` standing limit selected below, so the funding step remains on hold.
+
+The read-only `discover` phase has run twice. A staging rehearsal then created
+and approved questions and built one 30-answer order chain with a zero-dollar
+test payment. The order is `PAID_REVIEW_REQUIRED`; it has no cycle, permits,
+runs, provider boundary, or cost event. What remains is to reconcile the scope
+cap, review and enqueue exactly that order, open the worker's paid path, and
+close it again after the terminal evidence is checked.
 
 ## What one run costs
 
@@ -26,29 +34,49 @@ spending twenty-six times more.
 
 ## Order of operations
 
-1. **Merge this branch.** Migrations `0061` and `0062` become part of the
-   release.
-2. **Approve the migration.** The `migrate` deploy will refuse and print the
-   exact SHA to use; set `SELENA_MIGRATION_APPROVED_SHA` to it on the `migrate`
-   service and redeploy. Confirm the log reads `journal after: 63/…` and
-   `migrations complete` — 63 entries is the chain through `0062`.
-3. **Fund the scope.** The paid measurement path spends under the `measure`
-   scope, and an unfunded scope refuses every reservation — so this comes before
-   the first order, not after it. As the owner, against staging:
+1. **Merge the branch.** Done — `0061` and `0062` are in
+   `release/selena-visibility-mvp`.
+2. **Approve the migration.** Done. Approval is asked only when there is new
+   DDL to apply — `assertMigrationApproval` returns as soon as nothing is
+   pending — so a redeploy of an unchanged migration set passes without a
+   question. The `migrate` deploy on `1f0ae937` logged `journal before:
+   63/1787940024000`, `journal after: 63/1787940024000`, `migrations complete`.
+   When a deploy does refuse it prints the commit to approve: set
+   `SELENA_MIGRATION_APPROVED_SHA` to that and redeploy.
+3. **Fund the scope.** **HOLD at the intended standing limit.** The owner chose
+   **`20` dollars** on 2026-09-04, but the database readback still reports a
+   `measure` cap of **`2` dollars**, `$0` committed, and zero open reservations.
+   No cap was changed during the reconciliation. Although `$2` covers the
+   bounded run's `$0.09` retry-inclusive estimate, do not cross a paid boundary
+   while the approved limit and the database source of truth disagree.
+
+   Read it as a lifetime total, not an allowance per order or per venue. This
+   is the only ceiling that accumulates: `--max-runs` bounds one invocation of
+   the order script and `orderCap` bounds one order, while
+   `sv_provider_spend_committed` sums every reservation the scope has ever
+   held, with no order and no time window. Nothing resets it — when committed
+   spending reaches the cap the meter refuses, and raising it is a deliberate
+   act.
+
+   | | Cost | Fits in intended `$20` |
+   |---|---:|---:|
+   | One bounded run, one venue: 10 × 3 × 1 | `$0.045` | ~440 |
+   | Full Visitor Local plan, one venue: 100 × 3 × 1 | `$0.45` | ~44 |
+   | Ten pilot venues, full plan each | `$4.50` | 4 times over |
+
+   Set it, or read it back with no amount:
 
    ```
-   pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 2
+   pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts measure 20
    ```
-
-   Two dollars is more than forty bounded runs and far under the plan cap. Read
-   it back with the same command and no amount.
 
    One permit holds one reservation, taken before the permit is claimed and
    settled when the run reaches a terminal state, so the ceiling is a real
-   running total across the whole order rather than a per-order guess.
-4. **Build the order.** Not one screen: a measurement hangs off a chain of
-   five records, each with an endpoint of its own and none with a page that
-   creates the next.
+   running total rather than a per-order guess.
+
+4. **Build the order.** **Done for one staging rehearsal; not enqueued.** A
+   measurement hangs off a chain of five records, each with an endpoint of its
+   own and none with a page that creates the next.
 
    | Record | Endpoint |
    |---|---|
@@ -60,8 +88,9 @@ spending twenty-six times more.
 
    The customer-facing form at `/app/selena-order` does not build these — it
    files a lead, and says so on the page. Test payments need
-   `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` on `web`;
-   `live` is refused unconditionally, so neither value can charge anyone.
+   `SELENA_PAYMENTS_ENABLED=true` and `SELENA_PAYMENT_MODE=test` **on `web`**,
+   which serves these endpoints; both are set on staging. `live` is refused
+   unconditionally, so neither value can charge anyone.
 
    `packages/lib/scripts/selena-first-live-order.ts` walks them, in two phases
    because a question is reviewed between them:
@@ -80,10 +109,28 @@ spending twenty-six times more.
    without `--confirm` first — it prints the planned answer count and writes
    nothing.
 
-   The `First live measurement order` workflow runs it from CI, where the API
-   key is a secret nobody has to hold in a shell. Its `discover` phase reads
-   `/projects` and a family's questions, which is where the project and family
-   ids the other two phases need come from.
+   The `First live measurement order` workflow runs the script from CI, where
+   the API key is a secret nobody has to hold in a shell. Its `discover` phase
+   reads `/projects` and a family's questions, which is where the project and
+   family ids the other two phases need come from.
+
+   The read-only `discover` phase ran successfully in Actions on 2026-09-04 as
+   runs [33847588901](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847588901)
+   and [33847858297](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33847858297).
+   It performs only versioned API reads and created none of the records below.
+   The subsequent staging readback found:
+
+   - 35 scenarios created that day, all `APPROVED`;
+   - the newest lock freezes 10 of those approved scenarios across 3 systems
+     and 1 repeat, for 30 expected runs, with order cap `$2` and engine SHA
+     `70ff5b8efdd26505553a79f40a06cdb2b480d1ab`;
+   - an `ISSUED` zero-dollar quote, an order at `PAID_REVIEW_REQUIRED`, and a
+     matching `$0` `test` payment at `SUCCEEDED`;
+   - zero cycles, journal claims, run permits, runs, provider boundaries, and
+     cost events created that day.
+
+   Those zeros are the stop line: the commercial path has been assembled, but
+   no measurement has been dispatched and no provider-spend evidence exists.
 5. **Open the paid path.** On the staging `worker` service:
 
    | Variable | Value | Why |
@@ -95,7 +142,11 @@ spending twenty-six times more.
    | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight. |
    | `BRIGHTDATA_API_TOKEN` | present | Sealed; never read back. |
 
-   Leave `SELENA_RECURRING_JOBS_ENABLED` and `SELENA_PAYMENTS_ENABLED` off.
+   Leave `SELENA_RECURRING_JOBS_ENABLED` off. `SELENA_PAYMENTS_ENABLED` belongs
+   to `web`, which serves the payment endpoints; no code path in the worker
+   reads it, so setting it here neither enables nor prevents anything. What
+   governs the worker is the measurement, adapter, emergency-stop and
+   scheduling flags in the table above.
 6. **Enqueue exactly one order** from the desk. Nothing runs on a timer; a
    commercial run starts from an explicit admin action.
 7. **Close the path again.** Set `SELENA_EMERGENCY_STOP=true` as soon as the run
