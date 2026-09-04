@@ -5,6 +5,14 @@ import { svResponseMentions, svRuns, svScenarios } from "@workspace/lib/db/schem
 import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import {
+	type RunAnswer,
+	type RunCitation,
+	type RunSource,
+	readAnswer,
+	readCitations,
+	readSources,
+} from "./selena-run-payload";
 
 export type RunListItem = {
 	id: string;
@@ -19,12 +27,10 @@ export type RunListItem = {
 export type RunDetail = RunListItem & {
 	scenarioText: string | null;
 	language: string | null;
-	/** Null when never stored; a marker object when deleted by retention. */
-	answer: { state: "present"; text: string } | { state: "deleted"; deletedAt: string } | { state: "absent" };
+	answer: RunAnswer;
 	mentions: { entityType: string; name: string; ordinalPosition: number | null }[];
-	citations: { url: string; domain: string }[];
-	/** What the Visitor View surface displayed, when the adapter carried it. */
-	sources: { url: string; domain: string; title?: string }[];
+	citations: RunCitation[];
+	sources: RunSource[];
 };
 
 /**
@@ -65,45 +71,6 @@ export const listSelenaRunsFn = createServerFn({ method: "GET" })
 			})),
 		};
 	});
-
-function readAnswer(payload: unknown): RunDetail["answer"] {
-	if (typeof payload !== "object" || payload === null) return { state: "absent" };
-	const answer = (payload as Record<string, unknown>).answer;
-	if (typeof answer !== "object" || answer === null) return { state: "absent" };
-	const record = answer as Record<string, unknown>;
-	if (typeof record.text === "string") return { state: "present", text: record.text };
-	if (typeof record.textDeletedAt === "string") return { state: "deleted", deletedAt: record.textDeletedAt };
-	return { state: "absent" };
-}
-
-function readSources(payload: unknown): RunDetail["sources"] {
-	if (typeof payload !== "object" || payload === null) return [];
-	const sources = (payload as Record<string, unknown>).sources;
-	if (!Array.isArray(sources)) return [];
-	return sources.flatMap((item) => {
-		if (typeof item !== "object" || item === null) return [];
-		const record = item as Record<string, unknown>;
-		if (typeof record.url !== "string" || typeof record.domain !== "string") return [];
-		return [
-			{
-				url: record.url,
-				domain: record.domain,
-				...(typeof record.title === "string" ? { title: record.title } : {}),
-			},
-		];
-	});
-}
-
-function readCitations(value: unknown): RunDetail["citations"] {
-	if (!Array.isArray(value)) return [];
-	return value.flatMap((item) => {
-		if (typeof item !== "object" || item === null) return [];
-		const record = item as Record<string, unknown>;
-		return typeof record.url === "string" && typeof record.domain === "string"
-			? [{ url: record.url, domain: record.domain }]
-			: [];
-	});
-}
 
 export const getSelenaRunDetailFn = createServerFn({ method: "GET" })
 	.validator(z.object({ runId: z.string().uuid() }))
