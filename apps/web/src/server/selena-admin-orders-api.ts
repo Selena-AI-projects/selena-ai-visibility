@@ -64,8 +64,13 @@ async function respond(work: () => Promise<unknown>): Promise<Response> {
 		// A refused approval is a domain answer rather than a server fault, so
 		// it answers 400. The reason does not travel with it: error bodies are
 		// sanitised to an allowlist, and widening that list to carry order
-		// internals would trade a real protection for convenience. `preflight`
-		// is where a caller reads why, as a plain 200.
+		// internals would trade a real protection for convenience.
+		//
+		// An operator still has to be able to find out why, and preflight only
+		// answers for the checks it runs — a refusal from deeper in the mint
+		// has no other witness. The request id ties this line to the response
+		// the caller holds.
+		console.error(`order desk refused [${requestId}]:`, error);
 		return selenaApiErrorResponse(400, {
 			code: "ORDER_DESK_REFUSED",
 			message: error instanceof Error ? error.message : "Order desk action failed",
