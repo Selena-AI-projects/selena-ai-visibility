@@ -150,15 +150,16 @@ provider calls и расписаний не запускалось.
 - Для remote contour рассматривались Hetzner VPS и временный Railway Sandbox,
   чтобы не зависеть от свободного места на Mac.
 - Подтверждено создание свежего backup Central Memory и его копирование в
-  Hetzner-контур. Это recoverability evidence, а не доказательство работающего
-  VPS или запущенного удалённого сервиса.
-- По последнему наблюдаемому состоянию Hetzner Console доступ был получен, но
-  подтверждённого project/server не было; account verification через iDenfy
-  также не имела зафиксированного завершения. Поэтому handoff не утверждает,
-  что у нас уже есть provisioned и пригодный для эксплуатации VPS.
-- Полный перенос документов/сервисов, SSH/Compose/Caddy acceptance и запуск
-  Central Memory на Hetzner не подтверждены. Токены, конфигурации и логи в backup
-  handoff не переносились.
+  Hetzner-контур. Это recoverability evidence; оно отдельно от acceptance
+  запущенных сервисов.
+- Скриншот Hetzner Console от 2026-09-04 подтверждает активный проект
+  `selena-ai-visibility` и зелёный server `selena-remote-runner` в Nuremberg
+  (план `CX33 | x86 | 80 GB | eu-central`). Публичный IP виден в Console, но
+  намеренно не записывается в репозиторий.
+- Project ID и Server ID на скриншоте не видны и остаются `UNKNOWN` до открытия
+  server details/API. SSH/Compose/Caddy acceptance, запуск Central Memory и
+  полный перенос рабочих документов/сервисов всё ещё не подтверждены.
+- Токены, конфигурации и логи в backup handoff не переносились.
 - Ollama/LiteLLM были остановлены, автозапуск отключён, модели удалены по
   отдельному запросу; конфигурацию требовалось сохранить. Это не часть
   Bright Data deployment.
