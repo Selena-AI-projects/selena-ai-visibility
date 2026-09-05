@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { mapsLockV1Schema, type MapsLockV1 } from "@workspace/selena-visibility-contracts";
 import * as schema from "./db/schema";
@@ -90,7 +90,14 @@ export async function persistLocalMapsCanaryPlan(input: PersistLocalMapsCanaryIn
 		const leaseExpiresAt = new Date(createdAt.getTime() + leaseDurationMs);
 		const slot = plan.slot;
 
-		await tx.insert(schema.svConfigurationLocks).values({
+		// The approved 0051 frontier predates legacy_collision_ordinal. Use the
+		// pre-0052 column set explicitly; Drizzle otherwise emits later defaults.
+		if (typeof (tx as { execute?: unknown }).execute === "function") await tx.execute(sql`
+			INSERT INTO sv_configuration_locks
+			(id, organization_id, project_id, version, snapshot, engine_sha, expected_runs, budget_cap, created_by)
+			VALUES (${configurationLockId}, ${organizationId}, ${projectId}, 1, ${lock}, ${engineSha}, 1, ${CANARY_CAP_USD}, ${actorId})
+		`);
+		else await tx.insert(schema.svConfigurationLocks).values({
 			id: configurationLockId,
 			organizationId,
 			projectId,
