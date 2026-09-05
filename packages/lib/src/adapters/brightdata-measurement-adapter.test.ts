@@ -511,6 +511,43 @@ describe("Bright Data measurement adapter", () => {
 		expect(() => runOutcomeSchema.parse(outcome)).not.toThrow();
 	});
 
+	it("does not treat a visible login button as an auth wall when an answer is available", async () => {
+		const outcome = await adapterWith(
+			respondWith(
+				jsonResponse({
+					answer_text_markdown: "AVLI is recommended for Greek dining.",
+					login_button_visible: true,
+					citations: [{ url: "https://avlibali.com/", title: "AVLI" }],
+				}),
+			),
+		).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(outcome).toMatchObject({
+			status: "SUCCEEDED",
+			validity: "VALID",
+			answer: { text: "AVLI is recommended for Greek dining." },
+			sources: [{ url: "https://avlibali.com/", domain: "avlibali.com", title: "AVLI" }],
+		});
+		expect(outcome.invalidReason).toBeUndefined();
+	});
+
+	it("keeps a structured auth-wall row invalid even when it has no error text", async () => {
+		const outcome = await adapterWith(
+			respondWith(
+				jsonResponse([
+					{
+						timestamp: "2026-09-05T00:00:00.000Z",
+						input: { prompt: SCENARIO_TEXT },
+						error_code: "AUTH_WALL",
+					},
+				]),
+			),
+		).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(outcome.invalidReason).toBe("PROVIDER_ERROR_ROW");
+		expect(outcome.answer).toBeUndefined();
+	});
+
 	it("keeps only the sources the payload actually showed", () => {
 		const sources = extractBrightDataSources({
 			citations: [
