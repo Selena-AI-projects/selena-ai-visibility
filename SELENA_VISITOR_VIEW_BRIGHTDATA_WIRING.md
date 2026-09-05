@@ -53,11 +53,11 @@ on purpose.
 - `costUsd` is what the provider reported when it reports a number, and the
   coarse local per-run estimate otherwise. The stored number does not say which
   it was; reconcile against the invoice rather than reading it as billed fact.
-- Failure mapping: `EMPTY_RESPONSE`, `MALFORMED_RESPONSE`, `RESPONSE_TOO_LARGE`
-  and `TIMEOUT` are INVALID; `PROVIDER_HTTP_<code>`, `TRANSPORT_ERROR` and
-  `SCENARIO_TEXT_UNAVAILABLE` are FAILED. Nothing is quoted from the provider —
-  error bodies can echo the token back, and run rows are read by more people
-  than hold the credential.
+- Failure mapping: `EMPTY_RESPONSE`, `MALFORMED_RESPONSE`, `PROVIDER_ERROR_ROW`,
+  `RESPONSE_TOO_LARGE` and `TIMEOUT` are INVALID; `PROVIDER_HTTP_<code>`,
+  `TRANSPORT_ERROR` and `SCENARIO_TEXT_UNAVAILABLE` are FAILED. Nothing is
+  quoted from the provider — error bodies can echo the token back, and run rows
+  are read by more people than hold the credential.
 - An unrecognized payload is `MALFORMED_RESPONSE`. It is never stringified into
   an "answer", and it is never reported as an empty answer: a shape nobody has
   read is not a measurement of a surface that said nothing.
@@ -93,6 +93,45 @@ What they settled:
    exist`. Its default is now empty, so the surface is not registered and the
    family is refused before a permit is claimed; supply the real id in
    `SELENA_BRIGHTDATA_DATASET_GEMINI`.
+
+## Confirmed on the AVLI journal run, 2026-09-05
+
+The first journal measurement (`measure-journal.ts`) answered the Perplexity open
+question with a negative: **the collector returns an auth wall, not an answer.**
+
+Every one of the 24 Perplexity snapshots came back with the same small payload —
+the collector's error fields, nothing more — and the adapter's diagnostics
+(`describeUnreadablePayload`) recorded them verbatim:
+
+```
+keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
+```
+
+What this means, and what changed because of it:
+
+1. **The Perplexity payload is not renamed, it is refused.** There is no
+   `answer_text_markdown` in any snapshot because the collector never produced an
+   answer: it hit Perplexity's sign-up/authorization wall inside the collector's
+   own browser session. A parser fix cannot read an answer that the provider
+   never returned.
+2. **The adapter now classifies these rows as `PROVIDER_ERROR_ROW`, not
+   `MALFORMED_RESPONSE`.** A wall is a provider refusal, so blaming the parser
+   for it would mislabel the failure and keep paying for answers the collector
+   never produced (`providerErrorRowReason`, scoped to Perplexity by the
+   confirmed observation).
+3. **ChatGPT and Gemini are unaffected by the classification change.** Only
+   Perplexity enters that branch; their error handling is unchanged.
+4. **A run cycle that mixes surfaces now fails closed on Perplexity.** Because a
+   non-succeeded Perplexity run stops the whole cycle, the journal run's 29 valid
+   answers are ChatGPT+Gemini — the Perplexity share is the wall, not a measured
+   zero. Until the collector's auth is fixable, any `brightdata-perplexity`
+   number is unverified.
+
+The right half of the fix lives at Bright Data's side (collector session /
+authorization for the Perplexity surface), not in this repository. Tracked
+against the account's support; the fallback options (alternative Perplexity
+collector, `Oxylabs`, DataForSEO Sonar) are an owner decision gated the same way
+as the original Bright Data wiring.
 
 ## Still open
 
