@@ -3,8 +3,9 @@
 ## Summary
 
 The account's **Perplexity** Bright Data collector (`gd_m7dhdot1vw9a7gc1n`,
-dataset `brightdata-perplexity`) never produces an answer. Every snapshot in the
-2026-09-05 journal run came back as the same small error row, verbatim:
+dataset `brightdata-perplexity`) produced no answer at all on 2026-09-05. Every
+snapshot in that day's journal run came back as the same small error row,
+verbatim:
 
 ```
 keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
@@ -24,6 +25,11 @@ wall, not a visitor answer.
 - ChatGPT and Gemini collectors on the same account work and produce answers.
 - Until the collector's auth is resolvable, any `brightdata-perplexity` metric
   is unverified.
+- The wall does not describe the whole history. In the paid KORA cycle of
+  2026-09-04 the same collector returned text on two of ten runs, one of them a
+  366-character row with no sources that was nonetheless stored as `VALID`
+  evidence. `KORA_CYCLE_2026-09-04_OUTCOME.md` has those rows; whether that row
+  is the wall in another shape is not answerable from them.
 
 ## Affected surface
 
