@@ -261,6 +261,26 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Whether a payload that carried no readable answer is a collector error row
+ * rather than an unrecognized shape. The AVLI journal run of 2026-09-05
+ * observed every Perplexity snapshot return exactly the collector's error
+ * fields — error "Auth wall: sign-up prompt detected" beside error_code — so
+ * the run kept paying for answers the collector never produced. That is a
+ * provider refusal, not a parser gap: recording it as MALFORMED_RESPONSE
+ * would claim the parser failed on a shape it actually recognized as a wall.
+ * Scoped to Perplexity by the confirmed observation; ChatGPT and Gemini keep
+ * their existing classification.
+ */
+function providerErrorRowReason(system: BrightDataVisitorSystem, payload: unknown): string | null {
+	if (system !== "perplexity") return null;
+	const record = asRecord(Array.isArray(payload) ? payload[0] : payload);
+	if (!record) return null;
+	const hasError = typeof record.error === "string" && record.error.trim() !== "";
+	const hasCode = typeof record.error_code === "string" && record.error_code.trim() !== "";
+	return hasError || hasCode ? "PROVIDER_ERROR_ROW" : null;
+}
+
+/**
  * The sources the payload showed, and only those. A link is kept when the
  * payload carries it as a usable http(s) URL; anything else is dropped rather
  * than repaired, because a citation is evidence that the answer displayed a
@@ -668,7 +688,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				const snapshotId = snapshotIdFrom(payload);
 				if (snapshotId === null) {
 					console.warn(`[brightdata] ${deps.system} reply carried no answer and no handle — ${describe(payload)}`);
-					return invalidOutcome(permit, "MALFORMED_RESPONSE", costFields());
+					return invalidOutcome(permit, providerErrorRowReason(deps.system, payload) ?? "MALFORMED_RESPONSE", costFields());
 				}
 				const collected = await awaitSnapshot(
 					snapshotId,
@@ -688,7 +708,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				}
 				if (!answer) {
 					console.warn(`[brightdata] ${deps.system} snapshot ${snapshotId} held no readable answer — ${describe(collected)}`);
-					return invalidOutcome(permit, "MALFORMED_RESPONSE", costFields());
+					return invalidOutcome(permit, providerErrorRowReason(deps.system, collected) ?? "MALFORMED_RESPONSE", costFields());
 				}
 				answer = { ...answer, providerRequestId: answer.providerRequestId ?? snapshotId };
 			}
