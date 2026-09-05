@@ -1,8 +1,15 @@
-import { db } from "@workspace/lib/db/db";
-import { prompts, brands } from "@workspace/lib/db/schema";
-import { eq } from "drizzle-orm";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
+import { db } from "@workspace/lib/db/db";
+import { brands, prompts } from "@workspace/lib/db/schema";
+import { enqueueLegacyProviderWork, isLegacyProviderExecutionEnabled } from "@workspace/lib/run-policy";
+import { eq } from "drizzle-orm";
 import { getBoss } from "@/lib/boss-client";
+
+function isLegacySchedulingDisabled(): boolean {
+	if (isLegacyProviderExecutionEnabled()) return false;
+	console.warn("Legacy provider execution is disabled; no provider job was queued");
+	return true;
+}
 
 /**
  * Convert cadence hours to milliseconds.
@@ -60,6 +67,7 @@ type SchedulerOptions = {
 };
 
 export async function createPromptJobScheduler(promptId: string, options: SchedulerOptions = {}): Promise<boolean> {
+	if (isLegacySchedulingDisabled()) return false;
 	try {
 		const boss = await getBoss();
 		const cadenceHours = await getPromptCadenceHours(promptId);
@@ -74,34 +82,40 @@ export async function createPromptJobScheduler(promptId: string, options: Schedu
 
 		if (sendImmediate) {
 			// Send an immediate job
-			await boss.send(
-				"process-prompt",
-				{ promptId, cadenceHours },
-				{
-					singletonKey: `prompt-${promptId}`,
-					singletonSeconds: 60 * 60, // 1 hour - prevent duplicate jobs
-					retryLimit: 3,
-					retryDelay: 60,
-					retryBackoff: true,
-					expireInSeconds: 60 * 15, // 15 minute timeout
-				},
+			const result = await enqueueLegacyProviderWork(() =>
+				boss.send(
+					"process-prompt",
+					{ promptId, cadenceHours },
+					{
+						singletonKey: `prompt-${promptId}`,
+						singletonSeconds: 60 * 60, // 1 hour - prevent duplicate jobs
+						retryLimit: 3,
+						retryDelay: 60,
+						retryBackoff: true,
+						expireInSeconds: 60 * 15, // 15 minute timeout
+					},
+				),
 			);
+			if (result === undefined) return false;
 		} else {
 			// Schedule the next run based on cadence
 			const startAfterSeconds = cadenceHours * 60 * 60;
-			await boss.send(
-				"process-prompt",
-				{ promptId, cadenceHours },
-				{
-					singletonKey: `prompt-${promptId}`,
-					singletonSeconds: startAfterSeconds, // Prevent duplicates for the cadence period
-					startAfter: startAfterSeconds,
-					retryLimit: 3,
-					retryDelay: 60,
-					retryBackoff: true,
-					expireInSeconds: 60 * 15,
-				},
+			const result = await enqueueLegacyProviderWork(() =>
+				boss.send(
+					"process-prompt",
+					{ promptId, cadenceHours },
+					{
+						singletonKey: `prompt-${promptId}`,
+						singletonSeconds: startAfterSeconds, // Prevent duplicates for the cadence period
+						startAfter: startAfterSeconds,
+						retryLimit: 3,
+						retryDelay: 60,
+						retryBackoff: true,
+						expireInSeconds: 60 * 15,
+					},
+				),
 			);
+			if (result === undefined) return false;
 		}
 
 		console.log(`Created job for prompt ${promptId} with ${cadenceHours}h cadence`);
@@ -181,20 +195,24 @@ export async function recreatePromptJobScheduler(promptId: string, options: Sche
  * Useful for manual retries from the admin UI.
  */
 export async function sendImmediatePromptJob(promptId: string): Promise<boolean> {
+	if (isLegacySchedulingDisabled()) return false;
 	try {
 		const boss = await getBoss();
 		const cadenceHours = await getPromptCadenceHours(promptId);
 
-		await boss.send(
-			"process-prompt",
-			{ promptId, cadenceHours },
-			{
-				retryLimit: 3,
-				retryDelay: 60,
-				retryBackoff: true,
-				expireInSeconds: 60 * 15,
-			},
+		const result = await enqueueLegacyProviderWork(() =>
+			boss.send(
+				"process-prompt",
+				{ promptId, cadenceHours },
+				{
+					retryLimit: 3,
+					retryDelay: 60,
+					retryBackoff: true,
+					expireInSeconds: 60 * 15,
+				},
+			),
 		);
+		if (result === undefined) return false;
 
 		console.log(`Sent immediate job for prompt ${promptId}`);
 		return true;
@@ -209,23 +227,27 @@ export async function sendImmediatePromptJob(promptId: string): Promise<boolean>
  * Called by the worker after successful job completion.
  */
 export async function scheduleNextPromptRun(promptId: string, cadenceHours: number): Promise<boolean> {
+	if (isLegacySchedulingDisabled()) return false;
 	try {
 		const boss = await getBoss();
 		const startAfterSeconds = cadenceHours * 60 * 60;
 
-		await boss.send(
-			"process-prompt",
-			{ promptId, cadenceHours },
-			{
-				singletonKey: `prompt-${promptId}`,
-				singletonSeconds: startAfterSeconds, // Prevent duplicates for the cadence period
-				startAfter: startAfterSeconds,
-				retryLimit: 3,
-				retryDelay: 60,
-				retryBackoff: true,
-				expireInSeconds: 60 * 15,
-			},
+		const result = await enqueueLegacyProviderWork(() =>
+			boss.send(
+				"process-prompt",
+				{ promptId, cadenceHours },
+				{
+					singletonKey: `prompt-${promptId}`,
+					singletonSeconds: startAfterSeconds, // Prevent duplicates for the cadence period
+					startAfter: startAfterSeconds,
+					retryLimit: 3,
+					retryDelay: 60,
+					retryBackoff: true,
+					expireInSeconds: 60 * 15,
+				},
+			),
 		);
+		if (result === undefined) return false;
 
 		console.log(`Scheduled next run for prompt ${promptId} in ${cadenceHours}h`);
 		return true;
@@ -244,19 +266,23 @@ export async function sendReportJob(
 	brandWebsite: string,
 	manualPrompts?: string[],
 ): Promise<boolean> {
+	if (isLegacySchedulingDisabled()) return false;
 	try {
 		const boss = await getBoss();
 
-		await boss.send(
-			"generate-report",
-			{ reportId, brandName, brandWebsite, manualPrompts },
-			{
-				retryLimit: 3,
-				retryDelay: 60,
-				retryBackoff: true,
-				expireInSeconds: 60 * 60, // 1 hour timeout for reports
-			},
+		const result = await enqueueLegacyProviderWork(() =>
+			boss.send(
+				"generate-report",
+				{ reportId, brandName, brandWebsite, manualPrompts },
+				{
+					retryLimit: 3,
+					retryDelay: 60,
+					retryBackoff: true,
+					expireInSeconds: 60 * 60, // 1 hour timeout for reports
+				},
+			),
 		);
+		if (result === undefined) return false;
 
 		console.log(`Sent report job for report ${reportId}`);
 		return true;

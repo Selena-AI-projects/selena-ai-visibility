@@ -1,5 +1,5 @@
-import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
-import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
+import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
+import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import type { PgBoss } from "pg-boss";
 
 let bossInstance: PgBoss | null = null;
@@ -26,8 +26,13 @@ export async function getBoss(): Promise<PgBoss> {
 		const boss = new PgBoss({
 			...runtimeDatabaseConnection(),
 			schema: "pgboss",
+			// Hosted staging opts into owner-managed lifecycle explicitly; clean
+			// local and self-hosted installs preserve pg-boss bootstrap.
+			...runtimePgBossSchemaLifecycle(),
 			// Web app only needs to send/schedule jobs, not process them
 			supervise: false, // Let worker handle supervision
+			// Recurring dispatch belongs to the worker's explicitly gated scheduler.
+			schedule: false,
 		});
 
 		await boss.start();
@@ -57,14 +62,14 @@ export async function getBoss(): Promise<PgBoss> {
 		// work that was authorized once.
 		await boss.createQueue("selena-measure", {
 			retryLimit: 0,
-			expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+			expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 		});
 		// createQueue preserves options on an existing queue. Reconcile the
 		// measurement deadline so a web-first startup cannot leave the legacy
 		// 15-minute expiry in place.
 		await boss.updateQueue("selena-measure", {
 			retryLimit: 0,
-			expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+			expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 		});
 
 		bossInstance = boss;

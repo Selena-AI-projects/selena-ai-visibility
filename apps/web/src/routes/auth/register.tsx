@@ -89,7 +89,7 @@ function RegisterPage() {
 
 	if (pendingVerification) {
 		return (
-			<FullPageCard title="Check your email" subtitle={`We sent a verification link to ${email}`}>
+			<FullPageCard title="Check your email" subtitle={`We sent a verification link to ${email}`} scene="lens">
 				<div className="space-y-4 w-full">
 					<p className="text-sm text-muted-foreground text-center">
 						Click the link in the email to verify your address and get started. The link expires, so verify soon.
@@ -103,7 +103,7 @@ function RegisterPage() {
 	}
 
 	return (
-		<FullPageCard title="Create your workspace" subtitle="Set up your AI Visibility account">
+		<FullPageCard title="Create your workspace" subtitle="Set up your AI Visibility account" scene="lens">
 			{isCloud && (
 				<div className="space-y-4 w-full pb-4">
 					<Button

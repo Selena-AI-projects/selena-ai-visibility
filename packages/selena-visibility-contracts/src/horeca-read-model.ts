@@ -29,6 +29,7 @@ const evidenceIdSchema = z.string().trim().min(1);
 const measuredShareSchema = z
 	.strictObject({
 		kind: z.literal("MEASURED_SHARE"),
+		sampleBasis: z.literal("ACCEPTED_ONLY"),
 		numerator: z.number().int().nonnegative(),
 		denominator: z.number().int().positive(),
 		invalidCount: z.number().int().nonnegative(),
@@ -79,26 +80,35 @@ export const horecaModuleReadModelSchema = z
 	});
 export type HorecaModuleReadModel = z.infer<typeof horecaModuleReadModelSchema>;
 
-export const horecaEvidenceReferenceSchema = z.strictObject({
-	id: evidenceIdSchema,
-	domain: z.enum([
-		"ENTITY",
-		"WEBSITE",
-		"MENU",
-		"AI_ANSWERS",
-		"SEARCH",
-		"MAPS",
-		"REVIEW",
-		"SOCIAL",
-		"TRAVEL",
-		"OUTCOME",
-	]),
-	accessClass: z.enum(["PUBLIC", "UPLOADED", "CONNECTED", "DERIVED"]),
-	sourceLabel: z.string().trim().min(1),
-	capturedAt: z.iso.datetime(),
-	sourceReference: z.string().trim().min(1),
-	snapshotReference: z.string().trim().min(1),
-});
+export const horecaEvidenceReferenceSchema = z
+	.strictObject({
+		id: evidenceIdSchema,
+		domain: z.enum([
+			"ENTITY",
+			"WEBSITE",
+			"MENU",
+			"AI_ANSWERS",
+			"SEARCH",
+			"MAPS",
+			"REVIEW",
+			"SOCIAL",
+			"TRAVEL",
+			"OUTCOME",
+		]),
+		accessClass: z.enum(["PUBLIC", "UPLOADED", "CONNECTED", "DERIVED"]),
+		sourceLabel: z.string().trim().min(1),
+		capturedAt: z.iso.datetime(),
+		sourceReference: z.string().trim().min(1),
+		snapshotReference: z.string().trim().min(1),
+		acceptance: z.strictObject({
+			status: z.literal("ACCEPTED"),
+			acceptedAt: z.iso.datetime(),
+		}),
+	})
+	.refine((value) => Date.parse(value.acceptance.acceptedAt) >= Date.parse(value.capturedAt), {
+		message: "HORECA_EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE",
+		path: ["acceptance", "acceptedAt"],
+	});
 export type HorecaEvidenceReference = z.infer<typeof horecaEvidenceReferenceSchema>;
 
 export const horecaFindingSchema = z.strictObject({

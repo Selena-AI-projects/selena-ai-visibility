@@ -16,8 +16,16 @@ describe("plan request layer zero invariant", () => {
 		}
 	});
 
-	it("decides free passage on the server, never from the submitted form", () => {
-		expect(source).toContain("promoCodeApplies(data.promoCode, process.env)");
+	it("decides free passage by spending a seat in the database, not by matching a string", () => {
+		expect(source).toContain("redeemPilotInvite(tx");
+		expect(source).toContain("planId: data.planId");
+		expect(source).not.toContain("promoCodeApplies");
+	});
+
+	// Storing what the customer typed would turn the lead table into a list of
+	// working codes for anyone who can read one tenant's rows.
+	it("never stores the submitted code", () => {
+		expect(source).toContain("promoCode: null");
 	});
 
 	it("keeps reading and closing requests behind the admin gate", () => {
@@ -25,5 +33,11 @@ describe("plan request layer zero invariant", () => {
 		expect(listing).toContain("requireAdmin()");
 		const updating = source.slice(source.indexOf("updateSelenaOrderRequestStatusFn"));
 		expect(updating).toContain("requireAdmin()");
+	});
+
+	it("fails closed before the cross-tenant promo cap until an atomic claim exists", () => {
+		expect(source).toContain("RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED");
+		expect(source).not.toContain("await db\n");
+		expect(source).not.toContain("count()");
 	});
 });

@@ -158,6 +158,36 @@ describe("Visibility OS measurement registry", () => {
 });
 
 describe("Visibility OS provider evidence provenance", () => {
+	it("models a durable immutable one-shot GOOGLE_AI_MODE reservation", () => {
+		const table = getTableConfig(schema.svProviderCanaryExecutions);
+		const dialect = new PgDialect();
+		expect(table.name).toBe("sv_provider_canary_executions");
+		expect(table.enableRLS).toBe(true);
+		const identity = table.indexes.find(
+			(index) => index.config.name === "sv_provider_canary_executions_identity_unique",
+		);
+		expect(identity?.config.unique).toBe(true);
+		expect(identity?.config.columns.map((column) => ("name" in column ? column.name : null))).toEqual([
+			"source",
+			"execution_identity",
+		]);
+		expect(table.columns.find((column) => column.name === "project_id")?.notNull).toBe(false);
+		const projectReference = table.foreignKeys
+			.find((foreignKey) => foreignKey.getName() === "sv_provider_canary_executions_project_org_fk")
+			?.reference();
+		expect(projectReference?.columns.map((column) => column.name)).toEqual(["project_id", "organization_id"]);
+		expect(projectReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		const contract = table.checks.find(
+			(candidate) => candidate.name === "sv_provider_canary_executions_contract_check",
+		);
+		const compiled = contract && dialect.sqlToQuery(contract.value).sql;
+		expect(compiled).toContain("GOOGLE_AI_MODE");
+		expect(compiled).toContain("0.250000");
+		expect(compiled).toContain('"recurring" = false');
+		expect(compiled).toContain('"automatic_retries" = 0');
+		expect(compiled).toContain("UNKNOWN");
+	});
+
 	it("models append-only tenant capability versions without activating Social or Travel domains", () => {
 		const table = getTableConfig(schema.svProviderDatasetCapabilities);
 		const dialect = new PgDialect();
@@ -194,6 +224,7 @@ describe("Visibility OS provider evidence provenance", () => {
 			(candidate) => candidate.name === "sv_source_snapshots_provider_capture_metadata_check",
 		);
 		const outputSchema = snapshot.columns.find((column) => column.name === "output_schema_version");
+		const digestFormatValid = snapshot.columns.find((column) => column.name === "content_sha256_format_valid");
 		const compiledCheck = metadataCheck && new PgDialect().sqlToQuery(metadataCheck.value).sql;
 		expect(capabilityReference?.reference().columns.map((column) => column.name)).toEqual([
 			"capability_id",
@@ -204,6 +235,8 @@ describe("Visibility OS provider evidence provenance", () => {
 			"organization_id",
 		]);
 		expect(outputSchema?.notNull).toBe(false);
+		expect(digestFormatValid?.generated).toMatchObject({ type: "always", mode: "stored" });
+		expect(compiledCheck).toContain('"output_schema_version"');
 		expect(compiledCheck).toContain('"output_schema_version" IS NULL');
 	});
 
@@ -230,14 +263,222 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_provider_dataset_capabilities"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_source_snapshots"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_evidence_index"');
+		expect(migration).toContain('ALTER TABLE "sv_evidence_acceptance_receipts" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_evidence_acceptance_receipts"');
+		expect(migration).toContain("EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE");
 		expect(migration).toContain('REVOKE ALL ON "sv_evidence_provenance" FROM PUBLIC');
 		expect(migration).toContain("IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app')");
 		expect(migration).toContain(`EXECUTE 'REVOKE ALL ON "sv_evidence_provenance" FROM selena_app'`);
+		expect(migration).toContain('CREATE FUNCTION "sv_resolve_api_key_context"(api_key_hash text)');
+		expect(migration).toContain("SECURITY DEFINER\nSET search_path = ''");
+		expect(migration).toContain('FROM "public"."sv_api_keys" AS "key"');
+		expect(migration).toContain('REVOKE ALL ON FUNCTION "sv_resolve_api_key_context"(text) FROM PUBLIC');
+		expect(migration).toContain('GRANT EXECUTE ON FUNCTION "sv_resolve_api_key_context"(text) TO selena_app');
+		expect(migration).toContain('CREATE TABLE "sv_provider_canary_executions"');
+		expect(migration).toContain('ALTER TABLE "sv_provider_canary_executions" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_canary_executions"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_provider_canary_executions"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_provider_canary_executions"');
+		expect(migration).toContain('REVOKE UPDATE, DELETE, TRUNCATE ON "sv_provider_canary_executions"');
 		expect(migration).toContain("MUST NOT flow to client routes or exports");
 		expect(migration).not.toContain('INSERT INTO "sv_provider_dataset_capabilities"');
 		expect(migration).not.toContain('CREATE TABLE "sv_social_');
 		expect(migration).not.toContain('CREATE TABLE "sv_hotel_');
 		expect(migration).not.toContain("provider_call");
+	});
+
+	it("models one immutable tenant-scoped acceptance receipt per evidence row", () => {
+		const evidence = getTableConfig(schema.svEvidenceIndex);
+		const receipt = getTableConfig(schema.svEvidenceAcceptanceReceipts);
+		expect(
+			evidence.indexes.find((index) => index.config.name === "sv_evidence_index_id_organization_unique")?.config.unique,
+		).toBe(true);
+		expect(receipt.name).toBe("sv_evidence_acceptance_receipts");
+		expect(receipt.enableRLS).toBe(true);
+		expect(
+			receipt.indexes.find((index) => index.config.name === "sv_evidence_acceptance_receipts_org_evidence_unique")
+				?.config.unique,
+		).toBe(true);
+		const reference = receipt.foreignKeys.find(
+			(candidate) => candidate.getName() === "sv_evidence_acceptance_receipts_evidence_org_fk",
+		);
+		expect(reference?.reference().columns.map((column) => column.name)).toEqual(["evidence_id", "organization_id"]);
+		expect(reference?.reference().foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(receipt.columns.map((column) => column.name)).toEqual([
+			"id",
+			"organization_id",
+			"evidence_id",
+			"accepted_at",
+			"accepted_by",
+			"created_at",
+		]);
+	});
+
+	it("exposes a separate security-invoker evidence projection without raw provenance", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0051_visibility_os_provider_evidence_provenance.sql", import.meta.url),
+			"utf8",
+		);
+		const view = getViewConfig(schema.svEvidenceReadModel);
+		expect(view).toMatchObject({ name: "sv_evidence_read_model", isExisting: true });
+		const columns = Object.values(view.selectedFields as Record<string, { name: string }>).map((column) => column.name);
+		expect(columns).toEqual(
+			expect.arrayContaining([
+				"organization_id",
+				"project_id",
+				"evidence_id",
+				"domain_id",
+				"dataset_version",
+				"source_snapshot_id",
+				"capability_id",
+				"source_type",
+				"acceptance_status",
+				"accepted_at",
+				"evidence_captured_at",
+			]),
+		);
+		for (const forbidden of [
+			"source_ref",
+			"raw_reference",
+			"provider_dataset_ref",
+			"environment",
+			"content_sha256",
+			"snapshot",
+			"accepted_by",
+		])
+			expect(columns).not.toContain(forbidden);
+		expect(migration).toContain('CREATE VIEW "sv_evidence_read_model" WITH (security_invoker = true)');
+		expect(migration).toContain('REVOKE ALL ON "sv_evidence_read_model" FROM PUBLIC');
+		expect(migration).toContain('GRANT SELECT ON "sv_evidence_read_model" TO selena_app');
+		expect(migration).toContain('REVOKE SELECT ON "sv_source_snapshots" FROM selena_app');
+		expect(migration).toContain('"content_sha256_format_valid" boolean');
+		expect(migration).toContain('"content_sha256_format_valid",');
+		expect(migration).not.toMatch(
+			/GRANT SELECT \([\s\S]*?"content_sha256"[\s\S]*?\) ON "sv_source_snapshots" TO selena_app/,
+		);
+	});
+
+	it("keeps the post-0056 runtime role bootstrap idempotent and explicitly allowlisted", () => {
+		const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
+		const proof = readFileSync(
+			new URL("../../../../tools/visibility_os_0051_rls_schema_proof.sql", import.meta.url),
+			"utf8",
+		);
+		const proofE2e = readFileSync(
+			new URL("../../../../tools/visibility_os_0051_rls_schema_proof_e2e.sh", import.meta.url),
+			"utf8",
+		);
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0051");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0057");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0059");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060");
+		expect(roleBootstrap).toContain(
+			"REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app",
+		);
+		expect(roleBootstrap).toContain("GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app");
+		expect(roleBootstrap).toContain("GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text)");
+		expect(roleBootstrap).not.toMatch(/GRANT[^;]*UPDATE[^;]*sv_journal_provider_boundaries/);
+		expect(roleBootstrap).toContain("sv_provider_dataset_capabilities_owner_insert_guard");
+		expect(roleBootstrap).toContain("sv_source_snapshots_runtime_promotion_guard");
+		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_owner_guard");
+		expect(roleBootstrap).toContain("sv_evidence_acceptance_receipts_audit_pair_guard");
+		expect(roleBootstrap).toContain("sv_audit_events_formal_evidence_owner_guard");
+		expect(roleBootstrap).toContain("sv_audit_events_formal_evidence_receipt_pair_guard");
+		expect(roleBootstrap).toContain("\\set ON_ERROR_STOP on\n\nBEGIN;");
+		expect(roleBootstrap).toContain("\nCOMMIT;");
+		expect(roleBootstrap).toContain(
+			"WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'selena_app')",
+		);
+		expect(roleBootstrap).toContain("\\gexec");
+		expect(roleBootstrap).toContain("NOINHERIT NOBYPASSRLS");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37");
+		expect(roleBootstrap).toContain("GRANT USAGE ON SCHEMA pgboss TO selena_app");
+		expect(roleBootstrap).toContain("REVOKE CREATE ON SCHEMA pgboss FROM selena_app");
+		expect(roleBootstrap).toContain("REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss FROM PUBLIC");
+		expect(roleBootstrap).toContain("REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgboss FROM PUBLIC");
+		expect(roleBootstrap).toContain("pgboss.job, pgboss.job_common, pgboss.job_dependency");
+		expect(roleBootstrap).toContain("GRANT SELECT ON pgboss.bam, pgboss.version TO selena_app");
+		expect(roleBootstrap).toContain("pgboss.create_queue(text, jsonb)");
+		expect(roleBootstrap).not.toContain("pgboss.create_queue(text, jsonb),");
+		expect(roleBootstrap).not.toContain(
+			"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA pgboss TO selena_app",
+		);
+		expect(roleBootstrap).not.toContain("GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pgboss TO selena_app");
+		for (const relation of [
+			"sv_evidence_index",
+			"sv_measurement_cycles",
+			"sv_configuration_locks",
+			"sv_measurement_datasets",
+			"sv_source_snapshots",
+			"sv_provider_dataset_capabilities",
+			"sv_evidence_acceptance_receipts",
+		])
+			expect(roleBootstrap).toContain(`ALTER TABLE ${relation} FORCE ROW LEVEL SECURITY;`);
+		expect(roleBootstrap).toContain("CREATE OR REPLACE FUNCTION sv_resolve_report_context(report_id uuid)");
+		expect(roleBootstrap).toContain("SECURITY DEFINER\nSET search_path = ''");
+		expect(roleBootstrap).toContain("REVOKE ALL ON FUNCTION sv_resolve_report_context(uuid) FROM PUBLIC");
+		expect(roleBootstrap).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public");
+		expect(roleBootstrap).not.toContain("GRANT USAGE, SELECT ON ALL SEQUENCES");
+		expect(roleBootstrap).not.toContain("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT");
+		expect(roleBootstrap).not.toMatch(
+			/GRANT SELECT \([\s\S]*?\bcontent_sha256\b(?:\s|,|\))[\s\S]*?\) ON sv_source_snapshots TO selena_app/,
+		);
+		expect(roleBootstrap).toContain("content_sha256_format_valid");
+		expect(roleBootstrap).toContain("REVOKE ALL ON sv_evidence_acceptance_receipts FROM selena_app");
+		expect(roleBootstrap).toMatch(
+			/GRANT SELECT \(id, organization_id, evidence_id, accepted_at\)\s+ON sv_evidence_acceptance_receipts TO selena_app/,
+		);
+		expect(roleBootstrap).not.toMatch(/GRANT (?:SELECT|INSERT)[^;]*accepted_by[^;]*TO selena_app/);
+		expect(roleBootstrap).toMatch(
+			/REVOKE SELECT \([\s\S]*?content_sha256[\s\S]*?\) ON sv_source_snapshots FROM selena_app/,
+		);
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_UPDATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_DELETE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_TRUNCATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CONTENT_HASH_VISIBLE");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_ACTOR_VISIBLE");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_PRE_CAPTURE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("EVIDENCE_ACCEPTANCE_OWNER_SCOPE_REQUIRED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTED_CYCLE_MUTATION_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTED_DATASET_MUTATION_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_NULL_SCHEMA_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_CANARY_ONLY_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ISOLATED_CANARY_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_BLOCKED_SUPERSESSION_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_WITHOUT_AUDIT_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_AUDIT_WITHOUT_ACCEPTANCE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_ACCEPTANCE_IDENTITY_FORGERY_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_UPDATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_DELETE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_FORMAL_AUDIT_TRUNCATE_ALLOWED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_RUNTIME_ROLE_GRANTS_UNSAFE");
+		expect(proof).toContain("has_schema_privilege('selena_app', 'pgboss', 'CREATE')");
+		expect(proof).toContain("'pgboss.job', 'pgboss.job_common', 'pgboss.job_dependency'");
+		expect(proof).toContain("'SELECT,INSERT,UPDATE,DELETE'");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.bam', 'UPDATE')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.warning', 'INSERT')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.queue_stats', 'INSERT')");
+		expect(proof).toContain("has_table_privilege('selena_app', 'pgboss.version', 'UPDATE')");
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.delete_queue(text)', 'EXECUTE')");
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.job_table_format(text,text)', 'EXECUTE')");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_QUEUE_BOOTSTRAP_FAILED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_PGBOSS_PARTITION_DDL_ALLOWED");
+		expect(proof).toContain("has_function_privilege('selena_app', 'pgboss.job_table_run(text,text,text)', 'EXECUTE')");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_RELATION_NOT_FORCED");
+		expect(proof).toContain("RLS_SCHEMA_PROOF_SAFE_VIEW_CROSS_TENANT_VISIBLE");
+		expect(proof).toContain("SET LOCAL ROLE selena_app");
+		expect(proof).not.toContain("selena_rls_schema_probe");
+		expect(proofE2e).toContain('< "$repo_root/packages/lib/scripts/selena-rls-runtime-role.sql"');
+		expect(proofE2e).toContain("PGBOSS_SCHEMA_OWNER_PROVISION_FAILED");
+		expect(proofE2e).toContain("RLS_SCHEMA_PROOF_NON_BYPASS_MIGRATION_ALLOWED");
+		expect(proofE2e).toContain("EVIDENCE_ACCEPTANCE_MIGRATION_OWNER_BYPASS_REQUIRED");
+		expect(proofE2e).toContain('pnpm --dir "$repo_root/apps/worker" exec tsx');
+		expect(proofE2e).toContain("DROP OWNED BY selena_app; DROP ROLE selena_app;");
+		expect(proofE2e).toContain("trap cleanup_on_exit EXIT");
 	});
 });
 
@@ -289,15 +530,22 @@ describe("Provider dataset snapshot journal", () => {
 			new URL("./migrations/0052_provider_dataset_snapshot_journal.sql", import.meta.url),
 			"utf8",
 		);
+		const reconciliation = readFileSync(
+			new URL("./migrations/0055_provider_snapshot_resume_reconciliation.sql", import.meta.url),
+			"utf8",
+		);
 		expect(migration).toContain('ALTER TABLE "sv_provider_dataset_snapshot_events" FORCE ROW LEVEL SECURITY');
 		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_provider_dataset_snapshot_events"');
 		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_INITIAL_PHASE_INVALID");
+		expect(migration).toContain("IF NEW.\"phase\" <> 'TRIGGERED' THEN");
 		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_TERMINAL");
 		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_RESUME_REQUIRED");
 		expect(migration).toContain("PROVIDER_DATASET_SNAPSHOT_EVENT_IMMUTABLE");
 		expect(migration).toContain("RETURN NULL;");
 		expect(migration).not.toContain("raw_payload");
 		expect(migration).not.toContain("GRANT ");
+		expect(reconciliation).toContain("CREATE OR REPLACE FUNCTION");
+		expect(reconciliation).toContain("NOT IN ('TRIGGERED', 'RESUMED')");
 	});
 });
 
@@ -687,6 +935,10 @@ describe("Visibility OS local domain and attempt expand", () => {
 			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
 			"utf8",
 		);
+		const migration0053 = readFileSync(
+			new URL("./migrations/0053_configuration_lock_legacy_collision_ordinal.sql", import.meta.url),
+			"utf8",
+		);
 		const hardeningGate = readFileSync(
 			new URL("../../../../tools/visibility_os_0045_hardening_e2e.sh", import.meta.url),
 			"utf8",
@@ -725,16 +977,25 @@ describe("Visibility OS local domain and attempt expand", () => {
 			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_dataset_cycle_org_fk")
 			?.reference();
 		const evidenceSourceReference = getTableConfig(schema.svEvidenceIndex)
-			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_source_snapshot_org_fk")
+			.foreignKeys.find((foreignKey) => foreignKey.getName() === "sv_evidence_index_source_snapshot_project_org_fk")
 			?.reference();
 		const sourceIdentityIndex = getTableConfig(schema.svSourceSnapshots).indexes.find(
 			(index) => index.config.name === "sv_source_snapshots_id_organization_unique",
+		);
+		const sourceProjectIdentityIndex = getTableConfig(schema.svSourceSnapshots).indexes.find(
+			(index) => index.config.name === "sv_source_snapshots_id_project_org_unique",
+		);
+		const evidenceFormalIdentityIndex = getTableConfig(schema.svEvidenceIndex).uniqueConstraints.find(
+			(constraint) => constraint.name === "sv_evidence_index_formal_identity_unique",
 		);
 		const projectOrganizationReference = lockConfig.foreignKeys
 			.find((foreignKey) => foreignKey.getName() === "sv_configuration_locks_project_organization_fk")
 			?.reference();
 		const versionCheck = lockConfig.checks.find(
 			(candidate) => candidate.name === "sv_configuration_locks_version_check",
+		);
+		const legacyCollisionOrdinalCheck = lockConfig.checks.find(
+			(candidate) => candidate.name === "sv_configuration_locks_legacy_collision_ordinal_check",
 		);
 		const localDomainCheck = getTableConfig(schema.svLocalScanCycles).checks.find(
 			(candidate) => candidate.name === "sv_local_scan_cycles_domain_check",
@@ -744,6 +1005,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(projectVersionIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
 			"project_id",
 			"version",
+			"legacy_collision_ordinal",
 		]);
 		expect(projectIdentityIndex?.config.unique).toBe(true);
 		expect(projectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined))).toEqual([
@@ -805,10 +1067,29 @@ describe("Visibility OS local domain and attempt expand", () => {
 		]);
 		expect(evidenceSourceReference?.columns.map((column) => column.name)).toEqual([
 			"source_snapshot_id",
+			"project_id",
 			"organization_id",
 		]);
-		expect(evidenceSourceReference?.foreignColumns.map((column) => column.name)).toEqual(["id", "organization_id"]);
+		expect(evidenceSourceReference?.foreignColumns.map((column) => column.name)).toEqual([
+			"id",
+			"project_id",
+			"organization_id",
+		]);
 		expect(sourceIdentityIndex?.config.unique).toBe(true);
+		expect(sourceProjectIdentityIndex?.config.unique).toBe(true);
+		expect(
+			sourceProjectIdentityIndex?.config.columns.map((column) => ("name" in column ? column.name : undefined)),
+		).toEqual(["id", "project_id", "organization_id"]);
+		expect(evidenceFormalIdentityIndex?.nullsNotDistinct).toBe(true);
+		expect(evidenceFormalIdentityIndex?.columns.map((column) => column.name)).toEqual([
+			"organization_id",
+			"project_id",
+			"domain_id",
+			"cycle_id",
+			"dataset_id",
+			"source_snapshot_id",
+			"observation_ref",
+		]);
 		expect(projectOrganizationReference?.columns.map((column) => column.name)).toEqual([
 			"project_id",
 			"organization_id",
@@ -818,6 +1099,9 @@ describe("Visibility OS local domain and attempt expand", () => {
 			"organization_id",
 		]);
 		expect(versionCheck && dialect.sqlToQuery(versionCheck.value).sql).toContain('"version" > 0');
+		expect(legacyCollisionOrdinalCheck && dialect.sqlToQuery(legacyCollisionOrdinalCheck.value).sql).toContain(
+			'"legacy_collision_ordinal" >= 0',
+		);
 		expect(localDomainCheck && dialect.sqlToQuery(localDomainCheck.value).sql).toContain(
 			"\"domain_id\" = 'LOCAL_MAPS'",
 		);
@@ -827,9 +1111,13 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_cost_events"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_mutation"');
 		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_configuration_locks"');
+		expect(migration0053).toContain('CREATE TRIGGER "sv_guard_configuration_lock_insert"');
+		expect(migration0053).toContain('BEFORE INSERT ON "sv_configuration_locks"');
 		expect(migration).toContain('CREATE TRIGGER "sv_prevent_configuration_lock_truncate"');
 		expect(migration).toContain('BEFORE TRUNCATE ON "sv_configuration_locks"');
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(migration0053).toContain("CONFIGURATION_LOCK_0053_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration0053).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_NONPOSITIVE_VERSION");
 		expect(migration).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(migration).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
@@ -890,6 +1178,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		}
 		expect(exclusiveLock).toBeGreaterThan(-1);
 		expect(exclusiveLock).toBe(0);
+		expect(migration).not.toContain('UPDATE "sv_configuration_locks" AS configuration_lock');
 		expect(exclusiveLock).toBeLessThan(migration.indexOf('CREATE FUNCTION "sv_prevent_configuration_lock_mutation"'));
 		expect(projectLock).toBeLessThan(configurationLock);
 		expect(exclusiveLock).toBeLessThan(migration.indexOf("LOCAL_MAPS_0045_DOMAIN_REGISTRY_PREFLIGHT_FAILED"));
@@ -928,7 +1217,8 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("apply_through_0044");
 		expect(hardeningGate).toContain("--single-transaction");
 		expect(hardeningGate).toContain("assert_failed_migration_is_atomic");
-		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_VERSION_COLLISION");
+		expect(hardeningGate).toContain("legacy_collision_ordinal");
+		expect(hardeningGate).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
 		expect(hardeningGate).toContain("CONFIGURATION_LOCK_0045_PROJECT_ORGANIZATION_MISMATCH");
 		expect(hardeningGate).toContain("MEASUREMENT_CYCLE_0045_CONFIGURATION_LOCK_SCOPE_MISMATCH");
 		expect(hardeningGate).toContain("LOCAL_MAPS_0045_LOCAL_CYCLE_LOCK_SCOPE_MISMATCH");
@@ -939,7 +1229,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		expect(hardeningGate).toContain("tgenabled <> 'O'");
 		expect(gate12).toContain('--single-transaction < "$migration"');
 		expect(gate12).toContain("sv_journal_daily_claims_project_organization_fk");
-		expect(gate12).toContain("complete numbered migration chain through 0049");
+		expect(gate12).toContain("complete numbered migration chain through 0054");
 		const gate12Through0036 = gate12.indexOf("10#$migration_number > 36");
 		const gate12RegistryFixture = gate12.indexOf('bash "$repo_root/tools/visibility_os_m1_registry_e2e.sh"');
 		const gate12HistoricalChain = gate12.indexOf('bash "$repo_root/tools/visibility_os_m6_outcome_e2e.sh"');
@@ -951,7 +1241,7 @@ describe("Visibility OS local domain and attempt expand", () => {
 		const gate12Apply0048 = gate12.indexOf("0048_selena_api_idempotency_records.sql");
 		const gate12Apply0049 = gate12.indexOf("0049_visibility_os_claimed_submit_lease.sql");
 		const gate12Marker = gate12.indexOf("sv_journal_daily_claims_project_organization_fk");
-		const gate12Seed = gate12.indexOf("INSERT INTO organization");
+		const gate12Seed = gate12.indexOf("INSERT INTO organization", gate12Marker);
 		expect(gate12).toContain('if [[ "$fresh_database" == true ]]');
 		expect(gate12Through0036).toBeGreaterThan(-1);
 		expect(gate12Through0036).toBeLessThan(gate12RegistryFixture);
@@ -1172,6 +1462,92 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(migration).not.toContain("GRANT ");
 		expect(journal).toContain('"tag": "0046_selena_journal_daily_claims"');
 	});
+
+	it("leases executing journal claims and releases only abandoned attempts", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0054_journal_daily_claim_execution_lease.sql", import.meta.url),
+			"utf8",
+		);
+		const config = getTableConfig(schema.svJournalDailyClaims);
+		const abandonedAt = config.columns.find((column) => column.name === "abandoned_at");
+
+		expect(abandonedAt).toBeDefined();
+		expect(migration).toContain("'ABANDONED'");
+		expect(migration).toContain("NEW.\"status\" NOT IN ('EXECUTING', 'HOLD', 'COMPLETED', 'ABANDONED')");
+		expect(migration).toContain("OLD.\"status\" IN ('NO_SPEND', 'HOLD', 'COMPLETED', 'ABANDONED')");
+		expect(migration).toContain("WHERE \"status\" IN ('CLAIMED', 'EXECUTING', 'HOLD')");
+	});
+
+	it("fences every journal provider call with an immutable tenant-scoped boundary", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0058_journal_provider_boundary_recovery.sql", import.meta.url),
+			"utf8",
+		);
+		const config = getTableConfig(schema.svJournalProviderBoundaries);
+		const claimPermit = config.indexes.find(
+			(index) => index.config.name === "sv_journal_provider_boundaries_claim_permit_unique",
+		);
+		const run = config.indexes.find((index) => index.config.name === "sv_journal_provider_boundaries_run_unique");
+
+		expect(config.enableRLS).toBe(true);
+		expect(claimPermit?.config.unique).toBe(true);
+		expect(run?.config.unique).toBe(true);
+		expect(migration).toContain("clock_timestamp()");
+		expect(migration).toContain("JOURNAL_EXECUTING_ABANDONMENT_BLOCKED");
+		expect(migration).toContain("JOURNAL_CLAIM_NO_SPEND_PROOF_REQUIRED");
+		expect(migration).toContain("JOURNAL_PROVIDER_BOUNDARY_REQUIRED");
+		expect(migration).toContain('ADD COLUMN "project_id" uuid');
+		expect(migration).toContain('CONSTRAINT "sv_provider_canary_executions_project_required"');
+		expect(migration).toContain('CONSTRAINT "sv_provider_canary_executions_project_org_fk"');
+		expect(migration).toContain("NOT VALID");
+		expect(migration).toContain("providerCalls");
+		expect(migration).toContain("'providerCalls', 0");
+		expect(migration).toContain("pg_try_advisory_xact_lock");
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_journal_provider_boundaries"');
+		expect(migration).toContain('BEFORE UPDATE OR DELETE ON "sv_journal_provider_boundaries"');
+		expect(migration).toContain('BEFORE TRUNCATE ON "sv_journal_provider_boundaries"');
+	});
+
+	it("quarantines a reviewed journal HOLD only through an owner-scoped reconciliation", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0060_journal_hold_owner_reconciliation.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+		const claim = getTableConfig(schema.svJournalDailyClaims);
+
+		expect(claim.columns.find((column) => column.name === "reconciled_at")).toBeDefined();
+		expect(claim.columns.find((column) => column.name === "reconciliation_reason")).toBeDefined();
+		expect(claim.columns.find((column) => column.name === "reconciled_by")).toBeDefined();
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_OWNER_REQUIRED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_REQUIRES_MIGRATION_0059");
+		expect(migration).toContain("JOURNAL_DAILY_CLAIM_NO_SPEND_CERTIFICATE_REQUIRED");
+		expect(migration).toContain('FROM "public"."sv_journal_no_spend_reconciliations" AS reconciliation');
+		expect(migration).toContain("session_user <> table_owner");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_RUNTIME_NOT_QUIESCED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_ACTIVE_JOB");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_LEASE_ACTIVE");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_EXECUTION_INVARIANT");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_AMBIGUOUS_SPEND_ACK_REQUIRED");
+		expect(migration).toContain("JOURNAL_HOLD_RECONCILIATION_REPLAY_IDENTITY_MISMATCH");
+		expect(migration).toContain("+ legacy_unfenced_run_count");
+		expect(migration).toContain("+ unmatched_cost_event_count");
+		expect(migration).toContain("'legacyUnfencedRunCount', legacy_unfenced_run_count");
+		expect(migration).toContain("'legacyUnfencedProviderCallUpperBound', legacy_unfenced_run_count");
+		expect(migration).toContain("'OWNER_RECONCILED_LEGACY_INTERRUPTED_WITHOUT_BOUNDARY'");
+		expect(migration).toContain("'costEventCount', cost_event_count");
+		expect(migration).toContain("'unmatchedCostEventCount', unmatched_cost_event_count");
+		expect(migration).toContain("'OWNER_RECONCILED_INTERRUPTED_AFTER_BOUNDARY'");
+		expect(migration).toContain("SET \"status\" = 'revoked'");
+		expect(migration).toContain("'UNKNOWN_WITHIN_UPPER_BOUND'");
+		expect(migration).toContain('"resolved_at"');
+		expect(migration).toContain("'recurring', false");
+		expect(migration).toContain('REVOKE ALL ON FUNCTION "sv_reconcile_journal_hold"');
+		expect(migration).not.toContain("GRANT ");
+		expect(migration).not.toContain('INSERT INTO "public"."sv_cost_events"');
+		expect(journal).toContain('"tag": "0059_journal_no_spend_reconciliation"');
+		expect(journal).toContain('"tag": "0060_journal_hold_owner_reconciliation"');
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -1337,11 +1713,11 @@ describe("Visibility OS Map read models", () => {
 });
 
 describe("Visibility OS Outcome Layer schema", () => {
-	it("registers M2 through local attempt-count hardening as one ordered numbered migration chain", () => {
+	it("registers M2 through formal evidence hardening as one ordered numbered migration chain", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-15)).toEqual([
+		expect(journal.entries.slice(-25)).toEqual([
 			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
 			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
@@ -1417,7 +1793,109 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0052_provider_dataset_snapshot_journal",
 				breakpoints: true,
 			},
+			{
+				idx: 53,
+				version: "7",
+				when: 1787940015000,
+				tag: "0053_configuration_lock_legacy_collision_ordinal",
+				breakpoints: true,
+			},
+			{
+				idx: 54,
+				version: "7",
+				when: 1787940016000,
+				tag: "0054_journal_daily_claim_execution_lease",
+				breakpoints: true,
+			},
+			{
+				idx: 55,
+				version: "7",
+				when: 1787940017000,
+				tag: "0055_provider_snapshot_resume_reconciliation",
+				breakpoints: true,
+			},
+			{
+				idx: 56,
+				version: "7",
+				when: 1787940018000,
+				tag: "0056_formal_evidence_acceptance_hardening",
+				breakpoints: true,
+			},
+			{
+				idx: 57,
+				version: "7",
+				when: 1787940019000,
+				tag: "0057_evidence_project_identity_hardening",
+				breakpoints: true,
+			},
+			{
+				idx: 58,
+				version: "7",
+				when: 1787940020000,
+				tag: "0058_journal_provider_boundary_recovery",
+				breakpoints: true,
+			},
+			{
+				idx: 59,
+				version: "7",
+				when: 1787940021000,
+				tag: "0059_journal_no_spend_reconciliation",
+				breakpoints: true,
+			},
+			{
+				idx: 60,
+				version: "7",
+				when: 1787940022000,
+				tag: "0060_journal_hold_owner_reconciliation",
+				breakpoints: true,
+			},
+			{
+				idx: 61,
+				version: "7",
+				when: 1787940023000,
+				tag: "0061_pilot_invite_control",
+				breakpoints: true,
+			},
+			{
+				idx: 62,
+				version: "7",
+				when: 1787940024000,
+				tag: "0062_provider_spend_reservation",
+				breakpoints: true,
+			},
 		]);
+	});
+
+	it("carries the legacy lock ordinal in a follow-up migration that fits either applied shape", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0053_configuration_lock_legacy_collision_ordinal.sql", import.meta.url),
+			"utf8",
+		);
+		const hardening = readFileSync(
+			new URL("./migrations/0045_visibility_os_domain_and_lock_hardening.sql", import.meta.url),
+			"utf8",
+		);
+		// A database that applied 0045 keeps its journal entry, so the column can
+		// only reach it from a later migration, and only through statements that
+		// pass over a database already holding it.
+		expect(hardening).not.toContain("legacy_collision_ordinal");
+		expect(migration).toContain('ADD COLUMN IF NOT EXISTS "legacy_collision_ordinal"');
+		expect(migration).toContain('DROP CONSTRAINT IF EXISTS "sv_configuration_locks_legacy_collision_ordinal_check"');
+		expect(migration).toContain('DROP TRIGGER IF EXISTS "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain('DROP INDEX IF EXISTS "sv_locks_project_version_unique"');
+		expect(migration).toContain('CREATE OR REPLACE FUNCTION "sv_guard_configuration_lock_insert"');
+		expect(migration).toContain("CONFIGURATION_LOCK_LEGACY_COLLISION_ORDINAL_RESERVED");
+		expect(migration).toContain("CONFIGURATION_LOCK_0053_LEGACY_ORDINAL_POSTCONDITION_FAILED");
+		expect(migration).toContain(
+			'CREATE UNIQUE INDEX "sv_locks_project_version_unique"\n\tON "sv_configuration_locks" ("project_id", "version", "legacy_collision_ordinal")',
+		);
+		// The backfill rewrites rows the append-only trigger otherwise refuses.
+		expect(migration.indexOf('DISABLE TRIGGER "sv_prevent_configuration_lock_mutation"')).toBeLessThan(
+			migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock'),
+		);
+		expect(migration.indexOf('UPDATE "sv_configuration_locks" AS configuration_lock')).toBeLessThan(
+			migration.indexOf('ENABLE TRIGGER "sv_prevent_configuration_lock_mutation"'),
+		);
 	});
 
 	it("caps Local Maps observation attempts at three and fails closed on legacy overflow", () => {

@@ -63,6 +63,11 @@ RUN pnpm --filter @workspace/web build
 RUN pnpm --filter @workspace/worker deploy --legacy /deploy/worker
 RUN pnpm --filter @workspace/lib deploy --legacy /deploy/lib
 
+# The job stages run this binary directly rather than through a resolver that
+# may reach the registry at start time, so a missing runner has to fail the
+# build instead of the run.
+RUN test -x /deploy/worker/node_modules/.bin/tsx
+
 # Runner stage for web app (Nitro)
 FROM base AS web
 WORKDIR /app
@@ -90,20 +95,16 @@ ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", ".output/server/index.mjs"]
 
 # Migration stage — applies pending migrations, then exits.
-#
-# The binary is invoked by path, with no launcher in front of it. Both
-# launchers reach the network before they reach the database, and both failed
-# here: `npx` downloads drizzle-kit at container start (killed mid-download
-# once, exited zero having applied nothing once), and `pnpm exec` runs a
-# dependency check that decided to reinstall and aborted for want of a TTY.
-# drizzle-kit is a dependency of the library, so `pnpm deploy` already put it
-# in ./node_modules/.bin.
 FROM base AS migrate
 WORKDIR /app
 
 COPY --from=builder /deploy/lib ./
 
-CMD ["./node_modules/.bin/drizzle-kit", "migrate"]
+# The Node runner requires an explicit maximum migration index and builds an
+# exact Drizzle journal/SQL bundle before invoking the programmatic drizzle-orm
+# migrator. It performs no package-manager or migration-CLI downloads. The
+# bounded runner also keeps the final status visible for Railway log capture.
+CMD ["node", "./scripts/run-bounded-migrations.mjs"]
 
 # Worker stage
 FROM base AS worker
@@ -122,7 +123,7 @@ COPY --from=builder --chown=worker:nodejs /deploy/worker ./
 USER worker
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["./node_modules/.bin/tsx", "src/index.ts"]
 
 # Measurement stage — runs one measurement of the owner's own projects, then
 # exits. A job, not a server: the script refuses a second run of the same
@@ -138,7 +139,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["npx", "tsx", "src/scripts/measure-journal.ts"]
+CMD ["./node_modules/.bin/tsx", "src/scripts/measure-journal-entrypoint.ts"]
 
 # Publishing stage — reads a finished measurement and opens a pull request on
 # the marketing site with its per-question detail, then exits.
@@ -151,7 +152,7 @@ WORKDIR /app
 
 COPY --from=builder /deploy/worker ./
 
-CMD ["npx", "tsx", "src/scripts/publish-journal-detail.ts"]
+CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
 # The service name selects the final runtime stage: web or worker.
 FROM ${RAILWAY_SERVICE_NAME} AS final

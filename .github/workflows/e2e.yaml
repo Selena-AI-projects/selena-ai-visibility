@@ -32,7 +32,10 @@ jobs:
   e2e:
     name: E2E Integration Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Docker image builds plus the two fixture/worker phases can exceed the
+    # default 30-minute ceiling even when every test step passes. Keep enough
+    # bounded time for artifact and action cleanup to complete successfully.
+    timeout-minutes: 35
 
     env:
       # One file set for every `docker compose` invocation below, so no step
@@ -82,8 +85,11 @@ jobs:
       - name: Install Playwright browsers
         uses: nick-fields/retry@v4
         with:
-          timeout_minutes: 1
-          max_attempts: 3
+          # apt/browser downloads regularly exceed one minute on the hosted
+          # runner. Keep the step bounded without forcing retry-action to kill
+          # a still-healthy privileged dependency install.
+          timeout_minutes: 5
+          max_attempts: 2
           command: pnpm -C apps/web exec playwright install chromium --with-deps
 
       - name: Build elmo CLI
@@ -102,6 +108,9 @@ jobs:
           # E2E test overrides
           ADMIN_API_KEYS=test-api-key-e2e
           ONBOARDING_LLM_TARGET=stub:stub
+          SELENA_MEASUREMENT_ENABLED=true
+          SELENA_EMERGENCY_STOP=false
+          SELENA_RECURRING_JOBS_ENABLED=true
           SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
           PATCH
 
@@ -123,7 +132,11 @@ jobs:
       # Start web only (with its deps db-migrate + postgres). The worker stays
       # down for now — it comes up in phase 2, after the fixture suites run.
       - name: Start web
-        run: docker compose up -d --no-build web
+        run: |
+          if ! docker compose up -d --no-build web; then
+            docker compose logs --no-color db-migrate postgres
+            exit 1
+          fi
 
       - name: Wait for web
         run: |
@@ -215,6 +228,9 @@ jobs:
       BETTER_AUTH_SECRET: scheduling-policy-ci-secret-0123456789
       APP_URL: http://localhost:3000
       DISABLE_TELEMETRY: 1
+      SELENA_MEASUREMENT_ENABLED: "true"
+      SELENA_EMERGENCY_STOP: "false"
+      SELENA_RECURRING_JOBS_ENABLED: "true"
 
     steps:
       - name: Checkout
@@ -234,6 +250,20 @@ jobs:
 
       - name: Apply migrations
         run: pnpm -C packages/lib exec drizzle-kit migrate
+
+      - name: Replay bounded migrations on real PostgreSQL
+        env:
+          # Replay the complete source frontier after drizzle-kit has applied
+          # it. This is a disposable CI database only.
+          # Shared staging is bounded at the same index.
+          SELENA_MIGRATION_MAX_INDEX: "62"
+        run: node packages/lib/scripts/run-bounded-migrations.mjs
+
+      - name: Verify owner-only journal no-spend reconciliation
+        run: bash tools/visibility_os_disposable_rehearsal.sh --run 0059
+
+      - name: Verify owner-only ambiguous journal HOLD reconciliation
+        run: bash tools/visibility_os_disposable_rehearsal.sh --run 0060
 
       - name: Seed local fixtures
         run: pnpm -C e2e exec tsx seed.ts

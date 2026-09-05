@@ -2,7 +2,12 @@ import { db } from "@workspace/lib/db/db";
 import { svProjects } from "@workspace/lib/db/schema";
 import { analyzeBrand, type OnboardingSuggestion, type QuestionStyle } from "@workspace/lib/onboarding";
 import { assertSuggestSpendAllowed } from "@workspace/lib/run-policy";
-import { assertSuggestBudget, recordSuggestCost } from "@workspace/lib/selena-suggest-metering";
+import {
+	bookSuggestCostEvent,
+	releaseSuggestSpend,
+	reserveSuggestSpend,
+	settleSuggestSpend,
+} from "@workspace/lib/selena-suggest-metering";
 import { eq } from "drizzle-orm";
 import type { Job } from "pg-boss";
 
@@ -41,33 +46,59 @@ export async function analyzeBrandJob(jobs: Job<AnalyzeBrandData>[]): Promise<On
 	// A job already on the queue when the gate closed must not spend either:
 	// the request key carries which product asked, and the Selena suggestion is
 	// the one whose spending is budget-classed.
-	if (requestKey.startsWith("selena:")) {
-		assertSuggestSpendAllowed();
-		// Second refusal frontier of the monthly ceiling; the first is at
-		// enqueue time in the web app.
-		await assertSuggestBudget(db);
-	}
-	const suggestion = await analyzeBrand({
-		website,
-		brandName,
-		locationHint,
-		maxCompetitors,
-		maxPrompts,
-		questionStyle,
-	});
-	if (requestKey.startsWith("selena:")) {
-		// Booked where the spending happened. Attribution follows the project
-		// the request key names; a suggestion for a deleted project is still a
-		// real charge, so the row is written best-effort and never voids the
-		// suggestion itself.
-		try {
-			const projectId = requestKey.slice("selena:".length);
-			const [project] = await db
+	const selenaProjectId = requestKey.startsWith("selena:") ? requestKey.slice("selena:".length) : null;
+	// Attribution follows the project the request key names, and it has to be
+	// known before the call: budget is held against an organization, and a
+	// suggestion whose project has gone is one nobody can be charged for.
+	const [meteredProject] = selenaProjectId
+		? await db
 				.select({ organizationId: svProjects.organizationId })
 				.from(svProjects)
-				.where(eq(svProjects.id, projectId))
-				.limit(1);
-			if (project) await recordSuggestCost(db, { organizationId: project.organizationId, provider: "onboarding-llm" });
+				.where(eq(svProjects.id, selenaProjectId))
+				.limit(1)
+		: [];
+
+	if (selenaProjectId) {
+		assertSuggestSpendAllowed();
+		if (!meteredProject) throw new Error("SUGGEST_PROJECT_NOT_FOUND");
+		// Second refusal frontier; the first is at enqueue time in the web app.
+		// Same request key, so a job queued before the ceiling was reached rides
+		// on the reservation it already holds instead of taking another.
+		await reserveSuggestSpend(db, { organizationId: meteredProject.organizationId, requestKey: selenaProjectId });
+	}
+
+	let suggestion: Awaited<ReturnType<typeof analyzeBrand>>;
+	try {
+		suggestion = await analyzeBrand({
+			website,
+			brandName,
+			locationHint,
+			maxCompetitors,
+			maxPrompts,
+			questionStyle,
+		});
+	} catch (error) {
+		// The call never produced anything, so its budget goes back rather than
+		// staying held against a suggestion that does not exist.
+		if (selenaProjectId && meteredProject) {
+			await releaseSuggestSpend(db, {
+				organizationId: meteredProject.organizationId,
+				requestKey: selenaProjectId,
+			}).catch((releaseError) => console.error("[analyze-brand] suggest reservation not released:", releaseError));
+		}
+		throw error;
+	}
+
+	if (selenaProjectId && meteredProject) {
+		const metered = { organizationId: meteredProject.organizationId, requestKey: selenaProjectId };
+		await settleSuggestSpend(db, metered);
+		// The ledger row the cost reports read. Settling already moved the
+		// meter, so a bookkeeping failure here never voids the suggestion.
+		try {
+			await bookSuggestCostEvent(db, {
+				organizationId: meteredProject.organizationId,
+				provider: "onboarding-llm",
+			});
 		} catch (error) {
 			console.error("[analyze-brand] suggest cost row not written:", error);
 		}

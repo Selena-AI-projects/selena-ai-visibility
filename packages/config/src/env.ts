@@ -193,3 +193,75 @@ export function getEnv(key: string, defaultValue: string, env: EnvMap = process.
 	const value = env[key];
 	return hasValue(value) ? value! : defaultValue;
 }
+
+/**
+ * Variables the deployment sets that no code reads.
+ *
+ * Every Selena gate is fail-closed on the exact string, which is the right
+ * default and also the reason a typo is invisible: `SELENA_EMERGENCE_STOP` is
+ * not a broken stop, it is no stop at all, and nothing complains. Boot prints
+ * the ones it does not recognise, with the closest name it does, so the
+ * mistake is found by reading the log rather than by discovering later that a
+ * ceiling was never in force.
+ *
+ * Names outside the product runtime — the migration runner's own settings, and
+ * whatever the host injects — are not the app's to know about, so they are not
+ * reported.
+ */
+const MIGRATION_RUNNER_ENV_NAMES: ReadonlySet<string> = new Set([
+	"SELENA_MIGRATIONS_DIR",
+	"SELENA_MIGRATION_MAX_INDEX",
+	"SELENA_MIGRATION_APPROVED_SHA",
+	"SELENA_MIGRATION_APPROVAL_REQUIRED",
+	"SELENA_MIGRATION_SOURCE_SHA",
+	"SELENA_BOUNDED_MIGRATIONS_DIR",
+]);
+
+function editDistance(left: string, right: string): number {
+	const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+	for (let i = 1; i <= left.length; i += 1) {
+		let diagonal = previous[0];
+		previous[0] = i;
+		for (let j = 1; j <= right.length; j += 1) {
+			const candidate = Math.min(
+				previous[j] + 1,
+				previous[j - 1] + 1,
+				diagonal + (left[i - 1] === right[j - 1] ? 0 : 1),
+			);
+			diagonal = previous[j];
+			previous[j] = candidate;
+		}
+	}
+	return previous[right.length];
+}
+
+/** The registered name a misspelling most likely meant, when one is close enough. */
+export function nearestKnownEnvName(name: string): string | null {
+	let best: { name: string; distance: number } | null = null;
+	for (const spec of ENV_REGISTRY) {
+		const distance = editDistance(name, spec.name);
+		if (!best || distance < best.distance) best = { name: spec.name, distance };
+	}
+	// Beyond a third of the name, a "did you mean" is guessing rather than helping.
+	return best && best.distance <= Math.max(2, Math.floor(name.length / 3)) ? best.name : null;
+}
+
+export function unknownSelenaEnvNames(env: EnvMap = process.env): string[] {
+	const known = new Set(ENV_REGISTRY.map((spec) => spec.name));
+	return Object.keys(env)
+		.filter((name) => name.startsWith("SELENA_"))
+		.filter((name) => !known.has(name) && !MIGRATION_RUNNER_ENV_NAMES.has(name))
+		.sort();
+}
+
+/**
+ * Prints rather than throws. An unrecognised variable is usually a typo and
+ * sometimes a leftover from a previous release; neither is worth refusing to
+ * start a service over, and both are worth seeing.
+ */
+export function reportUnknownSelenaEnv(env: EnvMap = process.env, log: (message: string) => void = console.warn): void {
+	for (const name of unknownSelenaEnvNames(env)) {
+		const suggestion = nearestKnownEnvName(name);
+		log(`[env] ${name} is set but nothing reads it${suggestion ? ` — did you mean ${suggestion}?` : ""}`);
+	}
+}

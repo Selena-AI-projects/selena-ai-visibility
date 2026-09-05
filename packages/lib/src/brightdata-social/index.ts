@@ -186,7 +186,7 @@ export function createBrightDataSocialCollector(options: BrightDataSocialCollect
 		const sourceSnapshot: SourceSnapshot = {
 			entityType: "source_snapshot",
 			datasetKey: prepared.config.key,
-			datasetId: prepared.config.datasetId,
+			datasetId: collection.capture.providerDatasetId,
 			snapshotId: collection.snapshotId,
 			capturedAt: collection.capture.capturedAt,
 			rowCount: rows.length,

@@ -22,7 +22,7 @@ export type SelenaMeasureSender = (
 
 export type EnqueueOrderRunsResult = {
 	enqueued: number;
-	/** Permits left alone because they are consumed or expired. */
+	/** Permits left alone because they are consumed, revoked or expired. */
 	skipped: number;
 	/** Eligible permits the queue already held a job for. */
 	duplicates: number;

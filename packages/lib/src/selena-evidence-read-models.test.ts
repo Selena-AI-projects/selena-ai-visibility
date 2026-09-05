@@ -24,6 +24,8 @@ const baseRow = {
 	outputSchemaVersion: "instagram-profile-output-v1",
 	capabilityInputSchemaVersion: "schema-discovery-input-v1",
 	capabilityOutputSchemaVersion: "instagram-profile-output-v1",
+	acceptanceStatus: "ACCEPTED",
+	acceptedAt: new Date("2026-08-31T05:05:00.000Z"),
 	evidenceCapturedAt: new Date("2026-08-31T05:00:00.000Z"),
 };
 
@@ -62,6 +64,8 @@ describe("HoReCa evidence read models", () => {
 			provenanceState: "LINKED",
 			source: "INSTAGRAM_PROFILES",
 			surface: "INSTAGRAM",
+			acceptanceStatus: "ACCEPTED",
+			acceptedAt: "2026-08-31T05:05:00.000Z",
 		});
 		expect(model).not.toHaveProperty("rawReference");
 		expect(model).not.toHaveProperty("providerDatasetRef");
@@ -71,6 +75,23 @@ describe("HoReCa evidence read models", () => {
 		expect(model).not.toHaveProperty("datasetId");
 		expect(model).not.toHaveProperty("datasetKey");
 		expect(model).not.toHaveProperty("observationRef");
+	});
+
+	it("keeps missing, malformed, and pre-capture acceptance UNKNOWN", () => {
+		for (const acceptance of [
+			{ acceptanceStatus: null, acceptedAt: null },
+			{ acceptanceStatus: "UNKNOWN", acceptedAt: new Date("2026-08-31T05:05:00.000Z") },
+			{ acceptanceStatus: "ACCEPTED", acceptedAt: null },
+			{ acceptanceStatus: "ACCEPTED", acceptedAt: new Date("invalid") },
+			{ acceptanceStatus: "ACCEPTED", acceptedAt: new Date("2026-08-31T04:59:59.999Z") },
+		]) {
+			expect(
+				toEvidenceReadModel(
+					{ ...baseRow, ...acceptance },
+					{ tenantId: baseRow.organizationId, projectId: baseRow.projectId },
+				),
+			).toMatchObject({ acceptanceStatus: "UNKNOWN", acceptedAt: null });
+		}
 	});
 
 	it("marks missing source linkage as UNKNOWN instead of inventing evidence", () => {
@@ -100,6 +121,22 @@ describe("HoReCa evidence read models", () => {
 			{ tenantId: baseRow.organizationId, projectId: baseRow.projectId },
 		);
 		expect(model).toMatchObject({ moduleState: "LOCKED", provenanceState: "PARTIAL" });
+	});
+
+	it("links an ENTITY place capability to the canonical LOCAL_MAPS domain", () => {
+		expect(
+			toEvidenceReadModel(
+				{
+					...baseRow,
+					domainId: "LOCAL_MAPS",
+					capabilityDomain: "ENTITY",
+					sourceType: "GOOGLE_MAPS_PLACE",
+					source: "GOOGLE_MAPS_PLACE",
+					surface: "GOOGLE_MAPS_PLACE",
+				},
+				{ tenantId: baseRow.organizationId, projectId: baseRow.projectId },
+			),
+		).toMatchObject({ provenanceState: "LINKED" });
 	});
 
 	it("fails closed when source, domain or schema provenance does not match the capability", () => {

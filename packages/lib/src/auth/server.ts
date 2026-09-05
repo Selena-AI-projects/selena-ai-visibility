@@ -8,6 +8,7 @@
 
 import { type SSOOptions, sso } from "@better-auth/sso";
 import { type BetterAuthOptions, type BetterAuthPlugin, betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, customSession, organization } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
@@ -15,6 +16,17 @@ import { db } from "../db/db";
 import * as schema from "../db/schema";
 import { ac, adminRole, userRole } from "./permissions";
 import { resolveAuthTrustedOrigins } from "./trusted-origins";
+
+/**
+ * Refuse a signup with a 403 rather than the 500 a bare throw produces.
+ *
+ * better-auth is this package's dependency, not every app's, so a deployment
+ * hook that needs to turn someone away calls this instead of importing the
+ * error type itself.
+ */
+export function refuseSignup(message: string): never {
+	throw new APIError("FORBIDDEN", { message });
+}
 
 export interface CreateAuthOptions {
 	databaseHooks?: BetterAuthOptions["databaseHooks"];

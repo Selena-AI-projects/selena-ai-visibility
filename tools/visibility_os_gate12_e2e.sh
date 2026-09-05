@@ -39,10 +39,39 @@ if [[ "$fresh_database" == true ]]; then
 		"$repo_root/packages/lib/src/db/migrations/0050_visibility_os_jsonb_text_operator_casts.sql"; do
 		"${psql[@]}" --single-transaction < "$migration" >/dev/null
 	done
+	"${psql[@]}" <<'SQL' >/dev/null
+INSERT INTO organization (id, name, slug, created_at)
+VALUES ('gate12-claim-upgrade', 'Gate 12 Claim Upgrade', 'gate12-claim-upgrade', now());
+INSERT INTO sv_projects (id, organization_id, name, category, country, region, languages, status)
+VALUES (
+	'00000000-0000-4000-8000-000000000054', 'gate12-claim-upgrade', 'Gate 12 Claim Upgrade',
+	'gate12', 'ID', 'Bali', ARRAY['en'], 'ACTIVE'
+);
+SELECT set_config('app.organization_id', 'gate12-claim-upgrade', false);
+INSERT INTO sv_journal_daily_claims (
+	organization_id, project_id, question_set_version, utc_day, attempt
+)
+VALUES (
+	'gate12-claim-upgrade', '00000000-0000-4000-8000-000000000054', 'pre-0054',
+	(current_timestamp AT TIME ZONE 'UTC')::date, 1
+);
+UPDATE sv_journal_daily_claims SET status = 'NO_SPEND', updated_at = now()
+WHERE organization_id = 'gate12-claim-upgrade';
+SQL
+	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0054_journal_daily_claim_execution_lease.sql" >/dev/null
+	if [[ "$("${psql[@]}" -Atc "SELECT status || ':' || (abandoned_at IS NULL)::text FROM sv_journal_daily_claims WHERE organization_id = 'gate12-claim-upgrade'")" != "NO_SPEND:true" ]]; then
+		echo "Gate 12 claim lease migration did not preserve an existing 0046 row" >&2
+		exit 1
+	fi
 fi
 
 if [[ "$("${psql[@]}" -Atc "SELECT to_regclass('public.sv_journal_daily_claims') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_journal_daily_claims'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_journal_daily_claims'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname IN ('sv_journal_daily_claims_project_organization_fk', 'sv_journal_daily_claims_lock_project_org_fk', 'sv_journal_daily_claims_utc_day_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_journal_daily_claims' AND indexname = 'sv_journal_daily_claims_unresolved_unique' AND indexdef LIKE '%WHERE%') AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_journal_daily_claims'::regclass AND tgname IN ('sv_guard_journal_daily_claim_mutation', 'sv_prevent_journal_daily_claim_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2) AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sv_local_rank_observations'::regclass AND conname = 'sv_local_rank_observations_attempt_count_cap_check' AND convalidated) AND to_regclass('public.sv_api_idempotency_records') IS NOT NULL AND (SELECT relrowsecurity FROM pg_class WHERE oid = 'sv_api_idempotency_records'::regclass) AND EXISTS (SELECT 1 FROM pg_policy WHERE polrelid = 'sv_api_idempotency_records'::regclass AND polname = 'tenant_isolation') AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'sv_api_idempotency_records' AND indexname = 'sv_api_idempotency_identity_unique') AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'sv_api_idempotency_records'::regclass AND conname IN ('sv_api_idempotency_body_hash_check', 'sv_api_idempotency_response_status_check', 'sv_api_idempotency_expiry_check') AND convalidated GROUP BY convalidated HAVING count(*) = 3) AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'sv_api_idempotency_records'::regclass AND tgname IN ('sv_guard_api_idempotency_mutation', 'sv_prevent_api_idempotency_truncate') AND tgenabled = 'O' GROUP BY tgenabled HAVING count(*) = 2)")" != "t" ]]; then
-	echo "Gate 12 requires the complete numbered migration chain through 0049" >&2
+	echo "Gate 12 requires the complete numbered migration chain through 0054" >&2
+	exit 1
+fi
+
+if [[ "$("${psql[@]}" -Atc "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sv_journal_daily_claims' AND column_name = 'abandoned_at')")" != "t" ]]; then
+	echo "Gate 12 requires the 0054 journal claim execution lease" >&2
 	exit 1
 fi
 
@@ -518,6 +547,20 @@ BEGIN
 	VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 2)
 	RETURNING id INTO journal_claim_id;
 	UPDATE sv_journal_daily_claims SET status = 'NO_SPEND', updated_at = now() WHERE id = journal_claim_id;
+	INSERT INTO sv_journal_daily_claims (
+		organization_id, project_id, question_set_version, utc_day, attempt
+	)
+	VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 3)
+	RETURNING id INTO journal_claim_id;
+	UPDATE sv_journal_daily_claims
+	SET status = 'ABANDONED', abandoned_at = now(), updated_at = now()
+	WHERE id = journal_claim_id;
+	INSERT INTO sv_journal_daily_claims (
+		organization_id, project_id, question_set_version, utc_day, attempt
+	)
+	VALUES (org_id, project_id, 'gate12-journal-v1', (current_timestamp AT TIME ZONE 'UTC')::date, 4)
+	RETURNING id INTO journal_claim_id;
+	UPDATE sv_journal_daily_claims SET status = 'NO_SPEND', updated_at = now() WHERE id = journal_claim_id;
 
 	INSERT INTO sv_journal_daily_claims (
 		organization_id, project_id, question_set_version, utc_day, attempt, claimed_at, updated_at
@@ -546,6 +589,7 @@ BEGIN
 	UPDATE sv_journal_daily_claims
 	SET configuration_lock_id = journal_hold_lock_id, updated_at = now()
 	WHERE id = journal_hold_id;
+	UPDATE sv_journal_daily_claims SET status = 'EXECUTING', updated_at = now() WHERE id = journal_hold_id;
 	UPDATE sv_journal_daily_claims SET status = 'EXECUTING', updated_at = now() WHERE id = journal_hold_id;
 	UPDATE sv_journal_daily_claims SET status = 'HOLD', updated_at = now() WHERE id = journal_hold_id;
 	blocked := false;

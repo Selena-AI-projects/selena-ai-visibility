@@ -18,6 +18,7 @@ import type { SelenaExecutablePermit, SelenaMeasurementAdapter } from "./selena-
 // rather than restating the flag names it depends on.
 export {
 	assertDispatchModes,
+	isAffirmativeEnvValue,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	type SelenaMeasurementConfig,
@@ -61,6 +62,30 @@ export async function executePermit(input: ExecutePermitInput): Promise<RunOutco
 }
 
 /**
+ * Optional cumulative spend meter for the paid path.
+ *
+ * Structural for the same reason as the run store: this module must not import
+ * a database. The worker passes the real one; a caller that passes nothing
+ * keeps the previous behaviour, where the only ceilings are the per-order
+ * preflight cap and the limit on the provider account.
+ *
+ * Budget is held before the permit is claimed, because claiming spends the
+ * permit: a refusal has to arrive while it is still unspent, the same reason
+ * the adapter check sits where it does.
+ */
+export type MeasurementSpendMeter = {
+	reserve(request: { requestKey: string; estimatedUsd: number }): Promise<void>;
+	settle(request: { requestKey: string; actualUsd: number }): Promise<void>;
+	release(request: { requestKey: string }): Promise<void>;
+};
+
+/**
+ * What one answer is booked at before the invoice says otherwise. Read off the
+ * account's own usage on 2026-09-01: nine ChatGPT records cost USD 0.0135.
+ */
+export const MEASUREMENT_ESTIMATED_COST_USD = 0.0015;
+
+/**
  * Storage port for the runner. Kept structural so this module stays free of
  * repository and database imports; the worker passes the real repositories.
  */
@@ -68,11 +93,13 @@ export type MeasurementRunStore<Ctx> = {
 	claim(
 		ctx: Ctx,
 		permitId: string,
-		opts?: { now?: Date },
+		opts?: { now?: Date; journalClaimId?: string },
 	): Promise<{
 		permit: SelenaExecutablePermit;
 		run: { id: string };
 		cycle: { id: string; status: string };
+		claimed: boolean;
+		providerBoundary?: { journalClaimId: string; runId: string };
 	}>;
 	complete(ctx: Ctx, runId: string, outcome: RunOutcome, opts?: { now?: Date }): Promise<unknown>;
 };
@@ -102,6 +129,10 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	cycleState?: Partial<ControlledCycleState>;
 	/** Fresh completion clock; `now` remains the deterministic claim time. */
 	clock?: () => Date;
+	/** Fenced atomically with permit consumption by the real run store. */
+	journalClaimId?: string;
+	/** Absent leaves spending unmetered, as it was before the ledger existed. */
+	spend?: MeasurementSpendMeter;
 	now?: Date;
 }): Promise<MeasurementRunResult> {
 	// Checked before anything is read or written: while measurement is off the
@@ -111,9 +142,28 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	// name that cannot reach an approved, registered adapter must be refused
 	// while the permit is still unspent.
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
+	// Held before the claim for the same reason, and keyed by the permit so a
+	// redelivered job rides on the reservation it already made.
+	if (input.spend)
+		await input.spend.reserve({ requestKey: input.permitId, estimatedUsd: MEASUREMENT_ESTIMATED_COST_USD });
 	const claimTime = input.now ?? input.clock?.() ?? new Date();
 	const completionTime = () => input.clock?.() ?? new Date();
-	const { permit, run, cycle } = await input.store.claim(input.ctx, input.permitId, { now: claimTime });
+	const { permit, run, cycle, claimed, providerBoundary } = await input.store.claim(input.ctx, input.permitId, {
+		now: claimTime,
+		...(input.journalClaimId ? { journalClaimId: input.journalClaimId } : {}),
+	});
+	if (
+		input.journalClaimId &&
+		(!providerBoundary || providerBoundary.journalClaimId !== input.journalClaimId || providerBoundary.runId !== run.id)
+	) {
+		throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
+	}
+	if (!claimed) {
+		// Someone else already ran this permit, so this attempt spends nothing
+		// and must not keep holding budget for a call it will never make.
+		if (input.spend) await input.spend.release({ requestKey: input.permitId });
+		return { status: "skipped", reason: "SELENA_PERMIT_ALREADY_CONSUMED" };
+	}
 	// Chosen from the permit, not from the environment: a plan sells several
 	// systems and the surface a customer bought decides which adapter measures
 	// it.
@@ -134,6 +184,14 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	try {
 		const outcome = await executePermit({ permit, adapter, cycleState, config: input.config, now: claimTime });
 		await input.store.complete(input.ctx, run.id, outcome, { now: completionTime() });
+		// The adapter's own figure when it reported one; otherwise the estimate
+		// the reservation was taken at. Either way the meter records a number
+		// rather than leaving the hold open.
+		if (input.spend)
+			await input.spend.settle({
+				requestKey: input.permitId,
+				actualUsd: outcome.costUsd ?? MEASUREMENT_ESTIMATED_COST_USD,
+			});
 		return { status: "completed", runId: run.id, outcome };
 	} catch (error) {
 		const reason = failureReason(error);
@@ -143,6 +201,11 @@ export async function runMeasurementForPermit<Ctx>(input: {
 			{ dispatchKey: permit.dispatchKey, status: "FAILED", validity: "INVALID", invalidReason: reason },
 			{ now: completionTime() },
 		);
+		// A failed run may still have reached the provider, so this is not a
+		// release: the transport boundary decides, and until it says otherwise
+		// the estimate stays committed rather than being handed back.
+		if (input.spend)
+			await input.spend.settle({ requestKey: input.permitId, actualUsd: MEASUREMENT_ESTIMATED_COST_USD });
 		return { status: "failed", runId: run.id, reason };
 	}
 }

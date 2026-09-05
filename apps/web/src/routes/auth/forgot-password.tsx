@@ -44,6 +44,7 @@ function ForgotPasswordPage() {
 			<FullPageCard
 				title="Check your email"
 				subtitle={`If an account exists for ${email}, a reset link is on its way.`}
+				scene="lens"
 			>
 				<p className="text-center text-sm text-muted-foreground w-full">
 					<Link to="/auth/login" className="text-primary hover:underline font-medium">
@@ -55,7 +56,7 @@ function ForgotPasswordPage() {
 	}
 
 	return (
-		<FullPageCard title="Reset your password" subtitle="Enter your email and we'll send you a reset link">
+		<FullPageCard title="Reset your password" subtitle="Enter your email and we'll send you a reset link" scene="lens">
 			<form onSubmit={handleSubmit} className="space-y-4 w-full">
 				<div className="space-y-2">
 					<Label htmlFor="email">Email</Label>

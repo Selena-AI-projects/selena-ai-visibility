@@ -38,6 +38,7 @@ function readModel() {
 				capturedAt: "2026-08-31T04:00:00.000Z",
 				sourceReference: "https://example.com/business",
 				snapshotReference: "snapshot:evidence-1",
+				acceptance: { status: "ACCEPTED" as const, acceptedAt: "2026-08-31T04:30:00.000Z" },
 			},
 		],
 		findings: [
@@ -118,6 +119,7 @@ describe("HoReCa local-first read model", () => {
 				state: "ACTIVE",
 				summary: {
 					kind: "MEASURED_SHARE",
+					sampleBasis: "ACCEPTED_ONLY",
 					numerator: 3,
 					denominator: 5,
 					invalidCount: 1,
@@ -126,6 +128,41 @@ describe("HoReCa local-first read model", () => {
 				},
 			}),
 		).toThrow("HORECA_MEASURED_MODULE_REQUIRES_EVIDENCE_AND_LOCK");
+	});
+
+	it("requires accepted-only sample semantics and accepted evidence receipts", () => {
+		expect(() =>
+			horecaModuleReadModelSchema.parse({
+				...unknownModule,
+				state: "ACTIVE",
+				evidenceIds: ["evidence-1"],
+				configurationLockReference: "lock-1",
+				summary: {
+					kind: "MEASURED_SHARE",
+					numerator: 1,
+					denominator: 2,
+					invalidCount: 0,
+					capturedAt: "2026-08-31T05:00:00.000Z",
+					datasetVersion: "dataset-v1",
+				},
+			}),
+		).toThrow();
+		const evidenceWithoutAcceptance = {
+			...readModel(),
+			evidence: [{ ...readModel().evidence[0], acceptance: undefined }],
+		};
+		expect(() => horecaLocalFirstReadModelSchema.parse(evidenceWithoutAcceptance)).toThrow();
+		expect(() =>
+			horecaLocalFirstReadModelSchema.parse({
+				...readModel(),
+				evidence: [
+					{
+						...readModel().evidence[0],
+						acceptance: { status: "ACCEPTED", acceptedAt: "2026-08-31T03:59:59.000Z" },
+					},
+				],
+			}),
+		).toThrow("HORECA_EVIDENCE_ACCEPTANCE_PRECEDES_CAPTURE");
 	});
 
 	it("rejects post-opening visibility measurements for a pre-opening project", () => {
@@ -142,6 +179,7 @@ describe("HoReCa local-first read model", () => {
 							configurationLockReference: "lock-1",
 							summary: {
 								kind: "MEASURED_SHARE",
+								sampleBasis: "ACCEPTED_ONLY",
 								numerator: 1,
 								denominator: 2,
 								invalidCount: 0,

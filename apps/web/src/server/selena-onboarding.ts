@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { assertSuggestSpendAllowed } from "@workspace/lib/run-policy";
-import { assertSuggestBudget } from "@workspace/lib/selena-suggest-metering";
+import { reserveSuggestSpend } from "@workspace/lib/selena-suggest-metering";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { z } from "zod";
 import { cancelAnalyzeBrand, enqueueAnalyzeBrand, getAnalyzeBrandStatus } from "@/lib/analyze-brand-job";
@@ -112,10 +112,11 @@ export const startSelenaProfileSuggestionFn = createServerFn({ method: "POST" })
 		// LLM round trip on a live key. Refused unless the owner has named the
 		// budget class that pays for it.
 		assertSuggestSpendAllowed();
-		// First refusal frontier: nothing enters the queue past the monthly
-		// ceiling. The worker asserts again for jobs already queued.
-		await assertSuggestBudget(db);
 		const project = await requireProject(data.projectId);
+		// First refusal frontier: budget is held before anything enters the
+		// queue. The worker reserves again under the same key for jobs that were
+		// already queued, and rides on this reservation rather than adding one.
+		await reserveSuggestSpend(db, { organizationId: project.organizationId, requestKey: data.projectId });
 		let locationHint: string | undefined;
 		if (data.mapsLocationUrl) {
 			const maps = parseGoogleMapsLocation(data.mapsLocationUrl);

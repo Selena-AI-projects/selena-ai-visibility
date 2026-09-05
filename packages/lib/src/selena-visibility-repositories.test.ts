@@ -29,8 +29,9 @@ function allocationDb(options: { latest?: number; projectOwned?: boolean; insert
 	const inserted: Record<string, unknown>[] = [];
 	const conflictTargets: unknown[][] = [];
 	const events: string[] = [];
-	const execute = vi.fn(async (_statement: unknown) => {
-		events.push("advisory-lock");
+	const execute = vi.fn(async (statement: unknown) => {
+		const query = new PgDialect().sqlToQuery(statement as SQL);
+		events.push(query.sql.includes("set_config") ? "tenant-context" : "advisory-lock");
 	});
 	let selectCall = 0;
 	const tx = {
@@ -70,7 +71,12 @@ function allocationDb(options: { latest?: number; projectOwned?: boolean; insert
 					conflictTargets.push(options.target);
 					return insertQuery;
 				},
-				returning: async () => (options.insertWins === false ? [] : [{ id: "lock-1", createdAt: new Date(0), ...row }]),
+				returning: async (selection?: Record<string, unknown>) => {
+					if (options.insertWins === false) return [];
+					const result: Record<string, unknown> = { id: "lock-1", createdAt: new Date(0), ...row };
+					if (!selection) return [result];
+					return [Object.fromEntries(Object.keys(selection).map((key) => [key, result[key]]))];
+				},
 			};
 			return insertQuery;
 		}),
@@ -119,6 +125,7 @@ function observationReviewDb(options: { reviewed?: boolean; failAudit?: boolean 
 	};
 
 	const tx = {
+		execute: vi.fn(async () => undefined),
 		select: vi.fn(() => {
 			let table: unknown;
 			let predicate: unknown;
@@ -248,23 +255,26 @@ describe("configuration lock allocation", () => {
 		});
 
 		expect(fake.transaction).toHaveBeenCalledTimes(1);
-		expect(fake.execute).toHaveBeenCalledTimes(1);
-		expect(fake.events).toEqual(["project-check", "advisory-lock", "read-version", "insert"]);
-		const statement = fake.execute.mock.calls[0]?.[0];
+		expect(fake.execute).toHaveBeenCalledTimes(2);
+		expect(fake.events).toEqual(["tenant-context", "project-check", "advisory-lock", "read-version", "insert"]);
+		const statement = fake.execute.mock.calls[1]?.[0];
 		expect(statement && new PgDialect().sqlToQuery(statement as SQL).sql).toContain("pg_advisory_xact_lock");
 		expect(lock.version).toBe(5);
 		expect(fake.inserted).toEqual([
-			expect.objectContaining({
-				projectId: input.projectId,
-				organizationId: context.tenantId,
-				createdBy: context.actorId,
-				version: 5,
-			}),
+				expect.objectContaining({
+					projectId: input.projectId,
+					organizationId: context.tenantId,
+					createdBy: context.actorId,
+					version: 5,
+					legacyCollisionOrdinal: 0,
+				}),
 		]);
 		expect(fake.inserted[0]).not.toHaveProperty("expectedVersion");
+		expect(lock).not.toHaveProperty("legacyCollisionOrdinal");
 		expect(fake.conflictTargets[0]).toEqual([
 			schema.svConfigurationLocks.projectId,
 			schema.svConfigurationLocks.version,
+			schema.svConfigurationLocks.legacyCollisionOrdinal,
 		]);
 	});
 

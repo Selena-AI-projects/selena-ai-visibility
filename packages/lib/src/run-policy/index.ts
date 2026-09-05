@@ -19,14 +19,6 @@ export {
 	OVERDUE_ALERT_GRACE_MS,
 } from "./maintenance";
 export {
-	assertGlobalProviderStop,
-	assertSuggestSpendAllowed,
-	isGlobalProviderStopEngaged,
-	PROVIDER_STOP_ENV,
-	SUGGEST_BUDGET_ENV,
-	SUGGEST_FREE_BUDGET_CLASS,
-} from "./spend-gate";
-export {
 	dailyRunCeiling,
 	defaultPlatformPicks,
 	dueToleranceMs,
@@ -41,3 +33,15 @@ export {
 	targetKey,
 	targetOverdueStatus,
 } from "./policy";
+export {
+	assertGlobalProviderStop,
+	assertSuggestSpendAllowed,
+	enqueueLegacyProviderWork,
+	executeLegacyProviderTransport,
+	isGlobalProviderStopEngaged,
+	isLegacyProviderExecutionEnabled,
+	MEASUREMENT_ENABLED_ENV,
+	PROVIDER_STOP_ENV,
+	SUGGEST_BUDGET_ENV,
+	SUGGEST_FREE_BUDGET_CLASS,
+} from "./spend-gate";

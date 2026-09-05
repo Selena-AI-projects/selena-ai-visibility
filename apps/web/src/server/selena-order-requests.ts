@@ -1,15 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svAuditEvents, svOrderRequests, svProjects, svScenarios } from "@workspace/lib/db/schema";
+import { redeemPilotInvite } from "@workspace/lib/selena-pilot-invites";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import {
 	decideFreeAutoDispatch,
 	type FreeAutoDispatchStatus,
 	freeAutoDispatchConfigFromEnv,
-	promoCodeApplies,
 	SELENA_CATALOG,
 } from "@workspace/selena-visibility-contracts";
-import { and, count, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/helpers";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
@@ -19,8 +20,10 @@ const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
 // A request is a lead. The operator reads these on the admin desk and builds
 // the paid order there, so the money path keeps its single human gate. The one
-// exception is a request a promo code already made free: it may start itself,
-// under caps and behind a default-off flag.
+// exception is a request an issued pilot seat already made free: it may start
+// itself, under caps and behind a default-off flag. A seat is a row the
+// operator minted, spendable once, bound to one plan and to an expiry — never
+// a string compared against a list of live codes in the environment.
 
 export const orderRequestPlanIds = ["visitor-local", "full-ai-landscape"] as const;
 
@@ -51,45 +54,34 @@ async function autoDispatchFreeRequest(input: {
 	promoApplied: boolean;
 }): Promise<{ status: FreeAutoDispatchStatus; expectedRuns: number } | { status: null; reason: string }> {
 	const config = freeAutoDispatchConfigFromEnv(process.env);
-	const dayStart = new Date();
-	dayStart.setUTCHours(0, 0, 0, 0);
-	// Deliberately not scoped to this tenant: a promo code that leaks is used
-	// from fresh accounts, so a per-tenant ceiling would not bound the spend it
-	// causes. The project cap is tenant-scoped by construction.
-	const dispatchedToday = async (scope: "everyone" | "project") =>
-		Number(
-			(
-				await db
-					.select({ value: count() })
-					.from(svOrderRequests)
-					.where(
-						and(
-							eq(svOrderRequests.status, "AUTO_QUEUED"),
-							gte(svOrderRequests.createdAt, dayStart),
-							...(scope === "project" ? [eq(svOrderRequests.projectId, input.projectId)] : []),
-						),
-					)
-			)[0]?.value ?? 0,
-		);
 	const capsApply = config.enabled && input.promoApplied;
-	const decision = decideFreeAutoDispatch({
-		config,
-		promoApplied: input.promoApplied,
-		dispatchedToday: capsApply ? await dispatchedToday("everyone") : 0,
-		dispatchedTodayForProject: capsApply ? await dispatchedToday("project") : 0,
-	});
-	if (!decision.dispatch) {
-		// A cap refusal is a free measurement the customer expected and did not
-		// get, so it is recorded; the flag being off is not an event.
-		if (capsApply)
-			await db.insert(svAuditEvents).values({
+	if (capsApply) {
+		// The global promo ceiling intentionally spans tenants. A non-owner RLS
+		// role cannot safely count it, and a count followed by dispatch races with
+		// concurrent requests. Keep free auto-dispatch closed until one atomic DB
+		// claim enforces both global and project caps.
+		const reason = "RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED";
+		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
+			await tx.insert(svAuditEvents).values({
 				organizationId: input.context.tenantId,
 				actorId: input.context.actorId,
 				event: "ORDER_REQUEST_AUTO_DISPATCH_REFUSED",
 				subjectKind: "sv_order_requests",
 				subjectId: input.requestId,
-				details: { planId: input.planId, reason: decision.reason },
+				details: { planId: input.planId, reason },
 			});
+		});
+		return { status: null, reason };
+	}
+	const decision = decideFreeAutoDispatch({
+		config,
+		promoApplied: input.promoApplied,
+		dispatchedToday: 0,
+		dispatchedTodayForProject: 0,
+	});
+	if (!decision.dispatch) {
+		// A cap refusal is a free measurement the customer expected and did not
+		// get, so it is recorded; the flag being off is not an event.
 		return { status: null, reason: decision.reason };
 	}
 
@@ -102,10 +94,12 @@ async function autoDispatchFreeRequest(input: {
 			.slice(0, questionCap);
 		if (proposed.length === 0) throw new Error("SELENA_PROFILE_HAS_NO_QUESTIONS");
 		const scenarioIds = proposed.map((scenario) => scenario.id);
-		await db
-			.update(svScenarios)
-			.set({ status: "APPROVED", updatedAt: new Date() })
-			.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, input.context.tenantId)));
+		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
+			await tx
+				.update(svScenarios)
+				.set({ status: "APPROVED", updatedAt: new Date() })
+				.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, input.context.tenantId)));
+		});
 
 		const started = await startSelenaMeasurement(input.context, {
 			projectId: input.projectId,
@@ -113,30 +107,34 @@ async function autoDispatchFreeRequest(input: {
 			scenarioIds,
 			idempotencyKey: `auto-request:${input.requestId}`,
 		});
-		await db.insert(svAuditEvents).values({
-			organizationId: input.context.tenantId,
-			actorId: input.context.actorId,
-			event: "ORDER_REQUEST_AUTO_DISPATCHED",
-			subjectKind: "sv_order_requests",
-			subjectId: input.requestId,
-			details: {
-				planId: input.planId,
-				orderId: started.orderId,
-				expectedRuns: started.expectedRuns,
-				scenarioCount: scenarioIds.length,
-				queued: started.queued,
-				stoppedAt: started.stoppedAt,
-			},
+		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
+			await tx.insert(svAuditEvents).values({
+				organizationId: input.context.tenantId,
+				actorId: input.context.actorId,
+				event: "ORDER_REQUEST_AUTO_DISPATCHED",
+				subjectKind: "sv_order_requests",
+				subjectId: input.requestId,
+				details: {
+					planId: input.planId,
+					orderId: started.orderId,
+					expectedRuns: started.expectedRuns,
+					scenarioCount: scenarioIds.length,
+					queued: started.queued,
+					stoppedAt: started.stoppedAt,
+				},
+			});
 		});
 		return { status: "AUTO_QUEUED", expectedRuns: started.expectedRuns };
 	} catch (cause) {
-		await db.insert(svAuditEvents).values({
-			organizationId: input.context.tenantId,
-			actorId: input.context.actorId,
-			event: "ORDER_REQUEST_AUTO_DISPATCH_FAILED",
-			subjectKind: "sv_order_requests",
-			subjectId: input.requestId,
-			details: { planId: input.planId, error: cause instanceof Error ? cause.message : String(cause) },
+		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
+			await tx.insert(svAuditEvents).values({
+				organizationId: input.context.tenantId,
+				actorId: input.context.actorId,
+				event: "ORDER_REQUEST_AUTO_DISPATCH_FAILED",
+				subjectKind: "sv_order_requests",
+				subjectId: input.requestId,
+				details: { planId: input.planId, error: cause instanceof Error ? cause.message : String(cause) },
+			});
 		});
 		return { status: "AUTO_FAILED", expectedRuns: 0 };
 	}
@@ -148,20 +146,35 @@ export const createSelenaOrderRequestFn = createServerFn({ method: "POST" })
 		const context = await resolveSessionAuthContext();
 		const project = await repositories.projects.get(context, data.projectId);
 		if (!project) throw new Error("Not found: project is outside AuthContext tenant");
-		const promoApplied = promoCodeApplies(data.promoCode, process.env);
-		const [row] = await db
-			.insert(svOrderRequests)
-			.values({
-				organizationId: context.tenantId,
-				projectId: data.projectId,
-				planId: data.planId,
-				contactName: data.contactName,
-				contactChannel: data.contactChannel,
-				comment: data.comment || null,
-				promoCode: data.promoCode?.trim() ? data.promoCode.trim().toUpperCase() : null,
-				promoApplied,
-			})
-			.returning({ id: svOrderRequests.id });
+		// Claiming the seat and saving the lead commit together: a seat consumed
+		// by a request that was never stored would be a seat nobody can use again.
+		const { row, promoApplied } = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+			const seat = data.promoCode?.trim()
+				? await redeemPilotInvite(tx, {
+						code: data.promoCode,
+						planId: data.planId,
+						organizationId: context.tenantId,
+						userId: context.actorId,
+					})
+				: null;
+			const [inserted] = await tx
+				.insert(svOrderRequests)
+				.values({
+					organizationId: context.tenantId,
+					projectId: data.projectId,
+					planId: data.planId,
+					contactName: data.contactName,
+					contactChannel: data.contactChannel,
+					comment: data.comment || null,
+					// The submitted code is never stored. Which seat was spent is
+					// recorded on the invite itself, against this organization, so the
+					// lead table cannot become a list of working codes.
+					promoCode: null,
+					promoApplied: seat !== null,
+				})
+				.returning({ id: svOrderRequests.id });
+			return { row: inserted, promoApplied: seat !== null };
+		});
 
 		const auto = await autoDispatchFreeRequest({
 			context,
@@ -171,10 +184,12 @@ export const createSelenaOrderRequestFn = createServerFn({ method: "POST" })
 			promoApplied,
 		});
 		if (auto.status)
-			await db
-				.update(svOrderRequests)
-				.set({ status: auto.status, updatedAt: new Date() })
-				.where(eq(svOrderRequests.id, row.id));
+			await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+				await tx
+					.update(svOrderRequests)
+					.set({ status: auto.status, updatedAt: new Date() })
+					.where(and(eq(svOrderRequests.id, row.id), eq(svOrderRequests.organizationId, context.tenantId)));
+			});
 		return { id: row.id, promoApplied, autoStarted: auto.status === "AUTO_QUEUED" };
 	});
 
@@ -196,24 +211,26 @@ export const listSelenaOrderRequestsFn = createServerFn({ method: "GET" }).handl
 	async (): Promise<OrderRequestRow[]> => {
 		await requireAdmin();
 		const context = await resolveSessionAuthContext();
-		const rows = await db
-			.select({
-				id: svOrderRequests.id,
-				projectId: svOrderRequests.projectId,
-				projectName: svProjects.name,
-				planId: svOrderRequests.planId,
-				contactName: svOrderRequests.contactName,
-				contactChannel: svOrderRequests.contactChannel,
-				comment: svOrderRequests.comment,
-				promoCode: svOrderRequests.promoCode,
-				promoApplied: svOrderRequests.promoApplied,
-				status: svOrderRequests.status,
-				createdAt: svOrderRequests.createdAt,
-			})
-			.from(svOrderRequests)
-			.innerJoin(svProjects, eq(svOrderRequests.projectId, svProjects.id))
-			.where(eq(svOrderRequests.organizationId, context.tenantId))
-			.orderBy(desc(svOrderRequests.createdAt));
+		const rows = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.select({
+					id: svOrderRequests.id,
+					projectId: svOrderRequests.projectId,
+					projectName: svProjects.name,
+					planId: svOrderRequests.planId,
+					contactName: svOrderRequests.contactName,
+					contactChannel: svOrderRequests.contactChannel,
+					comment: svOrderRequests.comment,
+					promoCode: svOrderRequests.promoCode,
+					promoApplied: svOrderRequests.promoApplied,
+					status: svOrderRequests.status,
+					createdAt: svOrderRequests.createdAt,
+				})
+				.from(svOrderRequests)
+				.innerJoin(svProjects, eq(svOrderRequests.projectId, svProjects.id))
+				.where(eq(svOrderRequests.organizationId, context.tenantId))
+				.orderBy(desc(svOrderRequests.createdAt)),
+		);
 		return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
 	},
 );
@@ -223,11 +240,13 @@ export const updateSelenaOrderRequestStatusFn = createServerFn({ method: "POST" 
 	.handler(async ({ data }) => {
 		await requireAdmin();
 		const context = await resolveSessionAuthContext();
-		const [row] = await db
-			.update(svOrderRequests)
-			.set({ status: data.status, updatedAt: new Date() })
-			.where(and(eq(svOrderRequests.id, data.requestId), eq(svOrderRequests.organizationId, context.tenantId)))
-			.returning({ id: svOrderRequests.id });
+		const [row] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			tx
+				.update(svOrderRequests)
+				.set({ status: data.status, updatedAt: new Date() })
+				.where(and(eq(svOrderRequests.id, data.requestId), eq(svOrderRequests.organizationId, context.tenantId)))
+				.returning({ id: svOrderRequests.id }),
+		);
 		if (!row) throw new Error("Not found: request is outside AuthContext tenant");
 		return { id: row.id, status: data.status };
 	});

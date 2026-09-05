@@ -57,7 +57,9 @@ export function normalizeLedgerRows(rows: SelenaLedgerRow[], tenantId: string, s
 		snapshotId,
 		kind: "AI_RESPONSE",
 		accessClass: "PUBLIC",
-		sourceRef: row.rawResponseReference ?? `evidence-ledger://${row.runId}`,
+		// Provider/object locators remain private. Public evidence uses a stable
+		// ledger identifier and the dedicated raw-evidence route mediates access.
+		sourceRef: `evidence-ledger://${row.runId}`,
 		capturedAt: row.timestamp,
 		subject: row.scenarioText,
 		text: row.scenarioText,
@@ -92,6 +94,7 @@ export function createSelenaDataset(
 		tenantId,
 		rows: rows.map((row) => ({
 			...row,
+			rawResponseReference: null,
 			citations: [...row.citations],
 			competitors: [...row.competitors],
 			factualErrors: [...row.factualErrors],

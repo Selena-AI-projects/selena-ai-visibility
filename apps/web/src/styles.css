@@ -136,19 +136,44 @@
 	}
 }
 
+/*
+ * The workspace declared --font-sans as var(--font-geist-sans) but never
+ * defined that variable or loaded the face, so every screen fell back to the
+ * browser's default sans. The package is a dependency; this is the same single
+ * variable-range face the public site serves.
+ */
+@font-face {
+	font-family: "Geist Sans";
+	font-style: normal;
+	font-weight: 100 900;
+	src: url("@fontsource/geist-sans/files/geist-sans-latin-400-normal.woff2") format("woff2");
+	font-display: swap;
+}
+
+:root {
+	--font-geist-sans: "Geist Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
 /* Selena Systems customer surface. The product keeps the operator-focused
    component system while inheriting the warm editorial identity of the public
    Selena Systems site. */
 .selena-app,
 .selena-auth-shell {
-	--selena-ivory: #f7f2ea;
+	--selena-serif: Georgia, "Times New Roman", serif;
+	font-feature-settings:
+		"kern" 1,
+		"liga" 1;
+	font-variant-numeric: tabular-nums;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	--selena-ivory: #ece4d8;
 	--selena-surface: #fffdf8;
 	--selena-charcoal: #181614;
 	--selena-ink: #161413;
-	--selena-muted: #6e6258;
+	--selena-muted: #574d45;
 	--selena-copper: #b9825b;
 	--selena-copper-deep: #8f5c34;
-	--selena-line: #e6ddd1;
+	--selena-line: #dccfbe;
 	background-color: var(--selena-ivory);
 	color: var(--selena-ink);
 }
@@ -167,9 +192,22 @@
 
 .selena-wordmark-name,
 .selena-heading {
-	font-family: Georgia, "Times New Roman", serif;
+	font-family: var(--selena-serif, Georgia, "Times New Roman", serif);
 	font-weight: 600;
 	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+
+/*
+ * Prose is read, not scanned, so it is set in the serif at a document's
+ * measure. Past about seventy characters the eye loses the line it is
+ * returning to, and the page starts reading like a form.
+ */
+.selena-prose {
+	max-width: 64ch;
+	font-family: var(--selena-serif, Georgia, "Times New Roman", serif);
+	font-size: 1.0625rem;
+	line-height: 1.7;
 }
 
 .selena-wordmark-name {
@@ -177,7 +215,7 @@
 }
 
 .selena-wordmark-systems {
-	color: var(--selena-muted, #6e6258);
+	color: var(--selena-muted, #574d45);
 	font-size: 0.66rem;
 	font-weight: 650;
 	letter-spacing: 0.2em;
@@ -196,8 +234,8 @@
 }
 
 .selena-app-header {
-	border-bottom: 1px solid rgb(230 221 209 / 86%);
-	background: rgb(247 242 234 / 92%);
+	border-bottom: 1px solid rgb(220 207 190 / 86%);
+	background: rgb(236 228 216 / 92%);
 	box-shadow: 0 10px 30px -28px rgb(24 22 20 / 45%);
 }
 
@@ -240,7 +278,7 @@
 	font-size: 0.6875rem;
 	font-weight: 700;
 	letter-spacing: 0.08em;
-	color: #6e6258;
+	color: #574d45;
 }
 
 .selena-locale-switch button[aria-pressed="true"] {
@@ -256,6 +294,7 @@
 .selena-project-link {
 	display: flex;
 	width: 100%;
+	min-width: 0;
 	min-height: 4.25rem;
 	flex-direction: column;
 	align-items: flex-start;
@@ -271,8 +310,21 @@
 		color 160ms ease-out;
 }
 
+/*
+ * A column of flex items is sized to each line's own content, so a project name
+ * long enough — a staging name carrying a date, say — leaves the rail and lands
+ * on the page beside it. Bounding each line to the card keeps the name inside
+ * it; wrapping rather than clipping keeps the whole name readable, since the
+ * part that tells two staging projects apart is usually at the end.
+ */
+.selena-project-link > span {
+	max-width: 100%;
+	overflow-wrap: anywhere;
+}
+
 @media (max-width: 63.999rem) {
-	.selena-project-nav {
+	.selena-project-nav,
+	.selena-project-nav-list {
 		display: flex;
 		gap: 0.75rem;
 		overflow-x: auto;
@@ -280,7 +332,8 @@
 		scroll-snap-type: x proximity;
 	}
 
-	.selena-project-nav .selena-project-link {
+	.selena-project-nav .selena-project-link,
+	.selena-project-nav-list .selena-project-link {
 		min-width: 14rem;
 		scroll-snap-align: start;
 	}
@@ -289,6 +342,12 @@
 .selena-project-link:hover {
 	border-color: var(--selena-line);
 	background: rgb(255 253 248 / 72%);
+}
+
+.selena-project-link:focus-visible {
+	border-color: var(--selena-copper-deep);
+	outline: 2px solid var(--selena-copper-deep);
+	outline-offset: 2px;
 }
 
 .selena-project-link[data-selected] {
@@ -331,12 +390,170 @@
 	color: #f2e9df;
 }
 
+/*
+ * A page of a report rather than a stack of widgets: paper with a hairline
+ * edge, wide margins, and no drop shadow — a printed page does not float.
+ */
 .selena-section {
 	border: 1px solid var(--selena-line);
 	border-radius: 1rem;
-	background: rgb(255 253 248 / 92%);
-	padding: clamp(1.35rem, 3vw, 2rem);
-	box-shadow: 0 16px 38px -32px rgb(24 22 20 / 42%);
+	background: var(--selena-surface);
+	padding: clamp(1.6rem, 3.4vw, 2.75rem);
+}
+
+/* The tools row is a contents line, not a toolbar. */
+.selena-toolbar {
+	border-bottom: 1px solid var(--selena-line);
+}
+
+.selena-tool-link {
+	display: inline-flex;
+	min-height: 2.75rem;
+	align-items: center;
+	border-bottom: 2px solid transparent;
+	padding: 0 0.125rem;
+	color: var(--selena-muted);
+	font-size: 0.75rem;
+	font-weight: 650;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+}
+
+.selena-tool-link:hover {
+	border-bottom-color: var(--selena-copper);
+	color: var(--selena-ink);
+}
+
+.selena-tool-link:focus-visible {
+	outline: 2px solid var(--selena-copper-deep);
+	outline-offset: 4px;
+}
+
+/* Each measured surface is one row of a table: what, what it says, where it stands. */
+.selena-record {
+	border-top: 1px solid var(--selena-line);
+	padding-block: 1.9rem;
+}
+
+.selena-record:first-child {
+	border-top: 0;
+	padding-top: 0.75rem;
+}
+
+.selena-record-label {
+	color: var(--selena-ink);
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+}
+
+.selena-record-statement {
+	font-family: var(--selena-serif, Georgia, "Times New Roman", serif);
+	font-size: 1.0625rem;
+	line-height: 1.65;
+	color: var(--selena-ink);
+}
+
+.selena-record-note {
+	font-size: 0.875rem;
+	line-height: 1.6;
+	color: var(--selena-muted);
+}
+
+.selena-state {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	white-space: nowrap;
+}
+
+.selena-state--active {
+	color: #285f3e;
+}
+
+.selena-state--partial {
+	color: #7a4b24;
+}
+
+.selena-state--blocked {
+	color: #7c3029;
+}
+
+.selena-state--quiet {
+	color: var(--selena-muted);
+}
+
+/*
+ * One dark card per page, at the top, carrying the same copper ring as the
+ * public site. It gives the page an anchor to read from, and the sections
+ * below it read as paper against it rather than as one continuous wash.
+ */
+.selena-section--anchor {
+	position: relative;
+	overflow: hidden;
+	border-color: var(--selena-charcoal);
+	background: var(--selena-charcoal);
+	color: #faf4ec;
+	box-shadow: 0 30px 60px -34px rgb(24 22 20 / 62%);
+}
+
+.selena-section--anchor::after {
+	position: absolute;
+	top: -5rem;
+	right: -4rem;
+	width: 16rem;
+	height: 16rem;
+	border: 1px solid rgb(185 130 91 / 34%);
+	border-radius: 999px;
+	content: "";
+}
+
+.selena-section--anchor .selena-anchor-lede {
+	color: #c9bcae;
+}
+
+.selena-section--anchor .selena-anchor-meta {
+	color: #d79f74;
+}
+
+.selena-section--anchor .selena-status-chip {
+	color: #e7d9c9;
+}
+
+/*
+ * The signal row is read at a glance, so the label is set small and spaced and
+ * the value carries the weight, the way a printed figure would.
+ */
+.selena-signal {
+	border-top: 2px solid rgb(185 130 91 / 60%);
+	padding-top: 0.9rem;
+	padding-bottom: 1rem;
+}
+
+.selena-signal-label {
+	font-size: 0.6875rem;
+	font-weight: 700;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+	color: #c3b5a6;
+}
+
+.selena-signal-value {
+	margin-top: 0.55rem;
+	font-family: Georgia, "Times New Roman", serif;
+	font-size: 1.4rem;
+	font-weight: 600;
+	line-height: 1.15;
+	color: #faf4ec;
+}
+
+.selena-signal-detail {
+	margin-top: 0.4rem;
+	font-size: 0.75rem;
+	line-height: 1.25rem;
+	color: #c9bcae;
 }
 
 .selena-success-label {

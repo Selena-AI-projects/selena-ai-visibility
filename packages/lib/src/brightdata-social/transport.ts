@@ -77,8 +77,6 @@ function assertRequestBinding(request: BrightDataDatasetTransportRequest) {
 	const dataset = getBrightDataSocialDatasetBySource(request.source);
 	if (dataset.runtimeStatus === "blocked_cost_and_pii")
 		throw new BrightDataSocialTransportError("BRIGHTDATA_SOCIAL_DATASET_BLOCKED_COST_AND_PII");
-	if (request.datasetId !== dataset.datasetId)
-		throw new BrightDataSocialTransportError("BRIGHTDATA_SOCIAL_DATASET_ID_MISMATCH");
 	return dataset;
 }
 
@@ -86,6 +84,15 @@ export function createBrightDataSocialTransport(options: BrightDataSocialTranspo
 	if (!options.apiToken.trim()) throw new BrightDataSocialTransportError("BRIGHTDATA_TOKEN_REQUIRED");
 	const apiBaseUrl = new URL(options.apiBaseUrl ?? DEFAULT_API_BASE_URL);
 	if (apiBaseUrl.protocol !== "https:") throw new BrightDataSocialTransportError("BRIGHTDATA_HTTPS_REQUIRED");
+	if (
+		apiBaseUrl.origin !== DEFAULT_API_BASE_URL ||
+		apiBaseUrl.username ||
+		apiBaseUrl.password ||
+		apiBaseUrl.pathname !== "/" ||
+		apiBaseUrl.search ||
+		apiBaseUrl.hash
+	)
+		throw new BrightDataSocialTransportError("BRIGHTDATA_API_ORIGIN_NOT_ALLOWED");
 	const baseUrl = apiBaseUrl.toString().replace(/\/$/, "");
 	const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
 	const downloadTimeoutMs = options.downloadTimeoutMs ?? DEFAULT_DOWNLOAD_TIMEOUT_MS;

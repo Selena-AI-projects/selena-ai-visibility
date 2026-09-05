@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svProjectProfiles, svWebsiteSnapshots } from "@workspace/lib/db/schema";
 import { readStoredGoogleMapsLocation } from "@workspace/lib/google-maps-location";
 import { buildWebsiteActionPlan, collectWebsite } from "@workspace/lib/website-collector";
@@ -19,35 +20,42 @@ export const Route = createFileRoute("/api/v1/selena/website-collector")({
 					const parsed = requestSchema.safeParse(await request.json());
 					if (!parsed.success)
 						return Response.json({ error: "Validation Error", message: parsed.error.message }, { status: 400 });
-					const [profile] = await db
-						.select({ primaryDomain: svProjectProfiles.primaryDomain, mapsLocation: svProjectProfiles.mapsLocation })
-						.from(svProjectProfiles)
-						.where(
-							and(
-								eq(svProjectProfiles.projectId, parsed.data.projectId),
-								eq(svProjectProfiles.organizationId, auth.tenantId),
-							),
-						)
-						.limit(1);
+					const [profile] = await withOrganizationTransaction(db, auth.tenantId, (tx) =>
+						tx
+							.select({
+								primaryDomain: svProjectProfiles.primaryDomain,
+								mapsLocation: svProjectProfiles.mapsLocation,
+							})
+							.from(svProjectProfiles)
+							.where(
+								and(
+									eq(svProjectProfiles.projectId, parsed.data.projectId),
+									eq(svProjectProfiles.organizationId, auth.tenantId),
+								),
+							)
+							.limit(1),
+					);
 					if (!profile)
 						return Response.json(
 							{ error: "Not Found", message: "Confirmed project profile is required" },
 							{ status: 404 },
 						);
 					const collection = await collectWebsite(auth.tenantId, profile.primaryDomain);
-					await db
-						.insert(svWebsiteSnapshots)
-						.values({
-							id: collection.snapshot.id,
-							organizationId: auth.tenantId,
-							projectId: parsed.data.projectId,
-							website: collection.snapshot.url,
-							contentHash: collection.snapshot.contentHash,
-							capturedAt: new Date(collection.snapshot.capturedAt),
-							snapshot: collection.snapshot,
-							immutable: true,
-						})
-						.onConflictDoNothing({ target: [svWebsiteSnapshots.projectId, svWebsiteSnapshots.contentHash] });
+					await withOrganizationTransaction(db, auth.tenantId, async (tx) => {
+						await tx
+							.insert(svWebsiteSnapshots)
+							.values({
+								id: collection.snapshot.id,
+								organizationId: auth.tenantId,
+								projectId: parsed.data.projectId,
+								website: collection.snapshot.url,
+								contentHash: collection.snapshot.contentHash,
+								capturedAt: new Date(collection.snapshot.capturedAt),
+								snapshot: collection.snapshot,
+								immutable: true,
+							})
+							.onConflictDoNothing({ target: [svWebsiteSnapshots.projectId, svWebsiteSnapshots.contentHash] });
+					});
 					return Response.json(
 						{
 							snapshot: {

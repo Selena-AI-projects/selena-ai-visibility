@@ -1,0 +1,173 @@
+name: First live measurement order
+
+# The chain a measurement hangs off — scenarios, configuration lock, quote,
+# order, recorded payment — is walked by
+# packages/lib/scripts/selena-first-live-order.ts. The walk needs an API key,
+# and a key belongs in a secret rather than in a working session's environment,
+# so it runs here rather than from a laptop or an agent container.
+#
+# Nothing in this workflow contacts a measurement provider or spends a cent on
+# one: it stops at the order and its zero-priced test payment. Issuing run
+# permits and queueing them stay in the admin desk, where a person does them.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: "discover: list projects and question families · propose: create the questions · build: lock, quote, order, test payment"
+        required: true
+        default: discover
+        type: choice
+        options:
+          - discover
+          - propose
+          - build
+      confirm:
+        description: "Write. Without it, propose and build print what they would do and create nothing"
+        required: false
+        default: false
+        type: boolean
+      project_id:
+        description: "Project the order belongs to. Required by build"
+        required: false
+        type: string
+      family_id:
+        description: "Question family. Required by propose and build; discover lists a family's questions when given one"
+        required: false
+        type: string
+      read_path:
+        description: "discover only: one more path under /api/v1/selena to read, e.g. /profiles?projectId=…"
+        required: false
+        type: string
+      scenario_ids:
+        description: "Required by build: the approved scenario ids, one per line"
+        required: false
+        type: string
+      questions_file:
+        description: "Required by propose: file of questions, one per line"
+        required: false
+        default: docs/selena-visibility/first-live-questions.txt
+        type: string
+      max_runs:
+        description: "Refuse a question set whose answers would exceed this count"
+        required: false
+        default: "30"
+        type: string
+      api_base:
+        description: "Which deployment to talk to"
+        required: false
+        default: https://staging.selenasystems.com
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  order:
+    name: ${{ inputs.phase }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      SELENA_API_BASE: ${{ inputs.api_base }}
+      SELENA_API_KEY: ${{ secrets.SELENA_API_KEY }}
+      SELENA_PROJECT_ID: ${{ inputs.project_id }}
+      SELENA_FAMILY_ID: ${{ inputs.family_id }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Refuse without a key
+        run: |
+          if [ -z "$SELENA_API_KEY" ]; then
+            {
+              echo "### Ключа нет"
+              echo ""
+              echo "Добавьте секрет \`SELENA_API_KEY\` в Settings → Secrets and variables → Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      # Read-only, and the only step that can run before anyone knows an id:
+      # the ids the other two phases need are printed by this one.
+      - name: List projects and question families
+        if: inputs.phase == 'discover'
+        env:
+          READ_PATH: ${{ inputs.read_path }}
+        run: |
+          set -o pipefail
+          base="${SELENA_API_BASE%/}"
+          echo "## Проекты" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          curl -sS --fail-with-body -H "authorization: Bearer $SELENA_API_KEY" \
+            "$base/api/v1/selena/projects" | jq . | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$SELENA_FAMILY_ID" ]; then
+            echo "## Вопросы семейства $SELENA_FAMILY_ID" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            curl -sS --fail-with-body -H "authorization: Bearer $SELENA_API_KEY" \
+              "$base/api/v1/selena/scenarios?familyId=$SELENA_FAMILY_ID" | jq . | tee -a "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # Whether a project can be ordered at all is decided by records that
+          # have their own endpoints — a confirmed profile, its questions — and
+          # reading one should not need a new workflow each time.
+          if [ -n "$READ_PATH" ]; then
+            echo "## $READ_PATH" >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            curl -sS --fail-with-body -H "authorization: Bearer $SELENA_API_KEY" \
+              "$base/api/v1/selena/${READ_PATH#/}" | jq . | tee -a "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Setup pnpm
+        if: inputs.phase != 'discover'
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        if: inputs.phase != 'discover'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        if: inputs.phase != 'discover'
+        run: pnpm install --frozen-lockfile
+
+      # Inputs reach the shell as environment variables rather than through
+      # expression interpolation: a dispatch input is text someone typed, and
+      # interpolating it would let a quotation mark rewrite the command.
+      - name: Propose the questions
+        if: inputs.phase == 'propose'
+        env:
+          QUESTIONS_FILE: ${{ inputs.questions_file }}
+          MAX_RUNS: ${{ inputs.max_runs }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          if [ "$CONFIRM" = "true" ]; then set -- --confirm; fi
+          pnpm -C packages/lib exec tsx scripts/selena-first-live-order.ts \
+            propose --questions "$GITHUB_WORKSPACE/$QUESTIONS_FILE" \
+            --max-runs "$MAX_RUNS" "$@" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The lock freezes these ids and permit creation never rechecks their
+      # status, so the reviewer's approval has to have happened before this
+      # runs. The script refuses any id that is not APPROVED, which is where
+      # that is caught.
+      - name: Build the order
+        if: inputs.phase == 'build'
+        env:
+          # The commit the order is locked to. This workflow can only be
+          # dispatched from the default branch, which is the branch the staging
+          # services deploy, so the two agree by construction.
+          SELENA_ENGINE_SHA: ${{ github.sha }}
+          SCENARIO_IDS: ${{ inputs.scenario_ids }}
+          MAX_RUNS: ${{ inputs.max_runs }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          printf '%s\n' "$SCENARIO_IDS" > "$RUNNER_TEMP/scenario-ids.txt"
+          if [ "$CONFIRM" = "true" ]; then set -- --confirm; fi
+          pnpm -C packages/lib exec tsx scripts/selena-first-live-order.ts \
+            build --scenarios "$RUNNER_TEMP/scenario-ids.txt" \
+            --max-runs "$MAX_RUNS" "$@" | tee -a "$GITHUB_STEP_SUMMARY"

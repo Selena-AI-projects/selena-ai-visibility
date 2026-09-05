@@ -1,8 +1,10 @@
 import { IconArrowUpRight, IconMapPin } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
 import type { HorecaLocalFirstReadModel, HorecaModuleReadModel } from "@workspace/selena-visibility-contracts";
 import {
 	HORECA_PREVIEW_AREAS,
 	HORECA_PREVIEW_MODULE_COPY,
+	type HorecaEvidenceDetail,
 	type HorecaPreviewLocale,
 	type HorecaPreviewState,
 	localizedHorecaText,
@@ -11,6 +13,14 @@ import {
 type Props = {
 	locale: HorecaPreviewLocale;
 	model: HorecaLocalFirstReadModel;
+	sourceOnlyPreview?: boolean;
+	evidenceDetail?: HorecaEvidenceDetail | null;
+	evidenceDetailHref?: (evidenceId: string) => string;
+	workspaceToolSearch?: {
+		locale: HorecaPreviewLocale;
+		project?: string;
+		evidence?: string;
+	};
 };
 
 const statusCopy: Record<HorecaPreviewState, { en: string; ru: string }> = {
@@ -23,16 +33,72 @@ const statusCopy: Record<HorecaPreviewState, { en: string; ru: string }> = {
 	BLOCKED: { en: "Blocked", ru: "Заблокировано" },
 };
 
+type LocalizedCopy = { en: string; ru: string };
+
+const projectPhaseCopy: Record<HorecaLocalFirstReadModel["project"]["phase"], LocalizedCopy> = {
+	ACTIVE: { en: "Active", ru: "Действующий проект" },
+	PRE_OPENING: { en: "Pre-opening", ru: "До открытия" },
+	UNKNOWN: { en: "Not confirmed", ru: "Не подтверждено" },
+};
+
+const evidenceAccessCopy: Record<HorecaLocalFirstReadModel["evidence"][number]["accessClass"], LocalizedCopy> = {
+	PUBLIC: { en: "Public source", ru: "Публичный источник" },
+	UPLOADED: { en: "Uploaded source", ru: "Загруженный источник" },
+	CONNECTED: { en: "Connected source", ru: "Подключённый источник" },
+	DERIVED: { en: "Derived evidence", ru: "Производное доказательство" },
+};
+
+const findingStatusCopy: Record<HorecaLocalFirstReadModel["findings"][number]["status"], LocalizedCopy> = {
+	OBSERVED: { en: "Observed", ru: "Наблюдается" },
+	CONFLICT: { en: "Conflict", ru: "Конфликт" },
+	UNKNOWN: { en: "Not confirmed", ru: "Не подтверждено" },
+	BLOCKED: { en: "Blocked", ru: "Заблокировано" },
+};
+
+const actionPriorityCopy: Record<HorecaLocalFirstReadModel["actions"][number]["priority"], LocalizedCopy> = {
+	NOW: { en: "Now", ru: "Сейчас" },
+	NEXT: { en: "Next", ru: "Далее" },
+	LATER: { en: "Later", ru: "Позже" },
+};
+
+const actionStatusCopy: Record<HorecaLocalFirstReadModel["actions"][number]["status"], LocalizedCopy> = {
+	PROPOSED: { en: "Proposed", ru: "Предложено" },
+	READY: { en: "Ready", ru: "Готово" },
+	IN_PROGRESS: { en: "In progress", ru: "В работе" },
+	DONE: { en: "Done", ru: "Выполнено" },
+	BLOCKED: { en: "Blocked", ru: "Заблокировано" },
+};
+
+const outcomeLevelCopy: Record<HorecaLocalFirstReadModel["outcomes"][number]["level"], LocalizedCopy> = {
+	READINESS: { en: "Readiness", ru: "Готовность" },
+	OBSERVED: { en: "Observed outcome", ru: "Наблюдаемый результат" },
+	ASSISTED: { en: "Assisted outcome", ru: "Ассистированный результат" },
+	ATTRIBUTED: { en: "Attributed outcome", ru: "Атрибутированный результат" },
+};
+
+const outcomeStatusCopy: Record<HorecaLocalFirstReadModel["outcomes"][number]["status"], LocalizedCopy> = {
+	MEASURED: { en: "Measured", ru: "Измерено" },
+	UNKNOWN: { en: "Not measured", ru: "Не измерено" },
+	BLOCKED: { en: "Blocked", ru: "Заблокировано" },
+};
+
 function tr(locale: HorecaPreviewLocale, en: string, ru: string): string {
 	return locale === "ru" ? ru : en;
 }
 
-function plainStatus(value: string): string {
-	return value.replaceAll("_", " ").toLocaleLowerCase();
-}
-
 function summaryCopy(module: HorecaModuleReadModel, locale: HorecaPreviewLocale): string {
-	if (module.summary.kind === "UNKNOWN") return module.summary.reason;
+	if (module.summary.kind === "UNKNOWN") {
+		if (module.evidenceIds.length > 0) {
+			return tr(
+				locale,
+				"Accepted linked evidence is available; no aggregate measurement has passed the read-model gate.",
+				"Принятые связанные доказательства доступны; агрегированный замер ещё не прошёл проверку модели чтения.",
+			);
+		}
+		return locale === "ru"
+			? localizedHorecaText(locale, HORECA_PREVIEW_MODULE_COPY[module.moduleId].summary)
+			: module.summary.reason;
+	}
 	return tr(
 		locale,
 		`Observed in ${module.summary.numerator} of ${module.summary.denominator} accepted checks; ${module.summary.invalidCount} excluded. Captured ${new Date(module.summary.capturedAt).toLocaleDateString("en-GB")}.`,
@@ -41,10 +107,10 @@ function summaryCopy(module: HorecaModuleReadModel, locale: HorecaPreviewLocale)
 }
 
 function stateTone(state: HorecaPreviewState): string {
-	if (state === "ACTIVE") return "border-[#b7d4bf] bg-[#edf7ef] text-[#285f3e]";
-	if (state === "PARTIAL" || state === "PILOT") return "border-[#dfc09e] bg-[#fff7ed] text-[#7a4b24]";
-	if (state === "BLOCKED") return "border-[#e3bbb5] bg-[#fff1ef] text-[#7c3029]";
-	return "border-[#d9cfc2] bg-[#fffdf8] text-[#6e6258]";
+	if (state === "ACTIVE") return "selena-state--active";
+	if (state === "PARTIAL" || state === "PILOT") return "selena-state--partial";
+	if (state === "BLOCKED") return "selena-state--blocked";
+	return "selena-state--quiet";
 }
 
 function ModuleRow({
@@ -59,25 +125,23 @@ function ModuleRow({
 	const copy = HORECA_PREVIEW_MODULE_COPY[module.moduleId];
 	const linkedEvidence = evidence.filter((item) => module.evidenceIds.includes(item.id));
 	return (
-		<li className="grid gap-3 border-t border-[#e6ddd1] py-5 first:border-t-0 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(16rem,1.3fr)] sm:items-start">
-			<div className="flex items-center justify-between gap-3 sm:block">
-				<h3 className="font-semibold text-[#181614]">
+		<li className="selena-record grid gap-3 sm:grid-cols-[minmax(10rem,0.7fr)_minmax(16rem,1.3fr)] sm:items-start">
+			<div className="flex items-baseline justify-between gap-3 sm:block">
+				<h3 className="selena-record-label">
 					{locale === "en" ? module.label : localizedHorecaText(locale, copy.label)}
 				</h3>
-				<span
-					className={`inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[0.6875rem] font-bold tracking-[0.08em] ${stateTone(module.state)}`}
-				>
+				<span className={`selena-state sm:mt-3 sm:block ${stateTone(module.state)}`}>
 					{localizedHorecaText(locale, statusCopy[module.state])}
 				</span>
 			</div>
 			<div>
-				<p className="text-sm font-medium leading-6 text-[#181614]">{summaryCopy(module, locale)}</p>
+				<p className="selena-record-statement">{summaryCopy(module, locale)}</p>
 				{module.configurationLockReference && (
 					<p className="mt-1 text-xs font-semibold text-[#8f5c34]">
 						{tr(locale, "Measurement settings saved for comparison.", "Настройки замера сохранены для сравнения.")}
 					</p>
 				)}
-				<ul className="mt-1 space-y-1 text-sm leading-6 text-[#6e6258]">
+				<ul className="selena-record-note mt-2 space-y-1">
 					{(module.limitations.length > 0 ? module.limitations : [localizedHorecaText(locale, copy.limitation)]).map(
 						(limitation) => (
 							<li key={limitation}>{limitation}</li>
@@ -85,7 +149,7 @@ function ModuleRow({
 					)}
 				</ul>
 				{linkedEvidence.length > 0 && (
-					<p className="mt-2 text-xs leading-5 text-[#6e6258]">
+					<p className="mt-2 text-xs leading-5 text-[#574d45]">
 						{tr(locale, "Accepted sources", "Принятые источники")}:{" "}
 						{linkedEvidence.map((item, index) => (
 							<span key={item.id}>
@@ -102,7 +166,14 @@ function ModuleRow({
 	);
 }
 
-export function SelenaHorecaLocalFirst({ locale, model }: Props) {
+export function SelenaHorecaLocalFirst({
+	locale,
+	model,
+	sourceOnlyPreview = true,
+	evidenceDetail = null,
+	evidenceDetailHref,
+	workspaceToolSearch,
+}: Props) {
 	const modules = model.modules.filter((module) => module.state !== "HIDDEN");
 	const socialHidden = model.modules.some((module) => module.moduleId === "SOCIAL" && module.state === "HIDDEN");
 	const travelHidden = model.modules.some((module) => module.moduleId === "TRAVEL" && module.state === "HIDDEN");
@@ -128,80 +199,115 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 	);
 	const evidenceModules = modules.filter((module) => ["REPUTATION", "SOCIAL", "TRAVEL"].includes(module.moduleId));
 	const outcomes = modules.filter((module) => module.moduleId === "OUTCOMES");
+	const measuredVisibilityCount = visibilityModules.filter((module) => module.summary.kind === "MEASURED_SHARE").length;
+	const readinessEvidenceCount = outcomeRecords.filter(
+		(outcome) => outcome.level === "READINESS" && outcome.status === "MEASURED",
+	).length;
+	const evidenceGapCount = findings.filter((finding) => finding.status !== "OBSERVED").length;
+	const actionBlockerCount = actions.filter((action) => action.status === "BLOCKED").length;
+	const notMeasured = tr(locale, "Not measured", "Не измерено");
+	const notAssessed = tr(locale, "Not assessed", "Не оценено");
 	const overviewSignals = [
 		{
-			label: tr(locale, "Project phase", "Этап проекта"),
-			value: plainStatus(model.project.phase),
-			detail: model.project.displayName,
-		},
-		{
-			label: tr(locale, "Visible areas", "Доступные направления"),
-			value: String(modules.length),
-			detail: tr(locale, "Independent views, never one combined score", "Отдельные разделы без единого балла"),
-		},
-		{
-			label: tr(locale, "Accepted sources", "Принятые источники"),
-			value: String(evidence.length),
-			detail: tr(locale, "Only linked source records are counted", "Учитываются только привязанные записи"),
-		},
-		{
-			label: tr(locale, "Recommended actions", "Рекомендованные действия"),
-			value: String(actions.length),
+			label: tr(locale, "Visibility coverage", "Охват видимости"),
+			value: measuredVisibilityCount === 0 ? notMeasured : String(measuredVisibilityCount),
 			detail: tr(
 				locale,
-				"Each action needs an owner and a check plan",
-				"У каждого действия есть владелец и план проверки",
+				"Measured surfaces; samples and denominators remain separate",
+				"Измеренные поверхности; выборки и знаменатели остаются раздельными",
 			),
 		},
 		{
-			label: tr(locale, "Tracked results", "Отслеживаемые результаты"),
-			value: String(outcomeRecords.filter((outcome) => outcome.status === "MEASURED").length),
-			detail: tr(locale, "No causal claim without connected proof", "Без доказательств причинность не заявляется"),
+			label: tr(locale, "Readiness evidence", "Доказательства готовности"),
+			value: outcomeRecords.length === 0 ? notMeasured : String(readinessEvidenceCount),
+			detail: tr(locale, "Readiness is not a visibility measurement", "Готовность не является замером видимости"),
+		},
+		{
+			label: tr(locale, "Competitor observations", "Наблюдения о конкурентах"),
+			value: competitors.length === 0 ? notAssessed : String(competitors.length),
+			detail: tr(locale, "Only evidence-linked reasons are counted", "Учитываются только причины с доказательствами"),
+		},
+		{
+			label: tr(locale, "Evidence gaps", "Пробелы в доказательствах"),
+			value: findings.length === 0 ? notAssessed : String(evidenceGapCount),
+			detail: tr(
+				locale,
+				"Unknown, conflicting or blocked findings",
+				"Неизвестные, конфликтующие или заблокированные выводы",
+			),
+		},
+		{
+			label: tr(locale, "Action blockers", "Блокеры действий"),
+			value: actions.length === 0 ? notAssessed : String(actionBlockerCount),
+			detail: tr(
+				locale,
+				"Actions that cannot proceed on current evidence",
+				"Действия, которые нельзя продолжить с текущими доказательствами",
+			),
 		},
 	];
 
 	return (
-		<div className="space-y-6">
-			<nav aria-label={tr(locale, "HoReCa workspace", "HoReCa кабинет")} className="overflow-x-auto">
-				<ul className="flex min-w-max gap-2 pb-1">
+		<div className="space-y-8">
+			<nav aria-label={tr(locale, "Workspace tools", "Инструменты кабинета")} className="selena-toolbar overflow-x-auto">
+				<p className="mb-3 text-xs font-bold tracking-[0.08em] text-[#574d45]">{tr(locale, "TOOLS", "ИНСТРУМЕНТЫ")}</p>
+				<ul className="flex min-w-max gap-7">
 					{HORECA_PREVIEW_AREAS.map((area) => (
 						<li key={area.id}>
-							<a
-								href={`#${area.id}`}
-								className="inline-flex min-h-11 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-4 text-sm font-semibold text-[#181614] outline-none transition-colors hover:border-[#b9825b] focus-visible:ring-2 focus-visible:ring-[#8f5c34] focus-visible:ring-offset-2"
-							>
-								{localizedHorecaText(locale, area.label)}
-							</a>
+							{workspaceToolSearch ? (
+								<Link
+									to="/app/selena-horeca"
+									search={workspaceToolSearch}
+									hash={area.id}
+									className="selena-tool-link outline-none"
+								>
+									{localizedHorecaText(locale, area.label)}
+								</Link>
+							) : (
+								<a href={`#${area.id}`} className="selena-tool-link outline-none">
+									{localizedHorecaText(locale, area.label)}
+								</a>
+							)}
 						</li>
 					))}
 				</ul>
 			</nav>
 
-			<section id="overview" className="selena-section scroll-mt-5" aria-labelledby="horeca-overview-title">
+			<section
+				id="overview"
+				className="selena-section selena-section--anchor scroll-mt-5"
+				aria-labelledby="horeca-overview-title"
+			>
 				<div className="flex flex-wrap items-start justify-between gap-4">
 					<div className="max-w-3xl">
-						<h1 id="horeca-overview-title" className="selena-heading text-3xl text-[#181614] sm:text-4xl">
+						<h1 id="horeca-overview-title" className="selena-heading text-3xl sm:text-4xl">
 							{tr(locale, "HoReCa Local-first decision view", "HoReCa Local-first для принятия решений")}
 						</h1>
-						<p className="mt-3 text-sm leading-6 text-[#6e6258] sm:text-base">
+						<p className="selena-anchor-lede selena-prose mt-4">
 							{tr(
 								locale,
 								"A business decision view, not a single score. Each signal stays independent; evidence appears only after it is accepted and linked. No measurement starts from this page.",
 								"Картина для бизнес-решений, а не единый балл. Каждый сигнал остаётся независимым; доказательства появляются только после приёмки и привязки. С этой страницы замеры не запускаются.",
 							)}
 						</p>
+						<p className="selena-anchor-meta mt-2 text-xs font-semibold">
+							{tr(locale, "Project", "Проект")}: {model.project.displayName} · {tr(locale, "Phase", "Этап")}:{" "}
+							{localizedHorecaText(locale, projectPhaseCopy[model.project.phase])}
+						</p>
 					</div>
-					<span className="inline-flex min-h-9 items-center rounded-full border border-[#d9cfc2] bg-[#fffdf8] px-3 text-xs font-bold tracking-[0.08em] text-[#6e6258]">
-						{tr(locale, "READ-ONLY PREVIEW", "ПРЕВЬЮ · ТОЛЬКО ЧТЕНИЕ")}
+					<span className="selena-status-chip text-xs font-bold tracking-[0.08em]">
+						{sourceOnlyPreview
+							? tr(locale, "SOURCE-ONLY PREVIEW", "SOURCE-ONLY ПРЕВЬЮ")
+							: tr(locale, "READ-ONLY EVIDENCE", "ДОКАЗАТЕЛЬСТВА · ТОЛЬКО ЧТЕНИЕ")}
 					</span>
 				</div>
 
-				<dl className="mt-7 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-5">
+				<dl className="mt-9 grid gap-x-10 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
 					{overviewSignals.map((signal) => (
-						<div key={signal.label} className="border-t border-[#e6ddd1] py-4">
-							<dt className="font-semibold text-sm text-[#181614]">{signal.label}</dt>
-							<dd className="mt-2 text-sm font-semibold text-[#8f5c34]">{signal.value}</dd>
-							<dd className="mt-1 text-xs leading-5 text-[#6e6258]">{signal.detail}</dd>
+						<div key={signal.label} className="selena-signal">
+							<dt className="selena-signal-label">{signal.label}</dt>
+							<dd className="selena-signal-value">{signal.value}</dd>
+							<dd className="selena-signal-detail">{signal.detail}</dd>
 						</div>
 					))}
 				</dl>
@@ -214,7 +320,7 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 						<h2 id="horeca-visibility-title" className="selena-heading text-2xl text-[#181614]">
 							{tr(locale, "Visibility", "Видимость")}
 						</h2>
-						<p className="mt-2 text-sm leading-6 text-[#6e6258]">
+						<p className="selena-prose mt-3 text-[#574d45]">
 							{tr(
 								locale,
 								"AI answers, search, Maps and Local AI keep separate samples, comparison settings and dates.",
@@ -234,11 +340,11 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 				<h2 id="horeca-evidence-title" className="selena-heading text-2xl text-[#181614]">
 					{tr(locale, "Evidence", "Доказательства")}
 				</h2>
-				<p className="mt-2 max-w-3xl text-sm leading-6 text-[#6e6258]">
+				<p className="selena-prose mt-3 text-[#574d45]">
 					{tr(
 						locale,
-						"Business facts, website and menu, reviews, social sources and travel sources remain separate records. A configured source is never shown as collected proof.",
-						"Данные о бизнесе, сайт и меню, отзывы, социальные и туристические источники остаются отдельными записями. Настроенный источник не показывается как собранное доказательство.",
+						"Business facts, website and menu, reviews, and approved connected sources remain separate records. A configured source is never shown as collected proof.",
+						"Данные о бизнесе, сайт и меню, отзывы и разрешённые подключённые источники остаются отдельными записями. Настроенный источник не показывается как собранное доказательство.",
 					)}
 				</p>
 				<ul className="mt-4">
@@ -247,14 +353,25 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 					))}
 				</ul>
 				{evidence.length > 0 ? (
-					<ul className="mt-5 divide-y divide-[#e6ddd1] border-y border-[#e6ddd1]">
+					<ul className="mt-5 divide-y divide-[#dccfbe] border-y border-[#dccfbe]">
 						{evidence.map((item) => (
 							<li id={`evidence-${item.id}`} key={item.id} className="scroll-mt-5 py-4">
-								<p className="text-sm font-semibold text-[#181614]">{item.sourceLabel}</p>
-								<p className="mt-1 text-xs leading-5 text-[#6e6258]">
+								<p className="text-sm font-semibold text-[#181614]">
+									{evidenceDetailHref ? (
+										<a
+											href={evidenceDetailHref(item.id)}
+											className="inline-flex min-h-11 items-center underline decoration-[#b9825b] underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-[#8f5c34]"
+										>
+											{item.sourceLabel}
+										</a>
+									) : (
+										item.sourceLabel
+									)}
+								</p>
+								<p className="mt-1 text-xs leading-5 text-[#574d45]">
 									{tr(locale, "Captured", "Зафиксировано")}{" "}
 									{new Date(item.capturedAt).toLocaleDateString(locale === "ru" ? "ru-RU" : "en-GB")} ·{" "}
-									{plainStatus(item.accessClass)}
+									{localizedHorecaText(locale, evidenceAccessCopy[item.accessClass])}
 								</p>
 							</li>
 						))}
@@ -264,12 +381,47 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 						{tr(locale, "No accepted sources are connected.", "Принятые источники не подключены.")}
 					</p>
 				)}
+				{evidenceDetail && (
+					<aside
+						className="mt-5 border-l-2 border-[#b9825b] bg-[#fffdf8] px-4 py-3"
+						aria-labelledby="horeca-evidence-detail-title"
+					>
+						<h3 id="horeca-evidence-detail-title" className="text-sm font-semibold text-[#181614]">
+							{tr(locale, "Evidence detail", "Детали доказательства")}
+						</h3>
+						<p className="mt-2 text-sm font-medium text-[#181614]">{evidenceDetail.sourceLabel}</p>
+						<dl className="mt-2 grid gap-2 text-xs leading-5 text-[#574d45] sm:grid-cols-2">
+							<div>
+								<dt className="font-semibold text-[#181614]">{tr(locale, "Surface", "Поверхность")}</dt>
+								<dd>{evidenceDetail.surfaceLabel}</dd>
+							</div>
+							<div>
+								<dt className="font-semibold text-[#181614]">{tr(locale, "Dataset version", "Версия набора")}</dt>
+								<dd>{evidenceDetail.datasetVersion}</dd>
+							</div>
+							<div>
+								<dt className="font-semibold text-[#181614]">{tr(locale, "Reference", "Ссылка")}</dt>
+								<dd>{evidenceDetail.reference}</dd>
+							</div>
+							<div>
+								<dt className="font-semibold text-[#181614]">{tr(locale, "Snapshot reference", "Ссылка на снимок")}</dt>
+								<dd>{evidenceDetail.snapshotReference}</dd>
+							</div>
+							<div>
+								<dt className="font-semibold text-[#181614]">{tr(locale, "Access", "Доступ")}</dt>
+								<dd>{tr(locale, "Normalized detail only", "Только нормализованные детали")}</dd>
+							</div>
+						</dl>
+					</aside>
+				)}
 				{findings.length > 0 && (
 					<ul className="mt-5 space-y-3">
 						{findings.map((finding) => (
 							<li key={finding.id} className="border-l-2 border-[#b9825b] pl-4">
 								<p className="text-sm font-medium leading-6 text-[#181614]">{finding.statement}</p>
-								<p className="text-xs text-[#6e6258]">{plainStatus(finding.status)}</p>
+								<p className="text-xs text-[#574d45]">
+									{localizedHorecaText(locale, findingStatusCopy[finding.status])}
+								</p>
 							</li>
 						))}
 					</ul>
@@ -283,9 +435,9 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 				{competitors.length > 0 ? (
 					<ul className="mt-4 space-y-3">
 						{competitors.map((competitor) => (
-							<li key={competitor.id} className="border-t border-[#e6ddd1] pt-4">
+							<li key={competitor.id} className="border-t border-[#dccfbe] pt-4">
 								<p className="text-sm font-semibold text-[#181614]">{competitor.competitorLabel}</p>
-								<p className="mt-1 text-sm leading-6 text-[#6e6258]">{competitor.reason}</p>
+								<p className="mt-1 text-sm leading-6 text-[#574d45]">{competitor.reason}</p>
 							</li>
 						))}
 					</ul>
@@ -303,18 +455,19 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 				{actions.length > 0 ? (
 					<ul className="mt-4 space-y-3">
 						{actions.map((action) => (
-							<li key={action.id} className="border-t border-[#e6ddd1] pt-4">
+							<li key={action.id} className="border-t border-[#dccfbe] pt-4">
 								<p className="text-sm font-semibold text-[#181614]">{action.action}</p>
-								<p className="mt-1 text-sm leading-6 text-[#6e6258]">
+								<p className="mt-1 text-sm leading-6 text-[#574d45]">
 									{tr(locale, "Owner", "Владелец")}: {action.owner} · {tr(locale, "Priority", "Приоритет")}:{" "}
-									{plainStatus(action.priority)}
+									{localizedHorecaText(locale, actionPriorityCopy[action.priority])} · {tr(locale, "Status", "Статус")}:{" "}
+									{localizedHorecaText(locale, actionStatusCopy[action.status])}
 								</p>
-								<p className="mt-1 text-xs leading-5 text-[#6e6258]">{action.verificationPlan}</p>
+								<p className="mt-1 text-xs leading-5 text-[#574d45]">{action.verificationPlan}</p>
 							</li>
 						))}
 					</ul>
 				) : (
-					<p className="mt-3 max-w-3xl text-sm leading-6 text-[#6e6258]">
+					<p className="selena-prose mt-3 text-[#574d45]">
 						{tr(
 							locale,
 							"No recommendation is published until it has accepted sources, an owner, a priority and a verification plan.",
@@ -336,10 +489,11 @@ export function SelenaHorecaLocalFirst({ locale, model }: Props) {
 				{outcomeRecords.length > 0 && (
 					<ul className="mt-4 space-y-3">
 						{outcomeRecords.map((outcome) => (
-							<li key={outcome.id} className="border-t border-[#e6ddd1] pt-4">
+							<li key={outcome.id} className="border-t border-[#dccfbe] pt-4">
 								<p className="text-sm font-medium leading-6 text-[#181614]">{outcome.statement}</p>
-								<p className="mt-1 text-xs text-[#6e6258]">
-									{plainStatus(outcome.level)} · {plainStatus(outcome.status)}
+								<p className="mt-1 text-xs text-[#574d45]">
+									{localizedHorecaText(locale, outcomeLevelCopy[outcome.level])} ·{" "}
+									{localizedHorecaText(locale, outcomeStatusCopy[outcome.status])}
 								</p>
 							</li>
 						))}

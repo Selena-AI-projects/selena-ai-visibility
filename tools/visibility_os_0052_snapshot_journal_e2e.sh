@@ -16,6 +16,46 @@ bash "$repo_root/tools/visibility_os_gate12_e2e.sh" "$compose_file" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0051_visibility_os_provider_evidence_provenance.sql" >/dev/null
 "${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0052_provider_dataset_snapshot_journal.sql" >/dev/null
 
+"${psql[@]}" <<'SQL' >/dev/null
+DO $$
+DECLARE
+	function_definition text;
+	v_project_id uuid;
+	v_blocked boolean := false;
+BEGIN
+	SELECT pg_get_functiondef('sv_enforce_provider_dataset_snapshot_event_insert()'::regprocedure)
+	INTO function_definition;
+	function_definition := replace(
+		function_definition,
+		'IF NEW."phase" NOT IN (''TRIGGERED'', ''RESUMED'') THEN',
+		'IF NEW."phase" <> ''TRIGGERED'' THEN'
+	);
+	IF function_definition NOT LIKE '%IF NEW."phase" <> ''TRIGGERED'' THEN%' THEN
+		RAISE EXCEPTION '0055 historical trigger fixture was not installed';
+	END IF;
+	EXECUTE function_definition;
+
+	SELECT id INTO v_project_id
+	FROM sv_projects
+	WHERE organization_id = 'gate12-release' AND name = 'Gate 12 Project';
+	BEGIN
+		INSERT INTO sv_provider_dataset_snapshot_events (
+			organization_id, project_id, source, provider_dataset_id, snapshot_id,
+			phase, observed_at, event_hash
+		) VALUES (
+			'gate12-release', v_project_id, 'YOUTUBE_VIDEOS', 'gd_youtube_rehearsal',
+			'initial-resume-reconciliation', 'RESUMED', '2026-09-01T00:30:00Z', 'sha256:' || repeat('0', 64)
+		);
+	EXCEPTION WHEN raise_exception THEN
+		IF SQLERRM = 'PROVIDER_DATASET_SNAPSHOT_INITIAL_PHASE_INVALID' THEN v_blocked := true; ELSE RAISE; END IF;
+	END;
+	IF NOT v_blocked THEN RAISE EXCEPTION '0055 historical trigger accepted initial RESUMED'; END IF;
+END;
+$$;
+SQL
+
+"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/0055_provider_snapshot_resume_reconciliation.sql" >/dev/null
+
 DATABASE_URL="${DATABASE_URL:?DATABASE_URL_REQUIRED}" "$repo_root/node_modules/.bin/tsx" \
 	"$repo_root/packages/lib/scripts/brightdata-snapshot-journal-rehearsal.ts" >/dev/null
 
@@ -32,6 +72,14 @@ BEGIN
 	IF v_project_id IS NULL THEN
 		RAISE EXCEPTION '0052 primary project missing';
 	END IF;
+
+	INSERT INTO sv_provider_dataset_snapshot_events (
+		organization_id, project_id, source, provider_dataset_id, snapshot_id,
+		phase, observed_at, event_hash
+	) VALUES (
+		'gate12-release', v_project_id, 'YOUTUBE_VIDEOS', 'gd_youtube_rehearsal',
+		'initial-resume-reconciliation', 'RESUMED', '2026-09-01T00:30:00Z', 'sha256:' || repeat('0', 64)
+	);
 
 	IF (SELECT count(*) FROM sv_provider_dataset_snapshot_events
 		WHERE project_id = v_project_id AND snapshot_id = 'brightdata-journal-adapter-snapshot') <> 4 THEN
@@ -158,7 +206,7 @@ DECLARE
 	v_blocked boolean := false;
 BEGIN
 	SELECT count(*) INTO v_visible FROM sv_provider_dataset_snapshot_events;
-	IF v_visible <> 10 THEN RAISE EXCEPTION '0052 tenant A visibility count: %', v_visible; END IF;
+	IF v_visible <> 11 THEN RAISE EXCEPTION '0052 tenant A visibility count: %', v_visible; END IF;
 	BEGIN
 		INSERT INTO sv_provider_dataset_snapshot_events (
 			organization_id, project_id, source, provider_dataset_id, snapshot_id,

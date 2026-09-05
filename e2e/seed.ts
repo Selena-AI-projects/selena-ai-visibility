@@ -9,6 +9,7 @@
  *
  * Usage: tsx seed.ts
  */
+import { createHash } from "node:crypto";
 import pg from "pg";
 import {
   COMPETITOR_IDS,
@@ -19,6 +20,7 @@ import {
   NIKE_PROMPT_IDS,
   PROMPT_IDS,
   REPORT_IDS,
+  TEST_API_KEY,
   TEST_BRAND_ID,
   TEST_BRAND_NAME,
   TEST_BRAND_WEBSITE,
@@ -49,6 +51,7 @@ async function seed() {
     await client.query("DELETE FROM prompts");
     await client.query("DELETE FROM competitors");
     await client.query("DELETE FROM reports");
+    await client.query("DELETE FROM sv_api_keys");
     await client.query("DELETE FROM brands");
 
     // -----------------------------------------------------------------------
@@ -65,6 +68,11 @@ async function seed() {
       `INSERT INTO brands (id, organization_id, name, website, enabled, onboarded, created_at, updated_at)
        VALUES ($1, $1, $2, $3, true, true, NOW(), NOW())`,
       [TEST_BRAND_ID, TEST_BRAND_NAME, TEST_BRAND_WEBSITE]
+    );
+    await client.query(
+      `INSERT INTO sv_api_keys (organization_id, name, key_hash, permissions, created_by)
+       VALUES ($1, 'E2E report API key', $2, ARRAY['client:read', 'client:write'], 'e2e-seed')`,
+      [TEST_BRAND_ID, createHash("sha256").update(TEST_API_KEY).digest("hex")],
     );
     console.log("  Created brand:", TEST_BRAND_ID);
 
@@ -381,9 +389,9 @@ async function seed() {
     };
 
     await client.query(
-      `INSERT INTO reports (id, brand_name, brand_website, status, progress, raw_output, created_at, completed_at, updated_at)
-       VALUES ($1, $2, $3, 'completed', 100, $4, NOW(), NOW(), NOW())`,
-      [REPORT_IDS.completed, TEST_BRAND_NAME, TEST_BRAND_WEBSITE, JSON.stringify(completedReportRawOutput)],
+      `INSERT INTO reports (id, organization_id, brand_name, brand_website, status, progress, raw_output, created_at, completed_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'completed', 100, $5, NOW(), NOW(), NOW())`,
+      [REPORT_IDS.completed, TEST_BRAND_ID, TEST_BRAND_NAME, TEST_BRAND_WEBSITE, JSON.stringify(completedReportRawOutput)],
     );
 
     // Non-completed rows: exercise the status-only branch and list pagination.
@@ -393,9 +401,9 @@ async function seed() {
       [REPORT_IDS.failed, "failed", 20],
     ] as const) {
       await client.query(
-        `INSERT INTO reports (id, brand_name, brand_website, status, progress, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-        [id, TEST_BRAND_NAME, TEST_BRAND_WEBSITE, status, progress],
+        `INSERT INTO reports (id, organization_id, brand_name, brand_website, status, progress, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
+        [id, TEST_BRAND_ID, TEST_BRAND_NAME, TEST_BRAND_WEBSITE, status, progress],
       );
     }
     console.log("  Created 4 reports (1 completed, 1 pending, 1 processing, 1 failed)");

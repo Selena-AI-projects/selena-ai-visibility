@@ -94,9 +94,16 @@ export type SelenaMeasurementConfig = {
 	adapter: string;
 };
 
+const affirmativeEnvValues = new Set(["1", "true", "yes"]);
+
+/** Operator flags are fail-closed but tolerate whitespace from deployment UIs. */
+export function isAffirmativeEnvValue(value: string | undefined): boolean {
+	return value !== undefined && affirmativeEnvValues.has(value.trim());
+}
+
 export function measurementConfigFromEnv(env: Record<string, string | undefined>): SelenaMeasurementConfig {
 	return {
-		enabled: env.SELENA_MEASUREMENT_ENABLED === "true",
+		enabled: isAffirmativeEnvValue(env.SELENA_MEASUREMENT_ENABLED),
 		adapter: env.SELENA_MEASUREMENT_ADAPTER ?? "noop",
 	};
 }

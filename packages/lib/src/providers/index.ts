@@ -1,4 +1,5 @@
 import { PROVIDERS_DOCS_URL } from "@workspace/config/constants";
+import { executeLegacyProviderTransport } from "../run-policy/spend-gate";
 import { anthropicApi } from "./registry/anthropic-api";
 import { brightdata } from "./registry/brightdata";
 import { cloro } from "./registry/cloro";
@@ -26,7 +27,7 @@ export type {
 	TestResult,
 } from "./types";
 
-const providerMap: Record<string, Provider> = {
+const providerDefinitions: Record<string, Provider> = {
 	olostep,
 	brightdata,
 	oxylabs,
@@ -39,6 +40,22 @@ const providerMap: Record<string, Provider> = {
 	"openrouter-api": openrouterApi,
 	stub,
 };
+
+function withExecutionGate(provider: Provider): Provider {
+	const guarded: Provider = {
+		...provider,
+		run: (model, prompt, options) => executeLegacyProviderTransport(() => provider.run(model, prompt, options)),
+	};
+	const runStructuredResearch = provider.runStructuredResearch;
+	if (runStructuredResearch) {
+		guarded.runStructuredResearch = (options) => executeLegacyProviderTransport(() => runStructuredResearch(options));
+	}
+	return guarded;
+}
+
+const providerMap = Object.fromEntries(
+	Object.entries(providerDefinitions).map(([id, provider]) => [id, withExecutionGate(provider)]),
+) as Record<string, Provider>;
 
 export function getProvider(id: string): Provider {
 	const p = providerMap[id];

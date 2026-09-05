@@ -1,19 +1,38 @@
 import * as Sentry from "@sentry/node";
+import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { getDeployment } from "@workspace/deployment";
-import { PERPLEXITY_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
+import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
+import { runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
-import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
+import { isLegacyProviderExecutionEnabled, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
-import boss from "./boss";
+import type { PgBoss } from "pg-boss";
+import boss, { createRecurringSchedulerBoss } from "./boss";
 import { registerHandlers } from "./handlers";
-import { reconcileAnswerRetentionSchedule } from "./jobs/selena-answer-retention";
+import { reconcileAndStartRecurringSchedules } from "./recurring-schedules";
+import { isOwnerManagedPgBossRuntime } from "./runtime-boss-options";
 import { shutdownTelemetry } from "./telemetry";
+
+// A gate nobody reads is a gate nobody has. Say so before consuming a queue.
+reportUnknownSelenaEnv();
 
 if (process.env.SENTRY_DSN) {
 	Sentry.init({
 		dsn: process.env.SENTRY_DSN,
 		environment: process.env.ENVIRONMENT || "development",
 		tracesSampleRate: 1.0,
+	});
+}
+
+let recurringSchedulerBoss: PgBoss | undefined;
+
+function observeBossErrors(client: PgBoss, source: string): void {
+	client.on("error", (error) => {
+		console.error(`${source} error:`, error);
+		Sentry.withScope((scope) => {
+			scope.setTag("source", source);
+			Sentry.captureException(error);
+		});
 	});
 }
 
@@ -25,18 +44,17 @@ async function main() {
 
 	// Fail fast on misconfigured SCRAPE_TARGETS — surfaces unknown providers,
 	// missing API keys, and per-provider target errors before any job runs.
-	validateScrapeTargets(parseScrapeTargets(process.env.SCRAPE_TARGETS), getProvider);
-	console.log("SCRAPE_TARGETS validated");
+	const legacyProviderExecutionEnabled = isLegacyProviderExecutionEnabled();
+	if (legacyProviderExecutionEnabled) {
+		validateScrapeTargets(parseScrapeTargets(process.env.SCRAPE_TARGETS), getProvider);
+		console.log("SCRAPE_TARGETS validated");
+	} else {
+		console.log("Legacy provider execution disabled; skipped SCRAPE_TARGETS validation");
+	}
 
-	boss.on("error", (error) => {
-		console.error("pg-boss error:", error);
-		Sentry.withScope((scope) => {
-			scope.setTag("source", "pg-boss-internal");
-			Sentry.captureException(error);
-		});
-	});
+	observeBossErrors(boss, "pg-boss-internal");
 
-	// Start pg-boss (creates schema if needed)
+	// Start the processing client under the selected owner-managed or bootstrap lifecycle.
 	await boss.start();
 	console.log("pg-boss started");
 
@@ -74,14 +92,14 @@ async function main() {
 	// plus snapshot cancellation and the terminal database transaction.
 	await boss.createQueue("selena-measure", {
 		retryLimit: 0,
-		expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	});
 	// createQueue is idempotent but does not reconcile options on an existing
 	// pg-boss queue. Keep deployed upgrades from retaining the old 15-minute
 	// expiry after the Perplexity snapshot allowance changes.
 	await boss.updateQueue("selena-measure", {
 		retryLimit: 0,
-		expireInSeconds: PERPLEXITY_QUEUE_LEASE_SECONDS,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	});
 	await boss.createQueue("selena-answer-retention", {
 		retryLimit: 1,
@@ -98,20 +116,28 @@ async function main() {
 	}
 	console.log("Queues created");
 
-	if (isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED)) {
-		await boss.schedule("schedule-maintenance", "*/5 * * * *", { source: "scheduled" }, { tz: "UTC" });
-		console.log("Scheduled maintenance job (every 5 minutes)");
-	} else {
-		await boss.unschedule("schedule-maintenance");
-		console.log("Maintenance schedule disabled by SCHEDULE_MAINTENANCE_ENABLED=false");
-	}
-
-	if (process.env.DEPLOYMENT_MODE === "whitelabel") {
-		await boss.schedule("sync-auth0-memberships", "*/15 * * * *", { source: "scheduled" }, { tz: "UTC" });
-		console.log("Scheduled Auth0 membership sync (every 15 minutes)");
-	}
-
-	await reconcileAnswerRetentionSchedule(boss, process.env.SELENA_ANSWER_RETENTION_ENABLED);
+	recurringSchedulerBoss = await reconcileAndStartRecurringSchedules(
+		boss,
+		{
+			recurringEnabled: process.env.SELENA_RECURRING_JOBS_ENABLED,
+			legacyProviderExecutionEnabled,
+			maintenanceEnabled: isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED),
+			answerRetentionEnabled: process.env.SELENA_ANSWER_RETENTION_ENABLED,
+			deploymentMode: process.env.DEPLOYMENT_MODE,
+			ownerManaged: isOwnerManagedPgBossRuntime(runtimePgBossSchemaLifecycle()),
+		},
+		async () => {
+			const scheduler = createRecurringSchedulerBoss();
+			observeBossErrors(scheduler, "pg-boss-recurring");
+			await scheduler.start();
+			return scheduler;
+		},
+	);
+	console.log(
+		recurringSchedulerBoss
+			? "Recurring scheduler enabled after schedule reconciliation"
+			: "Recurring scheduler disabled; managed schedules removed",
+	);
 
 	// Register job handlers
 	await registerHandlers(boss);
@@ -128,6 +154,7 @@ main().catch(async (error) => {
 // Graceful shutdown
 process.on("SIGTERM", async () => {
 	console.log("Received SIGTERM, shutting down gracefully...");
+	if (recurringSchedulerBoss) await recurringSchedulerBoss.stop({ graceful: true, timeout: 30000 });
 	await boss.stop({ graceful: true, timeout: 30000 });
 	await Promise.all([Sentry.flush(2000), shutdownTelemetry()]);
 	console.log("Worker stopped");
@@ -136,6 +163,7 @@ process.on("SIGTERM", async () => {
 
 process.on("SIGINT", async () => {
 	console.log("Received SIGINT, shutting down gracefully...");
+	if (recurringSchedulerBoss) await recurringSchedulerBoss.stop({ graceful: true, timeout: 30000 });
 	await boss.stop({ graceful: true, timeout: 30000 });
 	await Promise.all([Sentry.flush(2000), shutdownTelemetry()]);
 	console.log("Worker stopped");

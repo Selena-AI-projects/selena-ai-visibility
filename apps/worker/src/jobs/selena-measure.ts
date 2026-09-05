@@ -1,8 +1,9 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
-import { isMaintenanceEnabled } from "@workspace/lib/run-policy";
+import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
+import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import { createNoopMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
 	assertDispatchModes,
@@ -134,7 +135,11 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 			store: repositories.runs,
 			adapters,
 			config,
-			cycleState: { globalEmergencyStop: process.env.SELENA_EMERGENCY_STOP === "true" },
+			// The cumulative ceiling for this scope, held before the permit is
+			// claimed. A scope nobody funded refuses, which is why the runbook
+			// funds `measure` before the first live order rather than after it.
+			spend: createMeasurementSpendMeter(db, job.data.organizationId),
+			cycleState: { globalEmergencyStop: isGlobalProviderStopEngaged(process.env) },
 		});
 		// A failure is already recorded as a terminal run; rethrowing would only
 		// buy a retry, and a retry cannot re-execute a permit that is spent.

@@ -1,6 +1,79 @@
 # Selena AI Visibility v1.3 — independent Codex audits
 
-Status: `PASS_SOURCE_ONLY_WITH_RUNTIME_GATES`.
+Status: `PASS_SOURCE_6C324622 / CI_PASS_AEBE3948 / HOSTED_0057_0058_NOT_RUN`.
+
+## Current independent overlay — 2026-09-02
+
+Reviewed implementation source:
+`6c3246222d18cab655c01136e7c524dfdc912b8c`; exact release base:
+`6d1e7c2a803b8d11053c88bd1996f8e3bc926565`.
+
+- Three non-overlapping implementation/review streams report residual
+  `P0=0 / P1=0 / P2=0` after the final project-binding proof.
+- `0051` converges four evidenced historical/release schema variants.
+  `0057` adds project identity, delivered-journal binding and Local Maps formal
+  evidence eligibility while rejecting legacy acceptance and the historical
+  canary. `0058` persists the provider boundary and bounded crash recovery.
+- `selena_app` remains non-owner/no-bypass with allowlisted metadata only. It
+  cannot read private payload/provider locators, mutate immutable canary state,
+  execute private reconciliation or forge formal acceptance.
+- Independent review found and closed a same-tenant cross-project replay gap:
+  new canary reservations are bound to organization+project; legacy projectless
+  reservations remain readable only as historical rows and fail closed before
+  persistence; audit details bind the project without private payload.
+- Observable PostgreSQL assertions prove a pre-0058 `NULL project_id` row
+  survives, a new projectless row is rejected and a cross-organization
+  project binding violates the composite FK. All assertions run against each
+  of the four variants.
+- Disposable results: variants, actual-role 0051, formal-evidence 0057 and
+  journal-boundary 0058 all pass with verified cleanup. Provider calls and cost
+  rows remain `0`; catalog digest is
+  `2ccfdc3a033d1f4d95d34b5ba567d0a6`.
+- Root results: lint `0 errors / 129 warnings / 12 infos`, typecheck `13/13`,
+  tests `16/16` (`lib 1138`, `web 445 + 4 skipped`, `worker 26`) and build
+  `16/16`. Focused project-binding tests pass `84/84`; auth poster/fallback
+  tests pass `2/2`. Local Node 22 differs from required CI Node 24.
+- Impeccable is `NOT_SUPPORTED` in this checkout because the workspace binary
+  is absent; it was not installed during acceptance.
+- Draft PR [#117](https://github.com/parkourcafe/selena-ai-visibility/pull/117)
+  is mergeable and clean at `aebe3948`. Build
+  [33624631226](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631226),
+  E2E/Scheduling
+  [33624631358](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631358),
+  License [33624631367](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631367),
+  Smoke [33624631241](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631241)
+  and CLA [33624631429](https://github.com/parkourcafe/selena-ai-visibility/actions/runs/33624631429)
+  passed. No shared staging mutation, deployment, provider call, production
+  action, billing or recurring job was performed for this overlay.
+
+Current independent conclusion: `PASS_SOURCE_CI`; `HOLD_STAGING_0057_0058`
+until fresh backup/isolated restore and separately
+authorized bounded apply; `NO_GO_PRODUCTION`.
+
+## Historical exact-head closure — 2026-09-01
+
+Accepted runtime/source HEAD:
+`2d023470a618c6606e7960ee4dd1b4523dcbdcfe`.
+
+The three independent streams and their cross-audits found no open P0/P1 in
+the material changes through `8cc0b87b`. The only later source changes were:
+
+- `d4ac606a`: opt the intentionally recurring, stub-only disposable CI worker
+  into the exact recurring gate;
+- `2d023470`: replace a real 5 ms timer in one Bright Data timeout test with
+  deterministic fake time.
+
+Runtime controls, provider timeout, retry cardinality and cost policy were not
+changed by either commit. Exact-head Build, unit, E2E, scheduling, license,
+smoke and CLA checks all passed. Hosted staging then passed backup/restore,
+0051/non-owner RLS, GUC, rollback, API tenant isolation, replay/concurrency/
+idempotency, public browser, web and worker lifecycle gates. Provider calls
+and new cost events remained zero.
+
+Open items are owner/access gates, not unresolved P0/P1 source findings:
+any future paid canary plus migration `0052` authorization. The earlier
+Postgres administration and authenticated-browser gates are closed by runtime
+receipts; no new P0/P1 source finding was introduced.
 
 Three non-overlapping implementation agents performed cross-stream read-only
 reviews after integration. They did not edit files during audit turns and did
@@ -26,8 +99,9 @@ Remediations driven by the review:
 
 ## Database/Evidence review
 
-Final result: `PASS` at source level, no residual P0/P1/P2 in the reviewed
-scope. Runtime result remains `UNKNOWN`.
+Milestone result: `PASS` at source level, no residual P0/P1/P2 in the reviewed
+scope. Runtime was `UNKNOWN` at that audit milestone; the exact-head hosted
+closure above now supplies the runtime evidence.
 
 Remediations driven by the review:
 
@@ -42,9 +116,10 @@ Remediations driven by the review:
   in both migration-before-role and role-before-migration orderings;
 - source snapshots and evidence rows remain append-only.
 
-No migration apply/replay/rollback, role inspection, trigger execution or
-cross-tenant database proof was authorized. Those gates are `UNKNOWN`, not
-promoted from static inspection.
+At that audit milestone no migration apply/replay/rollback, role inspection,
+trigger execution or cross-tenant database proof was authorized. Those claims
+were not promoted from static inspection; they were later proved separately in
+hosted staging as recorded in the closure above.
 
 ## HoReCa Product review
 
@@ -64,6 +139,37 @@ Remediations driven by the review:
 - AVLI remains location-verification-required and KORA remains pre-opening;
   neither package fabricates venue facts or outcomes.
 
+## Post-CI P1 re-audits
+
+Two additional non-overlapping source reviews were performed after green PR
+anchor `b86540c9`. Their first pass found two material gaps that the earlier
+snapshot did not cover:
+
+- the Google AI Mode command discarded the exact successful private capture;
+- the HoReCa route was still a static preview and had no safe tenant/project
+  binding or evidence-detail path.
+
+Provider remediation at `bb8f123c` persists the exact validated capture inside
+the tenant transaction as immutable private `CANARY_ONLY` source evidence,
+binds it to the once-ever reservation and emits only a sanitized receipt. It
+does not create `sv_evidence_index` or `sv_cost_events`; actual cost and
+acceptance remain `UNKNOWN`/`HOLD`. The independent repeat review reports no
+remaining P0/P1 in this slice. It does not prove provider-side price
+enforcement, real RLS or hosted persistence.
+
+HoReCa remediation at `4916125e` adds the session-authenticated,
+tenant/project-scoped route and project selector over the application-safe
+projection. The assembler requires authoritative `ACCEPTED` plus `acceptedAt`,
+`LINKED` provenance and snapshot linkage, retains WEBSITE/MENU as evidence-only,
+keeps Social/Travel hidden, maps PRE_OPENING only from unanimously confirmed
+persisted entity facts and renders UNKNOWN as `Not measured`/`Not assessed`.
+Evidence detail uses an opaque `snapshot:evidence:<evidenceId>` reference and
+never returns the snapshot UUID, payload, raw locator, provider reference or
+content hash. Because the current safe view has no authoritative acceptance
+decision/timestamp, the hosted route deliberately remains source-only until an
+approved provenance join exists. The independent repeat review reports no
+remaining P0/P1 in this slice.
+
 ## Local verification evidence
 
 - Provider/Database/Evidence: 6 files, 115 tests passed.
@@ -75,19 +181,18 @@ Remediations driven by the review:
 - `@workspace/web` production build passed. Its existing Node-externalization
   and Sentry telemetry notices remain warnings, not acceptance proof for a
   hosted environment.
-- The Impeccable deterministic detector returned an empty finding list in the single allowed
-  deterministic UI pass performed before the final contract-only remediation.
-- The repository-wide build remains blocked in unchanged `apps/www`: 40
-  unresolved `@/lib/*` imports under the workspace path containing a space;
-  14 of 16 tasks completed. The changed `apps/web` build passes independently.
-- The repository-wide web lint remains blocked by pre-existing findings outside
-  this change (33 errors, 132 warnings and 14 informational findings in the
-  recorded run). Changed files pass their targeted Biome check.
+- Exact-head local Impeccable detect passed before the final CI push.
+- The previously registered root build/lint baselines were fixed before green
+  anchor `b86540c9`; exact-anchor CI passed the full build/test/clean-tree graph.
+- Post-CI Provider verification under Node 24 passed 20/20 focused lib tests,
+  2/2 worker-output tests, lib/worker typechecks and scoped Biome.
+- Post-CI HoReCa verification under Node 24 passed 16/16 focused web tests,
+  web typecheck, scoped Biome and the web production build. Existing browser
+  externalization and missing Sentry-token messages remain warnings.
 
-## Remaining owner gates
+## Historical owner gates at the 2026-09-01 audit
 
-- migration/RLS runtime proof;
-- credentials and 13 paid isolated canaries;
-- shared staging/production, billing, merge, deploy and recurring jobs;
-- draft PR creation because its Blacksmith-backed CI billing impact is
-  `UNKNOWN` until the owner explicitly approves it.
+- separate authorization for migration `0052` and any paid Google AI Mode
+  canary; the latest decision currently prohibits the call;
+- production, production DB, billing changes, Social/Travel activation,
+  recurring jobs and PR merge remain prohibited.

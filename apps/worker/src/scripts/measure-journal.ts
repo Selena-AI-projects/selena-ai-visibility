@@ -18,28 +18,33 @@
  * Usage:
  *   DATABASE_URL=postgres://... BRIGHTDATA_API_TOKEN=... \
  *   SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=brightdata \
+ *   SELENA_MEASUREMENT_APPROVED_COMMIT_SHA=<exact commit> \
+ *   RAILWAY_GIT_COMMIT_SHA=<same exact commit> \
+ *   SELENA_MEASUREMENT_APPROVED_ENVIRONMENT=staging RAILWAY_ENVIRONMENT_NAME=staging \
  *   SELENA_JOURNAL_TENANT=<organization id> \
  *   SELENA_JOURNAL_PROJECTS=korafoodhall SELENA_JOURNAL_MAX_COST_USD=0.5 \
- *   pnpm -C apps/worker exec tsx src/scripts/measure-journal.ts
+ *   pnpm -C apps/worker measure:journal
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
+import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
 import * as schema from "@workspace/lib/db/schema";
-import { assertGlobalProviderStop } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
 import type { SelenaMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
+	isAffirmativeEnvValue,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	runMeasurementForPermit,
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { assertMeasurementDeploymentApproved } from "./measurement-deployment-gate.js";
 
-assertGlobalProviderStop(process.env);
+assertMeasurementDeploymentApproved(process.env);
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
@@ -53,12 +58,13 @@ const PRICE_PER_ANSWER_USD = 0.0015;
 const API_PRICE_PER_ANSWER_USD = 0.005;
 
 /** The collector is the bottleneck and it is patient, so many can wait at once. */
-// Bright Data's own scrape call can take well past a minute per question, and
-// under concurrent load a snapshot has been observed not to become ready
-// within the adapter's 5-minute default poll window — every permit sent that
-// way was recorded as MALFORMED_RESPONSE (2026-08-29 run: 0 valid of 200).
-// A gentler pace keeps each call inside that window.
-const CONCURRENCY = 3;
+// The pace that lost the 2026-08-29 run — 0 valid of 200, every permit
+// MALFORMED_RESPONSE — was concurrency against a 5-minute poll window: the
+// snapshots were produced and billed, and the adapter gave up before they were
+// ready. The window is 15 minutes below, and no observed answer has come close
+// to it, so the ceiling rises by one step rather than to whatever the account
+// might bear. Raise it again only against a run that stayed valid at this one.
+const CONCURRENCY = 6;
 
 const BRIGHTDATA_ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const BRIGHTDATA_SURFACES = ["chatgpt", "gemini", "perplexity"] as const;
@@ -103,7 +109,7 @@ if (unknown.length > 0) {
 }
 
 /** Repeating a same-day measurement is deliberate, never a restart's doing. */
-const FORCE = process.env.SELENA_JOURNAL_FORCE === "1";
+const FORCE = isAffirmativeEnvValue(process.env.SELENA_JOURNAL_FORCE);
 
 const ctx: SelenaRepositoryContext = {
 	actorId: "selena-measure-journal",
@@ -131,12 +137,13 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 			fetchImpl: fetch,
 			resolveScenarioText: resolvers.resolveScenarioText,
 			resolveExtractionContext: resolvers.resolveExtractionContext,
-			// ChatGPT and Gemini stay capped at 10 minutes for this bounded journal
-			// run. Perplexity is exempt: its collector has taken ~16 minutes on this
-			// account, so it keeps the adapter's 25-minute surface deadline —
-			// clamping it to 10 minutes here times out a produced (and billed)
-			// answer, and one non-succeeded Perplexity run stops the whole cycle.
-			...(surface === "perplexity" ? {} : { snapshotTimeoutMs: 10 * 60 * 1000 }),
+			// ChatGPT and Gemini wait 15 minutes for this bounded journal run: a
+			// snapshot slowed by the wider concurrency above is still a produced and
+			// billed answer, and timing it out buys nothing back. Perplexity is
+			// exempt: its collector has taken ~16 minutes on this account, so it
+			// keeps the adapter's 25-minute surface deadline — and one non-succeeded
+			// Perplexity run stops the whole cycle.
+			...(surface === "perplexity" ? {} : { snapshotTimeoutMs: 15 * 60 * 1000 }),
 		}),
 	]),
 );
@@ -221,16 +228,28 @@ async function scenarioRowsFor(projectId: string, slug: string) {
 	return rows;
 }
 
+/**
+ * A slot frees the moment its own answer lands, not when its neighbours do.
+ * In fixed batches one Perplexity call — routinely a quarter of an hour — held
+ * the other slots idle until it returned, so the run moved at the speed of its
+ * slowest answer rather than its own concurrency.
+ */
 async function inPool<T, R>(items: T[], size: number, worker: (item: T) => Promise<R>): Promise<R[]> {
-	const results: R[] = [];
-	for (let index = 0; index < items.length; index += size) {
-		results.push(...(await Promise.all(items.slice(index, index + size).map(worker))));
+	const results = new Array<R>(items.length);
+	let next = 0;
+	async function drain(): Promise<void> {
+		for (let index = next++; index < items.length; index = next++) {
+			const item = items[index];
+			if (item === undefined) return;
+			results[index] = await worker(item);
+		}
 	}
+	await Promise.all(Array.from({ length: Math.min(size, items.length) }, drain));
 	return results;
 }
 
 type DailyClaimDecision =
-	| { kind: "CLAIMED"; id: string; attempt: number; utcDay: string }
+	| { kind: "CLAIMED"; id: string; attempt: number; utcDay: string; abandonedAttempt?: number }
 	| { kind: "ALREADY_COMPLETED"; attempt: number; utcDay: string }
 	| { kind: "HOLD"; attempt: number; status: string; utcDay: string };
 
@@ -245,7 +264,7 @@ type DailyClaimDecision =
 async function acquireDailyClaim(projectId: string, version: string): Promise<DailyClaimDecision> {
 	return db.transaction(async (tx) => {
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
-		const clockResult = await tx.execute(sql`SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date::text AS utc_day`);
+		const clockResult = await tx.execute(sql`SELECT (clock_timestamp() AT TIME ZONE 'UTC')::date::text AS utc_day`);
 		const clock = clockResult.rows?.[0] as { utc_day?: string } | undefined;
 		if (!clock?.utc_day) throw new Error("SELENA_JOURNAL_DATABASE_CLOCK_UNAVAILABLE");
 		const utcDay = clock.utc_day;
@@ -254,7 +273,9 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 		);
 		const [unresolved] = await tx
 			.select({
+				id: schema.svJournalDailyClaims.id,
 				attempt: schema.svJournalDailyClaims.attempt,
+				questionSetVersion: schema.svJournalDailyClaims.questionSetVersion,
 				status: schema.svJournalDailyClaims.status,
 				utcDay: schema.svJournalDailyClaims.utcDay,
 			})
@@ -268,13 +289,22 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			)
 			.orderBy(desc(schema.svJournalDailyClaims.utcDay), desc(schema.svJournalDailyClaims.attempt))
 			.limit(1);
+		let abandonedAttempt: number | undefined;
 		if (unresolved) {
-			return {
-				kind: "HOLD",
-				attempt: unresolved.attempt,
-				status: unresolved.status,
-				utcDay: unresolved.utcDay,
-			};
+			const recovery = await recoverJournalDailyClaim(tx, { claimId: unresolved.id, actorId: ctx.actorId });
+			if (recovery === "COMPLETED") {
+				if (!FORCE && unresolved.questionSetVersion === version && unresolved.utcDay === utcDay)
+					return { kind: "ALREADY_COMPLETED", attempt: unresolved.attempt, utcDay: unresolved.utcDay };
+			} else if (recovery === "ABANDONED") {
+				abandonedAttempt = unresolved.attempt;
+			} else {
+				return {
+					kind: "HOLD",
+					attempt: unresolved.attempt,
+					status: recovery === "BUSY" ? "RECOVERY_BUSY" : unresolved.status,
+					utcDay: unresolved.utcDay,
+				};
+			}
 		}
 		const [completed] = await tx
 			.select({ attempt: schema.svJournalDailyClaims.attempt })
@@ -328,7 +358,7 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 			subjectId: claim.id,
 			details: { questionSetVersion: version, utcDay, attempt, forced: FORCE },
 		});
-		return { kind: "CLAIMED", id: claim.id, attempt, utcDay };
+		return { kind: "CLAIMED", id: claim.id, attempt, utcDay, abandonedAttempt };
 	});
 }
 
@@ -337,7 +367,7 @@ async function linkDailyClaim(claimId: string, configurationLockId: string): Pro
 		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
 		const [linked] = await tx
 			.update(schema.svJournalDailyClaims)
-			.set({ configurationLockId, updatedAt: sql`CURRENT_TIMESTAMP` })
+			.set({ configurationLockId, updatedAt: sql`clock_timestamp()` })
 			.where(
 				and(
 					eq(schema.svJournalDailyClaims.id, claimId),
@@ -362,8 +392,8 @@ async function transitionDailyClaim(
 			.update(schema.svJournalDailyClaims)
 			.set({
 				status,
-				completedAt: status === "COMPLETED" ? sql`CURRENT_TIMESTAMP` : null,
-				updatedAt: sql`CURRENT_TIMESTAMP`,
+				completedAt: status === "COMPLETED" ? sql`clock_timestamp()` : null,
+				updatedAt: sql`clock_timestamp()`,
 			})
 			.where(
 				and(
@@ -382,6 +412,31 @@ async function transitionDailyClaim(
 			subjectId: claimId,
 			details: { fromStatus, toStatus: status },
 		});
+	});
+}
+
+async function heartbeatDailyClaim(claimId: string): Promise<void> {
+	await db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		const [heartbeat] = await tx
+			.update(schema.svJournalDailyClaims)
+			.set({ updatedAt: sql`clock_timestamp()` })
+			.where(
+				and(
+					eq(schema.svJournalDailyClaims.id, claimId),
+					eq(schema.svJournalDailyClaims.organizationId, tenantId),
+					eq(schema.svJournalDailyClaims.status, "EXECUTING"),
+				),
+			)
+			.returning({ id: schema.svJournalDailyClaims.id });
+		if (!heartbeat) throw new Error("SELENA_JOURNAL_DAILY_CLAIM_LEASE_LOST");
+	});
+}
+
+async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDONED" | "HOLD" | "BUSY"> {
+	return db.transaction(async (tx) => {
+		await tx.execute(sql`select set_config('app.organization_id', ${tenantId}, true)`);
+		return recoverJournalDailyClaim(tx, { claimId, actorId: ctx.actorId });
 	});
 }
 
@@ -426,6 +481,9 @@ async function measure(slug: string): Promise<void> {
 		throw new Error(
 			`SELENA_JOURNAL_DAILY_CLAIM_HOLD: ${claim.utcDay} attempt ${claim.attempt} is ${claim.status}; inspect spend evidence before any repeat`,
 		);
+	}
+	if (claim.abandonedAttempt !== undefined) {
+		console.log(`${scenario.brand}: recovered abandoned attempt ${claim.abandonedAttempt} as attempt ${claim.attempt}`);
 	}
 
 	console.log(`\n${scenario.brand} — ${rows.length} questions × ${systems.length} systems (~$${cost.toFixed(4)})`);
@@ -494,11 +552,13 @@ async function measure(slug: string): Promise<void> {
 		const outcomes = await inPool(dispatch.permits, CONCURRENCY, async (permit) => {
 			const result = await runMeasurementForPermit({
 				permitId: permit.id,
+				journalClaimId: claim.id,
 				ctx,
 				store: repositories.runs,
 				adapters,
 				config,
 			});
+			await heartbeatDailyClaim(claim.id);
 			done += 1;
 			if (done % CONCURRENCY === 0 || done === dispatch.permits.length) {
 				console.log(`  ${done}/${dispatch.permits.length}`);
@@ -544,11 +604,12 @@ async function measure(slug: string): Promise<void> {
 		await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED");
 	} catch (error) {
 		try {
-			await transitionDailyClaim(
-				claim.id,
-				providerBoundaryCrossed ? "EXECUTING" : "CLAIMED",
-				providerBoundaryCrossed ? "HOLD" : "NO_SPEND",
-			);
+			// Once execution begins, only the database may interpret the committed
+			// run/boundary/cost ledgers. It can finish a terminal claim and otherwise
+			// leaves EXECUTING fail-closed for later evidence, rather than freezing an
+			// exact state into the immutable HOLD terminal.
+			if (providerBoundaryCrossed) await recoverDailyClaim(claim.id);
+			else await transitionDailyClaim(claim.id, "CLAIMED", "NO_SPEND");
 		} catch (settlementError) {
 			console.error(
 				`${slug}: daily claim remains fail-closed after settlement error: ${settlementError instanceof Error ? settlementError.message : String(settlementError)}`,

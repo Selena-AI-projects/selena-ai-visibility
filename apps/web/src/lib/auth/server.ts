@@ -8,8 +8,14 @@
  * All server functions, middleware, and route handlers import from here.
  */
 import { getCloudAuthOptions } from "@workspace/cloud/auth-hooks";
-import { type CreateAuthOptions, createAuth } from "@workspace/lib/auth/server";
+import { type CreateAuthOptions, createAuth, refuseSignup } from "@workspace/lib/auth/server";
 import { countUsers, provisionLocalOrg, provisionUmbrellaOrg } from "@workspace/lib/db/provisioning";
+import {
+	evaluatePilotSignup,
+	PILOT_SIGNUP_REFUSAL_MESSAGE,
+	pilotAllowlistFromEnv,
+	pilotSeatCapFromEnv,
+} from "@workspace/selena-visibility-contracts";
 import { getWhitelabelAuthOptions } from "@workspace/whitelabel/auth-hooks";
 import { getDeployment } from "@/lib/config/server";
 
@@ -20,11 +26,14 @@ import { getDeployment } from "@/lib/config/server";
  * atomically on signup". The `before` hook rejects any signup once a user
  * exists; the `after` hook creates the single shared organization.
  *
- * Open (SELENA_SELF_SERVE_SIGNUP_ENABLED=true): anyone may sign up, and each new
- * user gets their own workspace. The shared organization must not be reused
- * here — it would seat every stranger as an admin next to the operator's own
- * brands, and its id is a constant, so the second signup would collide on
- * the primary key anyway.
+ * Open (SELENA_SELF_SERVE_SIGNUP_ENABLED=true): the named pilot guest list may
+ * sign up, each new user in their own workspace. "Open" here means open to the
+ * invited addresses and to nobody else — an unconfigured guest list or seat cap
+ * admits no one, so switching the flag on cannot by itself put registration on
+ * the public internet. The shared organization must not be reused here — it
+ * would seat every guest as an admin next to the operator's own brands, and its
+ * id is a constant, so the second signup would collide on the primary key
+ * anyway.
  *
  * Both shapes also apply to direct POST /api/auth/sign-up/email calls — the
  * hooks fire regardless of whether signup is triggered from our UI or a curl.
@@ -36,8 +45,23 @@ function getLocalAuthOptions(): CreateAuthOptions {
 		databaseHooks: {
 			user: {
 				create: {
-					before: async () => {
-						if (selfServeSignup) return;
+					before: async (user) => {
+						if (selfServeSignup) {
+							const decision = evaluatePilotSignup({
+								email: user.email,
+								allowlist: pilotAllowlistFromEnv(process.env),
+								seatCap: pilotSeatCapFromEnv(process.env),
+								seatsTaken: await countUsers(),
+							});
+							if (!decision.allowed) {
+								// One message for every refusal: the caller learns that the
+								// pilot is closed to them, never whether an address is on the
+								// list or how the operator has configured the seats.
+								console.warn(`[signup] refused: ${decision.reason}`);
+								refuseSignup(PILOT_SIGNUP_REFUSAL_MESSAGE);
+							}
+							return;
+						}
 						if ((await countUsers()) > 0) {
 							throw new Error("This instance is already bootstrapped. Sign in with the existing account instead.");
 						}

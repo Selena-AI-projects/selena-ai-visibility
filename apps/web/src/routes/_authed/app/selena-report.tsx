@@ -163,7 +163,7 @@ function questionCellLabel(
 }
 
 function questionCellClass(result: ReportModel["questions"][number]["systems"][number] | undefined): string {
-	if (!result || result.answersAnalyzed === 0) return "border-[#e6ddd1] bg-[#f7f2ea] text-[#6e6258]";
+	if (!result || result.answersAnalyzed === 0) return "border-[#dccfbe] bg-[#ece4d8] text-[#574d45]";
 	if (result.brandMentioned > 0) return "border-[#bedbc8] bg-[#edf7ef] text-[#285f3e]";
 	return "border-[#ead1c4] bg-[#fff7f1] text-[#8f5c34]";
 }
@@ -171,7 +171,7 @@ function questionCellClass(result: ReportModel["questions"][number]["systems"][n
 function runButtonClass(mentioned: boolean | null): string {
 	if (mentioned === true) return "border-[#bedbc8] bg-[#edf7ef] text-[#285f3e]";
 	if (mentioned === false) return "border-[#ead1c4] bg-[#fff7f1] text-[#8f5c34]";
-	return "border-[#e6ddd1] bg-[#f7f2ea] text-[#6e6258]";
+	return "border-[#dccfbe] bg-[#ece4d8] text-[#574d45]";
 }
 
 function AIAnswersTable({
@@ -188,7 +188,7 @@ function AIAnswersTable({
 	const columns = questionSystemColumns(report);
 	if (report.questions.length === 0)
 		return (
-			<p className="mt-4 text-sm text-[#6e6258]">
+			<p className="mt-4 text-sm text-[#574d45]">
 				{tr(locale, "UNKNOWN — no approved question text is attached to this cycle.", "НЕИЗВЕСТНО — к этому циклу не привязан текст утверждённых вопросов.")}
 			</p>
 		);
@@ -196,7 +196,7 @@ function AIAnswersTable({
 		<div className="mt-4 overflow-x-auto">
 			<table className="w-full min-w-[920px] border-collapse text-sm">
 				<thead>
-					<tr className="border-b border-[#e6ddd1] text-left text-xs font-semibold uppercase tracking-wide text-[#6e6258]">
+					<tr className="border-b border-[#dccfbe] text-left text-xs font-semibold uppercase tracking-wide text-[#574d45]">
 						<th className="w-[22rem] py-3 pr-4">{tr(locale, "Question", "Вопрос")}</th>
 						<th className="w-28 py-3 pr-4">{tr(locale, "Type", "Тип")}</th>
 						{columns.map((system) => (
@@ -225,12 +225,12 @@ function AIAnswersTable({
 						);
 						return (
 							<Fragment key={question.scenarioId}>
-								<tr className="border-b border-[#e6ddd1] align-top">
+								<tr className="border-b border-[#dccfbe] align-top">
 									<td className="py-3 pr-4">
 										<p className="font-medium leading-6 text-[#181614]">{question.text}</p>
-										<p className="mt-1 text-xs uppercase tracking-wide text-[#6e6258]">{question.language}</p>
+										<p className="mt-1 text-xs uppercase tracking-wide text-[#574d45]">{question.language}</p>
 									</td>
-									<td className="py-3 pr-4 text-xs text-[#6e6258]">
+									<td className="py-3 pr-4 text-xs text-[#574d45]">
 										{question.branded
 											? tr(locale, "names the brand", "с названием бренда")
 											: tr(locale, "category", "категорийный")}
@@ -264,12 +264,12 @@ function AIAnswersTable({
 									})}
 								</tr>
 								{openedRuns.length > 0 && (
-									<tr className="border-b border-[#e6ddd1]">
+									<tr className="border-b border-[#dccfbe]">
 										<td colSpan={columns.length + 2} className="bg-[#fbf7ef] px-4 py-3">
 											<div className="grid gap-3">
 												{openedRuns.map(({ run, system, answer }) => (
-													<div key={run.runId} className="rounded-lg border border-[#e6ddd1] bg-[#fffdf8] p-3">
-														<p className="text-xs font-semibold uppercase tracking-wide text-[#6e6258]">
+													<div key={run.runId} className="rounded-lg border border-[#dccfbe] bg-[#fffdf8] p-3">
+														<p className="text-xs font-semibold uppercase tracking-wide text-[#574d45]">
 															{systemLabel(locale, system.systemId)} ·{" "}
 															{system.channel === "VISITOR" ? "Visitor View" : "API View"} ·{" "}
 															{run.brandMentioned === null
@@ -346,7 +346,7 @@ function Ring({ fraction, label, caption }: { fraction: number | null; label: st
 			</svg>
 			<div>
 				<div className="text-xl font-semibold tabular-nums text-[#181614]">{label}</div>
-				<div className="text-xs text-[#6e6258]">{caption}</div>
+				<div className="text-xs text-[#574d45]">{caption}</div>
 			</div>
 		</div>
 	);
@@ -364,7 +364,7 @@ function SectionTitle({ title, lead }: { title: string; lead?: string }) {
 	return (
 		<div>
 			<h2 className="selena-heading text-2xl">{title}</h2>
-			{lead && <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6258]">{lead}</p>}
+			{lead && <p className="mt-2 max-w-2xl text-sm leading-6 text-[#574d45]">{lead}</p>}
 		</div>
 	);
 }
@@ -443,10 +443,10 @@ function ReportContextRail({
 		},
 	];
 	const body = (
-		<div className="rounded-2xl border border-[#e6ddd1] bg-[#fffdf8] p-4 shadow-[0_16px_38px_-32px_rgba(24,22,20,0.42)]">
+		<div className="rounded-2xl border border-[#dccfbe] bg-[#fffdf8] p-4 shadow-[0_16px_38px_-32px_rgba(24,22,20,0.42)]">
 			<div>
 				<p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#8f5c34]">Selena Systems</p>
-				<label className="mt-3 block text-xs font-semibold text-[#6e6258]" htmlFor="report-product">
+				<label className="mt-3 block text-xs font-semibold text-[#574d45]" htmlFor="report-product">
 					{tr(locale, "Product", "Продукт")}
 				</label>
 				<select
@@ -457,18 +457,18 @@ function ReportContextRail({
 					<option value="ai-visibility">AI Visibility</option>
 				</select>
 			</div>
-			<div className="mt-5 border-t border-[#e6ddd1] pt-4">
-				<p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#6e6258]">
+			<div className="mt-5 border-t border-[#dccfbe] pt-4">
+				<p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#574d45]">
 					{tr(locale, "Current brand", "Текущий бренд")}
 				</p>
 				<p className="mt-2 font-semibold text-[#181614]">{brand}</p>
-				<p className="mt-1 break-words text-xs text-[#6e6258]">{view?.inputs?.primaryDomain || tr(locale, "website not set", "сайт не задан")}</p>
-				<p className="mt-1 text-xs text-[#6e6258]">{market}</p>
+				<p className="mt-1 break-words text-xs text-[#574d45]">{view?.inputs?.primaryDomain || tr(locale, "website not set", "сайт не задан")}</p>
+				<p className="mt-1 text-xs text-[#574d45]">{market}</p>
 			</div>
 			<nav className="mt-5 grid gap-5" aria-label={tr(locale, "Report sections", "Разделы отчёта")}>
 				{groups.map((group) => (
 					<div key={group.title}>
-						<p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#6e6258]">{group.title}</p>
+						<p className="text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#574d45]">{group.title}</p>
 						<div className="mt-2 grid gap-1">
 							{group.items.map((item) => (
 								<button
@@ -491,7 +491,7 @@ function ReportContextRail({
 	return (
 		<aside className="lg:sticky lg:top-5 lg:self-start">
 			<details className="lg:hidden">
-				<summary className="min-h-11 cursor-pointer rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-[#181614]">
+				<summary className="min-h-11 cursor-pointer rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-3 text-sm font-semibold text-[#181614]">
 					{tr(locale, "Dashboard context", "Контекст дашборда")}
 				</summary>
 				<div className="mt-3">{body}</div>
@@ -589,7 +589,7 @@ function SelenaReportPage() {
 	const planLabel = view?.planId ? (PLAN_LABELS[view.planId] ?? view.planId) : null;
 
 	return (
-		<div className="selena-app min-h-screen bg-[#f7f2ea] pb-16 text-[#181614]">
+		<div className="selena-app min-h-screen bg-[#ece4d8] pb-16 text-[#181614]">
 			<header className="bg-[#221f1b] text-[#f2e9df] print:hidden">
 				<div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3">
 					<Link to="/app/selena" className="text-sm underline underline-offset-4">
@@ -667,13 +667,13 @@ function SelenaReportPage() {
 				)}
 				{!failed && view === null && projectId && (
 					<SectionCard>
-						<p className="text-sm text-[#6e6258]">{tr(locale, "Loading the report…", "Загружаем отчёт…")}</p>
+						<p className="text-sm text-[#574d45]">{tr(locale, "Loading the report…", "Загружаем отчёт…")}</p>
 					</SectionCard>
 				)}
 				{!projectId && (
 					<SectionCard>
 						<SectionTitle title={tr(locale, "No projects yet", "Проектов ещё нет")} />
-						<p className="mt-3 text-sm text-[#6e6258]">
+						<p className="mt-3 text-sm text-[#574d45]">
 							{tr(locale, "Create a project in the cabinet — the report lives here once it exists.", "Создайте проект в кабинете — отчёт появится здесь, как только он будет.")}
 						</p>
 						<Link to="/app/selena" className="mt-4 inline-block print:hidden">
@@ -693,16 +693,16 @@ function SelenaReportPage() {
 							)}
 						/>
 						<div className="mt-4 grid gap-3 sm:grid-cols-3">
-							<div className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-2.5">
-								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#6e6258]">{tr(locale, "Name", "Название")}</p>
+							<div className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-2.5">
+								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#574d45]">{tr(locale, "Name", "Название")}</p>
 								<p className="mt-0.5 font-semibold">{view.inputs.brandName}</p>
 							</div>
-							<div className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-2.5">
-								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#6e6258]">{tr(locale, "Website", "Сайт")}</p>
+							<div className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-2.5">
+								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#574d45]">{tr(locale, "Website", "Сайт")}</p>
 								<p className="mt-0.5 font-semibold">{view.inputs.primaryDomain}</p>
 							</div>
-							<div className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-2.5">
-								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#6e6258]">{tr(locale, "Location", "Локация")}</p>
+							<div className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-2.5">
+								<p className="text-[0.68rem] font-bold uppercase tracking-wider text-[#574d45]">{tr(locale, "Location", "Локация")}</p>
 								<p className="mt-0.5 font-semibold">{[view.project.region, view.project.country].filter(Boolean).join(", ") || "—"}</p>
 							</div>
 						</div>
@@ -737,13 +737,13 @@ function SelenaReportPage() {
 											["0", tr(locale, "AI answers — that is the paid measurement", "AI-ответов — это платный замер")],
 											["$0", tr(locale, "and no card required", "и без карты")],
 										].map(([value, caption]) => (
-											<div key={caption} className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-3">
+											<div key={caption} className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-3">
 												<p className="selena-heading text-2xl tabular-nums">{value}</p>
-												<p className="text-xs text-[#6e6258]">{caption}</p>
+												<p className="text-xs text-[#574d45]">{caption}</p>
 											</div>
 										))}
 									</div>
-									<p className="mt-3 text-xs text-[#6e6258]">
+									<p className="mt-3 text-xs text-[#574d45]">
 										{tr(locale, "Checked", "Проверено")}: {view.freeAudit.websiteUrl} ·{" "}
 										{new Date(view.freeAudit.capturedAt).toLocaleDateString(locale === "ru" ? "ru-RU" : "en-US")}
 									</p>
@@ -780,7 +780,7 @@ function SelenaReportPage() {
 														label={score === null ? tr(locale, "UNKNOWN", "НЕИЗВЕСТНО") : `${score}/100`}
 														caption={tr(locale, "technical readiness", "техническая готовность")}
 													/>
-													<div className="text-xs text-[#6e6258]">
+													<div className="text-xs text-[#574d45]">
 														<p className="font-semibold text-[#2e6b46] tabular-nums">✓ {okCount} {tr(locale, "in place", "на месте")}</p>
 														<p className="mt-1 font-semibold text-[#9a5f14] tabular-nums">✗ {failCount} {tr(locale, "missing", "отсутствует")}</p>
 														{unknownCount > 0 && (
@@ -793,7 +793,7 @@ function SelenaReportPage() {
 									})()}
 									<div className="mt-4">
 										{view.freeAudit.checks.map((check) => (
-											<div key={check.ruleId} className="flex items-baseline gap-3 border-t border-[#e6ddd1] py-2.5 text-sm first:border-t-0">
+											<div key={check.ruleId} className="flex items-baseline gap-3 border-t border-[#dccfbe] py-2.5 text-sm first:border-t-0">
 												<span
 													className={
 														check.ok
@@ -811,7 +811,7 @@ function SelenaReportPage() {
 														: ruleTitle(locale, check.ruleId, check.subject)}
 													<span className="ml-2 align-middle text-[0.62rem] font-semibold uppercase text-[#b0a294]">{check.ruleId}</span>
 												</span>
-												<span className="shrink-0 text-xs text-[#6e6258]">
+												<span className="shrink-0 text-xs text-[#574d45]">
 													{check.ok
 														? tr(locale, "in place", "на месте")
 														: check.unknown
@@ -821,7 +821,7 @@ function SelenaReportPage() {
 											</div>
 										))}
 									</div>
-									<p className="mt-4 max-w-3xl text-xs italic text-[#6e6258]">
+									<p className="mt-4 max-w-3xl text-xs italic text-[#574d45]">
 										{tr(
 											locale,
 											"The score is transparent: critical checks weigh ×3, medium ×2, light ×1; unverifiable ones are excluded. It measures the site's technical readiness to be cited — AI visibility itself is measured only by the paid measurement.",
@@ -846,7 +846,7 @@ function SelenaReportPage() {
 												const how = ruleHow(locale, action.ruleId, action.action);
 												const priority = PRIORITY_LABELS[action.priority];
 												return (
-													<div key={`${action.ruleId}-${action.title}`} className="flex items-start gap-3.5 rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm">
+													<div key={`${action.ruleId}-${action.title}`} className="flex items-start gap-3.5 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 														<span className="selena-heading flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#efe3d7] text-[#8f5c34]">
 															{index + 1}
 														</span>
@@ -867,7 +867,7 @@ function SelenaReportPage() {
 																<summary className="cursor-pointer text-xs font-semibold text-[#8f5c34] underline underline-offset-4 [&::-webkit-details-marker]:hidden">
 																	{tr(locale, "How to fix →", "Как исправить →")}
 																</summary>
-																<div className="mt-2 rounded-lg border border-[#e6ddd1] bg-[#fbf7ef] p-3">
+																<div className="mt-2 rounded-lg border border-[#dccfbe] bg-[#fbf7ef] p-3">
 																	{ruleSteps(locale, action.ruleId).length > 0 ? (
 																		<ol className="list-decimal space-y-1 pl-4 text-xs leading-5 text-[#3d362e]">
 																			{ruleSteps(locale, action.ruleId).map((step) => (
@@ -878,7 +878,7 @@ function SelenaReportPage() {
 																		<p className="text-xs leading-5 text-[#3d362e]">{how}</p>
 																	)}
 																	{ruleExample(locale, action.ruleId) && (
-																		<p className="mt-2 rounded border border-[#e6ddd1] bg-[#fffdf8] px-2.5 py-1.5 font-mono text-[0.68rem] leading-4 text-[#3d362e]">
+																		<p className="mt-2 rounded border border-[#dccfbe] bg-[#fffdf8] px-2.5 py-1.5 font-mono text-[0.68rem] leading-4 text-[#3d362e]">
 																			{tr(locale, "Done right: ", "Как правильно: ")}
 																			{ruleExample(locale, action.ruleId)}
 																		</p>
@@ -938,7 +938,7 @@ function SelenaReportPage() {
 												tr(locale, "what to do, tied to specific numbers.", "что делать, с привязкой к конкретным цифрам."),
 											],
 										].map(([heading, body]) => (
-											<div key={heading} className="rounded-xl border border-dashed border-[#cdbdac] bg-[#fbf7ef] px-4 py-3 text-sm text-[#6e6258]">
+											<div key={heading} className="rounded-xl border border-dashed border-[#cdbdac] bg-[#fbf7ef] px-4 py-3 text-sm text-[#574d45]">
 												<b className="text-[#3d362e]">{heading}</b> — {body}
 											</div>
 										))}
@@ -951,7 +951,7 @@ function SelenaReportPage() {
 						) : (
 							<SectionCard id="overview">
 								<SectionTitle title={tr(locale, "No checks yet", "Проверок ещё не было")} />
-								<p className="mt-3 text-sm text-[#6e6258]">
+								<p className="mt-3 text-sm text-[#574d45]">
 									{tr(
 										locale,
 										"Run the free website review in the cabinet first — its results appear here, and a paid measurement deepens them.",
@@ -970,7 +970,7 @@ function SelenaReportPage() {
 						{report.methodology.answersExpected === 0 ? (
 							<SectionCard id="overview">
 								<SectionTitle title={tr(locale, "How this was measured", "Как проверялось")} />
-								<p className="mt-3 text-sm text-[#6e6258]">
+								<p className="mt-3 text-sm text-[#574d45]">
 									{tr(
 										locale,
 										"The measurement is ordered but its runs have not been created yet — the methodology appears with the first answers.",
@@ -1010,14 +1010,14 @@ function SelenaReportPage() {
 										tr(locale, "answers in this cycle", "ответов в этом замере"),
 									],
 								].map(([value, caption]) => (
-									<div key={caption} className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-3">
+									<div key={caption} className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-3">
 										<p className="selena-heading text-2xl tabular-nums">{value}</p>
-										<p className="text-xs text-[#6e6258]">{caption}</p>
+										<p className="text-xs text-[#574d45]">{caption}</p>
 									</div>
 								))}
 							</div>
 							<div className="mt-4 grid gap-3">
-								<div className="flex items-start gap-3 rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm">
+								<div className="flex items-start gap-3 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 									<span className="shrink-0 rounded-full bg-[#efe3d7] px-3 py-1 text-[0.7rem] font-bold tracking-wide text-[#8f5c34]">VISITOR VIEW</span>
 									<p>
 										{tr(
@@ -1027,8 +1027,8 @@ function SelenaReportPage() {
 										)}
 									</p>
 								</div>
-								<div className="flex items-start gap-3 rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm">
-									<span className="shrink-0 rounded-full bg-[#e8e4dc] px-3 py-1 text-[0.7rem] font-bold tracking-wide text-[#6e6258]">API VIEW</span>
+								<div className="flex items-start gap-3 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
+									<span className="shrink-0 rounded-full bg-[#e8e4dc] px-3 py-1 text-[0.7rem] font-bold tracking-wide text-[#574d45]">API VIEW</span>
 									<p>
 										{tr(
 											locale,
@@ -1069,11 +1069,11 @@ function SelenaReportPage() {
 										<table className="w-full min-w-[680px] border-collapse text-sm">
 											<thead>
 												<tr>
-													<th className="w-44 pb-3 text-left text-xs font-semibold text-[#6e6258]" aria-label={tr(locale, "Metric", "Метрика")} />
+													<th className="w-44 pb-3 text-left text-xs font-semibold text-[#574d45]" aria-label={tr(locale, "Metric", "Метрика")} />
 													{group.list.map((system) => (
 														<th key={system.systemId} className="pb-3 pr-4 text-left align-top">
 															<span className="selena-heading text-lg">{systemLabel(locale, system.systemId)}</span>
-															<span className="block text-[0.7rem] font-medium text-[#6e6258]">
+															<span className="block text-[0.7rem] font-medium text-[#574d45]">
 																{system.channel === "VISITOR" ? "Visitor View" : "API View"} ·{" "}
 																{captureLabel(locale, system.channel, system.captureModes)}
 															</span>
@@ -1082,8 +1082,8 @@ function SelenaReportPage() {
 												</tr>
 											</thead>
 											<tbody>
-												<tr className="border-t border-[#e6ddd1]">
-													<td className="py-3 pr-3 text-xs font-semibold text-[#6e6258]">{tr(locale, "Brand mentioned", "Бренд упомянут")}</td>
+												<tr className="border-t border-[#dccfbe]">
+													<td className="py-3 pr-3 text-xs font-semibold text-[#574d45]">{tr(locale, "Brand mentioned", "Бренд упомянут")}</td>
 													{group.list.map((system) => (
 														<td key={system.systemId} className="py-3 pr-4">
 															<Ring
@@ -1102,8 +1102,8 @@ function SelenaReportPage() {
 														</td>
 													))}
 												</tr>
-												<tr className="border-t border-[#e6ddd1]">
-													<td className="py-3 pr-3 text-xs font-semibold text-[#6e6258]">
+												<tr className="border-t border-[#dccfbe]">
+													<td className="py-3 pr-3 text-xs font-semibold text-[#574d45]">
 														{tr(locale, "Category questions (no brand name)", "Вопросы про категорию (без названия бренда)")}
 													</td>
 													{group.list.map((system) => (
@@ -1114,8 +1114,8 @@ function SelenaReportPage() {
 														</td>
 													))}
 												</tr>
-												<tr className="border-t border-[#e6ddd1]">
-													<td className="py-3 pr-3 text-xs font-semibold text-[#6e6258]">{tr(locale, "Questions naming the brand", "Вопросы с названием бренда")}</td>
+												<tr className="border-t border-[#dccfbe]">
+													<td className="py-3 pr-3 text-xs font-semibold text-[#574d45]">{tr(locale, "Questions naming the brand", "Вопросы с названием бренда")}</td>
 													{group.list.map((system) => (
 														<td key={system.systemId} className="py-3 pr-4 tabular-nums">
 															{system.branded.answers === 0
@@ -1124,16 +1124,16 @@ function SelenaReportPage() {
 														</td>
 													))}
 												</tr>
-												<tr className="border-t border-[#e6ddd1]">
-													<td className="py-3 pr-3 text-xs font-semibold text-[#6e6258]">{tr(locale, "Share of voice", "Доля голоса")}</td>
+												<tr className="border-t border-[#dccfbe]">
+													<td className="py-3 pr-3 text-xs font-semibold text-[#574d45]">{tr(locale, "Share of voice", "Доля голоса")}</td>
 													{group.list.map((system) => (
 														<td key={system.systemId} className="py-3 pr-4 font-semibold tabular-nums">
 															{pct(locale, system.shareOfVoice)}
 														</td>
 													))}
 												</tr>
-												<tr className="border-t border-[#e6ddd1]">
-													<td className="py-3 pr-3 text-xs font-semibold text-[#6e6258]">{tr(locale, "Average position in the list", "Средняя позиция в списке")}</td>
+												<tr className="border-t border-[#dccfbe]">
+													<td className="py-3 pr-3 text-xs font-semibold text-[#574d45]">{tr(locale, "Average position in the list", "Средняя позиция в списке")}</td>
 													{group.list.map((system) => (
 														<td key={system.systemId} className="py-3 pr-4 font-semibold tabular-nums">
 															{system.averageOrder === null ? tr(locale, "UNKNOWN", "НЕИЗВЕСТНО") : system.averageOrder.toFixed(1)}
@@ -1156,7 +1156,7 @@ function SelenaReportPage() {
 								)}
 							/>
 							<AIAnswersTable report={report} locale={locale} answers={answers} onOpenAnswer={openAnswer} />
-							<p className="mt-3 max-w-3xl text-xs italic text-[#6e6258]">
+							<p className="mt-3 max-w-3xl text-xs italic text-[#574d45]">
 								{tr(
 									locale,
 									"UNKNOWN means the run has no analyzable answer yet or the retained text was not available; it is never counted as a miss.",
@@ -1246,18 +1246,18 @@ function SelenaReportPage() {
 										<text x="100" y="94" textAnchor="middle" fontSize="24" fontWeight="650" fill="#181614">
 											{pct(locale, report.roster[0] ? report.roster[0].answersMentioned / rosterTotal : null)}
 										</text>
-										<text x="100" y="114" textAnchor="middle" fontSize="11" fill="#6e6258">
+										<text x="100" y="114" textAnchor="middle" fontSize="11" fill="#574d45">
 											{tr(locale, "your brand", "ваш бренд")}
 										</text>
 									</svg>
 									<div className="min-w-60 flex-1">
-										<div className="grid grid-cols-[1fr_auto_auto] gap-x-5 gap-y-0 text-[0.7rem] font-bold uppercase tracking-wider text-[#6e6258]">
+										<div className="grid grid-cols-[1fr_auto_auto] gap-x-5 gap-y-0 text-[0.7rem] font-bold uppercase tracking-wider text-[#574d45]">
 											<span>{tr(locale, "Business", "Заведение")}</span>
 											<span>{tr(locale, "Named in answers", "Назван в ответах")}</span>
 											<span>{tr(locale, "Avg. position", "Средняя позиция")}</span>
 										</div>
 										{report.roster.map((entry, index) => (
-											<div key={entry.name} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-5 border-t border-[#e6ddd1] py-2 text-sm first:border-t-0">
+											<div key={entry.name} className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-5 border-t border-[#dccfbe] py-2 text-sm first:border-t-0">
 												<span className={entry.isBrand ? "font-bold text-[#8f5c34]" : "font-medium"}>
 												<span
 														className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-baseline"
@@ -1299,7 +1299,7 @@ function SelenaReportPage() {
 								)}
 							/>
 							{report.gaps.length === 0 ? (
-								<p className="mt-4 text-sm text-[#6e6258]">
+								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
 										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
 										: tr(locale, "No such answers: wherever a competitor was named, you were named too.", "Таких ответов нет: везде, где назван конкурент, названы и вы.")}
@@ -1307,18 +1307,18 @@ function SelenaReportPage() {
 							) : (
 								<div className="mt-4 flex flex-col">
 									{report.gaps.map((gap) => (
-										<div key={gap.runId} className="border-t border-[#e6ddd1] py-3 first:border-t-0">
+										<div key={gap.runId} className="border-t border-[#dccfbe] py-3 first:border-t-0">
 											<div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
 												<div className="min-w-56 flex-1">
 													<p className="font-medium">{gap.scenarioText || tr(locale, "(question text unavailable)", "(текст вопроса недоступен)")}</p>
-													<p className="text-xs text-[#6e6258]">
+													<p className="text-xs text-[#574d45]">
 														{systemLabel(locale, gap.systemId)} · {gap.channel === "VISITOR" ? "Visitor View" : "API View"} ·{" "}
 														<span className="rounded-full bg-[#f6e7d8] px-2 py-0.5 font-bold text-[#9a5f14]">{tr(locale, "you are not named", "вы не названы")}</span>
 													</p>
 												</div>
 												<div className="text-sm">
 													<p>{gap.competitorsShown.join(", ")}</p>
-													<p className="text-xs text-[#6e6258]">
+													<p className="text-xs text-[#574d45]">
 														{gap.citedDomains.length > 0 ? gap.citedDomains.join(" · ") : tr(locale, "no sources cited", "источники не указаны")}
 													</p>
 												</div>
@@ -1331,7 +1331,7 @@ function SelenaReportPage() {
 												</button>
 											</div>
 											{answers[gap.runId] && (
-												<div className="mt-2 rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm leading-6 whitespace-pre-wrap">
+												<div className="mt-2 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm leading-6 whitespace-pre-wrap">
 													{answers[gap.runId].loading ? tr(locale, "Loading…", "Загружаем…") : answers[gap.runId].text}
 												</div>
 											)}
@@ -1351,7 +1351,7 @@ function SelenaReportPage() {
 								)}
 							/>
 							{report.overall.citationGap.length === 0 ? (
-								<p className="mt-4 text-sm text-[#6e6258]">
+								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
 										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
 										: tr(locale, "The analyzed answers cited no sources.", "В разобранных ответах источники не встречались.")}
@@ -1359,7 +1359,7 @@ function SelenaReportPage() {
 							) : (
 								<div className="mt-4">
 									{report.overall.citationGap.slice(0, 8).map((entry) => (
-										<div key={entry.domain} className="grid grid-cols-[1fr_auto] items-baseline gap-x-5 border-t border-[#e6ddd1] py-2.5 text-sm first:border-t-0">
+										<div key={entry.domain} className="grid grid-cols-[1fr_auto] items-baseline gap-x-5 border-t border-[#dccfbe] py-2.5 text-sm first:border-t-0">
 											<span className="font-semibold">
 												{entry.domain}
 												{entry.ownedByBrand && <span className="ml-2 text-xs font-bold text-[#2e6b46]">{tr(locale, "your site", "ваш сайт")}</span>}
@@ -1428,11 +1428,11 @@ function SelenaReportPage() {
 															),
 														};
 										return (
-											<div key={`${rec.kind}-${index === 0 ? "a" : index}`} className="flex items-start gap-3.5 rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm">
+											<div key={`${rec.kind}-${index === 0 ? "a" : index}`} className="flex items-start gap-3.5 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 												<span className="selena-heading flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#efe3d7] text-[#8f5c34]">{index + 1}</span>
 												<div>
 													<p className="font-semibold">{body.action}</p>
-													<p className="mt-1 text-xs text-[#6e6258]">
+													<p className="mt-1 text-xs text-[#574d45]">
 														{tr(locale, "Why", "Почему")}: {body.why}
 													</p>
 												</div>
@@ -1440,7 +1440,7 @@ function SelenaReportPage() {
 										);
 									})}
 								</div>
-								<p className="mt-4 max-w-3xl text-xs italic text-[#6e6258]">
+								<p className="mt-4 max-w-3xl text-xs italic text-[#574d45]">
 									{tr(
 										locale,
 										"Recommendations come from this measurement's facts. Acting on them does not guarantee appearing in answers — AI systems change on their own; a repeat measurement shows what moved.",
@@ -1461,10 +1461,10 @@ function SelenaReportPage() {
 							/>
 							<div className="mt-4">
 								{report.questions.map((question) => (
-									<div key={question.scenarioId} className="flex items-baseline gap-3 border-t border-[#e6ddd1] py-2.5 text-sm first:border-t-0">
-										<span className="w-8 shrink-0 text-[0.68rem] font-bold uppercase text-[#6e6258]">{question.language}</span>
+									<div key={question.scenarioId} className="flex items-baseline gap-3 border-t border-[#dccfbe] py-2.5 text-sm first:border-t-0">
+										<span className="w-8 shrink-0 text-[0.68rem] font-bold uppercase text-[#574d45]">{question.language}</span>
 										<span className="flex-1">{question.text}</span>
-										<span className="shrink-0 text-xs text-[#6e6258]">
+										<span className="shrink-0 text-xs text-[#574d45]">
 											{question.branded ? tr(locale, "names the brand", "с названием бренда") : tr(locale, "category question", "про категорию")}
 										</span>
 									</div>
@@ -1493,13 +1493,13 @@ function SelenaReportPage() {
 										tr(locale, "The measurement asks only questions you saw and approved.", "Замер задаёт только те вопросы, которые вы видели и одобрили."),
 									],
 								].map(([heading, body]) => (
-									<div key={heading} className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] p-4 text-sm">
+									<div key={heading} className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 										<p className="font-semibold">{heading}</p>
 										<p className="mt-1 text-[#3d362e]">{body}</p>
 									</div>
 								))}
 							</div>
-							<p className="mt-4 max-w-3xl text-xs italic text-[#6e6258]">
+							<p className="mt-4 max-w-3xl text-xs italic text-[#574d45]">
 								{tr(
 									locale,
 									"Answers are retained for 13 months so a year-over-year comparison stays possible. Changes in AI answers are never guaranteed and depend on the systems themselves.",
@@ -1533,9 +1533,9 @@ function SelenaReportPage() {
 										["POSITION_SHIFTED", tr(locale, "position shifts", "сдвигов позиции")],
 										["SOURCE_APPEARED", tr(locale, "new sources", "новых источников")],
 									].map(([type, caption]) => (
-										<div key={type} className="rounded-xl border border-[#e6ddd1] bg-[#fffdf8] px-4 py-3">
+										<div key={type} className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-3">
 											<p className="selena-heading text-2xl tabular-nums">{compare.report.changes.filter((change) => change.type === type).length}</p>
-											<p className="text-xs text-[#6e6258]">{caption}</p>
+											<p className="text-xs text-[#574d45]">{caption}</p>
 										</div>
 									))}
 								</div>

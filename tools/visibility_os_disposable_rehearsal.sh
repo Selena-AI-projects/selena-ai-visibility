@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	printf '%s\n' \
 		'Usage:' \
-		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045|0049|0051|0052]' \
+		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045|0049|0051|0052|0057|0058|0059|0060|variants]' \
 		'' \
 		'--dry-run is the default and does not call Docker or apply migrations.' \
 		'--run starts a unique ephemeral PostgreSQL compose project, runs one suite, and removes it.'
@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--dry-run) mode='dry-run'; shift ;;
 		--run) mode='run'; shift ;;
-		gate12|0045|0049|0051|0052) suite="$1"; shift ;;
+		gate12|0045|0049|0051|0052|0057|0058|0059|0060|variants) suite="$1"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'BLOCKED_SCOPE: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -43,6 +43,11 @@ case "$suite" in
 	0049) suite_script="$repo_root/tools/visibility_os_0049_lifecycle_e2e.sh" ;;
 	0051) suite_script="$repo_root/tools/visibility_os_0051_rls_schema_proof_e2e.sh" ;;
 	0052) suite_script="$repo_root/tools/visibility_os_0052_snapshot_journal_e2e.sh" ;;
+	0057) suite_script="$repo_root/tools/visibility_os_0057_formal_evidence_e2e.sh" ;;
+	0058) suite_script="$repo_root/tools/visibility_os_0058_journal_recovery_e2e.sh" ;;
+	0059) suite_script="$repo_root/tools/visibility_os_0059_journal_no_spend_reconciliation_e2e.sh" ;;
+	0060) suite_script="$repo_root/tools/visibility_os_0060_journal_hold_reconciliation_e2e.sh" ;;
+	variants) suite_script="$repo_root/tools/visibility_os_migration_variant_matrix_e2e.sh" ;;
 esac
 
 if [[ "$mode" == 'dry-run' ]]; then
@@ -129,9 +134,14 @@ trap 'exit 143' TERM
 cleanup_required=true
 "${compose[@]}" up -d --pull never postgres
 
+# Probe over TCP, not the socket. The postgres image runs a temporary server on
+# the same unix socket while initdb and the init scripts run, and answers
+# pg_isready from it; the suite would then start in the window after that server
+# is shut down and before the real one binds. The temporary server is started
+# with listen_addresses='', so only the real one ever answers on TCP.
 ready=false
 for _ in {1..60}; do
-	if "${compose[@]}" exec -T postgres pg_isready -U selena_test -d selena_visibility_test >/dev/null 2>&1; then
+	if "${compose[@]}" exec -T postgres pg_isready -h 127.0.0.1 -p 5432 -U selena_test -d selena_visibility_test >/dev/null 2>&1; then
 		ready=true
 		break
 	fi

@@ -51,7 +51,7 @@ describe("v1.3 core Google dataset adapters", () => {
 			{ observedProviderField: "query" },
 		);
 		const result = await createBrightDataDatasetClient({
-			journal: { record: async () => undefined },
+			journal: { record: async () => undefined, claimResume: async () => false },
 			lifecycle: {
 				timeoutMs: 1_000,
 				pollIntervalMs: 10,

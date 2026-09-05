@@ -1,5 +1,4 @@
 import * as Sentry from "@sentry/node";
-import { getDeployment } from "@workspace/deployment";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
 import { brands, promptRuns, prompts } from "@workspace/lib/db/schema";
@@ -8,6 +7,8 @@ import { reconcilePromptRunAggregates } from "@workspace/lib/prompt-run-aggregat
 import { parseScrapeTargets } from "@workspace/lib/providers";
 import {
 	computeMaintenanceDecisions,
+	enqueueLegacyProviderWork,
+	isLegacyProviderExecutionEnabled,
 	isMaintenanceEnabled,
 	lastRunQueryWindowMs,
 	type MaintenancePromptState,
@@ -18,6 +19,7 @@ import {
 import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Job } from "pg-boss";
 import boss from "../boss";
+import { isRecurringJobsEnabled } from "../recurring-schedules";
 import { PROMPT_JOB_OPTIONS } from "./process-prompt";
 
 export interface ScheduleMaintenanceData {
@@ -38,6 +40,14 @@ let lastOverdueAlertMs = 0;
  * this job only gathers state and executes the decisions.
  */
 export async function scheduleMaintenanceJob(jobs: Job<ScheduleMaintenanceData>[]): Promise<void> {
+	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
+		console.log("[schedule-maintenance] Skipped because recurring execution is disabled");
+		return;
+	}
+	if (!isLegacyProviderExecutionEnabled()) {
+		console.log("[schedule-maintenance] Skipped because legacy provider execution is disabled");
+		return;
+	}
 	if (!isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED)) {
 		console.log("[schedule-maintenance] Skipped because SCHEDULE_MAINTENANCE_ENABLED=false");
 		return;
@@ -231,21 +241,23 @@ async function runMaintenanceCheck(): Promise<void> {
 			const batch = decisions.toSchedule.slice(i, i + BATCH_SIZE);
 			const results = await Promise.allSettled(
 				batch.map(({ promptId }) =>
-					boss.send(
-						"process-prompt",
-						{ promptId },
-						{
-							singletonKey: `prompt-${promptId}`,
-							singletonSeconds: 60 * 60, // 1 hour - prevent duplicates
-							...PROMPT_JOB_OPTIONS,
-						},
+					enqueueLegacyProviderWork(() =>
+						boss.send(
+							"process-prompt",
+							{ promptId },
+							{
+								singletonKey: `prompt-${promptId}`,
+								singletonSeconds: 60 * 60, // 1 hour - prevent duplicates
+								...PROMPT_JOB_OPTIONS,
+							},
+						),
 					),
 				),
 			);
 
 			for (const result of results) {
 				if (result.status === "fulfilled") {
-					successCount++;
+					if (result.value !== undefined) successCount++;
 				} else {
 					failCount++;
 					console.error("[schedule-maintenance] Failed to schedule job:", result.reason);

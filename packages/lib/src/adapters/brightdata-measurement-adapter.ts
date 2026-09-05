@@ -208,14 +208,40 @@ const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
 const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 // A successful Perplexity collection on the account took almost sixteen
-// minutes. Keep its larger budget scoped to that surface so the faster
-// collectors retain their existing ceiling.
-export const PERPLEXITY_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
+// minutes, and the KORA cycle of 2026-09-04 lost two Gemini answers to
+// SNAPSHOT_NOT_READY at the twelve-minute default — both snapshots produced
+// and billed. The larger budget stays scoped to the surfaces observed to need
+// it so the faster collector keeps its existing ceiling.
+export const SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
 // The worker lease includes room after the provider deadline for snapshot
 // cancellation and the transaction that makes the run and cycle terminal.
-export const PERPLEXITY_QUEUE_LEASE_SECONDS = 35 * 60;
+export const SLOW_COLLECTOR_QUEUE_LEASE_SECONDS = 35 * 60;
+const SLOW_COLLECTOR_SURFACES = new Set(["perplexity", "gemini"]);
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
 const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
+
+/**
+ * What an unreadable payload contained, without quoting it: the field names it
+ * carried, and the provider's own status line when it has one. A payload that
+ * cannot be read costs exactly what a readable one costs, and the KORA cycle of
+ * 2026-09-04 could not say why three Perplexity answers were unreadable —
+ * nothing kept a trace of their shape, so the only way to learn it was to buy
+ * the answers again. Field names and a status line are neither the answer text
+ * nor the credential, which is what makes them safe to write down.
+ */
+export function describeUnreadablePayload(payload: unknown, scrub: (value: string) => string): string {
+	if (typeof payload === "string") return `body: text, ${payload.length} chars`;
+	const record = asRecord(Array.isArray(payload) ? payload[0] : payload);
+	if (!record) return `body: ${Array.isArray(payload) ? "empty array" : typeof payload}`;
+	const keys = Object.keys(record).slice(0, 20).join(",");
+	const notes = ["status", "message", "error", "warning"]
+		.map((field) => {
+			const value = record[field];
+			return typeof value === "string" && value.trim() !== "" ? `${field}=${scrub(value).slice(0, 200)}` : null;
+		})
+		.filter((note): note is string => note !== null);
+	return [`keys=${keys || "none"}`, ...notes].join(" ");
+}
 
 /** The handle a receipt carries, when the payload is only a receipt. */
 export function snapshotIdFrom(payload: unknown): string | null {
@@ -469,9 +495,13 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	const maxResponseBytes = deps.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES;
 	const buildRequestBody = deps.buildRequestBody ?? buildBrightDataRequestBody;
 	const parseAnswer = deps.parseAnswer ?? parseBrightDataAnswer;
+	// A surface that echoes request material back would otherwise put the key
+	// into anything written from a payload — a stored row or a log line alike.
+	const scrub = (value: string) => value.split(deps.apiKey).join("[redacted-credential]");
+	const describe = (payload: unknown) => describeUnreadablePayload(payload, scrub);
 	const snapshotTimeoutMs =
 		deps.snapshotTimeoutMs ??
-		(deps.system === "perplexity" ? PERPLEXITY_MEASUREMENT_DEADLINE_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
+		(SLOW_COLLECTOR_SURFACES.has(deps.system) ? SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
 
 	async function cancelSnapshot(snapshotId: string): Promise<void> {
@@ -656,8 +686,10 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			// payload.
 			if (!answer) {
 				const snapshotId = snapshotIdFrom(payload);
-				if (snapshotId === null)
+				if (snapshotId === null) {
+					console.warn(`[brightdata] ${deps.system} reply carried no answer and no handle — ${describe(payload)}`);
 					return invalidOutcome(permit, providerErrorRowReason(deps.system, payload) ?? "MALFORMED_RESPONSE", costFields());
+				}
 				const collected = await awaitSnapshot(
 					snapshotId,
 					Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now()),
@@ -674,15 +706,16 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				} catch {
 					answer = null;
 				}
-				if (!answer)
+				if (!answer) {
+					console.warn(`[brightdata] ${deps.system} snapshot ${snapshotId} held no readable answer — ${describe(collected)}`);
 					return invalidOutcome(permit, providerErrorRowReason(deps.system, collected) ?? "MALFORMED_RESPONSE", costFields());
+				}
 				answer = { ...answer, providerRequestId: answer.providerRequestId ?? snapshotId };
 			}
 			// Storing the answer text (CABINET_MODEL §4a) must never store the
 			// credential: a surface that echoes request material back would
 			// otherwise write the key into a row read by more people than hold
 			// it. Everything destined for the run row is scrubbed.
-			const scrub = (value: string) => value.split(deps.apiKey).join("[redacted-credential]");
 			answer = {
 				...answer,
 				answerText: scrub(answer.answerText),

@@ -1,9 +1,23 @@
 import { sql } from "drizzle-orm";
-import type { db as defaultDb } from "./db/db";
+import {
+	assertProviderSpendReserved,
+	releaseProviderSpend,
+	settleProviderSpend,
+	type SpendReceipt,
+	type SqlExecutor,
+} from "./selena-provider-spend";
 
-type Executor = Pick<typeof defaultDb, "execute">;
+/**
+ * What the onboarding suggestion is allowed to spend.
+ *
+ * The deployment-wide ceiling could not be enforced by a tenant-scoped count
+ * followed by an enqueue — concurrent requests race, and a per-tenant count
+ * silently weakens a global limit — so this path stayed closed. It now rides on
+ * one atomic reservation that owns the cap, and the cap lives in the database
+ * rather than in this process's environment.
+ */
 
-export const SUGGEST_BUDGET_USD_ENV = "SELENA_SUGGEST_BUDGET_USD";
+export const SUGGEST_SPEND_SCOPE = "suggest";
 
 /**
  * Deliberately coarse, like usage/cost.ts: what one profile suggestion is
@@ -11,59 +25,71 @@ export const SUGGEST_BUDGET_USD_ENV = "SELENA_SUGGEST_BUDGET_USD";
  */
 export const SUGGEST_ESTIMATED_COST_USD = 0.05;
 
-/** Unset or unparsable means no ceiling — the class gate alone, as before. */
-export function suggestBudgetUsdFromEnv(env: Record<string, string | undefined> = process.env): number | null {
-	const raw = env[SUGGEST_BUDGET_USD_ENV]?.trim();
-	if (!raw) return null;
-	const value = Number(raw);
-	return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-/** Pure rule shared by both refusal frontiers (web enqueue and worker). */
-export function isSuggestBudgetExceeded(
-	spentThisMonthUsd: number,
-	budgetUsd: number | null,
-	nextCallUsd: number = SUGGEST_ESTIMATED_COST_USD,
-): boolean {
-	if (budgetUsd === null) return false;
-	return spentThisMonthUsd + nextCallUsd > budgetUsd;
-}
-
-async function suggestSpendThisMonthUsd(dbc: Executor, now: Date): Promise<number> {
-	const result = await dbc.execute(sql`
-		SELECT coalesce(sum(amount_usd), 0)::float8 AS spent
-		FROM sv_cost_events
-		WHERE kind = 'suggest'
-			AND created_at >= date_trunc('month', ${now.toISOString()}::timestamptz)
-	`);
-	const row = result.rows?.[0] as { spent?: number } | undefined;
-	return Number(row?.spent ?? 0);
+export interface SuggestSpendRequest {
+	organizationId: string;
+	/** One suggestion, one key — a retried job reuses its own reservation. */
+	requestKey: string;
 }
 
 /**
- * The monthly ceiling for suggestion spending, deployment-wide: it protects
- * the owner's provider key, so it does not slice by tenant. Asserted before
- * enqueueing and again in the worker, because a job already queued when the
- * ceiling was reached must not spend either.
+ * Holds budget before the model is called. Throws when the scope has no budget
+ * configured or the ceiling would be crossed, so a refusal stops the work.
  */
-export async function assertSuggestBudget(
-	dbc: Executor,
-	env: Record<string, string | undefined> = process.env,
-	now: Date = new Date(),
-): Promise<void> {
-	const budget = suggestBudgetUsdFromEnv(env);
-	if (budget === null) return;
-	const spent = await suggestSpendThisMonthUsd(dbc, now);
-	if (isSuggestBudgetExceeded(spent, budget)) throw new Error("SUGGEST_BUDGET_EXHAUSTED");
+export async function reserveSuggestSpend(
+	dbc: SqlExecutor,
+	request: SuggestSpendRequest,
+	estimatedUsd: number = SUGGEST_ESTIMATED_COST_USD,
+): Promise<SpendReceipt> {
+	return assertProviderSpendReserved(dbc, {
+		scope: SUGGEST_SPEND_SCOPE,
+		organizationId: request.organizationId,
+		requestKey: request.requestKey,
+		estimatedUsd,
+	});
 }
 
-/** One ledger row per suggestion call, booked where the call is made. */
-export async function recordSuggestCost(
-	dbc: Executor,
-	value: { organizationId: string; provider: string },
+/** Books what the suggestion actually cost against its own reservation. */
+export async function settleSuggestSpend(
+	dbc: SqlExecutor,
+	request: SuggestSpendRequest,
+	actualUsd: number = SUGGEST_ESTIMATED_COST_USD,
+): Promise<SpendReceipt> {
+	return settleProviderSpend(dbc, {
+		scope: SUGGEST_SPEND_SCOPE,
+		organizationId: request.organizationId,
+		requestKey: request.requestKey,
+		actualUsd,
+	});
+}
+
+/** Returns budget held for a suggestion that never reached the provider. */
+export async function releaseSuggestSpend(dbc: SqlExecutor, request: SuggestSpendRequest): Promise<SpendReceipt> {
+	return releaseProviderSpend(dbc, {
+		scope: SUGGEST_SPEND_SCOPE,
+		organizationId: request.organizationId,
+		requestKey: request.requestKey,
+	});
+}
+
+/**
+ * The accounting row that accompanies a settled reservation.
+ *
+ * The reservation is what enforces the ceiling; this is what the cost reports
+ * read. It is written separately and best-effort, because a suggestion that
+ * already cost money must not be undone by a bookkeeping failure.
+ */
+export async function bookSuggestCostEvent(
+	dbc: SqlExecutor,
+	value: { organizationId: string; provider: string; amountUsd?: number },
 ): Promise<void> {
 	await dbc.execute(sql`
 		INSERT INTO sv_cost_events (organization_id, provider, amount_usd, basis, kind)
-		VALUES (${value.organizationId}, ${value.provider}, ${SUGGEST_ESTIMATED_COST_USD}, 'estimated', 'suggest')
+		VALUES (
+			${value.organizationId},
+			${value.provider},
+			${value.amountUsd ?? SUGGEST_ESTIMATED_COST_USD},
+			'estimated',
+			'suggest'
+		)
 	`);
 }
