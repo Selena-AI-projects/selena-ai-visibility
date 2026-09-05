@@ -83,6 +83,20 @@ function adapterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown>
 	});
 }
 
+function dcaAdapterWith(fetchImpl: typeof fetch, overrides: Record<string, unknown> = {}) {
+	return createBrightDataAdapter({
+		apiKey: API_KEY,
+		endpoint: "https://api.brightdata.com/datasets/v3/scrape",
+		datasetId: DATASET_ID,
+		system: "perplexity",
+		fetchImpl,
+		resolveScenarioText: () => SCENARIO_TEXT,
+		now,
+		perplexityDca: { collectorId: "c_mtoi7ng2wyqxm8d61", version: "dev", pollMs: 0 },
+		...overrides,
+	});
+}
+
 function successPayload(overrides: Record<string, unknown> = {}) {
 	return {
 		snapshot_id: "s_01HZY",
@@ -131,6 +145,62 @@ describe("Bright Data measurement adapter", () => {
 			],
 		});
 		expect(globalFetch).not.toHaveBeenCalled();
+	});
+
+	it("triggers the opted-in DCA collector once with the encoded question URL", async () => {
+		const responses = [
+			jsonResponse({ collection_id: "j_dca123" }),
+			jsonResponse({ status: "completed" }),
+			jsonResponse({ answer: "AVLI is recommended.", cited_sources: [], final_url: "https://www.perplexity.ai/search/dca" }),
+		];
+		const fetchMock = vi.fn(async () => responses.shift() as Response) as unknown as typeof fetch;
+		const outcome = await dcaAdapterWith(fetchMock).execute(permitFor({ systemId: "Perplexity" }));
+		const trigger = String((fetchMock as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+		expect(trigger).toContain("/dca/trigger?collector=c_mtoi7ng2wyqxm8d61&version=dev");
+		expect((fetchMock as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]).toMatchObject({ method: "POST" });
+		expect(JSON.parse(String((fetchMock as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body))).toEqual({
+			input: [{ url: `https://www.perplexity.ai/?q=${encodeURIComponent(SCENARIO_TEXT)}` }],
+		});
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(outcome).toMatchObject({ status: "SUCCEEDED", answer: { text: "AVLI is recommended." }, rawResponseReference: "brightdata:j_dca123" });
+	});
+
+	it("accepts DCA cited_sources and keeps a login flag with an answer successful", async () => {
+		const responses = [
+			jsonResponse({ collection_id: "j_dca124" }),
+			jsonResponse({ status: "ready" }),
+			jsonResponse({
+				answer: "AVLI is recommended.",
+				login_wall_detected: true,
+				cited_sources: [{ source_url: "https://avlibali.com/", source_title: "AVLI" }],
+			}),
+		];
+		const fetchMock = vi.fn(async () => responses.shift() as Response) as unknown as typeof fetch;
+		const outcome = await dcaAdapterWith(fetchMock).execute(permitFor({ systemId: "Perplexity" }));
+		expect(outcome).toMatchObject({ status: "SUCCEEDED", sources: [{ url: "https://avlibali.com/", title: "AVLI" }] });
+	});
+
+	it("classifies a DCA login wall without an answer as provider auth failure", async () => {
+		const responses = [jsonResponse({ collection_id: "j_dca125" }), jsonResponse({ status: "completed" }), jsonResponse({ login_wall_detected: true, answer: "" })];
+		const fetchMock = vi.fn(async () => responses.shift() as Response) as unknown as typeof fetch;
+		const outcome = await dcaAdapterWith(fetchMock).execute(permitFor({ systemId: "Perplexity" }));
+		expect(outcome).toMatchObject({ status: "INVALID", validity: "INVALID", invalidReason: "PROVIDER_AUTH_FAILURE", rawResponseReference: "brightdata:j_dca125" });
+	});
+
+	it("bounds DCA polling without retriggering", async () => {
+		const responses = [jsonResponse({ collection_id: "j_dca126" }), jsonResponse({ status: "running" })];
+		const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => responses.shift() as Response);
+		const outcome = await dcaAdapterWith(fetchMock as unknown as typeof fetch, { snapshotTimeoutMs: 5, perplexityDca: { collectorId: "c_mtoi7ng2wyqxm8d61", version: "prod", pollMs: 0 } }).execute(permitFor({ systemId: "Perplexity" }));
+		expect(outcome.invalidReason).toBe("TIMEOUT");
+		expect(fetchMock.mock.calls.filter((call) => String(call[0]).includes("/dca/trigger")).length).toBe(1);
+	});
+
+	it("classifies malformed DCA dataset output without inventing an answer", async () => {
+		const responses = [jsonResponse({ collection_id: "j_dca127" }), jsonResponse({ status: "complete" }), jsonResponse({ final_url: "https://www.perplexity.ai/search/dca" })];
+		const fetchMock = vi.fn(async () => responses.shift() as Response) as unknown as typeof fetch;
+		const outcome = await dcaAdapterWith(fetchMock).execute(permitFor({ systemId: "Perplexity" }));
+		expect(outcome.invalidReason).toBe("MALFORMED_RESPONSE");
+		expect(outcome.answer).toBeUndefined();
 	});
 
 	it("runs Perplexity through trigger, poll and fetch, then reads its HTML answer", async () => {

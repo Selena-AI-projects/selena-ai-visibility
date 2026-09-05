@@ -131,6 +131,12 @@ export type BrightDataAdapterDeps = {
 	 * which is recorded as MALFORMED_RESPONSE — never as an empty answer.
 	 */
 	parseAnswer?: (raw: unknown) => BrightDataAnswer | null;
+	/** Explicit opt-in for the Scraper Studio DCA Perplexity collector. */
+	perplexityDca?: {
+		collectorId: string;
+		version: "dev" | "prod";
+		pollMs?: number;
+	};
 };
 
 /** Whether a cost came from the provider or from the local estimate. */
@@ -247,6 +253,38 @@ function isProviderErrorRow(raw: unknown): boolean {
 	const error = typeof record.error === "string" && record.error.trim() !== "";
 	const errorCode = typeof record.error_code === "string" && record.error_code.trim() !== "";
 	return error || errorCode;
+}
+
+function isDcaLoginWall(raw: unknown): boolean {
+	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
+	return record?.login_wall_detected === true;
+}
+
+/** Parse the custom output contract of a Scraper Studio DCA collector. */
+function parsePerplexityDcaAnswer(raw: unknown): BrightDataAnswer | null {
+	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
+	if (!record || typeof record.answer !== "string") return null;
+	const answerText = record.answer.trim();
+	const cited = Array.isArray(record.cited_sources) ? record.cited_sources : [];
+	const sources: BrightDataSource[] = [];
+	for (const item of cited) {
+		const entry = asRecord(item);
+		if (typeof entry?.source_url !== "string") continue;
+		try {
+			const url = new URL(entry.source_url);
+			if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+			sources.push({
+				url: entry.source_url,
+				domain: url.hostname.replace(/^www\./, ""),
+				...(typeof entry.source_title === "string" && entry.source_title.trim()
+					? { title: entry.source_title.trim() }
+					: {}),
+			});
+		} catch {
+			// A malformed cited source is omitted, never repaired into evidence.
+		}
+	}
+	return { answerText, sources };
 }
 
 /**
@@ -442,6 +480,11 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	if (deps.datasetId.trim() === "") throw new Error("BRIGHTDATA_DATASET_ID_MISSING");
 	if (!(brightDataVisitorSystems as readonly string[]).includes(deps.system))
 		throw new Error("BRIGHTDATA_SYSTEM_UNSUPPORTED");
+	if (deps.perplexityDca) {
+		if (deps.system !== "perplexity") throw new Error("BRIGHTDATA_DCA_SYSTEM_UNSUPPORTED");
+		if (!/^c_[A-Za-z0-9]+$/.test(deps.perplexityDca.collectorId))
+			throw new Error("BRIGHTDATA_DCA_COLLECTOR_ID_INVALID");
+	}
 
 	// The collector is chosen in the query string, so the dataset id belongs to
 	// the URL rather than the body — and appending it here keeps every call for
@@ -468,6 +511,80 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		deps.snapshotTimeoutMs ??
 		(deps.system === "perplexity" ? PERPLEXITY_MEASUREMENT_DEADLINE_MS : DEFAULT_SNAPSHOT_TIMEOUT_MS);
 	const snapshotPollMs = deps.snapshotPollMs ?? DEFAULT_SNAPSHOT_POLL_MS;
+	const dcaBaseUrl = new URL(deps.endpoint.trim()).origin;
+
+	async function collectPerplexityDca(
+		prompt: string,
+		budgetMs: number,
+	): Promise<{ payload: unknown; raw: string; collectionId: string } | { reason: string }> {
+		const config = deps.perplexityDca;
+		if (!config) return { reason: "MALFORMED_RESPONSE" };
+		const deadline = Date.now() + budgetMs;
+		const request = async (url: string, init: RequestInit): Promise<Response | null> => {
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) return null;
+			const controller = new AbortController();
+			const timer = setTimeout(() => controller.abort(), Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, remaining));
+			try {
+				return await deps.fetchImpl(url, { ...init, signal: controller.signal });
+			} catch {
+				return null;
+			} finally {
+				clearTimeout(timer);
+			}
+		};
+		const inputUrl = `https://www.perplexity.ai/?q=${encodeURIComponent(prompt)}`;
+		const triggerUrl = new URL(`${dcaBaseUrl}/dca/trigger`);
+		triggerUrl.searchParams.set("collector", config.collectorId);
+		triggerUrl.searchParams.set("version", config.version);
+		const trigger = await request(triggerUrl.toString(), {
+			method: "POST",
+			headers: { Authorization: `Bearer ${deps.apiKey}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ input: [{ url: inputUrl }] }),
+		});
+		if (!trigger) return { reason: "TIMEOUT" };
+		if (!trigger.ok) return { reason: `PROVIDER_HTTP_${trigger.status}` };
+		let triggerPayload: unknown;
+		try {
+			triggerPayload = JSON.parse(await readBodyWithinLimit(trigger, maxResponseBytes));
+		} catch {
+			return { reason: "MALFORMED_RESPONSE" };
+		}
+		const triggerRecord = asRecord(triggerPayload);
+		const collectionId = typeof triggerRecord?.collection_id === "string" ? triggerRecord.collection_id.trim() : "";
+		if (!/^j_[A-Za-z0-9]+$/.test(collectionId)) return { reason: "MALFORMED_RESPONSE" };
+		const pollMs = Math.max(0, config.pollMs ?? snapshotPollMs);
+		while (Date.now() < deadline) {
+			const log = await request(`${dcaBaseUrl}/dca/log/${encodeURIComponent(collectionId)}`, {
+				method: "GET",
+				headers: { Authorization: `Bearer ${deps.apiKey}` },
+			});
+			if (!log) return { reason: "TIMEOUT" };
+			if (!log.ok) return { reason: `PROVIDER_HTTP_${log.status}` };
+			let logPayload: unknown;
+			try { logPayload = JSON.parse(await readBodyWithinLimit(log, maxResponseBytes)); } catch { return { reason: "MALFORMED_RESPONSE" }; }
+			const status = typeof asRecord(logPayload)?.status === "string" ? String(asRecord(logPayload)?.status).toLowerCase() : "";
+			if (["failed", "error", "cancelled", "canceled"].includes(status)) return { reason: "PROVIDER_DCA_ERROR" };
+			if (["ready", "completed", "complete", "succeeded", "success"].includes(status)) break;
+			const remaining = deadline - Date.now();
+			if (remaining <= 0) return { reason: "TIMEOUT" };
+			await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remaining)));
+		}
+		if (Date.now() >= deadline) return { reason: "TIMEOUT" };
+		const dataset = await request(`${dcaBaseUrl}/dca/dataset?id=${encodeURIComponent(collectionId)}`, {
+			method: "GET",
+			headers: { Authorization: `Bearer ${deps.apiKey}` },
+		});
+		if (!dataset) return { reason: "TIMEOUT" };
+		if (!dataset.ok) return { reason: `PROVIDER_HTTP_${dataset.status}` };
+		let raw: string;
+		try { raw = await readBodyWithinLimit(dataset, maxResponseBytes); } catch (error) {
+			return { reason: error instanceof ResponseTooLargeError ? "RESPONSE_TOO_LARGE" : "MALFORMED_RESPONSE" };
+		}
+		let payload: unknown;
+		try { payload = JSON.parse(raw); } catch { payload = raw; }
+		return { payload, raw, collectionId };
+	}
 
 	async function cancelSnapshot(snapshotId: string): Promise<void> {
 		const controller = new AbortController();
@@ -585,66 +702,83 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		const timeoutMs = Math.max(1, Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, budgetMs));
 		const timer = setTimeout(() => controller.abort(), timeoutMs);
 		try {
-			let response: Response;
-			try {
-				const requestBody = buildRequestBody({ system: deps.system, prompt: scenarioText });
-				const triggerRecord = asRecord(requestBody);
-				const body =
-					collectionMode === "trigger"
-						? Array.isArray(triggerRecord?.input)
-							? triggerRecord.input
-							: Array.isArray(requestBody)
-								? requestBody
-								: [requestBody]
-						: requestBody;
-				response = await deps.fetchImpl(endpoint, {
-					method: "POST",
-					headers: {
-						// The only place the credential appears. It is never put in
-						// the body, the URL, an outcome or an error.
-						Authorization: `Bearer ${deps.apiKey}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(body),
-					signal: controller.signal,
-				});
-			} catch (error) {
-				// The provider error is classified, never quoted: a thrown request
-				// error can carry the request headers, and this text is stored.
-				return isAbortError(error) || controller.signal.aborted
-					? invalidOutcome(permit, "TIMEOUT", costFields())
-					: failedOutcome(permit, "TRANSPORT_ERROR", costFields());
-			}
-			if (!response.ok) {
-				// The error body can echo request material back, so it is dropped
-				// rather than read into the run row.
-				await response.body?.cancel().catch(() => {});
-				return failedOutcome(permit, `PROVIDER_HTTP_${response.status}`, costFields());
-			}
 			let raw: string;
-			try {
-				raw = await readBodyWithinLimit(response, maxResponseBytes);
-			} catch (error) {
-				if (error instanceof ResponseTooLargeError) return invalidOutcome(permit, "RESPONSE_TOO_LARGE", costFields());
-				return isAbortError(error) || controller.signal.aborted
-					? invalidOutcome(permit, "TIMEOUT", costFields())
-					: failedOutcome(permit, "TRANSPORT_ERROR", costFields());
-			}
-			// A non-JSON body is handed to the parser as the raw string rather
-			// than refused here: the confirmed shape may not be JSON, and the
-			// default parser reports anything it does not recognize as malformed.
 			let payload: unknown;
-			try {
-				payload = JSON.parse(raw);
-			} catch {
-				payload = raw;
+			let dcaCollectionId: string | undefined;
+			if (deps.perplexityDca) {
+				const dca = await collectPerplexityDca(
+					scenarioText,
+					Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now()),
+				);
+				if ("reason" in dca) return invalidOutcome(permit, dca.reason, costFields());
+				raw = dca.raw;
+				payload = dca.payload;
+				dcaCollectionId = dca.collectionId;
+			} else {
+				let response: Response;
+				try {
+					const requestBody = buildRequestBody({ system: deps.system, prompt: scenarioText });
+					const triggerRecord = asRecord(requestBody);
+					const body =
+						collectionMode === "trigger"
+							? Array.isArray(triggerRecord?.input)
+								? triggerRecord.input
+								: Array.isArray(requestBody)
+									? requestBody
+									: [requestBody]
+							: requestBody;
+					response = await deps.fetchImpl(endpoint, {
+						method: "POST",
+						headers: {
+							// The only place the credential appears. It is never put in
+							// the body, the URL, an outcome or an error.
+							Authorization: `Bearer ${deps.apiKey}`,
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify(body),
+						signal: controller.signal,
+					});
+				} catch (error) {
+					// The provider error is classified, never quoted: a thrown request
+					// error can carry the request headers, and this text is stored.
+					return isAbortError(error) || controller.signal.aborted
+						? invalidOutcome(permit, "TIMEOUT", costFields())
+						: failedOutcome(permit, "TRANSPORT_ERROR", costFields());
+				}
+				if (!response.ok) {
+					// The error body can echo request material back, so it is dropped
+					// rather than read into the run row.
+					await response.body?.cancel().catch(() => {});
+					return failedOutcome(permit, `PROVIDER_HTTP_${response.status}`, costFields());
+				}
+				try {
+					raw = await readBodyWithinLimit(response, maxResponseBytes);
+				} catch (error) {
+					if (error instanceof ResponseTooLargeError) return invalidOutcome(permit, "RESPONSE_TOO_LARGE", costFields());
+					return isAbortError(error) || controller.signal.aborted
+						? invalidOutcome(permit, "TIMEOUT", costFields())
+						: failedOutcome(permit, "TRANSPORT_ERROR", costFields());
+				}
+				// A non-JSON body is handed to the parser as the raw string rather
+				// than refused here: the confirmed shape may not be JSON, and the
+				// default parser reports anything it does not recognize as malformed.
+				try {
+					payload = JSON.parse(raw);
+				} catch {
+					payload = raw;
+				}
 			}
 			let answer: BrightDataAnswer | null;
 			try {
-				answer = parseAnswer(payload);
+				answer = deps.perplexityDca ? parsePerplexityDcaAnswer(payload) : parseAnswer(payload);
 			} catch {
 				answer = null;
 			}
+			if (deps.perplexityDca && isDcaLoginWall(payload) && (!answer || answer.answerText.trim() === ""))
+				return invalidOutcome(permit, "PROVIDER_AUTH_FAILURE", {
+					...costFields(),
+					rawResponseReference: dcaCollectionId ? `brightdata:${dcaCollectionId}` : undefined,
+				});
 			// The collector's auth/sign-up wall is a provider observation, not an
 			// unknown payload shape. Keep the reason stable and redact the provider
 			// error body; the hashed response reference below still binds evidence
@@ -728,7 +862,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				dispatchKey: permit.dispatchKey,
 				status: "SUCCEEDED",
 				validity: "VALID",
-				rawResponseReference: rawResponseReference(answer.providerRequestId, raw),
+				rawResponseReference: rawResponseReference(answer.providerRequestId ?? dcaCollectionId, raw),
 				// CABINET_MODEL §4a: the answer text is retained with the run for
 				// the owner's window so findings can be recomputed without buying
 				// a second measurement; the reference stays for provider-side
