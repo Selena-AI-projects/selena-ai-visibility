@@ -893,6 +893,47 @@ describe("Bright Data measurement adapter", () => {
 		expect(malformed.provider).toBe("brightdata");
 	});
 
+	it("records a collector error row as PROVIDER_ERROR_ROW instead of a malformed answer", async () => {
+		// The 2026-09-05 live journal run observed every Perplexity snapshot
+		// returning only the collector's error fields and no answer: timestamp,
+		// input, error, error_code with error "Auth wall: sign-up prompt
+		// detected". That is a provider refusal, not a shape the parser failed
+		// to understand — recording it as MALFORMED_RESPONSE would blame the
+		// parser for the provider's wall.
+		const errorRow = {
+			timestamp: "2026-09-05T07:00:00.000Z",
+			input: "restaurant rekomendasi di Seminyak yang punya area outdoor",
+			error: "Auth wall: sign-up prompt detected",
+			error_code: "auth_wall",
+		};
+
+		const responses = [
+			jsonResponse({ snapshot_id: "s_auth_wall" }),
+			jsonResponse({ status: "ready" }),
+			jsonResponse([errorRow]),
+		];
+		const snapshotPath = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
+			const response = responses.shift();
+			if (!response) throw new Error("TEST_SEQUENCE_EXHAUSTED");
+			return response;
+		}) as unknown as typeof fetch;
+		const collected = await adapterWith(snapshotPath, {
+			system: "perplexity",
+			snapshotPollMs: 0,
+		}).execute(permitFor({ systemId: "Perplexity" }));
+		expect(collected).toMatchObject({ status: "INVALID", validity: "INVALID", invalidReason: "PROVIDER_ERROR_ROW" });
+		expect(collected.measurement).toBeUndefined();
+		expect(() => runOutcomeSchema.parse(collected)).not.toThrow();
+
+		// A reply that itself carries the error fields (no snapshot handle) is
+		// the same provider row, never an unrecognized shape.
+		const replyPath = respondWith(jsonResponse(errorRow));
+		const direct = await adapterWith(replyPath, { system: "perplexity" }).execute(permitFor({ systemId: "Perplexity" }));
+		expect(direct).toMatchObject({ status: "INVALID", validity: "INVALID", invalidReason: "PROVIDER_ERROR_ROW" });
+		expect(replyPath).toHaveBeenCalledTimes(1);
+		expectCostUsd(direct, expectedBrightDataCost(1));
+	});
+
 	it("does not retry a failed provider call", async () => {
 		// A transport error is a different problem than an unusable answer;
 		// retrying it here would be the adapter guessing at a fix instead of
