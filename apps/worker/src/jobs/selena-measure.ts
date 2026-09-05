@@ -39,6 +39,7 @@ const ADAPTERS: MeasurementAdapterRegistry = { noop: createNoopMeasurementAdapte
  */
 const BRIGHTDATA_DEFAULT_ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const BRIGHTDATA_SURFACES = ["chatgpt", "gemini", "perplexity"] as const;
+const PERPLEXITY_DCA_COLLECTOR_ID = "c_mtoi7ng2wyqxm8d61";
 
 /**
  * One collector per surface, taken from the account's own scrapers. They are
@@ -66,6 +67,13 @@ function brightDataAdapterName(surface: (typeof BRIGHTDATA_SURFACES)[number]) {
 	return `brightdata-${surface}`;
 }
 
+function perplexityDcaConfigFromEnv() {
+	const version = process.env.SELENA_BRIGHTDATA_PERPLEXITY_DCA_VERSION?.trim();
+	if (!version) return undefined;
+	if (version !== "dev" && version !== "prod") throw new Error("SELENA_BRIGHTDATA_PERPLEXITY_DCA_VERSION_INVALID");
+	return { collectorId: PERPLEXITY_DCA_COLLECTOR_ID, version } as const;
+}
+
 // Both per-permit reads, tenant-scoped by the permit itself. Without the
 // extraction context a run is still stored and billed, but no mention,
 // position or citation is extracted, so no ledger metric moves.
@@ -91,6 +99,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 	// not die on a key it would never use. A family name selects several at
 	// once, because one plan is measured across several systems.
 	const selected = new Set(measurementAdapterNamesFor(config.adapter));
+	const perplexityDca = selected.has("brightdata-perplexity") ? perplexityDcaConfigFromEnv() : undefined;
 	const adapters: MeasurementAdapterRegistry = {
 		...ADAPTERS,
 		...(selected.has("openrouter")
@@ -114,6 +123,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					datasetId: brightDataDatasetId(surface),
 					system: surface,
 					collectionMode: surface === "perplexity" ? "trigger" : "scrape",
+					perplexityDca: surface === "perplexity" ? perplexityDca : undefined,
 					fetchImpl: fetch,
 					resolveScenarioText: resolvers.resolveScenarioText,
 					resolveExtractionContext: resolvers.resolveExtractionContext,

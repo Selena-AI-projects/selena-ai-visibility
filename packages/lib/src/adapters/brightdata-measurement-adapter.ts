@@ -255,26 +255,47 @@ function isProviderErrorRow(raw: unknown): boolean {
 	return error || errorCode;
 }
 
+function perplexityQuestionUrl(prompt: string): string {
+	return `https://www.perplexity.ai/?q=${encodeURIComponent(prompt)}`;
+}
+
 function isDcaLoginWall(raw: unknown): boolean {
-	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
+	const record = Array.isArray(raw) && raw.length === 1 ? asRecord(raw[0]) : null;
 	return record?.login_wall_detected === true;
 }
 
 /** Parse the custom output contract of a Scraper Studio DCA collector. */
-function parsePerplexityDcaAnswer(raw: unknown): BrightDataAnswer | null {
-	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
+function parsePerplexityDcaAnswer(raw: unknown, expectedInputUrl: string): BrightDataAnswer | null {
+	const record = Array.isArray(raw) && raw.length === 1 ? asRecord(raw[0]) : null;
 	if (!record || typeof record.answer !== "string") return null;
+	const input = asRecord(record.input);
+	if (input?.url !== expectedInputUrl || typeof record.final_url !== "string") return null;
+	try {
+		const finalUrl = new URL(record.final_url);
+		if (
+			finalUrl.protocol !== "https:" ||
+			(finalUrl.hostname !== "perplexity.ai" && finalUrl.hostname !== "www.perplexity.ai") ||
+			!/^\/search\/[^/]+\/?$/.test(finalUrl.pathname)
+		)
+			return null;
+	} catch {
+		return null;
+	}
 	const answerText = record.answer.trim();
 	const cited = Array.isArray(record.cited_sources) ? record.cited_sources : [];
 	const sources: BrightDataSource[] = [];
+	const seen = new Set<string>();
 	for (const item of cited) {
 		const entry = asRecord(item);
 		if (typeof entry?.source_url !== "string") continue;
 		try {
 			const url = new URL(entry.source_url);
 			if (url.protocol !== "http:" && url.protocol !== "https:") continue;
+			if (url.hostname === "perplexity.ai" || url.hostname.endsWith(".perplexity.ai")) continue;
+			if (seen.has(url.href)) continue;
+			seen.add(url.href);
 			sources.push({
-				url: entry.source_url,
+				url: url.href,
 				domain: url.hostname.replace(/^www\./, ""),
 				...(typeof entry.source_title === "string" && entry.source_title.trim()
 					? { title: entry.source_title.trim() }
@@ -477,7 +498,7 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	// The credential travels in a request header, so a plaintext endpoint would
 	// put it on the wire; a mock transport needs no URL scheme to be relaxed.
 	if (!/^https:\/\//i.test(deps.endpoint.trim())) throw new Error("BRIGHTDATA_ENDPOINT_INSECURE");
-	if (deps.datasetId.trim() === "") throw new Error("BRIGHTDATA_DATASET_ID_MISSING");
+	if (!deps.perplexityDca && deps.datasetId.trim() === "") throw new Error("BRIGHTDATA_DATASET_ID_MISSING");
 	if (!(brightDataVisitorSystems as readonly string[]).includes(deps.system))
 		throw new Error("BRIGHTDATA_SYSTEM_UNSUPPORTED");
 	if (deps.perplexityDca) {
@@ -516,73 +537,107 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 	async function collectPerplexityDca(
 		prompt: string,
 		budgetMs: number,
-	): Promise<{ payload: unknown; raw: string; collectionId: string } | { reason: string }> {
+	): Promise<{ payload: unknown; raw: string; collectionId: string } | { reason: string; collectionId?: string }> {
 		const config = deps.perplexityDca;
 		if (!config) return { reason: "MALFORMED_RESPONSE" };
 		const deadline = Date.now() + budgetMs;
-		const request = async (url: string, init: RequestInit): Promise<Response | null> => {
+		const request = async (url: string, init: RequestInit): Promise<{ raw: string } | { reason: string }> => {
 			const remaining = deadline - Date.now();
-			if (remaining <= 0) return null;
+			if (remaining <= 0) return { reason: "TIMEOUT" };
 			const controller = new AbortController();
-			const timer = setTimeout(() => controller.abort(), Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, remaining));
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const timeout = new Promise<{ reason: string }>((resolve) => {
+				timer = setTimeout(
+					() => {
+						controller.abort();
+						resolve({ reason: "TIMEOUT" });
+					},
+					Math.min(deps.timeoutMs ?? DEFAULT_TIMEOUT_MS, remaining),
+				);
+			});
 			try {
-				return await deps.fetchImpl(url, { ...init, signal: controller.signal });
-			} catch {
-				return null;
+				return await Promise.race([
+					timeout,
+					(async () => {
+						const response = await deps.fetchImpl(url, { ...init, signal: controller.signal });
+						if (!response.ok) {
+							void response.body?.cancel().catch(() => {});
+							return { reason: `PROVIDER_HTTP_${response.status}` };
+						}
+						return { raw: await readBodyWithinLimit(response, maxResponseBytes) };
+					})(),
+				]);
+			} catch (error) {
+				return {
+					reason: controller.signal.aborted
+						? "TIMEOUT"
+						: error instanceof ResponseTooLargeError
+							? "RESPONSE_TOO_LARGE"
+							: "TRANSPORT_ERROR",
+				};
 			} finally {
 				clearTimeout(timer);
 			}
 		};
-		const inputUrl = `https://www.perplexity.ai/?q=${encodeURIComponent(prompt)}`;
+		const inputUrl = perplexityQuestionUrl(prompt);
 		const triggerUrl = new URL(`${dcaBaseUrl}/dca/trigger`);
 		triggerUrl.searchParams.set("collector", config.collectorId);
 		triggerUrl.searchParams.set("version", config.version);
+		triggerUrl.searchParams.set("queue_next", "1");
+		triggerUrl.searchParams.set("no_downloads", "1");
+		// A local timeout cannot terminate the remote collection. Bound its runtime too.
+		const providerDeadlineSeconds = Math.floor((deadline - Date.now()) / 1000);
+		if (providerDeadlineSeconds < 1) return { reason: "TIMEOUT" };
+		triggerUrl.searchParams.set("deadline", `${providerDeadlineSeconds}s`);
 		const trigger = await request(triggerUrl.toString(), {
 			method: "POST",
 			headers: { Authorization: `Bearer ${deps.apiKey}`, "Content-Type": "application/json" },
-			body: JSON.stringify({ input: [{ url: inputUrl }] }),
+			body: JSON.stringify([{ url: inputUrl }]),
 		});
-		if (!trigger) return { reason: "TIMEOUT" };
-		if (!trigger.ok) return { reason: `PROVIDER_HTTP_${trigger.status}` };
+		if ("reason" in trigger) return trigger;
 		let triggerPayload: unknown;
 		try {
-			triggerPayload = JSON.parse(await readBodyWithinLimit(trigger, maxResponseBytes));
+			triggerPayload = JSON.parse(trigger.raw);
 		} catch {
 			return { reason: "MALFORMED_RESPONSE" };
 		}
 		const triggerRecord = asRecord(triggerPayload);
 		const collectionId = typeof triggerRecord?.collection_id === "string" ? triggerRecord.collection_id.trim() : "";
 		if (!/^j_[A-Za-z0-9]+$/.test(collectionId)) return { reason: "MALFORMED_RESPONSE" };
+		const failure = (reason: string) => ({ reason, collectionId });
 		const pollMs = Math.max(0, config.pollMs ?? snapshotPollMs);
 		while (Date.now() < deadline) {
 			const log = await request(`${dcaBaseUrl}/dca/log/${encodeURIComponent(collectionId)}`, {
 				method: "GET",
 				headers: { Authorization: `Bearer ${deps.apiKey}` },
 			});
-			if (!log) return { reason: "TIMEOUT" };
-			if (!log.ok) return { reason: `PROVIDER_HTTP_${log.status}` };
+			if ("reason" in log) return failure(log.reason);
 			let logPayload: unknown;
-			try { logPayload = JSON.parse(await readBodyWithinLimit(log, maxResponseBytes)); } catch { return { reason: "MALFORMED_RESPONSE" }; }
-			const status = typeof asRecord(logPayload)?.status === "string" ? String(asRecord(logPayload)?.status).toLowerCase() : "";
-			if (["failed", "error", "cancelled", "canceled"].includes(status)) return { reason: "PROVIDER_DCA_ERROR" };
-			if (["ready", "completed", "complete", "succeeded", "success"].includes(status)) break;
+			try {
+				logPayload = JSON.parse(log.raw);
+			} catch {
+				return failure("MALFORMED_RESPONSE");
+			}
+			const status = asRecord(logPayload)?.Status;
+			if (status === "failed" || status === "cancelled" || status === "canceled") return failure("PROVIDER_DCA_ERROR");
+			if (status === "done") break;
 			const remaining = deadline - Date.now();
-			if (remaining <= 0) return { reason: "TIMEOUT" };
+			if (remaining <= 0) return failure("TIMEOUT");
 			await new Promise((resolve) => setTimeout(resolve, Math.min(pollMs, remaining)));
 		}
-		if (Date.now() >= deadline) return { reason: "TIMEOUT" };
+		if (Date.now() >= deadline) return failure("TIMEOUT");
 		const dataset = await request(`${dcaBaseUrl}/dca/dataset?id=${encodeURIComponent(collectionId)}`, {
 			method: "GET",
 			headers: { Authorization: `Bearer ${deps.apiKey}` },
 		});
-		if (!dataset) return { reason: "TIMEOUT" };
-		if (!dataset.ok) return { reason: `PROVIDER_HTTP_${dataset.status}` };
-		let raw: string;
-		try { raw = await readBodyWithinLimit(dataset, maxResponseBytes); } catch (error) {
-			return { reason: error instanceof ResponseTooLargeError ? "RESPONSE_TOO_LARGE" : "MALFORMED_RESPONSE" };
-		}
+		if ("reason" in dataset) return failure(dataset.reason);
+		const raw = dataset.raw;
 		let payload: unknown;
-		try { payload = JSON.parse(raw); } catch { payload = raw; }
+		try {
+			payload = JSON.parse(raw);
+		} catch {
+			payload = raw;
+		}
 		return { payload, raw, collectionId };
 	}
 
@@ -710,7 +765,11 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 					scenarioText,
 					Math.min(permit.expiresAt.getTime() - now().getTime(), overallDeadlineAt - Date.now()),
 				);
-				if ("reason" in dca) return invalidOutcome(permit, dca.reason, costFields());
+				if ("reason" in dca)
+					return invalidOutcome(permit, dca.reason, {
+						...costFields(),
+						rawResponseReference: dca.collectionId ? `brightdata:${dca.collectionId}` : undefined,
+					});
 				raw = dca.raw;
 				payload = dca.payload;
 				dcaCollectionId = dca.collectionId;
@@ -770,10 +829,17 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			}
 			let answer: BrightDataAnswer | null;
 			try {
-				answer = deps.perplexityDca ? parsePerplexityDcaAnswer(payload) : parseAnswer(payload);
+				answer = deps.perplexityDca
+					? parsePerplexityDcaAnswer(payload, perplexityQuestionUrl(scenarioText))
+					: parseAnswer(payload);
 			} catch {
 				answer = null;
 			}
+			if (deps.perplexityDca && (!Array.isArray(payload) || payload.length !== 1))
+				return invalidOutcome(permit, "MALFORMED_RESPONSE", {
+					...costFields(),
+					rawResponseReference: dcaCollectionId ? `brightdata:${dcaCollectionId}` : undefined,
+				});
 			if (deps.perplexityDca && isDcaLoginWall(payload) && (!answer || answer.answerText.trim() === ""))
 				return invalidOutcome(permit, "PROVIDER_AUTH_FAILURE", {
 					...costFields(),
@@ -786,7 +852,12 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			if (!answer && isProviderErrorRow(payload))
 				return invalidOutcome(permit, "PROVIDER_ERROR_ROW", {
 					...costFields(),
-					rawResponseReference: rawResponseReference(undefined, raw),
+					rawResponseReference: rawResponseReference(dcaCollectionId, raw),
+				});
+			if (deps.perplexityDca && !answer)
+				return invalidOutcome(permit, "MALFORMED_RESPONSE", {
+					...costFields(),
+					rawResponseReference: dcaCollectionId ? `brightdata:${dcaCollectionId}` : undefined,
 				});
 			// No answer but a handle to one: the reply is a receipt, and the
 			// answer it stands for has already been produced and billed.
@@ -830,7 +901,11 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			};
 			// A parsed payload may name its own charge even when the answer is
 			// unusable: bill what was reported, not the estimate.
-			if (answer.answerText.trim() === "") return invalidOutcome(permit, "EMPTY_RESPONSE", costFields(answer.costUsd));
+			if (answer.answerText.trim() === "")
+				return invalidOutcome(permit, "EMPTY_RESPONSE", {
+					...costFields(answer.costUsd),
+					...(dcaCollectionId ? { rawResponseReference: `brightdata:${dcaCollectionId}` } : {}),
+				});
 			// Extraction is an enrichment of a call that already succeeded and was
 			// paid for: a context failure must not turn paid evidence into a
 			// FAILED row. The raw response is stored either way, so a missing
