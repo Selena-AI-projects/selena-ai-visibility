@@ -235,6 +235,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * Bright Data can return a successful HTTP/snapshot envelope that is actually
+ * a provider-side refusal.  In particular, the Perplexity collector emits a
+ * small `{ timestamp, input, error, error_code }` row when its browser session
+ * reaches the sign-up wall.  It is not a malformed answer and must not be
+ * retried as though parsing failed: no visitor answer was produced.
+ */
+function isProviderErrorRow(raw: unknown): boolean {
+	const record = asRecord(Array.isArray(raw) ? raw[0] : raw);
+	if (!record) return false;
+	const error = typeof record.error === "string" && record.error.trim() !== "";
+	const errorCode = typeof record.error_code === "string" && record.error_code.trim() !== "";
+	return error || errorCode;
+}
+
+/**
  * The sources the payload showed, and only those. A link is kept when the
  * payload carries it as a usable http(s) URL; anything else is dropped rather
  * than repaired, because a citation is evidence that the answer displayed a
@@ -630,6 +645,15 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 			} catch {
 				answer = null;
 			}
+			// The collector's auth/sign-up wall is a provider observation, not an
+			// unknown payload shape. Keep the reason stable and redact the provider
+			// error body; the hashed response reference below still binds evidence
+			// to this exact paid attempt without storing its message.
+			if (!answer && isProviderErrorRow(payload))
+				return invalidOutcome(permit, "PROVIDER_ERROR_ROW", {
+					...costFields(),
+					rawResponseReference: rawResponseReference(undefined, raw),
+				});
 			// No answer but a handle to one: the reply is a receipt, and the
 			// answer it stands for has already been produced and billed.
 			// Abandoning it here would record a paid answer as an unreadable

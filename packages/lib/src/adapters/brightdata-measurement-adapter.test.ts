@@ -488,6 +488,29 @@ describe("Bright Data measurement adapter", () => {
 		}
 	});
 
+	it("classifies a Perplexity auth-wall error row as provider refusal", async () => {
+		const outcome = await adapterWith(
+			respondWith(
+				jsonResponse({
+					timestamp: "2026-09-05T00:00:00.000Z",
+					input: { prompt: SCENARIO_TEXT },
+					error: "Auth wall: sign-up prompt detected",
+					error_code: "AUTH_WALL",
+				}),
+			),
+		).execute(permitFor({ systemId: "Perplexity" }));
+
+		expect(outcome).toMatchObject({
+			status: "INVALID",
+			validity: "INVALID",
+			invalidReason: "PROVIDER_ERROR_ROW",
+			provider: "brightdata",
+		});
+		expect(outcome.rawResponseReference).toMatch(/^brightdata:sha256:[0-9a-f]{64}$/);
+		expect(JSON.stringify(outcome)).not.toContain("Auth wall");
+		expect(() => runOutcomeSchema.parse(outcome)).not.toThrow();
+	});
+
 	it("keeps only the sources the payload actually showed", () => {
 		const sources = extractBrightDataSources({
 			citations: [
