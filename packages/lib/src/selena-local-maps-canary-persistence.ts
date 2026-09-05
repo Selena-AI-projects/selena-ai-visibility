@@ -95,7 +95,6 @@ export async function persistLocalMapsCanaryPlan(input: PersistLocalMapsCanaryIn
 			organizationId,
 			projectId,
 			version: 1,
-			legacyCollisionOrdinal: 0,
 			snapshot: lock,
 			engineSha,
 			expectedRuns: 1,
