@@ -87,7 +87,11 @@
 		"./adapters/brightdata-snapshot-journal": "./src/adapters/brightdata-snapshot-journal.ts",
 		"./adapters/google-datasets": "./src/adapters/google-dataset-adapters.ts",
 		"./adapters/local-maps-rank": "./src/adapters/local-maps-rank-adapter.ts",
-		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts"
+		"./adapters/brightdata-local-maps-rank": "./src/adapters/brightdata-local-maps-rank-adapter.ts",
+		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts",
+		"./selena-local-maps-live-runner": "./src/selena-local-maps-live-runner.ts",
+		"./selena-local-maps-canary": "./src/selena-local-maps-canary.ts",
+		"./selena-local-maps-canary-persistence": "./src/selena-local-maps-canary-persistence.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^4.0.27",

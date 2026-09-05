@@ -3,6 +3,7 @@ import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
 import { LOCAL_MEASUREMENT_QUEUE } from "@workspace/lib/selena-local-execution";
 import { PgBoss } from "pg-boss";
 import { registerLocalHandlers } from "./local-handlers";
+import type { SelenaLocalMeasureExecutor } from "./jobs/selena-local-measure";
 import { shutdownTelemetry } from "./telemetry";
 
 const localQueueOptions = {
@@ -24,7 +25,10 @@ export function createLocalWorkerBoss(): PgBoss {
  * queue; the executor remains owner-gated and therefore performs no provider
  * or write-side effects until a later approved runtime slice injects one.
  */
-export async function startLocalWorker(boss: PgBoss = createLocalWorkerBoss()): Promise<PgBoss> {
+export async function startLocalWorker(
+	boss: PgBoss = createLocalWorkerBoss(),
+	executor?: SelenaLocalMeasureExecutor,
+): Promise<PgBoss> {
 	if (process.env.SENTRY_DSN) {
 		Sentry.init({
 			dsn: process.env.SENTRY_DSN,
@@ -43,7 +47,7 @@ export async function startLocalWorker(boss: PgBoss = createLocalWorkerBoss()): 
 
 	await boss.start();
 	await boss.createQueue(LOCAL_MEASUREMENT_QUEUE, localQueueOptions);
-	await registerLocalHandlers(boss);
+	await registerLocalHandlers(boss, executor);
 	console.log(`Local worker ready: ${LOCAL_MEASUREMENT_QUEUE} (owner-gated)`);
 	return boss;
 }

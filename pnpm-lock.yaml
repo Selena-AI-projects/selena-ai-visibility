@@ -295,6 +295,9 @@ importers:
       '@workspace/lib':
         specifier: workspace:*
         version: link:../../packages/lib
+      '@workspace/selena-visibility-contracts':
+        specifier: workspace:*
+        version: link:../../packages/selena-visibility-contracts
       '@workspace/whitelabel':
         specifier: workspace:*
         version: link:../../packages/whitelabel
