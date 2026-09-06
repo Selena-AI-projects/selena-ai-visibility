@@ -78,6 +78,33 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
    Data) believes the wall is gone — currently not needed and `SELENA_EMERGENCY_STOP`
    stays true.
 
+### Decisions taken on 6 September 2026
+
+- **1 is decided: switch, and the provider is Oxylabs.** Chosen over DataForSEO
+  for a reason that settles it rather than a preference: DataForSEO has no
+  Perplexity scraper, only the Sonar API, which is the `API` channel; the
+  Oxylabs `perplexity` source drives perplexity.ai and stays in the `VISITOR`
+  channel the local plan sells. A provider that changes the channel replaces
+  the surface, not the collector. (If the API channel is ever sold for
+  Perplexity, it is already reachable through the approved `openrouter`
+  adapter — no new provider needed.)
+- **2 is open: there is no Oxylabs account yet.** Nothing is wired and nothing
+  is billed. The step before any adapter is one live probe —
+  `Oxylabs Perplexity probe` workflow, `packages/lib/scripts/selena-oxylabs-perplexity-probe.ts`
+  — which refuses to run without `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` as
+  Actions secrets. Its verdict (answer with sources / text without sources /
+  empty / wall) decides whether an `oxylabs-perplexity` measurement adapter is
+  written at all. `SELENA_EMERGENCY_STOP=true` stays on throughout; the probe
+  never touches the measurement path.
+- **The 2026-09-04 KORA numbers in the repo were wrong** and are corrected in
+  `docs/selena-visibility/KORA_CYCLE_2026-09-04_OUTCOME.md`: 16 of 30 answers
+  failed, not 5 — Perplexity 8× `MALFORMED_RESPONSE`, Gemini 4×
+  `SNAPSHOT_NOT_READY` plus 2× `RESPONSE_TOO_LARGE` (a size ceiling with no fix
+  yet). One Perplexity row of 366 characters and zero sources was stored as
+  `VALID`, `mention: false`, so "never returns an answer" holds for 2026-09-05
+  but not for 09-04; whether that row is the wall in another shape is open.
+  The ledger is 30 events at $0.30, all `estimated`, none `actual`.
+
 ## State as of 5 September 2026
 
 - API View has produced a real, paid measurement. Measured cost per answer:
