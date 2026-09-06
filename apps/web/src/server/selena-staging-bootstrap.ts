@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "@workspace/lib/db/db";
 import { member, organization, svApiKeys, user } from "@workspace/lib/db/schema";
 import { verifyPayloadSignature } from "@workspace/selena-visibility-contracts";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { assertSimulationEnvironment, SimulationError } from "./selena-staging-simulation";
 
 /**
@@ -54,10 +54,30 @@ export async function bootstrapSimulationTenant(input: {
 		.where(eq(organization.slug, SIMULATION_ORG_SLUG))
 		.limit(1);
 
-	// A second call is answered but not re-credentialed: the tenant is reported
-	// so a re-run can continue, and the key is withheld because the first call
-	// was the only moment it could be shown.
-	if (existing) return { organizationId: existing.id, apiKey: null, created: false };
+	// A repeat call re-credentials the rig rather than withholding a key. The
+	// signing secret is already this rehearsal's root of trust — whoever holds
+	// it can activate a subscription and mint a Telegram link — so issuing the
+	// runner's key to the same holder grants nothing it did not already have,
+	// and it means a run never has to store a credential between attempts. The
+	// previous key is revoked in the same transaction, so exactly one is live.
+	if (existing) {
+		const rotatedKey = `sk_sim_${randomBytes(24).toString("hex")}`;
+		await db.transaction(async (tx) => {
+			await tx
+				.update(svApiKeys)
+				.set({ revokedAt: now })
+				.where(and(eq(svApiKeys.organizationId, existing.id), isNull(svApiKeys.revokedAt)));
+			await tx.insert(svApiKeys).values({
+				organizationId: existing.id,
+				name: "staging simulation runner",
+				keyHash: hashApiKey(rotatedKey),
+				permissions: ["client:read", "client:write"],
+				createdBy: `bootstrap:${SIMULATION_ORG_SLUG}`,
+				createdAt: now,
+			});
+		});
+		return { organizationId: existing.id, apiKey: rotatedKey, created: false };
+	}
 
 	const organizationId = `org_${randomUUID().replaceAll("-", "")}`;
 	const userId = `user_${randomUUID().replaceAll("-", "")}`;
