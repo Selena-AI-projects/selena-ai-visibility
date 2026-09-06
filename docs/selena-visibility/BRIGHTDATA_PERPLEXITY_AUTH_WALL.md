@@ -64,15 +64,34 @@ the provider the registry already ships, on a question the Bright Data
 collector failed. Its verdict is one of: a visitor answer with sources, text
 without sources, an empty answer, or the wall.
 
-As of 2026-09-06 there is no Oxylabs account, so the probe is blocked on
-procurement rather than on code: the workflow refuses to run without the two
-secrets, and nothing is spent until they exist.
+The account was created and the two secrets added on 2026-09-06, and the probe
+ran once that day (Actions run `34041688953`, 15:16 UTC, on the question the
+Bright Data collector failed on 09-04). **Verdict: a visitor answer with
+sources.** The job took 21 seconds; the payload carried `answer_results_md`
+alongside `answer_results`, `additional_results`, `related_queries`,
+`parse_status_code`, `url` and `model` (`turbo`); the answer was 447
+characters with 10 citations and one exposed web query. No wall, no empty
+payload, no provider refusal. The raw payload is the run's
+`oxylabs-perplexity-live-probe` artifact (id `9991882570`, kept until
+2026-09-20); it was not committed.
 
-Only a visitor answer with sources justifies the next step, which is a
-measurement adapter under the same permit, cost and evidence contract as the
-Bright Data one, an `oxylabs-perplexity` entry on the owner-approved list, and
-a canary — the same approval path as the original wiring. Until then the
-`Perplexity` visitor route stays on Bright Data and its metric stays
+Two things one run cannot settle. 447 characters is short next to the 5834 the
+one genuine Bright Data Perplexity answer carried and the 5249 ChatGPT gave on
+the same question — whether `answer_results_md` is the whole answer or a
+list-style summary is a question for the artifact (`answer_results` against
+`answer_results_md`, and the `parse_status_code` value), not for the log. And
+one success on one question says the surface is reachable through this
+provider; it does not say how often. Bright Data returned text on two of ten on
+09-04 before returning the wall on every sync of 09-05. Reliability is what a
+canary of several runs measures, and that is the adapter's first job, not the
+probe's.
+
+That verdict is the one that justifies the next step, and the next step is
+still an owner decision: a measurement adapter under the same permit, cost and
+evidence contract as the Bright Data one, an `oxylabs-perplexity` entry on the
+owner-approved list, and a canary of several runs before any route changes —
+the same approval path as the original wiring. Until that is approved and
+built, the `Perplexity` visitor route stays on Bright Data and its metric stays
 unverified.
 
 Not chosen:
