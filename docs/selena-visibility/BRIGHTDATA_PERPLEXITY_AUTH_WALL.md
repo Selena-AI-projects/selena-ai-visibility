@@ -48,11 +48,31 @@ wall, not a visitor answer.
 4. If not fixable: is there another Perplexity collector/dataset on the account
    that returns real visitor answers?
 
-## App-side fallback options (owner decision pending)
+## App-side fallback options
 
-- Alternative Bright Data Perplexity collector/dataset.
-- `Oxylabs` Perplexity solution.
-- DataForSEO Sonar for the same surface.
+The owner chose **Oxylabs** on 2026-09-06, and chose it over DataForSEO for a
+reason that decides the whole question: DataForSEO has no Perplexity scraper —
+its Perplexity is the Sonar API, which is the `API` channel — while the Oxylabs
+`perplexity` source drives perplexity.ai itself and so stays in the `VISITOR`
+channel the local plan sells. A provider that changes the channel does not
+replace this collector; it replaces the surface.
 
-Owner gate required before any fallback provider is wired; same approval path as
-the original Bright Data wiring.
+Whether Oxylabs meets the same wall is an empirical question, and it is asked
+first, before any adapter is written: the `Oxylabs Perplexity probe` workflow
+runs `packages/lib/scripts/selena-oxylabs-perplexity-probe.ts` once, through
+the provider the registry already ships, on a question the Bright Data
+collector failed. Its verdict is one of: a visitor answer with sources, text
+without sources, an empty answer, or the wall.
+
+Only a visitor answer with sources justifies the next step, which is a
+measurement adapter under the same permit, cost and evidence contract as the
+Bright Data one, an `oxylabs-perplexity` entry on the owner-approved list, and
+a canary — the same approval path as the original wiring. Until then the
+`Perplexity` visitor route stays on Bright Data and its metric stays
+unverified.
+
+Not chosen:
+
+- DataForSEO Sonar — `API` channel; if that channel is ever sold for Perplexity
+  it is already reachable through the approved `openrouter` adapter.
+- Another Bright Data Perplexity dataset — none is known on the account.
