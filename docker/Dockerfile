@@ -154,5 +154,9 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
-# The service name selects the final runtime stage: web or worker.
-FROM ${RAILWAY_SERVICE_NAME} AS final
+# The service name selects the final runtime stage: web or worker. A service
+# named for what it proves rather than for what it runs — a gate or a rehearsal
+# rig — cannot borrow a stage name another service already holds, so it names
+# its stage directly instead.
+ARG SELENA_RUNTIME_TARGET=${RAILWAY_SERVICE_NAME}
+FROM ${SELENA_RUNTIME_TARGET} AS final
