@@ -125,8 +125,11 @@ jobs:
         env:
           KEY: ${{ steps.key.outputs.value }}
         run: |
-          START=$(date -u -d '7 days ago' +%Y-%m-%dT00:00:00Z)
-          END=$(date -u +%Y-%m-%dT00:00:00Z)
+          # A period is unique per project, so a rehearsal run needs its own
+          # window: pinning both ends to midnight would make the second run of
+          # any day re-find the first run's report and its finished delivery.
+          END=$(date -u +%Y-%m-%dT%H:%M:00Z)
+          START=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:00Z)
           curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
             -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
             -d "$(jq -cn --arg p "$PROJECT_REF" --arg s "$START" --arg e "$END" \
