@@ -1718,8 +1718,6 @@ describe("Visibility OS Outcome Layer schema", () => {
 			entries: Array<{ idx: number; tag: string }>;
 		};
 		expect(journal.entries.slice(-25)).toEqual([
-			{ idx: 38, version: "7", when: 1787940000000, tag: "0038_visibility_os_local_visibility", breakpoints: true },
-			{ idx: 39, version: "7", when: 1787940001000, tag: "0039_visibility_os_search_reputation", breakpoints: true },
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1744,13 +1742,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0045_visibility_os_domain_and_lock_hardening",
 				breakpoints: true,
 			},
-			{
-				idx: 46,
-				version: "7",
-				when: 1787940008000,
-				tag: "0046_selena_journal_daily_claims",
-				breakpoints: true,
-			},
+			{ idx: 46, version: "7", when: 1787940008000, tag: "0046_selena_journal_daily_claims", breakpoints: true },
 			{
 				idx: 47,
 				version: "7",
@@ -1758,20 +1750,8 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0047_visibility_os_local_attempt_count_cap",
 				breakpoints: true,
 			},
-			{
-				idx: 48,
-				version: "7",
-				when: 1787940010000,
-				tag: "0048_selena_api_idempotency_records",
-				breakpoints: true,
-			},
-			{
-				idx: 49,
-				version: "7",
-				when: 1787940011000,
-				tag: "0049_visibility_os_claimed_submit_lease",
-				breakpoints: true,
-			},
+			{ idx: 48, version: "7", when: 1787940010000, tag: "0048_selena_api_idempotency_records", breakpoints: true },
+			{ idx: 49, version: "7", when: 1787940011000, tag: "0049_visibility_os_claimed_submit_lease", breakpoints: true },
 			{
 				idx: 50,
 				version: "7",
@@ -1786,13 +1766,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0051_visibility_os_provider_evidence_provenance",
 				breakpoints: true,
 			},
-			{
-				idx: 52,
-				version: "7",
-				when: 1787940014000,
-				tag: "0052_provider_dataset_snapshot_journal",
-				breakpoints: true,
-			},
+			{ idx: 52, version: "7", when: 1787940014000, tag: "0052_provider_dataset_snapshot_journal", breakpoints: true },
 			{
 				idx: 53,
 				version: "7",
@@ -1828,41 +1802,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0057_evidence_project_identity_hardening",
 				breakpoints: true,
 			},
-			{
-				idx: 58,
-				version: "7",
-				when: 1787940020000,
-				tag: "0058_journal_provider_boundary_recovery",
-				breakpoints: true,
-			},
-			{
-				idx: 59,
-				version: "7",
-				when: 1787940021000,
-				tag: "0059_journal_no_spend_reconciliation",
-				breakpoints: true,
-			},
-			{
-				idx: 60,
-				version: "7",
-				when: 1787940022000,
-				tag: "0060_journal_hold_owner_reconciliation",
-				breakpoints: true,
-			},
-			{
-				idx: 61,
-				version: "7",
-				when: 1787940023000,
-				tag: "0061_pilot_invite_control",
-				breakpoints: true,
-			},
-			{
-				idx: 62,
-				version: "7",
-				when: 1787940024000,
-				tag: "0062_provider_spend_reservation",
-				breakpoints: true,
-			},
+			{ idx: 58, version: "7", when: 1787940020000, tag: "0058_journal_provider_boundary_recovery", breakpoints: true },
+			{ idx: 59, version: "7", when: 1787940021000, tag: "0059_journal_no_spend_reconciliation", breakpoints: true },
+			{ idx: 60, version: "7", when: 1787940022000, tag: "0060_journal_hold_owner_reconciliation", breakpoints: true },
+			{ idx: 61, version: "7", when: 1787940023000, tag: "0061_pilot_invite_control", breakpoints: true },
+			{ idx: 62, version: "7", when: 1787940024000, tag: "0062_provider_spend_reservation", breakpoints: true },
+			{ idx: 63, version: "7", when: 1787940025000, tag: "0063_staging_verification_simulation", breakpoints: true },
+			{ idx: 64, version: "7", when: 1787940026000, tag: "0064_simulation_delivery_claim", breakpoints: true },
 		]);
 	});
 
