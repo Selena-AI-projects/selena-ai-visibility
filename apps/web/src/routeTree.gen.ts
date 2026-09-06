@@ -89,6 +89,7 @@ import { Route as ApiV1SelenaProjectsIndexRouteImport } from './routes/api/v1/se
 import { Route as ApiV1SelenaQuotesIndexRouteImport } from './routes/api/v1/selena/quotes/index'
 import { Route as ApiV1SelenaReadinessVerifyRouteImport } from './routes/api/v1/selena/readiness/verify'
 import { Route as ApiV1SelenaScenariosIndexRouteImport } from './routes/api/v1/selena/scenarios/index'
+import { Route as ApiV1SelenaStagingBootstrapRouteImport } from './routes/api/v1/selena/staging/bootstrap'
 import { Route as ApiV1SelenaStagingPaymentEventRouteImport } from './routes/api/v1/selena/staging/payment-event'
 import { Route as ApiV1SelenaStagingSimulationRouteImport } from './routes/api/v1/selena/staging/simulation'
 import { Route as ApiV1SelenaCyclesCycleIdRunsRouteImport } from './routes/api/v1/selena/cycles/$cycleId/runs'
@@ -544,6 +545,12 @@ const ApiV1SelenaScenariosIndexRoute =
     path: '/api/v1/selena/scenarios/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaStagingBootstrapRoute =
+  ApiV1SelenaStagingBootstrapRouteImport.update({
+    id: '/api/v1/selena/staging/bootstrap',
+    path: '/api/v1/selena/staging/bootstrap',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaStagingPaymentEventRoute =
   ApiV1SelenaStagingPaymentEventRouteImport.update({
     id: '/api/v1/selena/staging/payment-event',
@@ -801,6 +808,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
@@ -909,6 +917,7 @@ export interface FileRoutesByTo {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/app/$brand/prompts': typeof AuthedAppBrandPromptsIndexRoute
@@ -1023,6 +1032,7 @@ export interface FileRoutesById {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/_authed/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
@@ -1137,6 +1147,7 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
     | '/app/$brand/prompts/'
@@ -1245,6 +1256,7 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
     | '/app/$brand/prompts'
@@ -1358,6 +1370,7 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
     | '/_authed/app/$brand/prompts/'
@@ -1435,6 +1448,7 @@ export interface RootRouteChildren {
   ApiV1ReportsIndexRoute: typeof ApiV1ReportsIndexRoute
   ApiV1SelenaPaymentsTestRoute: typeof ApiV1SelenaPaymentsTestRoute
   ApiV1SelenaReadinessVerifyRoute: typeof ApiV1SelenaReadinessVerifyRoute
+  ApiV1SelenaStagingBootstrapRoute: typeof ApiV1SelenaStagingBootstrapRoute
   ApiV1SelenaStagingPaymentEventRoute: typeof ApiV1SelenaStagingPaymentEventRoute
   ApiV1SelenaStagingSimulationRoute: typeof ApiV1SelenaStagingSimulationRoute
   ApiPlausibleJsScriptIndexRoute: typeof ApiPlausibleJsScriptIndexRoute
@@ -2036,6 +2050,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaScenariosIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/staging/bootstrap': {
+      id: '/api/v1/selena/staging/bootstrap'
+      path: '/api/v1/selena/staging/bootstrap'
+      fullPath: '/api/v1/selena/staging/bootstrap'
+      preLoaderRoute: typeof ApiV1SelenaStagingBootstrapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/staging/payment-event': {
       id: '/api/v1/selena/staging/payment-event'
       path: '/api/v1/selena/staging/payment-event'
@@ -2458,6 +2479,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1ReportsIndexRoute: ApiV1ReportsIndexRoute,
   ApiV1SelenaPaymentsTestRoute: ApiV1SelenaPaymentsTestRoute,
   ApiV1SelenaReadinessVerifyRoute: ApiV1SelenaReadinessVerifyRoute,
+  ApiV1SelenaStagingBootstrapRoute: ApiV1SelenaStagingBootstrapRoute,
   ApiV1SelenaStagingPaymentEventRoute: ApiV1SelenaStagingPaymentEventRoute,
   ApiV1SelenaStagingSimulationRoute: ApiV1SelenaStagingSimulationRoute,
   ApiPlausibleJsScriptIndexRoute: ApiPlausibleJsScriptIndexRoute,

@@ -15,7 +15,7 @@ import {
 	storeConnectToken,
 	unbindTelegramRecipient,
 } from "@workspace/lib/selena-simulation-repositories";
-import { sendTelegramMessage } from "@workspace/lib/selena-telegram-adapter";
+import { sendTelegramMessage, setTelegramWebhook } from "@workspace/lib/selena-telegram-adapter";
 import {
 	assertSimulationAllowed,
 	buildConnectTokenClaims,
@@ -281,6 +281,35 @@ export async function readTelegramBindingStatus(input: {
 		findBoundRecipient(tx, context, input.projectRef),
 	);
 	return { connected: recipient !== null };
+}
+
+/**
+ * Registers this deployment's webhook with Telegram.
+ *
+ * The rig does this for itself so the bot credential never has to be copied
+ * anywhere else: whatever drives the rehearsal asks for the webhook to be set
+ * and never handles the token.
+ */
+export async function registerTelegramWebhook(input: {
+	env?: NodeJS.ProcessEnv;
+	fetchImpl?: typeof fetch;
+}): Promise<{ ok: boolean; webhookUrl: string; description: string | null }> {
+	const env = input.env ?? process.env;
+	assertSimulationEnvironment(env);
+	const botToken = env.SELENA_TELEGRAM_BOT_TOKEN;
+	if (!botToken) throw new SimulationError("SELENA_TELEGRAM_BOT_TOKEN_MISSING", 503);
+	const secretToken = env.SELENA_TELEGRAM_WEBHOOK_SECRET;
+	if (!secretToken) throw new SimulationError("SELENA_TELEGRAM_WEBHOOK_SECRET_MISSING", 503);
+	const appUrl = env.APP_URL;
+	if (!appUrl) throw new SimulationError("SELENA_SIMULATION_APP_URL_MISSING", 503);
+
+	const webhookUrl = `${appUrl.replace(/\/+$/, "")}/api/v1/selena/staging/telegram/webhook`;
+	const result = await setTelegramWebhook(
+		{ botToken },
+		{ url: webhookUrl, secretToken },
+		{ fetchImpl: input.fetchImpl },
+	);
+	return { ok: result.ok, webhookUrl, description: result.description };
 }
 
 // ---------------------------------------------------------------------------

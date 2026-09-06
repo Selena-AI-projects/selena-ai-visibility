@@ -8,6 +8,7 @@ import {
 	prepareSampleReportDelivery,
 	readSimulationEvidence,
 	readTelegramBindingStatus,
+	registerTelegramWebhook,
 	runDeliveryAttempt,
 } from "../../../../../server/selena-staging-simulation";
 import { simulationErrorResponse } from "../../../../../server/selena-staging-simulation-http";
@@ -29,6 +30,7 @@ const bodySchema = z.discriminatedUnion("action", [
 		userId: z.string().min(1).max(160),
 	}),
 	z.object({ action: z.literal("binding-status"), projectRef: z.string().min(1).max(160) }),
+	z.object({ action: z.literal("set-webhook") }),
 	z.object({ action: z.literal("disconnect"), projectRef: z.string().min(1).max(160) }),
 	z.object({
 		action: z.literal("prepare-report"),
@@ -67,6 +69,7 @@ export const Route = createFileRoute("/api/v1/selena/staging/simulation")({
 						return Response.json(
 							await issueTelegramConnectLink({ ...identity, userId: body.userId, projectRef: body.projectRef }),
 						);
+					if (body.action === "set-webhook") return Response.json(await registerTelegramWebhook({}));
 					if (body.action === "binding-status")
 						return Response.json(await readTelegramBindingStatus({ ...identity, projectRef: body.projectRef }));
 					if (body.action === "disconnect")

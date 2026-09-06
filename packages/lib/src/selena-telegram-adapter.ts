@@ -132,3 +132,42 @@ export function parseTelegramStartUpdate(update: unknown): TelegramStartUpdate |
 	if (!match?.[1]) return null;
 	return { chatId: String(chatId), token: match[1] };
 }
+
+/**
+ * Points the bot at this deployment's webhook.
+ *
+ * The secret travels to Telegram here and comes back on every update, which is
+ * how an update can be shown to have come from Telegram rather than from
+ * anyone who guessed the path. `drop_pending_updates` clears anything the bot
+ * accumulated while it had nowhere to deliver: those updates predate the
+ * binding and replaying them would only produce refusals.
+ */
+export async function setTelegramWebhook(
+	credentials: TelegramCredentials,
+	request: { url: string; secretToken: string },
+	options: { fetchImpl?: typeof fetch } = {},
+): Promise<{ ok: boolean; httpStatus: number; description: string | null }> {
+	if (!credentials.botToken) throw new Error("SELENA_TELEGRAM_BOT_TOKEN_MISSING");
+	if (!request.secretToken) throw new Error("SELENA_TELEGRAM_WEBHOOK_SECRET_MISSING");
+	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+	try {
+		const response = await fetchImpl(`${TELEGRAM_API_ORIGIN}/bot${credentials.botToken}/setWebhook`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				url: request.url,
+				secret_token: request.secretToken,
+				allowed_updates: ["message"],
+				drop_pending_updates: true,
+			}),
+		});
+		const body = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+		return {
+			ok: body.ok === true && response.ok,
+			httpStatus: response.status,
+			description: body.description ?? null,
+		};
+	} catch (error) {
+		return { ok: false, httpStatus: 0, description: describeFailure(error, credentials.botToken) };
+	}
+}
