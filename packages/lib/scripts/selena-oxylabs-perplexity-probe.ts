@@ -86,7 +86,9 @@ async function main(): Promise<void> {
 	console.log(`content keys: ${content ? keysOf(content) : "none — results[0].content absent"}`);
 	console.log(`llm_model: ${String(content?.llm_model ?? content?.model ?? "-")}`);
 	console.log(`answer field: ${answerField ?? "none of " + ANSWER_FIELDS.join(",")}`);
-	console.log(`answer: ${text.length} chars, ${result.citations.length} citations, ${result.webQueries.length} web queries`);
+	console.log(
+		`answer: ${text.length} chars, ${result.citations.length} citations, ${result.webQueries.length} web queries`,
+	);
 	console.log(`excerpt: ${JSON.stringify(text.slice(0, EXCERPT_CHARS))}`);
 	console.log(`fixture written: ${fixturePath}`);
 
