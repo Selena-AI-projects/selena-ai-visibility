@@ -32,17 +32,63 @@ They are different observations and are never averaged together.
 - **API View** — the model answering from its own knowledge, no web search.
   Runs through OpenRouter. Part of the $79 plan.
 
-## State as of 25 August 2026
+## Current open problem — Perplexity collector returns an auth wall (5 September 2026)
+
+Search for this block with the words: **Perplexity**, **auth wall**,
+**brightdata-perplexity**, **PROVIDER_ERROR_ROW**, **issue #141**.
+
+The Perplexity Visitor View metric is **not working and cannot be fixed in this
+repository**. Bright Data's Perplexity collector `gd_m7dhdot1vw9a7gc1n`
+**never returns an answer**: every snapshot (24/24 on 2026-09-05) is a wall:
+
+```
+keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
+```
+
+- This is **not a parser bug** — there is no `answer_text_markdown` to parse
+  because the collector's own browser session is stopped at Perplexity's
+  sign-up/login wall. Do **not** edit `normalizeAnswer`/`extractSources`; that
+  branch was investigated and rejected.
+- The adapter now classifies the row as **`PROVIDER_ERROR_ROW`** (provider
+  refusal), not `MALFORMED_RESPONSE`, and the run cycle **fails closed** on it —
+  so a wall is reported honestly instead of being paid for as a fake zero.
+- ChatGPT and Gemini visitor runs work (the 29 valid answers on 2026-09-05 were
+  exactly those two). Only Perplexity is blocked.
+- Dev deployed: staging worker sits on release `a70ffb2b` (merge of #140 into
+  release, diagnostics #139 now live). `SELENA_EMERGENCY_STOP=true` is the
+  correct safety setting and should stay on until the owner decides the next
+  provider step.
+- **Ticket is filed:** https://github.com/parkourcafe/selena-ai-visibility/issues/141
+  (body also at `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`, full
+  observation at `SELENA_VISITOR_VIEW_BRIGHTDATA_WIRING.md`).
+
+### Decisions the owner must make next
+
+1. **Do we keep waiting on Bright Data support** to fix the Perplexity
+   collector, or **switch to a different Perplexity provider**? The candidates
+   named so far: another Bright Data Perplexity dataset, **Oxylabs**, or
+   **DataForSEO Sonar**. This is the only blocker for a Perplexity number.
+2. If switching: **which provider**, and does the owner **approve the billing**
+   for it (new token + `SELENA_BRIGHTDATA_DATASET_PERPLEXITY` style wiring, same
+   `.env`/Railway gate as the original Bright Data wiring)?
+3. **What is the Perplexity SLA?** Until this is resolved, every
+   `brightdata-perplexity` number is **unverified** and must be labeled as such
+   in any report. Perplexity stub should keep failing closed, not show a zero.
+4. Whether to spend another paid permit to re-test once the owner (or Bright
+   Data) believes the wall is gone — currently not needed and `SELENA_EMERGENCY_STOP`
+   stays true.
+
+## State as of 5 September 2026
 
 - API View has produced a real, paid measurement. Measured cost per answer:
   **$0.00171**.
-- Visitor View has **never completed a run**. Everything is wired and three
-  faults in that path were fixed on 25 August (surface naming, the missing
-  extraction resolver, one adapter name for a multi-surface plan) — but no run
-  has proven it end to end. That is the next thing to do.
+- Visitor View runs for **ChatGPT and Gemini** are proven end to end. The third
+  surface, **Perplexity, is blocked on Bright Data's auth wall** (see the block
+  above) — that is the next thing to unblock, and it is a provider decision, not
+  code.
 - Free auto-dispatch of promo-code orders is built and **switched off**
-  (`SELENA_FREE_AUTO_DISPATCH_ENABLED`). It stays off until one Visitor View
-  run succeeds by hand, or the first customer gets an automated failure.
+  (`SELENA_FREE_AUTO_DISPATCH_ENABLED`). It stays off until Visitor View is
+  healthy across the surfaces a customer's plan sells.
 
 ## Owner variables
 
