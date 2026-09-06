@@ -36,7 +36,9 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 // Measured on the account's own collectors: a ChatGPT answer arrived at 0.97 MB
 // and a Perplexity one at 2.6 MB, because the payload carries the rendered
 // answer alongside the text. A cap below those turns real answers into
-// RESPONSE_TOO_LARGE.
+// RESPONSE_TOO_LARGE. Two Gemini answers in the KORA cycle of 2026-09-04
+// exceeded even this ceiling; how far past it they ran was never measured, so
+// any larger number here would be a guess rather than a fix.
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export const brightDataVisitorSystems = ["chatgpt", "gemini", "perplexity"] as const;
@@ -208,10 +210,12 @@ const PROGRESS_ENDPOINT = "https://api.brightdata.com/datasets/v3/progress";
 const SNAPSHOT_ENDPOINT = "https://api.brightdata.com/datasets/v3/snapshot";
 const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 // A successful Perplexity collection on the account took almost sixteen
-// minutes, and the KORA cycle of 2026-09-04 lost two Gemini answers to
-// SNAPSHOT_NOT_READY at the twelve-minute default — both snapshots produced
+// minutes, and the KORA cycle of 2026-09-04 lost four Gemini answers to
+// SNAPSHOT_NOT_READY at the twelve-minute default — every one of them produced
 // and billed. The larger budget stays scoped to the surfaces observed to need
-// it so the faster collector keeps its existing ceiling.
+// it so the faster collector keeps its existing ceiling. It does nothing for
+// the two answers the same cycle lost to RESPONSE_TOO_LARGE: a size ceiling is
+// not a wait, and that surface still has no fix.
 export const SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
 // The worker lease includes room after the provider deadline for snapshot
 // cancellation and the transaction that makes the run and cycle terminal.
@@ -224,7 +228,7 @@ const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
  * What an unreadable payload contained, without quoting it: the field names it
  * carried, and the provider's own status line when it has one. A payload that
  * cannot be read costs exactly what a readable one costs, and the KORA cycle of
- * 2026-09-04 could not say why three Perplexity answers were unreadable —
+ * 2026-09-04 could not say why eight Perplexity answers were unreadable —
  * nothing kept a trace of their shape, so the only way to learn it was to buy
  * the answers again. Field names and a status line are neither the answer text
  * nor the credential, which is what makes them safe to write down.
