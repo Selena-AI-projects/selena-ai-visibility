@@ -129,6 +129,22 @@ export async function sha256Hex(value: string): Promise<string> {
 	return hex(digest);
 }
 
+/**
+ * The value Telegram echoes back on every update.
+ *
+ * Telegram accepts only letters, digits, underscore and hyphen here and
+ * rejects the whole registration otherwise — a rule an operator choosing a
+ * secret has no reason to know. Hashing the configured secret satisfies it
+ * whatever they typed, and has the better property that the secret itself
+ * never leaves the deployment holding it: what travels to Telegram is a
+ * derived value, domain-separated so it cannot double as a plain digest of
+ * the secret in another context.
+ */
+export async function telegramWebhookHeaderToken(secret: string): Promise<string> {
+	if (!secret) throw new Error("SELENA_TELEGRAM_WEBHOOK_SECRET_MISSING");
+	return sha256Hex(`selena-telegram-webhook ${secret}`);
+}
+
 // ---------------------------------------------------------------------------
 // Simulated payment event
 // ---------------------------------------------------------------------------

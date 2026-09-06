@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { parseTelegramStartUpdate } from "@workspace/lib/selena-telegram-adapter";
-import { constantTimeEquals } from "@workspace/selena-visibility-contracts";
+import { constantTimeEquals, telegramWebhookHeaderToken } from "@workspace/selena-visibility-contracts";
 import {
 	assertSimulationEnvironment,
 	redeemTelegramConnectToken,
@@ -25,9 +25,10 @@ export const Route = createFileRoute("/api/v1/selena/staging/telegram/webhook")(
 			POST: async ({ request }) => {
 				try {
 					assertSimulationEnvironment();
-					const expected = process.env.SELENA_TELEGRAM_WEBHOOK_SECRET ?? "";
+					const configured = process.env.SELENA_TELEGRAM_WEBHOOK_SECRET ?? "";
 					const presented = request.headers.get("x-telegram-bot-api-secret-token") ?? "";
-					if (!expected || !constantTimeEquals(expected, presented)) return new Response("Not Found", { status: 404 });
+					if (!configured || !constantTimeEquals(await telegramWebhookHeaderToken(configured), presented))
+						return new Response("Not Found", { status: 404 });
 
 					let update: unknown;
 					try {

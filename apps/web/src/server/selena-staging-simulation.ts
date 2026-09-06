@@ -27,6 +27,7 @@ import {
 	simulationEnvironmentFromEnv,
 	subscriptionActivationFromEvent,
 	telegramDeepLink,
+	telegramWebhookHeaderToken,
 	verifyConnectToken,
 	verifyPayloadSignature,
 } from "@workspace/selena-visibility-contracts";
@@ -306,7 +307,7 @@ export async function registerTelegramWebhook(input: {
 	const webhookUrl = `${appUrl.replace(/\/+$/, "")}/api/v1/selena/staging/telegram/webhook`;
 	const result = await setTelegramWebhook(
 		{ botToken },
-		{ url: webhookUrl, secretToken },
+		{ url: webhookUrl, secretToken: await telegramWebhookHeaderToken(secretToken) },
 		{ fetchImpl: input.fetchImpl },
 	);
 	return { ok: result.ok, webhookUrl, description: result.description };
