@@ -64,6 +64,10 @@ the provider the registry already ships, on a question the Bright Data
 collector failed. Its verdict is one of: a visitor answer with sources, text
 without sources, an empty answer, or the wall.
 
+As of 2026-09-06 there is no Oxylabs account, so the probe is blocked on
+procurement rather than on code: the workflow refuses to run without the two
+secrets, and nothing is spent until they exist.
+
 Only a visitor answer with sources justifies the next step, which is a
 measurement adapter under the same permit, cost and evidence contract as the
 Bright Data one, an `oxylabs-perplexity` entry on the owner-approved list, and
