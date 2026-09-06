@@ -660,6 +660,7 @@ export type DeliveryClaim = {
 	report: SampleWeeklyReport;
 	chatId: string;
 	attempt: number;
+	claimedAt: Date;
 	correlationId: string;
 };
 
@@ -751,6 +752,7 @@ export async function claimDeliveryAttempt(
 			report: (report as { report: SampleWeeklyReport }).report,
 			chatId,
 			attempt: precondition.attempt,
+			claimedAt: input.now,
 			correlationId: delivery.correlationId as string,
 		},
 	};
@@ -763,7 +765,21 @@ export async function claimDeliveryAttempt(
  * fails between the two the transaction rolls back both, and an attempt that
  * reached Telegram without leaving a record is the one outcome that would make
  * the evidence untrustworthy.
+ *
+ * Every update carries the claim it is writing for. A worker whose claim
+ * expired and was taken over must not overwrite the state of the worker that
+ * took it: it lost the delivery while it was away, and saying so is better
+ * than quietly winding the attempt count back.
  */
+/** Matches the delivery only while it is still held by this claim. */
+function claimHeld(claim: DeliveryClaim) {
+	return and(eq(svSimulationDeliveries.id, claim.deliveryId), eq(svSimulationDeliveries.claimedAt, claim.claimedAt));
+}
+
+function assertClaimHeld(written: { id: unknown }[]): void {
+	if (written.length === 0) throw new Error("SELENA_DELIVERY_CLAIM_LOST");
+}
+
 export async function recordDeliveryAttempt(
 	tx: Tx,
 	context: SimulationContext,
@@ -796,7 +812,7 @@ export async function recordDeliveryAttempt(
 	const decision = decideNextDelivery({ attempt: input.claim.attempt, outcome: input.outcome, now: input.now });
 
 	if (decision.kind === "DELIVERED") {
-		await tx
+		const written = await tx
 			.update(svSimulationDeliveries)
 			.set({
 				status: "DELIVERED",
@@ -807,7 +823,9 @@ export async function recordDeliveryAttempt(
 				lastError: null,
 				updatedAt: input.now,
 			})
-			.where(eq(svSimulationDeliveries.id, input.claim.deliveryId));
+			.where(claimHeld(input.claim))
+			.returning({ id: svSimulationDeliveries.id });
+		assertClaimHeld(written);
 		await recordAudit(tx, context, {
 			event: "SIMULATION_TELEGRAM_DELIVERY_CONFIRMED",
 			correlationId: input.claim.correlationId,
@@ -821,7 +839,7 @@ export async function recordDeliveryAttempt(
 	}
 
 	if (decision.kind === "RETRY") {
-		await tx
+		const written = await tx
 			.update(svSimulationDeliveries)
 			.set({
 				status: "RETRY_SCHEDULED",
@@ -831,11 +849,13 @@ export async function recordDeliveryAttempt(
 				lastError: input.outcome.kind === "SUCCESS" ? null : input.outcome.detail.slice(0, 300),
 				updatedAt: input.now,
 			})
-			.where(eq(svSimulationDeliveries.id, input.claim.deliveryId));
+			.where(claimHeld(input.claim))
+			.returning({ id: svSimulationDeliveries.id });
+		assertClaimHeld(written);
 		return decision;
 	}
 
-	await tx
+	const stopped = await tx
 		.update(svSimulationDeliveries)
 		.set({
 			status: decision.status,
@@ -845,7 +865,9 @@ export async function recordDeliveryAttempt(
 			lastError: decision.reason.slice(0, 300),
 			updatedAt: input.now,
 		})
-		.where(eq(svSimulationDeliveries.id, input.claim.deliveryId));
+		.where(claimHeld(input.claim))
+		.returning({ id: svSimulationDeliveries.id });
+	assertClaimHeld(stopped);
 
 	if (decision.status === "UNBOUND")
 		await unbindTelegramRecipient(tx, context, {
