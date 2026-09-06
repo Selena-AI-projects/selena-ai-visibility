@@ -341,6 +341,9 @@ GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app;
 -- The simulation's attempt log is append-only for the same reason the audit
 -- trail is: a delivery attempt that could be edited afterwards proves nothing.
 GRANT SELECT, INSERT ON sv_simulation_delivery_attempts TO selena_app;
+
+-- The bootstrap nonce ledger holds no tenant data; it is swept rather than kept.
+GRANT SELECT, INSERT, DELETE ON sv_simulation_bootstrap_nonces TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_journal_claim_recovery_state(uuid) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text) TO selena_app;
 SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'

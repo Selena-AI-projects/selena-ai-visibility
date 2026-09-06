@@ -664,7 +664,7 @@ export const svSimulationSubscriptions = pgTable("sv_simulation_subscriptions", 
 	activatedAt: timestamp("activated_at", { withTimezone: true }).defaultNow().notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
-	eventUnique: uniqueIndex("sv_simulation_subscriptions_event_unique").on(table.provider, table.providerEventId),
+	eventUnique: uniqueIndex("sv_simulation_subscriptions_event_unique").on(table.organizationId, table.provider, table.providerEventId),
 	orgIdx: index("sv_simulation_subscriptions_org_idx").on(table.organizationId),
 	projectIdx: index("sv_simulation_subscriptions_project_idx").on(table.organizationId, table.projectRef),
 	environmentCheck: check("sv_simulation_subscriptions_environment_check", sql`${table.environment} = 'staging'`),
@@ -697,14 +697,14 @@ export const svSimulationConnectTokens = pgTable("sv_simulation_connect_tokens",
 	expiryCheck: check("sv_simulation_connect_tokens_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
 })).enableRLS();
 
-/** The bound recipient. The chat id is stored as a keyed hash for lookup and as
- * ciphertext for sending, so a database copy alone cannot address the chat. */
+/** The bound recipient. The chat id exists here only as ciphertext: a digest of
+ * a numeric Telegram id is guessable offline, so there is no hash column to undo
+ * what the ciphertext protects. */
 export const svSimulationRecipients = pgTable("sv_simulation_recipients", {
 	id: uuid("id").defaultRandom().primaryKey().notNull(),
 	organizationId: text("organization_id").notNull().references(() => organization.id),
 	projectRef: text("project_ref").notNull(),
 	channel: text("channel").notNull().default("telegram"),
-	chatIdHash: text("chat_id_hash").notNull(),
 	chatIdCiphertext: text("chat_id_ciphertext").notNull(),
 	status: text("status").notNull().default("BOUND"),
 	environment: text("environment").notNull().default("staging"),
@@ -718,7 +718,6 @@ export const svSimulationRecipients = pgTable("sv_simulation_recipients", {
 	projectIdx: index("sv_simulation_recipients_project_idx").on(table.organizationId, table.projectRef),
 	environmentCheck: check("sv_simulation_recipients_environment_check", sql`${table.environment} = 'staging'`),
 	statusCheck: check("sv_simulation_recipients_status_check", sql`${table.status} IN ('PENDING', 'BOUND', 'UNBOUND')`),
-	hashCheck: check("sv_simulation_recipients_hash_check", sql`${table.chatIdHash} ~ '^[a-f0-9]{64}$'`),
 	unboundCheck: check("sv_simulation_recipients_unbound_check", sql`(${table.status} = 'UNBOUND') = (${table.unboundAt} IS NOT NULL)`),
 })).enableRLS();
 
@@ -761,6 +760,7 @@ export const svSimulationDeliveries = pgTable("sv_simulation_deliveries", {
 	status: text("status").notNull().default("PENDING"),
 	attemptsMade: integer("attempts_made").notNull().default(0),
 	nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+	claimedAt: timestamp("claimed_at", { withTimezone: true }),
 	deliveredAt: timestamp("delivered_at", { withTimezone: true }),
 	lastError: text("last_error"),
 	environment: text("environment").notNull().default("staging"),
@@ -773,10 +773,22 @@ export const svSimulationDeliveries = pgTable("sv_simulation_deliveries", {
 	projectIdx: index("sv_simulation_deliveries_project_idx").on(table.organizationId, table.projectRef),
 	environmentCheck: check("sv_simulation_deliveries_environment_check", sql`${table.environment} = 'staging'`),
 	modeCheck: check("sv_simulation_deliveries_mode_check", sql`${table.mode} = 'test'`),
-	statusCheck: check("sv_simulation_deliveries_status_check", sql`${table.status} IN ('PENDING', 'DELIVERED', 'RETRY_SCHEDULED', 'FAILED', 'UNBOUND')`),
+	statusCheck: check("sv_simulation_deliveries_status_check", sql`${table.status} IN ('PENDING', 'SENDING', 'DELIVERED', 'RETRY_SCHEDULED', 'FAILED', 'UNBOUND')`),
 	attemptCapCheck: check("sv_simulation_deliveries_attempt_cap_check", sql`${table.attemptsMade} BETWEEN 0 AND 5`),
 	deliveredCheck: check("sv_simulation_deliveries_delivered_check", sql`(${table.status} = 'DELIVERED') = (${table.deliveredAt} IS NOT NULL)`),
+	claimedCheck: check("sv_simulation_deliveries_claimed_check", sql`${table.status} <> 'SENDING' OR ${table.claimedAt} IS NOT NULL`),
 })).enableRLS();
+
+/** Spent bootstrap nonces: what makes one bootstrap signature usable once. The
+ * rows carry no tenant and no secret, and each call sweeps those older than the
+ * window a signature stays fresh for. */
+export const svSimulationBootstrapNonces = pgTable("sv_simulation_bootstrap_nonces", {
+	nonce: text("nonce").primaryKey().notNull(),
+	usedAt: timestamp("used_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	usedIdx: index("sv_simulation_bootstrap_nonces_used_idx").on(table.usedAt),
+	shapeCheck: check("sv_simulation_bootstrap_nonces_shape_check", sql`${table.nonce} ~ '^[a-f0-9]{32,128}$'`),
+}));
 
 /** Append-only attempt log: one row per send, whatever its outcome. */
 export const svSimulationDeliveryAttempts = pgTable("sv_simulation_delivery_attempts", {

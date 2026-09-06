@@ -54,35 +54,38 @@ export function assertSimulationMarkers(value: unknown): asserts value is Simula
 
 /**
  * Where the simulation may run. Two independent conditions must both hold: the
- * owner has switched it on, and the deployment does not identify itself as
- * production. The production check reads the names Railway injects rather than
- * a value the feature sets for itself, so a service that is production cannot
- * be talked out of it by its own configuration.
+ * deployment identifies itself as the one staging environment this feature is
+ * built for, and the owner has switched it on. The name is read from what
+ * Railway injects before what the service sets for itself, so a deployment
+ * cannot rename itself into eligibility.
  */
 export type SimulationEnvironment = { enabled: boolean; environmentName: string };
-
-const PRODUCTION_NAMES = new Set(["production", "prod"]);
 
 export function simulationEnvironmentFromEnv(env: Record<string, string | undefined>): SimulationEnvironment {
 	const environmentName = (env.RAILWAY_ENVIRONMENT_NAME ?? env.ENVIRONMENT ?? "").trim().toLowerCase();
 	return { enabled: env.SELENA_STAGING_SIMULATION_ENABLED === "true", environmentName };
 }
 
-export function isProductionEnvironment(environmentName: string): boolean {
-	return PRODUCTION_NAMES.has(environmentName.trim().toLowerCase());
+export function isSimulationEnvironment(environmentName: string): boolean {
+	return environmentName.trim().toLowerCase() === SIMULATION_ENVIRONMENT;
 }
 
 /**
- * Refuses outside staging. The production branch is checked first and reported
- * with its own code so an operator reading a rejected request can tell "this
- * environment may never do this" apart from "this environment has not been
- * switched on".
+ * Admits only the named staging environment. Naming the one environment that
+ * may run this, rather than listing the ones that may not, is what makes the
+ * gate safe to carry forward: an environment nobody anticipated — a preview, a
+ * clone, a renamed production — is refused because it was never admitted,
+ * not because someone remembered to add its name to a list.
+ *
+ * An unnamed environment gets its own code, because "this deployment tells us
+ * nothing about where it runs" is an operator's misconfiguration to fix, while
+ * a named non-staging environment is a decision that stands.
  */
 export function assertSimulationAllowed(environment: SimulationEnvironment): void {
-	if (isProductionEnvironment(environment.environmentName))
-		throw new Error("SELENA_SIMULATION_FORBIDDEN_IN_PRODUCTION");
-	if (!environment.enabled) throw new Error("SELENA_SIMULATION_DISABLED");
 	if (environment.environmentName.length === 0) throw new Error("SELENA_SIMULATION_ENVIRONMENT_UNKNOWN");
+	if (!isSimulationEnvironment(environment.environmentName))
+		throw new Error("SELENA_SIMULATION_ENVIRONMENT_NOT_ALLOWED");
+	if (!environment.enabled) throw new Error("SELENA_SIMULATION_DISABLED");
 }
 
 // ---------------------------------------------------------------------------
@@ -631,8 +634,22 @@ export const DELIVERY_MAX_ATTEMPTS = 5;
  */
 export const DELIVERY_RETRY_DELAYS_MS = Object.freeze([60_000, 300_000, 1_800_000, 7_200_000]);
 
-export const DELIVERY_STATUSES = ["PENDING", "DELIVERED", "RETRY_SCHEDULED", "FAILED", "UNBOUND"] as const;
+export const DELIVERY_STATUSES = ["PENDING", "SENDING", "DELIVERED", "RETRY_SCHEDULED", "FAILED", "UNBOUND"] as const;
 export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
+
+/**
+ * How long a claimed delivery stays claimed. A worker marks the row SENDING
+ * before it calls Telegram, so a second worker refuses; if that worker then
+ * dies mid-send, nothing would ever clear the mark, and one crash would strand
+ * the delivery for good. After this window another worker may take it over —
+ * the attempt the dead worker consumed has already been counted, so a takeover
+ * continues the schedule rather than restarting it.
+ *
+ * The window is far longer than a Telegram call takes and far shorter than the
+ * first retry delay, so it can only ever admit a takeover that the retry
+ * schedule would have admitted anyway.
+ */
+export const DELIVERY_CLAIM_LEASE_MS = 30_000;
 
 export type DeliveryOutcome =
 	| { kind: "SUCCESS" }
@@ -692,8 +709,10 @@ export type DeliveryPrecondition =
 			code:
 				| "SELENA_DELIVERY_REPORT_NOT_PERSISTED"
 				| "SELENA_DELIVERY_ALREADY_DELIVERED"
+				| "SELENA_DELIVERY_IN_FLIGHT"
 				| "SELENA_DELIVERY_RECIPIENT_UNBOUND"
-				| "SELENA_DELIVERY_ATTEMPTS_EXHAUSTED";
+				| "SELENA_DELIVERY_ATTEMPTS_EXHAUSTED"
+				| "SELENA_DELIVERY_NOT_DUE";
 	  };
 
 export function resolveDeliveryPrecondition(input: {
@@ -701,13 +720,29 @@ export function resolveDeliveryPrecondition(input: {
 	deliveryStatus: DeliveryStatus;
 	attemptsMade: number;
 	recipientStatus: RecipientBindingStatus;
+	claimedAt: Date | null;
+	nextAttemptAt: Date | null;
+	now: Date;
 }): DeliveryPrecondition {
 	if (!input.reportPersisted) return { kind: "REFUSE", code: "SELENA_DELIVERY_REPORT_NOT_PERSISTED" };
 	if (input.deliveryStatus === "DELIVERED") return { kind: "REFUSE", code: "SELENA_DELIVERY_ALREADY_DELIVERED" };
+	if (input.deliveryStatus === "SENDING") {
+		// A claim with no recorded time is a row we cannot reason about, and the
+		// safe reading of "somebody may be sending this right now" is that they
+		// are: refusing costs a retry, sending twice cannot be undone.
+		const leaseExpired =
+			input.claimedAt !== null && input.now.getTime() - input.claimedAt.getTime() >= DELIVERY_CLAIM_LEASE_MS;
+		if (!leaseExpired) return { kind: "REFUSE", code: "SELENA_DELIVERY_IN_FLIGHT" };
+	}
 	if (input.deliveryStatus === "UNBOUND" || input.recipientStatus !== "BOUND")
 		return { kind: "REFUSE", code: "SELENA_DELIVERY_RECIPIENT_UNBOUND" };
-	if (input.attemptsMade >= DELIVERY_MAX_ATTEMPTS)
+	if (input.deliveryStatus === "FAILED" || input.attemptsMade >= DELIVERY_MAX_ATTEMPTS)
 		return { kind: "REFUSE", code: "SELENA_DELIVERY_ATTEMPTS_EXHAUSTED" };
+	// The schedule is the contract, so it is enforced where the send is decided
+	// rather than only where the next time is written down: a queue that fires a
+	// job early — or twice — still cannot send before the delay has passed.
+	if (input.nextAttemptAt !== null && input.nextAttemptAt.getTime() > input.now.getTime())
+		return { kind: "REFUSE", code: "SELENA_DELIVERY_NOT_DUE" };
 	return { kind: "SEND", attempt: input.attemptsMade + 1 };
 }
 
@@ -801,3 +836,37 @@ export const SIMULATION_RECEIPT: SimulationReceipt = Object.freeze({
 	environment: SIMULATION_ENVIRONMENT,
 	mode: SIMULATION_MODE,
 });
+
+// ---------------------------------------------------------------------------
+// Rig bootstrap
+// ---------------------------------------------------------------------------
+
+/**
+ * How far from now a bootstrap request may claim to have been issued. The
+ * window is what turns a captured signature from a permanent credential into
+ * one that is worthless within minutes; the nonce is what stops it being used
+ * even once more inside the window. Both are needed: a window alone allows a
+ * replay in the seconds after capture, and a nonce alone would leave a ledger
+ * that has to be kept forever.
+ */
+export const BOOTSTRAP_FRESHNESS_MS = 120_000;
+
+export const bootstrapRequestSchema = z.strictObject({
+	purpose: z.literal("staging-verification-simulation"),
+	nonce: z.string().regex(/^[a-f0-9]{32,128}$/),
+	issued_at: z.iso.datetime(),
+});
+export type BootstrapRequest = z.infer<typeof bootstrapRequestSchema>;
+
+export function parseBootstrapRequest(value: unknown): BootstrapRequest {
+	const parsed = bootstrapRequestSchema.safeParse(value);
+	if (!parsed.success) throw new Error("SELENA_BOOTSTRAP_REQUEST_INVALID");
+	return parsed.data;
+}
+
+/** Rejects a request signed too long ago, and one dated too far ahead to be a
+ * clock that merely drifted. */
+export function assertBootstrapFresh(request: BootstrapRequest, now: Date): void {
+	const skewMs = Math.abs(now.getTime() - new Date(request.issued_at).getTime());
+	if (skewMs > BOOTSTRAP_FRESHNESS_MS) throw new Error("SELENA_BOOTSTRAP_REQUEST_STALE");
+}

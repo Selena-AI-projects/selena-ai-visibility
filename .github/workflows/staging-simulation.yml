@@ -43,7 +43,8 @@ jobs:
       - name: Take the rig's runner credential
         id: key
         run: |
-          BODY='{"purpose":"staging-verification-simulation"}'
+          BODY=$(jq -cn --arg n "$(openssl rand -hex 16)" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{purpose:"staging-verification-simulation",nonce:$n,issued_at:$t}')
           SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" -r | cut -d' ' -f1)
           RESPONSE=$(curl -sS -X POST "$BASE/api/v1/selena/staging/bootstrap" \
             -H 'content-type: application/json' -H "x-selena-signature: $SIG" -d "$BODY")
@@ -81,10 +82,15 @@ jobs:
         env:
           KEY: ${{ steps.key.outputs.value }}
         run: |
-          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+          curl -sS -o /tmp/link.json -X POST "$BASE/api/v1/selena/staging/simulation" \
             -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
-            -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"connect-link",projectRef:$p,userId:"simulation-operator"}')" \
-            | tee /tmp/link.json | jq .
+            -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"connect-link",projectRef:$p,userId:"simulation-operator"}')"
+          # The response carries a live single-use credential. It is masked before
+          # anything is printed, and the run log shows only what is safe to keep:
+          # the link itself is written to the job summary, which is where the
+          # person who has to press Start reads it.
+          echo "::add-mask::$(jq -r .startCommand /tmp/link.json | cut -d' ' -f2)"
+          jq '{expiresAt,correlationId}' /tmp/link.json
           {
             echo "# Send this to the bot, then run the deliver stage"
             echo
@@ -97,7 +103,8 @@ jobs:
             echo
             echo "Or, in a fresh chat, open: $(jq -r .deepLink /tmp/link.json)"
             echo
-            echo "Single use, expires at $(jq -r .expiresAt /tmp/link.json)."
+            echo "Single use, expires at $(jq -r .expiresAt /tmp/link.json). Treat this summary as"
+            echo "the credential it contains: once the deliver stage has run, the link is spent."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Confirm the recipient is bound

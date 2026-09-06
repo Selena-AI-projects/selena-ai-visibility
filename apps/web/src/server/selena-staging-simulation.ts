@@ -66,7 +66,7 @@ export function assertSimulationEnvironment(env: NodeJS.ProcessEnv = process.env
 		assertSimulationAllowed(environment(env));
 	} catch (error) {
 		const code = error instanceof Error ? error.message : "SELENA_SIMULATION_DISABLED";
-		throw new SimulationError(code, code === "SELENA_SIMULATION_FORBIDDEN_IN_PRODUCTION" ? 403 : 404);
+		throw new SimulationError(code, code === "SELENA_SIMULATION_ENVIRONMENT_NOT_ALLOWED" ? 403 : 404);
 	}
 }
 

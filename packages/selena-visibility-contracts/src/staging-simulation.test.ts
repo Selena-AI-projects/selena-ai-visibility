@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
 	assertAuditDetailsSafe,
+	assertBootstrapFresh,
 	assertSimulationAllowed,
+	BOOTSTRAP_FRESHNESS_MS,
 	buildAuditRecord,
 	buildConnectTokenClaims,
 	buildDigestMessage,
@@ -9,9 +11,11 @@ import {
 	classifyTelegramResponse,
 	constantTimeEquals,
 	countActionsByStatus,
+	DELIVERY_CLAIM_LEASE_MS,
 	DELIVERY_MAX_ATTEMPTS,
 	DELIVERY_RETRY_DELAYS_MS,
 	decideNextDelivery,
+	parseBootstrapRequest,
 	parseSimulatedPaymentEvent,
 	resolveConnectRedemption,
 	resolveDeliveryPrecondition,
@@ -53,7 +57,23 @@ describe("environment gate", () => {
 			SELENA_STAGING_SIMULATION_ENABLED: "true",
 			RAILWAY_ENVIRONMENT_NAME: "production",
 		});
-		expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_FORBIDDEN_IN_PRODUCTION");
+		expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_ENVIRONMENT_NOT_ALLOWED");
+	});
+
+	it.each(["prod", "preview", "staging-2", "staging-clone", "sandbox", "PRODUCTION-eu"])(
+		"refuses the environment named %s, which no denylist would have named",
+		(name) => {
+			const environment = simulationEnvironmentFromEnv({
+				SELENA_STAGING_SIMULATION_ENABLED: "true",
+				RAILWAY_ENVIRONMENT_NAME: name,
+			});
+			expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_ENVIRONMENT_NOT_ALLOWED");
+		},
+	);
+
+	it("refuses a deployment that says nothing about where it runs", () => {
+		const environment = simulationEnvironmentFromEnv({ SELENA_STAGING_SIMULATION_ENABLED: "true" });
+		expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_ENVIRONMENT_UNKNOWN");
 	});
 
 	it("refuses staging until the owner switches the simulation on", () => {
@@ -77,7 +97,7 @@ describe("environment gate", () => {
 			RAILWAY_ENVIRONMENT_NAME: "production",
 			ENVIRONMENT: "staging",
 		});
-		expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_FORBIDDEN_IN_PRODUCTION");
+		expect(() => assertSimulationAllowed(environment)).toThrowError("SELENA_SIMULATION_ENVIRONMENT_NOT_ALLOWED");
 	});
 });
 
@@ -433,6 +453,9 @@ describe("delivery preconditions", () => {
 		deliveryStatus: "PENDING" as const,
 		attemptsMade: 0,
 		recipientStatus: "BOUND" as const,
+		claimedAt: null,
+		nextAttemptAt: null,
+		now: NOW,
 	};
 
 	it("sends when the report is saved and a recipient is bound", () => {
@@ -465,6 +488,89 @@ describe("delivery preconditions", () => {
 			kind: "REFUSE",
 			code: "SELENA_DELIVERY_ATTEMPTS_EXHAUSTED",
 		});
+	});
+
+	it("refuses a delivery another worker is already sending", () => {
+		expect(
+			resolveDeliveryPrecondition({ ...base, deliveryStatus: "SENDING", attemptsMade: 1, claimedAt: NOW }),
+		).toEqual({ kind: "REFUSE", code: "SELENA_DELIVERY_IN_FLIGHT" });
+	});
+
+	it("refuses an in-flight delivery whose claim time was never written", () => {
+		expect(resolveDeliveryPrecondition({ ...base, deliveryStatus: "SENDING", attemptsMade: 1 })).toEqual({
+			kind: "REFUSE",
+			code: "SELENA_DELIVERY_IN_FLIGHT",
+		});
+	});
+
+	it("lets another worker take over a claim left behind by a crash", () => {
+		expect(
+			resolveDeliveryPrecondition({
+				...base,
+				deliveryStatus: "SENDING",
+				attemptsMade: 1,
+				claimedAt: NOW,
+				now: new Date(NOW.getTime() + DELIVERY_CLAIM_LEASE_MS),
+			}),
+			// The crashed attempt was counted when it was claimed, so the takeover
+			// continues the schedule rather than restarting it.
+		).toEqual({ kind: "SEND", attempt: 2 });
+	});
+
+	it("refuses to send a scheduled retry before its delay has passed", () => {
+		const nextAttemptAt = new Date(NOW.getTime() + DELIVERY_RETRY_DELAYS_MS[0]);
+		expect(
+			resolveDeliveryPrecondition({ ...base, deliveryStatus: "RETRY_SCHEDULED", attemptsMade: 1, nextAttemptAt }),
+		).toEqual({ kind: "REFUSE", code: "SELENA_DELIVERY_NOT_DUE" });
+		expect(
+			resolveDeliveryPrecondition({
+				...base,
+				deliveryStatus: "RETRY_SCHEDULED",
+				attemptsMade: 1,
+				nextAttemptAt,
+				now: nextAttemptAt,
+			}),
+		).toEqual({ kind: "SEND", attempt: 2 });
+	});
+
+	it("refuses a delivery that already stopped", () => {
+		expect(resolveDeliveryPrecondition({ ...base, deliveryStatus: "FAILED", attemptsMade: 5 })).toEqual({
+			kind: "REFUSE",
+			code: "SELENA_DELIVERY_ATTEMPTS_EXHAUSTED",
+		});
+	});
+});
+
+describe("rig bootstrap request", () => {
+	const request = {
+		purpose: "staging-verification-simulation",
+		nonce: "0123456789abcdef0123456789abcdef",
+		issued_at: NOW.toISOString(),
+	};
+
+	it("accepts a fresh, well-formed request", () => {
+		expect(() => assertBootstrapFresh(parseBootstrapRequest(request), NOW)).not.toThrow();
+	});
+
+	it("refuses a request that carries no nonce to spend", () => {
+		expect(() => parseBootstrapRequest({ purpose: request.purpose, issued_at: request.issued_at })).toThrowError(
+			"SELENA_BOOTSTRAP_REQUEST_INVALID",
+		);
+		expect(() => parseBootstrapRequest({ ...request, nonce: "not-hex" })).toThrowError(
+			"SELENA_BOOTSTRAP_REQUEST_INVALID",
+		);
+	});
+
+	it("refuses a captured signature once its window has passed", () => {
+		const parsed = parseBootstrapRequest(request);
+		const later = new Date(NOW.getTime() + BOOTSTRAP_FRESHNESS_MS + 1000);
+		expect(() => assertBootstrapFresh(parsed, later)).toThrowError("SELENA_BOOTSTRAP_REQUEST_STALE");
+	});
+
+	it("refuses a request dated too far ahead to be drift", () => {
+		const parsed = parseBootstrapRequest(request);
+		const earlier = new Date(NOW.getTime() - BOOTSTRAP_FRESHNESS_MS - 1000);
+		expect(() => assertBootstrapFresh(parsed, earlier)).toThrowError("SELENA_BOOTSTRAP_REQUEST_STALE");
 	});
 });
 

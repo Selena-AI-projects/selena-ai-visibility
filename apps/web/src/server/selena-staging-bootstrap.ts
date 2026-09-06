@@ -1,8 +1,14 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "@workspace/lib/db/db";
-import { member, organization, svApiKeys, user } from "@workspace/lib/db/schema";
-import { verifyPayloadSignature } from "@workspace/selena-visibility-contracts";
-import { and, eq, isNull } from "drizzle-orm";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
+import { member, organization, svApiKeys, svSimulationBootstrapNonces, user } from "@workspace/lib/db/schema";
+import {
+	assertBootstrapFresh,
+	BOOTSTRAP_FRESHNESS_MS,
+	parseBootstrapRequest,
+	verifyPayloadSignature,
+} from "@workspace/selena-visibility-contracts";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import { assertSimulationEnvironment, SimulationError } from "./selena-staging-simulation";
 
 /**
@@ -14,11 +20,11 @@ import { assertSimulationEnvironment, SimulationError } from "./selena-staging-s
  * rehearsal is that a script can run the whole chain and leave evidence.
  *
  * This is deliberately narrow. It runs only where the simulation itself may
- * run — an opted-in, non-production environment — it requires the same HMAC
- * signature every other simulation entry point requires, and it refuses once a
- * simulation tenant exists, so it cannot be used to mint a second credential
- * for a workspace that already has one. The key it returns is shown once and
- * stored only as its digest, exactly as a key created through the product is.
+ * run — the opted-in staging environment — and it requires an HMAC signature
+ * over a request that can be used once: the body carries a nonce and the time
+ * it was signed, so a captured call is worthless minutes later and cannot be
+ * repeated even before that. The key it returns is shown once and stored only
+ * as its digest, exactly as a key created through the product is.
  */
 
 const SIMULATION_ORG_SLUG = "staging-simulation";
@@ -47,6 +53,7 @@ export async function bootstrapSimulationTenant(input: {
 		throw new SimulationError("SELENA_SIMULATION_SIGNATURE_INVALID", 401);
 
 	const now = input.now ?? new Date();
+	await consumeBootstrapNonce(input.rawBody, now);
 
 	const [existing] = await db
 		.select({ id: organization.id })
@@ -54,34 +61,17 @@ export async function bootstrapSimulationTenant(input: {
 		.where(eq(organization.slug, SIMULATION_ORG_SLUG))
 		.limit(1);
 
-	// A repeat call re-credentials the rig rather than withholding a key. The
-	// signing secret is already this rehearsal's root of trust — whoever holds
-	// it can activate a subscription and mint a Telegram link — so issuing the
-	// runner's key to the same holder grants nothing it did not already have,
-	// and it means a run never has to store a credential between attempts. The
-	// previous key is revoked in the same transaction, so exactly one is live.
+	// A repeat call re-credentials the rig rather than withholding a key, so a
+	// run never has to store a credential between attempts. That is only safe
+	// because the request above can be used once: otherwise a captured call
+	// would both take a key and revoke the runner's on every replay.
 	if (existing) {
-		const rotatedKey = `sk_sim_${randomBytes(24).toString("hex")}`;
-		await db.transaction(async (tx) => {
-			await tx
-				.update(svApiKeys)
-				.set({ revokedAt: now })
-				.where(and(eq(svApiKeys.organizationId, existing.id), isNull(svApiKeys.revokedAt)));
-			await tx.insert(svApiKeys).values({
-				organizationId: existing.id,
-				name: "staging simulation runner",
-				keyHash: hashApiKey(rotatedKey),
-				permissions: ["client:read", "client:write"],
-				createdBy: `bootstrap:${SIMULATION_ORG_SLUG}`,
-				createdAt: now,
-			});
-		});
+		const rotatedKey = await issueRunnerKey(existing.id, `bootstrap:${SIMULATION_ORG_SLUG}`, now);
 		return { organizationId: existing.id, apiKey: rotatedKey, created: false };
 	}
 
 	const organizationId = `org_${randomUUID().replaceAll("-", "")}`;
 	const userId = `user_${randomUUID().replaceAll("-", "")}`;
-	const apiKey = `sk_sim_${randomBytes(24).toString("hex")}`;
 
 	await db.transaction(async (tx) => {
 		await tx.insert(user).values({
@@ -105,15 +95,62 @@ export async function bootstrapSimulationTenant(input: {
 			role: "owner",
 			createdAt: now,
 		});
+	});
+
+	// The key is written under the workspace's own RLS identity, which the
+	// identity tables above cannot be: they are created before there is a
+	// workspace to be. A failure between the two leaves a workspace with no key,
+	// and the next call takes the branch above and issues one.
+	const apiKey = await issueRunnerKey(organizationId, userId, now);
+	return { organizationId, apiKey, created: true };
+}
+
+/**
+ * Spends the request's nonce, or refuses. The insert is the check: two
+ * simultaneous replays both find the ledger empty, and only the one whose row
+ * lands proceeds.
+ */
+async function consumeBootstrapNonce(rawBody: string, now: Date): Promise<void> {
+	let request: ReturnType<typeof parseBootstrapRequest>;
+	try {
+		request = parseBootstrapRequest(JSON.parse(rawBody));
+		assertBootstrapFresh(request, now);
+	} catch (error) {
+		const code = error instanceof Error ? error.message : "SELENA_BOOTSTRAP_REQUEST_INVALID";
+		throw new SimulationError(code, code === "SELENA_BOOTSTRAP_REQUEST_STALE" ? 401 : 400);
+	}
+
+	await db
+		.delete(svSimulationBootstrapNonces)
+		.where(lt(svSimulationBootstrapNonces.usedAt, new Date(now.getTime() - BOOTSTRAP_FRESHNESS_MS)));
+
+	const spent = await db
+		.insert(svSimulationBootstrapNonces)
+		.values({ nonce: request.nonce, usedAt: now })
+		.onConflictDoNothing({ target: svSimulationBootstrapNonces.nonce })
+		.returning({ nonce: svSimulationBootstrapNonces.nonce });
+	if (spent.length === 0) throw new SimulationError("SELENA_BOOTSTRAP_REQUEST_REPLAYED", 409);
+}
+
+/**
+ * Issues the one live runner key, revoking whatever preceded it in the same
+ * transaction so exactly one is valid at a time.
+ */
+async function issueRunnerKey(organizationId: string, createdBy: string, now: Date): Promise<string> {
+	const key = `sk_sim_${randomBytes(24).toString("hex")}`;
+	await withOrganizationTransaction(db, organizationId, async (tx) => {
+		await tx
+			.update(svApiKeys)
+			.set({ revokedAt: now })
+			.where(and(eq(svApiKeys.organizationId, organizationId), isNull(svApiKeys.revokedAt)));
 		await tx.insert(svApiKeys).values({
 			organizationId,
 			name: "staging simulation runner",
-			keyHash: hashApiKey(apiKey),
+			keyHash: hashApiKey(key),
 			permissions: ["client:read", "client:write"],
-			createdBy: userId,
+			createdBy,
 			createdAt: now,
 		});
 	});
-
-	return { organizationId, apiKey, created: true };
+	return key;
 }

@@ -19,6 +19,7 @@ const SIMULATION_SOURCES = [
 	join(LIB, "selena-simulation-repositories.ts"),
 	join(LIB, "selena-telegram-adapter.ts"),
 	join(WEB, "server/selena-staging-simulation.ts"),
+	join(WEB, "server/selena-staging-bootstrap.ts"),
 ];
 
 const PROVIDER_MARKERS = [

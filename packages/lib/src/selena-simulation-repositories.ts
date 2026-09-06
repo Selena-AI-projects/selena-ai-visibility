@@ -202,7 +202,11 @@ export async function activateSimulationSubscription(
 			activatedAt: input.now,
 		})
 		.onConflictDoNothing({
-			target: [svSimulationSubscriptions.provider, svSimulationSubscriptions.providerEventId],
+			target: [
+				svSimulationSubscriptions.organizationId,
+				svSimulationSubscriptions.provider,
+				svSimulationSubscriptions.providerEventId,
+			],
 		})
 		.returning({ id: svSimulationSubscriptions.id });
 
@@ -214,6 +218,7 @@ export async function activateSimulationSubscription(
 			.from(svSimulationSubscriptions)
 			.where(
 				and(
+					eq(svSimulationSubscriptions.organizationId, context.tenantId),
 					eq(svSimulationSubscriptions.provider, input.intent.provider),
 					eq(svSimulationSubscriptions.providerEventId, input.intent.providerEventId),
 				),
@@ -344,6 +349,7 @@ export async function bindTelegramRecipient(
 	const [stored] = await tx
 		.select({
 			id: svSimulationConnectTokens.id,
+			organizationId: svSimulationConnectTokens.organizationId,
 			tokenHash: svSimulationConnectTokens.tokenHash,
 			projectRef: svSimulationConnectTokens.projectRef,
 			userId: svSimulationConnectTokens.userId,
@@ -368,7 +374,10 @@ export async function bindTelegramRecipient(
 		stored
 			? {
 					tokenHash: stored.tokenHash as string,
-					tenantId: context.tenantId,
+					// The row's own owner, never the caller's: comparing the claim
+					// against the context it was already used to build would compare a
+					// value with itself and prove nothing.
+					tenantId: stored.organizationId as string,
 					projectId: stored.projectRef as string,
 					userId: stored.userId as string,
 					consumedAt: (stored.consumedAt as Date | null) ?? null,
@@ -390,7 +399,6 @@ export async function bindTelegramRecipient(
 	const correlationId = stored.correlationId as string;
 	const keyring = getKeyring(input.env ?? process.env);
 	if (!keyring) throw new Error("SELENA_SIMULATION_ENCRYPTION_KEY_MISSING");
-	const chatIdHash = await sha256Hex(`${context.tenantId}:${projectRef}:${input.chatId}`);
 	const chatIdCiphertext = await encryptSecret(input.chatId, { key: keyring.primary, aad: RECIPIENT_AAD });
 
 	// One live recipient per project: an earlier binding is retired rather than
@@ -412,7 +420,6 @@ export async function bindTelegramRecipient(
 			organizationId: context.tenantId,
 			projectRef,
 			channel: "telegram",
-			chatIdHash,
 			chatIdCiphertext,
 			status: "BOUND",
 			boundAt: input.now,
@@ -657,13 +664,21 @@ export type DeliveryClaim = {
 };
 
 /**
- * Locks one delivery and decides whether it may send.
+ * Claims one delivery and decides whether it may send.
  *
- * The row is taken `FOR UPDATE` before any precondition is read, so a
- * redelivered queue job cannot overlap with the one already running and send
- * the same digest twice. The preconditions themselves are re-read here rather
- * than carried on the job payload, because a payload records what was true when
- * the job was created, not what is true now.
+ * The row is taken `FOR UPDATE` and then *marked* in flight before this
+ * function returns. The lock alone would not have been enough: it is released
+ * when the claiming transaction commits, and the send happens after that, so
+ * two redelivered jobs could each lock an untouched row in turn and both send
+ * the same digest. Writing the claim down is what makes the second one refuse.
+ *
+ * The attempt is counted at claim time for the same reason. A crash between
+ * the claim and the record would otherwise leave no trace of a send that may
+ * well have reached Telegram, and an uncounted attempt is how a five-attempt
+ * cap becomes six.
+ *
+ * The preconditions are re-read here rather than carried on the job payload,
+ * because a payload records what was true when the job was created.
  */
 export async function claimDeliveryAttempt(
 	tx: Tx,
@@ -678,6 +693,8 @@ export async function claimDeliveryAttempt(
 			recipientId: svSimulationDeliveries.recipientId,
 			status: svSimulationDeliveries.status,
 			attemptsMade: svSimulationDeliveries.attemptsMade,
+			claimedAt: svSimulationDeliveries.claimedAt,
+			nextAttemptAt: svSimulationDeliveries.nextAttemptAt,
 			correlationId: svSimulationDeliveries.correlationId,
 		})
 		.from(svSimulationDeliveries)
@@ -704,12 +721,26 @@ export async function claimDeliveryAttempt(
 		deliveryStatus: delivery.status as DeliveryStatus,
 		attemptsMade: delivery.attemptsMade as number,
 		recipientStatus: (recipient?.status as RecipientBindingStatus) ?? "UNBOUND",
+		claimedAt: (delivery.claimedAt as Date | null) ?? null,
+		nextAttemptAt: (delivery.nextAttemptAt as Date | null) ?? null,
+		now: input.now,
 	});
 	if (precondition.kind === "REFUSE") return { kind: "REFUSE", code: precondition.code };
 
 	const keyring = getKeyring(input.env ?? process.env);
 	if (!keyring) throw new Error("SELENA_SIMULATION_ENCRYPTION_KEY_MISSING");
 	const chatId = await decryptSecret(recipient?.chatIdCiphertext, { keyring, aad: RECIPIENT_AAD });
+
+	await tx
+		.update(svSimulationDeliveries)
+		.set({
+			status: "SENDING",
+			attemptsMade: precondition.attempt,
+			claimedAt: input.now,
+			nextAttemptAt: null,
+			updatedAt: input.now,
+		})
+		.where(eq(svSimulationDeliveries.id, delivery.id));
 
 	return {
 		kind: "SEND",
@@ -772,6 +803,7 @@ export async function recordDeliveryAttempt(
 				attemptsMade: input.claim.attempt,
 				deliveredAt: input.now,
 				nextAttemptAt: null,
+				claimedAt: null,
 				lastError: null,
 				updatedAt: input.now,
 			})
@@ -795,6 +827,7 @@ export async function recordDeliveryAttempt(
 				status: "RETRY_SCHEDULED",
 				attemptsMade: input.claim.attempt,
 				nextAttemptAt: decision.nextAttemptAt,
+				claimedAt: null,
 				lastError: input.outcome.kind === "SUCCESS" ? null : input.outcome.detail.slice(0, 300),
 				updatedAt: input.now,
 			})
@@ -808,6 +841,7 @@ export async function recordDeliveryAttempt(
 			status: decision.status,
 			attemptsMade: input.claim.attempt,
 			nextAttemptAt: null,
+			claimedAt: null,
 			lastError: decision.reason.slice(0, 300),
 			updatedAt: input.now,
 		})
