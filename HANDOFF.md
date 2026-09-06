@@ -94,10 +94,13 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   answer with sources** — 447 characters, 10 citations, 21 seconds, no wall.
   Details and the two open caveats (answer length; one run is not a
   reliability figure) are in `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`.
-  What is still the owner's to approve: writing the `oxylabs-perplexity`
-  measurement adapter, adding it to the owner-approved list, and the canary
-  spend that comes with it. Nothing is wired yet; `SELENA_EMERGENCY_STOP=true`
-  stays on; the `Perplexity` visitor route is still `brightdata-perplexity`.
+  The owner approved writing the `oxylabs-perplexity` measurement adapter the
+  same day, so that decision is made — do not ask for it again; the adapter
+  arrives in a separate pull request. What is still the owner's to approve,
+  after that adapter lands: the canary spend through it, and any route change
+  the canary's result would justify. Nothing is wired yet;
+  `SELENA_EMERGENCY_STOP=true` stays on; the `Perplexity` visitor route is
+  still `brightdata-perplexity`.
 - **The 2026-09-04 KORA numbers in the repo were wrong** and are corrected in
   `docs/selena-visibility/KORA_CYCLE_2026-09-04_OUTCOME.md`: 16 of 30 answers
   failed, not 5 — Perplexity 8× `MALFORMED_RESPONSE`, Gemini 4×

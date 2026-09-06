@@ -70,8 +70,11 @@ Bright Data collector failed on 09-04). **Verdict: a visitor answer with
 sources.** The job took 21 seconds; the payload carried `answer_results_md`
 alongside `answer_results`, `additional_results`, `related_queries`,
 `parse_status_code`, `url` and `model` (`turbo`); the answer was 447
-characters with 10 citations and one exposed web query. No wall, no empty
-payload, no provider refusal. The raw payload is the run's
+characters with 10 citations. The probe's "1 web queries" line was not an
+exposed query: the payload carried neither `search_queries` nor
+`web_search_queries`, and the registry's reader answers that case with the
+sentinel `unavailable` when citations exist, which the probe counted. No web
+query was observed. No wall, no empty payload, no provider refusal. The raw payload is the run's
 `oxylabs-perplexity-live-probe` artifact (id `9991882570`, kept until
 2026-09-20); it was not committed.
 
