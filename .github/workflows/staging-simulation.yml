@@ -53,6 +53,14 @@ jobs:
           test -n "$KEY" || { echo "The rig issued no key."; exit 1; }
           echo "::add-mask::$KEY"
           echo "value=$KEY" >> "$GITHUB_OUTPUT"
+          # The same request again, byte for byte and with the same signature.
+          # A replay is how a captured bootstrap call would both take a key and
+          # revoke the runner's, so the refusal is checked here rather than
+          # assumed from the unit tests.
+          REPLAY=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/selena/staging/bootstrap" \
+            -H 'content-type: application/json' -H "x-selena-signature: $SIG" -d "$BODY")
+          echo "replayed bootstrap answered $REPLAY"
+          test "$REPLAY" = "409" || { echo "A replayed bootstrap was not refused."; exit 1; }
 
       - name: Point the bot at this rig
         env:
@@ -151,6 +159,16 @@ jobs:
             | tee /tmp/deliver.json | jq .
           jq -e '.decision == "DELIVERED"' /tmp/deliver.json > /dev/null \
             || { echo "The digest was not delivered."; exit 1; }
+          # Asking again is what a redelivered queue job does. One digest per
+          # report is the rule, so the second ask has to be refused rather than
+          # send the same message twice.
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg d "$DELIVERY" --arg u "$BASE/app/selena-report" \
+              '{action:"deliver",deliveryId:$d,workspaceUrl:$u}')" \
+            | tee /tmp/redeliver.json | jq .
+          jq -e '.decision == "REFUSED" and .code == "SELENA_DELIVERY_ALREADY_DELIVERED"' /tmp/redeliver.json > /dev/null \
+            || { echo "A redelivered job was not refused."; exit 1; }
 
       - name: Read the audit trail
         if: inputs.stage == 'deliver'
