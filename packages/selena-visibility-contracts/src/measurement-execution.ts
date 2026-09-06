@@ -38,6 +38,12 @@ export const ownerApprovedMeasurementAdapters = [
 	"brightdata-chatgpt",
 	"brightdata-gemini",
 	"brightdata-perplexity",
+	// The second Perplexity transport, approved on 2026-09-06 after one live
+	// probe answered where the Bright Data collector returns a sign-up wall. It
+	// is deliberately not a member of any family below: the Perplexity visitor
+	// route stays on Bright Data until a canary through this adapter decides
+	// otherwise, so it runs only when named outright — a one-surface scope.
+	"oxylabs-perplexity",
 ] as const;
 export type OwnerApprovedMeasurementAdapter = (typeof ownerApprovedMeasurementAdapters)[number];
 

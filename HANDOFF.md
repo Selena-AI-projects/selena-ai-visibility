@@ -94,13 +94,16 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   answer with sources** — 447 characters, 10 citations, 21 seconds, no wall.
   Details and the two open caveats (answer length; one run is not a
   reliability figure) are in `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`.
-  The owner approved writing the `oxylabs-perplexity` measurement adapter the
-  same day, so that decision is made — do not ask for it again; the adapter
-  arrives in a separate pull request. What is still the owner's to approve,
-  after that adapter lands: the canary spend through it, and any route change
-  the canary's result would justify. Nothing is wired yet;
-  `SELENA_EMERGENCY_STOP=true` stays on; the `Perplexity` visitor route is
-  still `brightdata-perplexity`.
+  The owner approved the adapter the same day and it is built:
+  `oxylabs-perplexity` (`packages/lib/src/adapters/oxylabs-measurement-adapter.ts`),
+  on the owner-approved list, registered in the worker job and in the journal
+  script, routed nowhere. What is still open is the **canary spend**: run
+  `measure:journal` with `SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity` and
+  `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` on the worker (the exact command and
+  what it has to show are in the auth-wall doc). `SELENA_EMERGENCY_STOP=true`
+  stays on until that run is deliberately started; the `Perplexity` visitor
+  route is still `brightdata-perplexity` and changes only by a code change
+  after the canary.
 - **The 2026-09-04 KORA numbers in the repo were wrong** and are corrected in
   `docs/selena-visibility/KORA_CYCLE_2026-09-04_OUTCOME.md`: 16 of 30 answers
   failed, not 5 — Perplexity 8× `MALFORMED_RESPONSE`, Gemini 4×

@@ -133,6 +133,14 @@ against the account's support; the fallback options (alternative Perplexity
 collector, `Oxylabs`, DataForSEO Sonar) are an owner decision gated the same way
 as the original Bright Data wiring.
 
+Of those, Oxylabs was chosen on 2026-09-06 and one live probe through its
+`perplexity` source returned a visitor answer with sources. The resulting
+`oxylabs-perplexity` measurement adapter (`packages/lib/src/adapters/oxylabs-measurement-adapter.ts`)
+is on the owner-approved list but routed nowhere: the `Perplexity` visitor route
+here stays on `brightdata-perplexity` until a canary through the new adapter
+decides otherwise. `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`
+carries the probe result and the canary procedure.
+
 ## Still open
 
 

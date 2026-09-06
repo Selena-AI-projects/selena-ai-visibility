@@ -1,4 +1,5 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { createOxylabsAdapter } from "@workspace/lib/adapters/oxylabs";
 import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
@@ -97,6 +98,23 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 			? {
 					openrouter: createOpenRouterFamilyAdapter({
 						apiKey: process.env.OPENROUTER_API_KEY ?? "",
+						fetchImpl: fetch,
+						resolveScenarioText: resolvers.resolveScenarioText,
+						resolveExtractionContext: resolvers.resolveExtractionContext,
+					}),
+				}
+			: {}),
+		// The second Perplexity transport. Built the same way as OpenRouter above:
+		// only when named, so a missing Oxylabs credential fails the jobs that
+		// need it and nothing else. It is reachable only by its own name — no
+		// family routes to it — because the Perplexity visitor route stays on
+		// Bright Data until this adapter's canary says otherwise.
+		...(selected.has("oxylabs-perplexity")
+			? {
+					"oxylabs-perplexity": createOxylabsAdapter({
+						username: process.env.OXYLABS_USERNAME ?? "",
+						password: process.env.OXYLABS_PASSWORD ?? "",
+						system: "perplexity",
 						fetchImpl: fetch,
 						resolveScenarioText: resolvers.resolveScenarioText,
 						resolveExtractionContext: resolvers.resolveExtractionContext,

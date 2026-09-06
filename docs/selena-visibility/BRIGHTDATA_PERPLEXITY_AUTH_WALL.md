@@ -89,13 +89,47 @@ provider; it does not say how often. Bright Data returned text on two of ten on
 canary of several runs measures, and that is the adapter's first job, not the
 probe's.
 
-That verdict is the one that justifies the next step, and the next step is
-still an owner decision: a measurement adapter under the same permit, cost and
-evidence contract as the Bright Data one, an `oxylabs-perplexity` entry on the
-owner-approved list, and a canary of several runs before any route changes —
-the same approval path as the original wiring. Until that is approved and
-built, the `Perplexity` visitor route stays on Bright Data and its metric stays
-unverified.
+That verdict justified the next step, and the owner approved it the same day.
+The `oxylabs-perplexity` measurement adapter now exists
+(`packages/lib/src/adapters/oxylabs-measurement-adapter.ts`), under the same
+permit, cost and evidence contract as the Bright Data one: one job per permit,
+submitted, polled to `done` and fetched; the answer read off
+`answer_results_md` and the displayed sources off
+`additional_results.sources_results`; every post-submission outcome carrying
+its charge (the cost table's estimate — the results payload names none); both
+credentials scrubbed from anything stored; an unrecognized payload recorded as
+`MALFORMED_RESPONSE`, an empty one as `EMPTY_RESPONSE`, a faulted job as
+`JOB_FAULTED`, a job that outlives its budget as `JOB_NOT_READY` with the job
+id kept for a later fetch. It is on the owner-approved list under that name
+and in no routing family, so it runs only when named outright.
+
+## The canary
+
+The Perplexity visitor route is still `brightdata-perplexity`. What decides
+whether it moves is a canary through the new adapter, run where the worker
+runs, by the journal script that already measures the owner's own projects:
+
+```
+SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity \
+OXYLABS_USERNAME=... OXYLABS_PASSWORD=... \
+SELENA_JOURNAL_TENANT=<organization id> SELENA_JOURNAL_PROJECTS=korafoodhall \
+SELENA_JOURNAL_MAX_COST_USD=<ceiling> \
+pnpm -C apps/worker measure:journal
+```
+
+Named outright, the adapter measures Perplexity alone: the script mints
+permits only for the surfaces its registered adapters can honour, so no
+ChatGPT or Gemini permit is paid for and then refused. The ceiling is priced
+at the cost table's Oxylabs estimate because no invoice exists yet; replace
+that constant with the invoiced figure once one does. The script already
+refuses to declare a cycle healthy below 80% valid, which is the reliability
+figure the single probe could not give.
+
+What the canary has to show before the route changes: the valid rate, the
+answer lengths against the 447-character probe, how often the sources list is
+empty, and the invoiced price. The route change itself is one more owner
+decision and one more code change — `visitorRoutes` in
+`measurement-execution.ts` — not a configuration flip.
 
 Not chosen:
 

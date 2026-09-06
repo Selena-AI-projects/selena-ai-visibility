@@ -52,6 +52,15 @@ describe("Selena measurement execution boundary", () => {
 		expect(() => resolveMeasurementAdapterName("brightdata", null)).toThrow("SELENA_ADAPTER_NO_ROUTE");
 	});
 
+	it("approves the Oxylabs Perplexity adapter by its one-surface name only, outside every family", () => {
+		expect(() => assertAdapterAllowed("oxylabs-perplexity", ["noop", "oxylabs-perplexity"])).not.toThrow();
+		expect(() => assertAdapterAllowed("oxylabs", ["noop", "oxylabs"])).toThrow("SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO");
+		// Named outright it means itself; no family routes a permit to it.
+		expect(resolveMeasurementAdapterName("oxylabs-perplexity", "Perplexity")).toBe("oxylabs-perplexity");
+		expect(resolveMeasurementAdapterName("brightdata", "Perplexity")).toBe("brightdata-perplexity");
+		expect(measurementAdapterNamesFor("auto")).not.toContain("oxylabs-perplexity");
+	});
+
 	it("holds every adapter a family can reach to the same owner gate", () => {
 		const brightData = ["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity"];
 		expect(measurementAdapterNamesFor("brightdata").sort()).toEqual([...brightData].sort());
