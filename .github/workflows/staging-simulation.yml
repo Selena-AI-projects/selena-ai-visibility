@@ -13,15 +13,16 @@ name: Staging verification simulation
 on:
   workflow_dispatch:
     inputs:
+      stage:
+        description: "connect = activate and mint the Telegram link. deliver = save the report and send the digest."
+        required: true
+        default: connect
+        type: choice
+        options: [connect, deliver]
       project_ref:
         description: "Test project reference"
         required: true
         default: test_project_001
-        type: string
-      wait_minutes:
-        description: "How long to wait for Start to be pressed"
-        required: true
-        default: "10"
         type: string
 
 concurrency: staging-simulation
@@ -63,6 +64,7 @@ jobs:
             || { echo "Telegram refused the webhook. Check the bot token and webhook secret on the rig."; exit 1; }
 
       - name: Accept one simulated payment event
+        if: inputs.stage == 'connect'
         env:
           KEY: ${{ steps.key.outputs.value }}
         run: |
@@ -75,6 +77,7 @@ jobs:
           jq -e '.receipt.providerCalls == 0 and .receipt.realPayments == 0' /tmp/payment.json > /dev/null
 
       - name: Mint the single-use Telegram link
+        if: inputs.stage == 'connect'
         env:
           KEY: ${{ steps.key.outputs.value }}
         run: |
@@ -82,34 +85,35 @@ jobs:
             -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
             -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"connect-link",projectRef:$p,userId:"simulation-operator"}')" \
             | tee /tmp/link.json | jq .
-          LINK=$(jq -r .deepLink /tmp/link.json)
           {
-            echo "# Open this link and press Start"
+            echo "# Send this to the bot, then run the deliver stage"
             echo
-            echo "$LINK"
+            echo "Telegram shows a Start button only in a chat nobody has opened before."
+            echo "In any other chat, send the command below — it is what that button would have sent."
             echo
-            echo "This run waits for you. It is single use and expires at $(jq -r .expiresAt /tmp/link.json)."
+            echo '```'
+            jq -r .startCommand /tmp/link.json
+            echo '```'
+            echo
+            echo "Or, in a fresh chat, open: $(jq -r .deepLink /tmp/link.json)"
+            echo
+            echo "Single use, expires at $(jq -r .expiresAt /tmp/link.json)."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "::notice title=Press Start on this link::$LINK"
 
-      - name: Wait for the recipient to bind
+      - name: Confirm the recipient is bound
+        if: inputs.stage == 'deliver'
         env:
           KEY: ${{ steps.key.outputs.value }}
-          WAIT_MINUTES: ${{ inputs.wait_minutes }}
         run: |
-          DEADLINE=$(( $(date +%s) + WAIT_MINUTES * 60 ))
-          while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-            CONNECTED=$(curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
-              -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
-              -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"binding-status",projectRef:$p}')" | jq -r '.connected')
-            if [ "$CONNECTED" = "true" ]; then echo "Recipient bound."; exit 0; fi
-            echo "waiting for Start..."
-            sleep 15
-          done
-          echo "No recipient bound within ${WAIT_MINUTES} minutes. Open the link in the summary and run this again."
-          exit 1
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"binding-status",projectRef:$p}')" \
+            | tee /tmp/binding.json | jq .
+          jq -e '.connected == true' /tmp/binding.json > /dev/null \
+            || { echo "No recipient is bound. Send the command from the connect stage to the bot first."; exit 1; }
 
       - name: Save the sample report and create its delivery
+        if: inputs.stage == 'deliver'
         id: report
         env:
           KEY: ${{ steps.key.outputs.value }}
@@ -125,6 +129,7 @@ jobs:
           echo "correlation=$(jq -r .correlationId /tmp/report.json)" >> "$GITHUB_OUTPUT"
 
       - name: Send the digest
+        if: inputs.stage == 'deliver'
         env:
           KEY: ${{ steps.key.outputs.value }}
           DELIVERY: ${{ steps.report.outputs.delivery }}
@@ -138,6 +143,7 @@ jobs:
             || { echo "The digest was not delivered."; exit 1; }
 
       - name: Read the audit trail
+        if: inputs.stage == 'deliver'
         env:
           KEY: ${{ steps.key.outputs.value }}
           DELIVERY: ${{ steps.report.outputs.delivery }}

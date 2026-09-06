@@ -100,6 +100,7 @@ declare global {
 			readonly SELENA_PAYMENT_MODE?: string;
 			readonly SELENA_STAGING_SIMULATION_ENABLED?: string;
 			readonly SELENA_SIMULATION_SIGNING_SECRET?: string;
+			readonly SELENA_SIMULATION_CONNECT_TTL_MINUTES?: string;
 			readonly SELENA_TELEGRAM_BOT_TOKEN?: string;
 			readonly SELENA_TELEGRAM_BOT_USERNAME?: string;
 			readonly SELENA_TELEGRAM_WEBHOOK_SECRET?: string;

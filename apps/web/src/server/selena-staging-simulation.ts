@@ -160,7 +160,24 @@ export async function acceptSimulatedPaymentEvent(input: {
 // 2. Telegram connect link
 // ---------------------------------------------------------------------------
 
-export type ConnectLink = { deepLink: string; expiresAt: string; correlationId: string };
+export type ConnectLink = {
+	deepLink: string;
+	startCommand: string;
+	expiresAt: string;
+	correlationId: string;
+};
+
+/**
+ * How long a connect link stays valid. The product default is short because a
+ * link is a credential; a rehearsal, where the person redeeming it is waiting
+ * on someone else to hand it over, is allowed a longer window so the exercise
+ * does not fail on a round trip rather than on the thing being proven.
+ */
+function connectTokenTtlMs(env: NodeJS.ProcessEnv): number | undefined {
+	const minutes = Number.parseInt(env.SELENA_SIMULATION_CONNECT_TTL_MINUTES ?? "", 10);
+	if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 180) return undefined;
+	return minutes * 60 * 1000;
+}
 
 /**
  * Mints one single-use connect link for a project that has an active
@@ -197,6 +214,7 @@ export async function issueTelegramConnectLink(input: {
 			projectId: input.projectRef,
 			nonce,
 			now,
+			ttlMs: connectTokenTtlMs(env),
 		});
 		const token = await signConnectToken(claims, secret);
 		const stored = await storeConnectToken(tx, context, {
@@ -206,9 +224,15 @@ export async function issueTelegramConnectLink(input: {
 			nonce,
 			correlationId,
 			now,
+			ttlMs: connectTokenTtlMs(env),
 		});
 		return {
 			deepLink: telegramDeepLink(botUsername, token),
+			// Telegram shows a Start button only in a chat that has never been
+			// opened. Anyone who has already written to the bot has to send the
+			// command the button would have sent, so it is handed over ready to
+			// paste rather than left to be reconstructed from the link.
+			startCommand: `/start ${token}`,
 			expiresAt: stored.expiresAt.toISOString(),
 			correlationId,
 		};
