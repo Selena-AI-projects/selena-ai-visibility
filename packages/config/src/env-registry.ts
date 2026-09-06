@@ -592,6 +592,40 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Which payment path is in effect. Fixture mode while live payments are off.",
 	},
 	{
+		name: "SELENA_STAGING_SIMULATION_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to accept the staging verification simulation. Refused outright in a production environment regardless of this value; production Telegram delivery stays on HOLD either way.",
+	},
+	{
+		name: "SELENA_SIMULATION_SIGNING_SECRET",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"HMAC secret for simulated payment events and Telegram connect tokens. Without it the simulation cannot accept an event or mint a link.",
+	},
+	{
+		name: "SELENA_TELEGRAM_BOT_TOKEN",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Staging Telegram bot credential. Never stored in the database and redacted from any error this code reports.",
+	},
+	{
+		name: "SELENA_TELEGRAM_BOT_USERNAME",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Staging Telegram bot username, used to build the connect deep link.",
+	},
+	{
+		name: "SELENA_TELEGRAM_WEBHOOK_SECRET",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Value Telegram echoes in X-Telegram-Bot-Api-Secret-Token, so an update that did not come from Telegram is refused.",
+	},
+	{
 		name: "SELENA_PROVIDER_BUDGET_USD",
 		scope: "server",
 		requiredBy: "optional",

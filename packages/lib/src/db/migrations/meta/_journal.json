@@ -442,6 +442,13 @@
       "when": 1787940024000,
       "tag": "0062_provider_spend_reservation",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1787940025000,
+      "tag": "0063_staging_verification_simulation",
+      "breakpoints": true
     }
   ]
 }

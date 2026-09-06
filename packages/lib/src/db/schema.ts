@@ -628,3 +628,168 @@ export const secrets = pgTable("secrets", {
 		.$onUpdate(() => new Date())
 		.notNull(),
 }).enableRLS();
+
+// ============================================================================
+// Staging verification simulation (Architecture v1.4 §11, staging only)
+// ============================================================================
+
+/**
+ * The five tables below carry the staging simulation: a payment event that
+ * charges nothing, a subscription that authorises nothing, a Telegram
+ * recipient bound by a single-use link, a sample report that is not a
+ * measurement, and the delivery of one digest.
+ *
+ * Every row states its own environment, mode, source status and
+ * not-a-measurement flag, and a CHECK constraint pins each to its only
+ * permitted value. A row that reached production, or that claimed to be a
+ * measurement, could not have been inserted.
+ */
+
+export const svSimulationSubscriptions = pgTable("sv_simulation_subscriptions", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	projectRef: text("project_ref").notNull(),
+	customerRef: text("customer_ref").notNull(),
+	planId: text("plan_id").notNull(),
+	status: text("status").notNull().default("ACTIVE"),
+	provider: text("provider").notNull(),
+	providerEventId: text("provider_event_id").notNull(),
+	amountUsd: numeric("amount_usd", { precision: 12, scale: 2 }).notNull(),
+	currency: text("currency").notNull(),
+	environment: text("environment").notNull().default("staging"),
+	mode: text("mode").notNull().default("test"),
+	sourceStatus: text("source_status").notNull().default("sample"),
+	notAMeasurement: boolean("not_a_measurement").notNull().default(true),
+	correlationId: text("correlation_id").notNull(),
+	activatedAt: timestamp("activated_at", { withTimezone: true }).defaultNow().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	eventUnique: uniqueIndex("sv_simulation_subscriptions_event_unique").on(table.provider, table.providerEventId),
+	orgIdx: index("sv_simulation_subscriptions_org_idx").on(table.organizationId),
+	projectIdx: index("sv_simulation_subscriptions_project_idx").on(table.organizationId, table.projectRef),
+	environmentCheck: check("sv_simulation_subscriptions_environment_check", sql`${table.environment} = 'staging'`),
+	modeCheck: check("sv_simulation_subscriptions_mode_check", sql`${table.mode} = 'test'`),
+	sourceStatusCheck: check("sv_simulation_subscriptions_source_status_check", sql`${table.sourceStatus} = 'sample'`),
+	notAMeasurementCheck: check("sv_simulation_subscriptions_not_a_measurement_check", sql`${table.notAMeasurement} = true`),
+	statusCheck: check("sv_simulation_subscriptions_status_check", sql`${table.status} IN ('ACTIVE', 'PAUSED', 'CANCELLED')`),
+	currencyCheck: check("sv_simulation_subscriptions_currency_check", sql`${table.currency} = 'USD'`),
+})).enableRLS();
+
+/** Only the SHA-256 of a connect token is stored, so the database never holds a
+ * credential that could bind a recipient. `consumed_at` is the single-use latch. */
+export const svSimulationConnectTokens = pgTable("sv_simulation_connect_tokens", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	projectRef: text("project_ref").notNull(),
+	userId: text("user_id").notNull(),
+	tokenHash: text("token_hash").notNull(),
+	nonce: text("nonce").notNull(),
+	environment: text("environment").notNull().default("staging"),
+	consumedAt: timestamp("consumed_at", { withTimezone: true }),
+	expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+	correlationId: text("correlation_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	tokenHashUnique: uniqueIndex("sv_simulation_connect_tokens_hash_unique").on(table.tokenHash),
+	projectIdx: index("sv_simulation_connect_tokens_project_idx").on(table.organizationId, table.projectRef),
+	environmentCheck: check("sv_simulation_connect_tokens_environment_check", sql`${table.environment} = 'staging'`),
+	hashCheck: check("sv_simulation_connect_tokens_hash_check", sql`${table.tokenHash} ~ '^[a-f0-9]{64}$'`),
+	expiryCheck: check("sv_simulation_connect_tokens_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
+})).enableRLS();
+
+/** The bound recipient. The chat id is stored as a keyed hash for lookup and as
+ * ciphertext for sending, so a database copy alone cannot address the chat. */
+export const svSimulationRecipients = pgTable("sv_simulation_recipients", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	projectRef: text("project_ref").notNull(),
+	channel: text("channel").notNull().default("telegram"),
+	chatIdHash: text("chat_id_hash").notNull(),
+	chatIdCiphertext: text("chat_id_ciphertext").notNull(),
+	status: text("status").notNull().default("BOUND"),
+	environment: text("environment").notNull().default("staging"),
+	boundAt: timestamp("bound_at", { withTimezone: true }).defaultNow().notNull(),
+	unboundAt: timestamp("unbound_at", { withTimezone: true }),
+	unboundReason: text("unbound_reason"),
+	correlationId: text("correlation_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	activeUnique: uniqueIndex("sv_simulation_recipients_active_unique").on(table.organizationId, table.projectRef, table.channel).where(sql`${table.status} = 'BOUND'`),
+	projectIdx: index("sv_simulation_recipients_project_idx").on(table.organizationId, table.projectRef),
+	environmentCheck: check("sv_simulation_recipients_environment_check", sql`${table.environment} = 'staging'`),
+	statusCheck: check("sv_simulation_recipients_status_check", sql`${table.status} IN ('PENDING', 'BOUND', 'UNBOUND')`),
+	hashCheck: check("sv_simulation_recipients_hash_check", sql`${table.chatIdHash} ~ '^[a-f0-9]{64}$'`),
+	unboundCheck: check("sv_simulation_recipients_unbound_check", sql`(${table.status} = 'UNBOUND') = (${table.unboundAt} IS NOT NULL)`),
+})).enableRLS();
+
+/** The saved sample report. It is the workspace copy a digest links to, and its
+ * existence is the precondition delivery checks. */
+export const svSimulationReports = pgTable("sv_simulation_reports", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	projectRef: text("project_ref").notNull(),
+	subscriptionId: uuid("subscription_id").notNull().references(() => svSimulationSubscriptions.id),
+	periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+	periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+	payload: jsonb("payload").notNull(),
+	environment: text("environment").notNull().default("staging"),
+	mode: text("mode").notNull().default("test"),
+	sourceStatus: text("source_status").notNull().default("sample"),
+	notAMeasurement: boolean("not_a_measurement").notNull().default(true),
+	providerCalls: integer("provider_calls").notNull().default(0),
+	correlationId: text("correlation_id").notNull(),
+	persistedAt: timestamp("persisted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	periodUnique: uniqueIndex("sv_simulation_reports_period_unique").on(table.organizationId, table.projectRef, table.periodStart),
+	projectIdx: index("sv_simulation_reports_project_idx").on(table.organizationId, table.projectRef),
+	environmentCheck: check("sv_simulation_reports_environment_check", sql`${table.environment} = 'staging'`),
+	modeCheck: check("sv_simulation_reports_mode_check", sql`${table.mode} = 'test'`),
+	sourceStatusCheck: check("sv_simulation_reports_source_status_check", sql`${table.sourceStatus} = 'sample'`),
+	notAMeasurementCheck: check("sv_simulation_reports_not_a_measurement_check", sql`${table.notAMeasurement} = true`),
+	providerCallsCheck: check("sv_simulation_reports_provider_calls_check", sql`${table.providerCalls} = 0`),
+	periodCheck: check("sv_simulation_reports_period_check", sql`${table.periodEnd} > ${table.periodStart}`),
+})).enableRLS();
+
+/** One delivery per saved report. `attempts_made` is capped in the database so
+ * a sixth attempt cannot be written even by a caller that ignored the schedule. */
+export const svSimulationDeliveries = pgTable("sv_simulation_deliveries", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	projectRef: text("project_ref").notNull(),
+	reportId: uuid("report_id").notNull().references(() => svSimulationReports.id),
+	recipientId: uuid("recipient_id").notNull().references(() => svSimulationRecipients.id),
+	status: text("status").notNull().default("PENDING"),
+	attemptsMade: integer("attempts_made").notNull().default(0),
+	nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+	deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+	lastError: text("last_error"),
+	environment: text("environment").notNull().default("staging"),
+	mode: text("mode").notNull().default("test"),
+	correlationId: text("correlation_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	reportUnique: uniqueIndex("sv_simulation_deliveries_report_unique").on(table.reportId),
+	projectIdx: index("sv_simulation_deliveries_project_idx").on(table.organizationId, table.projectRef),
+	environmentCheck: check("sv_simulation_deliveries_environment_check", sql`${table.environment} = 'staging'`),
+	modeCheck: check("sv_simulation_deliveries_mode_check", sql`${table.mode} = 'test'`),
+	statusCheck: check("sv_simulation_deliveries_status_check", sql`${table.status} IN ('PENDING', 'DELIVERED', 'RETRY_SCHEDULED', 'FAILED', 'UNBOUND')`),
+	attemptCapCheck: check("sv_simulation_deliveries_attempt_cap_check", sql`${table.attemptsMade} BETWEEN 0 AND 5`),
+	deliveredCheck: check("sv_simulation_deliveries_delivered_check", sql`(${table.status} = 'DELIVERED') = (${table.deliveredAt} IS NOT NULL)`),
+})).enableRLS();
+
+/** Append-only attempt log: one row per send, whatever its outcome. */
+export const svSimulationDeliveryAttempts = pgTable("sv_simulation_delivery_attempts", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	organizationId: text("organization_id").notNull().references(() => organization.id),
+	deliveryId: uuid("delivery_id").notNull().references(() => svSimulationDeliveries.id),
+	attempt: integer("attempt").notNull(),
+	outcome: text("outcome").notNull(),
+	detail: text("detail"),
+	correlationId: text("correlation_id").notNull(),
+	attemptedAt: timestamp("attempted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	attemptUnique: uniqueIndex("sv_simulation_delivery_attempts_unique").on(table.deliveryId, table.attempt),
+	attemptRangeCheck: check("sv_simulation_delivery_attempts_range_check", sql`${table.attempt} BETWEEN 1 AND 5`),
+	outcomeCheck: check("sv_simulation_delivery_attempts_outcome_check", sql`${table.outcome} IN ('SUCCESS', 'TEMPORARY_FAILURE', 'RECIPIENT_GONE')`),
+})).enableRLS();

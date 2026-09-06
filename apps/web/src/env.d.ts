@@ -98,6 +98,11 @@ declare global {
 			readonly SELENA_PGBOSS_OWNER_MANAGED_SCHEMA?: string;
 			readonly SELENA_PAYMENTS_ENABLED?: string;
 			readonly SELENA_PAYMENT_MODE?: string;
+			readonly SELENA_STAGING_SIMULATION_ENABLED?: string;
+			readonly SELENA_SIMULATION_SIGNING_SECRET?: string;
+			readonly SELENA_TELEGRAM_BOT_TOKEN?: string;
+			readonly SELENA_TELEGRAM_BOT_USERNAME?: string;
+			readonly SELENA_TELEGRAM_WEBHOOK_SECRET?: string;
 			readonly SELENA_PROVIDER_BUDGET_USD?: string;
 			readonly SELENA_FREE_AUTO_DISPATCH_ENABLED?: string;
 			readonly SELENA_FREE_AUTO_DISPATCH_MAX_PER_DAY?: string;
