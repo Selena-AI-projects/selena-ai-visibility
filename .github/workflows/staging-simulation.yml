@@ -29,7 +29,7 @@ concurrency: staging-simulation
 
 jobs:
   run:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       BASE: ${{ secrets.SELENA_SIM_BASE_URL }}
       SIGNING_SECRET: ${{ secrets.SELENA_SIMULATION_SIGNING_SECRET }}
