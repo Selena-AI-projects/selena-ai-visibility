@@ -393,6 +393,15 @@ whitespace a dashboard hides, the fingerprint catches everything else, and
 neither can be read back into a credential. **Two runs whose fingerprints
 match and whose outcomes differ leave only the network.**
 
+That last sentence is wrong, and what refutes it is in
+`PERPLEXITY_REVIEW_2026-09-07.md`: the probe workflow was run twice more the
+same day, from the same Blacksmith runner that had answered at 05:22Z, and
+both returned `401` under the same fingerprint `4f0d071cd42f`. A restriction
+on the network the request comes from cannot refuse a machine it served four
+hours earlier. What the four probe runs bound is a time, not a place — the
+account served this credential at 05:22Z and refused it by 09:18Z — and no
+change of ours falls in that window.
+
 Spend was again nothing: a 401 creates no job, and after the submission-cost
 fix those six rows carry no charge — the first live confirmation that both
 changes from that fix behave as designed.
