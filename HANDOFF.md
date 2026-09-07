@@ -174,8 +174,23 @@ Two things follow, and neither is a retry:
   Blacksmith runner). One more adapter run from Railway, on a project that is
   not held, decides it — the script now prints the reason. Details, the
   105-character answer and the published price are in the outcome record.
+- **The refusal is `PROVIDER_HTTP_401`.** The `avlibali` canary of 08:36Z
+  printed the reason breakdown — `SELENA_ORDER_STOPPED ×19,
+  PROVIDER_HTTP_401 ×6` — three hours after the probe answered, so payment,
+  plan and "not yet activated" are all excluded. The credential is refused
+  from Railway and accepted from a GitHub runner while both stored values
+  match. Two causes of that were ours and are fixed: the adapter built the
+  Basic header with UTF-8 where the working registry path uses `btoa`, and
+  the journal script trimmed the credential where the registry does not.
+  Both now print a credential fingerprint, so the next pair of runs either
+  agrees and leaves only an account IP restriction, or disagrees and names
+  which value differs.
 - **The wall detector is still unproven against live output.** No answer was
   reached, so the canary's first question is exactly where it was.
+- **`avlibali` is held too, by that canary.** Same shape as `korafoodhall`;
+  migration `0065` releases both and is merged, not applied. Starting a
+  canary from a commit whose merge also triggers a deploy races two
+  containers onto the same variables — that is how this run happened at all.
 - **A repeat is blocked by the daily claim, and that is not a timer.** Two
   retries (04:47Z and 05:14Z) were refused with
   `SELENA_JOURNAL_DAILY_CLAIM_HOLD: 2026-09-07 attempt 1 is EXECUTING`. The

@@ -147,6 +147,32 @@ export function resolveOxylabsCost(reportedCostUsd?: number | null): {
 	return { costUsd: estimateRunCostUsd("oxylabs", true), basis: "estimated" };
 }
 
+/**
+ * The Authorization header the provider registry sends, byte for byte. The
+ * registry reaches the same account through `btoa`, which encodes each code
+ * unit as one byte; `Buffer.from` defaults to UTF-8 and turns a credential
+ * carrying `é` into different bytes — the same configured password, a
+ * different password on the wire, and a 401 nobody can explain by comparing
+ * the two values. Above U+00FF there is no Basic representation at all, and
+ * refusing is honest where either encoding would be a guess.
+ */
+export function buildOxylabsAuthorization(username: string, password: string): string {
+	const credential = `${username}:${password}`;
+	for (const character of credential) {
+		if ((character.codePointAt(0) ?? 0) > 0xff) throw new Error("OXYLABS_CREDENTIAL_NOT_LATIN1");
+	}
+	return `Basic ${Buffer.from(credential, "latin1").toString("base64")}`;
+}
+
+/**
+ * What was sent, identified without revealing it. Two runs that hash alike
+ * sent the same header, so a 401 against a matching fingerprint is about the
+ * account or the network rather than the credential.
+ */
+export function oxylabsCredentialFingerprint(authorization: string): string {
+	return createHash("sha256").update(authorization).digest("hex").slice(0, 12);
+}
+
 /** Past this, prose that mentions signing up is prose, not an interstitial. */
 export const OXYLABS_AUTH_WALL_MAX_CHARS = 600;
 const AUTH_WALL_PATTERN = /sign up|sign in|log in|create a free account|continue with google|verify you are human/i;
@@ -372,7 +398,13 @@ export function createOxylabsAdapter(deps: OxylabsAdapterDeps): SelenaMeasuremen
 	const pollMs = deps.pollMs ?? DEFAULT_POLL_MS;
 	// The only place the credentials are assembled. Never put in a body, a
 	// URL, an outcome or an error.
-	const authorization = `Basic ${Buffer.from(`${deps.username}:${deps.password}`).toString("base64")}`;
+	const authorization = buildOxylabsAuthorization(deps.username, deps.password);
+	// Printed once per adapter, not per job: what a 401 has to be checked
+	// against. Lengths catch the whitespace a dashboard hides, the fingerprint
+	// catches everything else, and neither can be read back into a credential.
+	console.info(
+		`[oxylabs] ${deps.system} credential ${deps.username.length}:${deps.password.length} chars, header ${oxylabsCredentialFingerprint(authorization)}`,
+	);
 	// A surface that echoes request material back would otherwise put a
 	// credential into anything written from a payload — a stored row or a log
 	// line alike.
