@@ -1,0 +1,119 @@
+name: Perplexity scraper probe
+
+# One live Perplexity job through the chosen scraped provider, run by
+# packages/lib/scripts/selena-scraper-perplexity-probe.ts. It answers one
+# question — does this vendor's browser currently get an answer, or the
+# sign-up interstitial Perplexity serves a session it reads as automated —
+# and it needs a credential, which belongs in a secret rather than in
+# anyone's shell.
+#
+# It contacts exactly one provider once and creates no order, permit, run or
+# cost event: nothing here touches the measurement path.
+#
+# Two vendors have each answered and then stopped answering within days, so a
+# single pass is not adoption. Dispatch this twice, at least six hours apart,
+# before an adapter is written against a vendor.
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Which scraped provider to probe"
+        required: true
+        default: cloro
+        type: choice
+        options:
+          - cloro
+          - olostep
+          - oxylabs
+          - brightdata
+      prompt:
+        description: "The question to ask. Default is one the Bright Data collector failed on 2026-09-04"
+        required: false
+        default: "What are the best food halls in Ubud, Bali?"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 20
+
+    env:
+      CLORO_API_KEY: ${{ secrets.CLORO_API_KEY }}
+      OLOSTEP_API_KEY: ${{ secrets.OLOSTEP_API_KEY }}
+      OXYLABS_USERNAME: ${{ secrets.OXYLABS_USERNAME }}
+      OXYLABS_PASSWORD: ${{ secrets.OXYLABS_PASSWORD }}
+      BRIGHTDATA_API_TOKEN: ${{ secrets.BRIGHTDATA_API_TOKEN }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # Named rather than looked up, so a missing secret is reported as the
+      # provider the operator chose rather than as a stack trace.
+      - name: Refuse without a credential
+        env:
+          PROVIDER: ${{ inputs.provider }}
+        run: |
+          case "$PROVIDER" in
+            cloro)      needed="CLORO_API_KEY" ;;
+            olostep)    needed="OLOSTEP_API_KEY" ;;
+            oxylabs)    needed="OXYLABS_USERNAME OXYLABS_PASSWORD" ;;
+            brightdata) needed="BRIGHTDATA_API_TOKEN" ;;
+            *) echo "Unknown provider $PROVIDER" >&2; exit 1 ;;
+          esac
+          missing=""
+          for name in $needed; do
+            [ -z "$(printenv "$name")" ] && missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            {
+              echo "### Ключей нет"
+              echo ""
+              echo "Для \`$PROVIDER\` нужны секреты:$missing"
+              echo ""
+              echo "Settings → Secrets and variables → Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The prompt reaches the shell as an environment variable, not through
+      # expression interpolation: it is text someone typed.
+      - name: Run the one probe
+        env:
+          SELENA_SCRAPER_PROBE: "yes"
+          SELENA_PROBE_PROVIDER: ${{ inputs.provider }}
+          PERPLEXITY_PROBE_PROMPT: ${{ inputs.prompt }}
+        run: |
+          set -o pipefail
+          echo "## ${SELENA_PROBE_PROVIDER} · Perplexity" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          pnpm -C packages/lib exec tsx scripts/selena-scraper-perplexity-probe.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # The raw payload is the evidence an adapter would be built on; it stays
+      # out of the log and travels as an artifact instead.
+      - name: Keep the raw payload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.provider }}-perplexity-live-probe
+          path: packages/lib/src/adapters/__fixtures__/${{ inputs.provider }}-perplexity-live-probe.json
+          if-no-files-found: ignore
+          retention-days: 14
