@@ -16,6 +16,8 @@ export type JournalHoldReconciliationReceipt = {
 	providerCalls: 0 | null;
 	providerCallsStatus: "PROVEN_ZERO" | "UNKNOWN_WITHIN_UPPER_BOUND";
 	recurring: false;
+	/** Present only on the executor-settled sibling; 0060's receipt has no shape field. */
+	settlementShape?: "EXECUTOR_SETTLED";
 };
 
 type SqlExecutor = {
@@ -72,6 +74,38 @@ export async function reconcileJournalHold(
 		throw new Error("SELENA_JOURNAL_HOLD_RECONCILIATION_RECEIPT_INVALID");
 	}
 	return receipt;
+}
+
+/**
+ * The sibling of reconcileJournalHold for a claim whose runs the executor
+ * already closed. The reconciler settles nothing there — it only releases the
+ * claim — so the receipt names its shape and the reader insists on it: a
+ * 0060 receipt answering this call would mean the wrong function ran.
+ */
+export async function reconcileJournalExecutorSettledClaim(
+	executor: SqlExecutor,
+	input: Readonly<{
+		claimId: string;
+		actorId: string;
+		ownerDecisionRef: string;
+		runtimeQuiesced: true;
+		ambiguousSpendAcknowledged: true;
+	}>,
+): Promise<JournalHoldReconciliationReceipt & { settlementShape: "EXECUTOR_SETTLED" }> {
+	const result = await executor.execute(
+		sql`SELECT public.sv_reconcile_journal_executor_settled(
+			${input.claimId}::uuid,
+			${input.actorId}::text,
+			${input.ownerDecisionRef}::text,
+			${input.runtimeQuiesced}::boolean,
+			${input.ambiguousSpendAcknowledged}::boolean
+		) AS receipt`,
+	);
+	const receipt = (result.rows?.[0] as { receipt?: unknown } | undefined)?.receipt;
+	if (!isJournalHoldReconciliationReceipt(receipt) || receipt.settlementShape !== "EXECUTOR_SETTLED") {
+		throw new Error("SELENA_JOURNAL_EXECUTOR_SETTLED_RECEIPT_INVALID");
+	}
+	return receipt as JournalHoldReconciliationReceipt & { settlementShape: "EXECUTOR_SETTLED" };
 }
 
 function isJournalHoldReconciliationReceipt(value: unknown): value is JournalHoldReconciliationReceipt {

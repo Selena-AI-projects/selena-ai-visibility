@@ -93,20 +93,36 @@ The account is live, the source is served, and nothing needs paying. The
 dashboard agrees: Web Scraper API `Active`, no usage-limit rules, spending
 analytics not yet populated.
 
-What differs between that job and the refused canary is one thing. The
-request code is the same in every material respect — `POST
+The request code is the same in every material respect — `POST
 https://data.oxylabs.io/v1/queries`, Basic authorization, JSON content type,
 body `{ source: "perplexity", prompt, parse: true }` — in the registry
-provider the probe uses and in the adapter the canary uses. The probe took
-its credentials from the GitHub Actions secrets; the canary took them from
-`OXYLABS_USERNAME` and `OXYLABS_PASSWORD` on the staging `measure` service.
-One pair is accepted and the other is refused with a 4xx, so the Railway
-values are not the pair that works. The fix is to overwrite them from the
-Oxylabs dashboard (My account → Web Scraper API user), in the Railway
-dashboard, never through a chat. The one residual alternative — an IP
-restriction on the account that a Railway egress address fails — is unlikely
-for a password-authenticated Web Scraper API user and is where to look only
-if the rewritten pair is refused too.
+provider the probe uses and in the adapter the canary uses, and the journal
+script hands the adapter the plain `fetch`, the default endpoint and the
+credentials trimmed from `OXYLABS_USERNAME` / `OXYLABS_PASSWORD`. The first
+reading of this record concluded that the Railway pair therefore had to
+differ from the GitHub Actions copy. **The owner compared them and they are
+identical.** That leaves two differences between the accepted job and the
+refused one, and the record does not choose between them:
+
+- **Time.** The canary ran at 04:23Z, the probe at 05:22Z. The dashboard at
+  05:0xZ showed Web Scraper API `Active` with spending analytics still
+  "uploading, up to 24 hours" — the state of a product activated recently.
+  An account not yet active at 04:23Z answers a valid credential with a 4xx
+  and the same credential with a job an hour later.
+- **Network.** The canary submits from a Railway container, the probe from a
+  Blacksmith runner. An account-level IP restriction would refuse one and not
+  the other; it is unlikely for a password-authenticated Web Scraper API
+  user, but it is the only other thing that differs.
+
+Concurrency does not explain the log on its own: six submissions in flight
+could draw a 429 on the later ones, but a first job accepted at 04:23Z would
+have been polled for twenty seconds, and the whole run ended in four tenths.
+
+What separates the two is one more run through the adapter from Railway,
+with the reason breakdown the script now prints. It cannot be on
+`korafoodhall` until the claim below is released, but the block is per
+project: the same canary on another owner project, at the same ceiling,
+answers the question and is the first live test of the wall detector.
 
 Two more things the probe said:
 
@@ -278,19 +294,53 @@ express, not what happened: the receipt will report
 permit) and `providerCallsStatus = UNKNOWN_WITHIN_UPPER_BOUND`, while the
 breaker bounds the real requests at six and a 4xx refusal bills nothing.
 
-### What it takes to release this claim
+### What releases this claim: migration 0065
 
-A migration. Either `sv_reconcile_journal_hold` learns to accept a claim
-whose runs are all terminal — closed, each with its consumed permit and
-matching boundary, "settled by the executor" rather than by the reconciler
-— and reports the observed cost from `sv_cost_events`; or a sibling
-function does that for exactly this shape. Both are owner-gated
-(`SELENA_MIGRATION_APPROVED_SHA`) and neither exists yet. The script-side
-half of the same defect is that the `INCOMPLETE_CYCLE` path leaves the
-claim `EXECUTING` when every run is closed and the cycle is terminal —
-there is no status the guard admits for that state today, which is why the
-fix cannot be script-only.
+`0065_journal_executor_settled_reconciliation.sql` adds
+`sv_reconcile_journal_executor_settled`, a sibling of `0060` with the same
+five parameters, the same owner-only boundary and the same receipt shape
+plus `settlementShape: EXECUTOR_SETTLED`. It is the exit for exactly the
+shape above and refuses every other: the claim in `EXECUTING` or `HOLD`, the
+cycle `STOPPED` or `FAILED`, every run terminal and fenced by a boundary of
+this claim on its own consumed permit, no run still open
+(`…_RUNS_STILL_OPEN` — that is `0060`'s shape), no legacy unfenced pair, the
+lease past 45 minutes, no active measurement job. It settles nothing — the
+executor already did, and the function never rewrites a run — it revokes
+any unspent permit, cancels the order, and moves the claim `EXECUTING →
+HOLD → RECONCILED` in one transaction through the two transitions the guard
+already admits, so the guard itself is untouched. A replay returns
+`ALREADY_RECONCILED` under the same actor and decision reference.
 
-Until one of those ships, `korafoodhall` cannot be journaled on any day,
-and the canary cannot be repeated on it. The other owner projects are not
-affected: the block is per project.
+Applying it is the owner's decision twice over. First the migration: raise
+`SELENA_MIGRATION_MAX_INDEX` to `65` on the staging `migrate` service and
+deploy it, then read `prepared … through index 65` in its log. Then the
+release, in the same owner `psql` session as the readback above — the
+rehearsal first:
+
+```sql
+BEGIN;
+SELECT set_config('app.organization_id', '<TENANT>', true);
+SELECT jsonb_pretty(public.sv_reconcile_journal_executor_settled(
+  '<CLAIM_ID>'::uuid,
+  'selena-owner-reconciler'::text,
+  'owner-decision-2026-09-07-korafoodhall-oxylabs-canary-attempt-1'::text,
+  true::boolean,
+  true::boolean
+));
+ROLLBACK;
+```
+
+Expected: `"decision": "RECONCILED"`, `"settlementShape": "EXECUTOR_SETTLED"`,
+`settledRunCount` 25, `providerCallUpperBound` 25,
+`providerCallsStatus` `UNKNOWN_WITHIN_UPPER_BOUND`, `costEventCount` between
+0 and 6 with `unmatchedCostEventCount` 0. The `EXECUTING → HOLD` update from
+the earlier rehearsal is no longer needed; the function does it. Then the
+same statement with `COMMIT`, a second call to see `ALREADY_RECONCILED`,
+and the next journal run on `korafoodhall` allocates attempt 2 — the
+unresolved lookup does not see `RECONCILED`.
+
+The script-side half of the same defect — the `INCOMPLETE_CYCLE` path
+leaving the claim `EXECUTING` when every run is closed — is not changed
+here: with `0065` in place that state has an owner exit, and moving the
+claim automatically would decide for the owner what the function asks the
+owner to acknowledge.
