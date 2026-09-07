@@ -24,9 +24,15 @@
  *   SELENA_JOURNAL_TENANT=<organization id> \
  *   SELENA_JOURNAL_PROJECTS=korafoodhall SELENA_JOURNAL_MAX_COST_USD=0.5 \
  *   pnpm -C apps/worker measure:journal
+ *
+ * The same command with SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity and
+ * OXYLABS_USERNAME / OXYLABS_PASSWORD in place of the Bright Data token
+ * measures the Perplexity surface alone, through the Oxylabs source — which is
+ * how that adapter's canary runs before any route changes.
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from "@workspace/lib/adapters/oxylabs";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
@@ -48,6 +54,15 @@ assertMeasurementDeploymentApproved(process.env);
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
+
+/**
+ * Oxylabs has not yet been invoiced for a Perplexity answer, so its per-answer
+ * price is the cost table's estimate rather than an observed figure. It is the
+ * higher of the two visitor rates, which is the direction a ceiling should err
+ * in: refuse a run before it spends rather than after. Replace it with the
+ * invoice's figure once one exists.
+ */
+const OXYLABS_PRICE_PER_ANSWER_USD = resolveOxylabsCost(undefined).costUsd ?? 0.01;
 
 /**
  * An API View answer is bought by the token and costs more than a scraped one,
@@ -84,7 +99,6 @@ function required(name: string): string {
 }
 
 const DATABASE_URL = required("DATABASE_URL");
-const apiKey = required("BRIGHTDATA_API_TOKEN");
 const tenantId = required("SELENA_JOURNAL_TENANT");
 const maxCostUsd = Number(required("SELENA_JOURNAL_MAX_COST_USD"));
 if (!Number.isFinite(maxCostUsd) || maxCostUsd <= 0) {
@@ -95,9 +109,17 @@ void DATABASE_URL;
 
 const config = measurementConfigFromEnv(process.env);
 if (!config.enabled) {
-	console.error("SELENA_MEASUREMENT_ENABLED must be true — this spends money on the Bright Data account");
+	console.error("SELENA_MEASUREMENT_ENABLED must be true — this spends money on the provider account");
 	process.exit(2);
 }
+
+/** Only the surfaces the configured name can actually route to are built. */
+const selected = new Set(measurementAdapterNamesFor(config.adapter));
+const brightDataSelected = BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`));
+const oxylabsSelected = selected.has("oxylabs-perplexity");
+// Each credential is demanded only by the run that would spend it: a canary
+// through Oxylabs must not stop on a Bright Data token it never uses.
+const apiKey = brightDataSelected.length > 0 ? required("BRIGHTDATA_API_TOKEN") : "";
 
 const requested = (process.env.SELENA_JOURNAL_PROJECTS ?? "").trim();
 const slugs =
@@ -122,10 +144,8 @@ const ctx: SelenaRepositoryContext = {
 const repositories = createSelenaRepositories(db);
 const resolvers = createSelenaMeasurementResolvers(db);
 
-/** Only the surfaces the configured name can actually route to are built. */
-const selected = new Set(measurementAdapterNamesFor(config.adapter));
 const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
-	BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`)).map((surface) => [
+	brightDataSelected.map((surface) => [
 		`brightdata-${surface}`,
 		createBrightDataAdapter({
 			apiKey,
@@ -147,6 +167,16 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 		}),
 	]),
 );
+if (oxylabsSelected) {
+	adapters["oxylabs-perplexity"] = createOxylabsAdapter({
+		username: required("OXYLABS_USERNAME"),
+		password: required("OXYLABS_PASSWORD"),
+		system: "perplexity",
+		fetchImpl: fetch,
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
+}
 if (selected.has("openrouter")) {
 	adapters.openrouter = createOpenRouterFamilyAdapter({
 		apiKey: required("OPENROUTER_API_KEY"),
@@ -443,26 +473,41 @@ async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDO
 async function measure(slug: string): Promise<void> {
 	const { project, scenario } = await projectFor(slug);
 	const rows = await scenarioRowsFor(project.id, slug);
-	// The surfaces the collectors are pointed at, under the names the catalog
-	// sells them as — the adapter's own map, so the two cannot drift apart.
-	const systems = [
-		...BRIGHTDATA_SURFACES.map((surface) => ({
+	// One system per adapter that was actually built, under the name the
+	// catalog sells it as — each adapter's own map, so the two cannot drift
+	// apart. A surface no registered adapter measures gets no permit: a permit
+	// the plain-named adapter cannot honour would be paid for and then refused
+	// as evidence for a system it did not authorize.
+	const priced = [
+		...brightDataSelected.map((surface) => ({
 			systemId: brightDataVisitorSurface[surface],
 			channel: "VISITOR" as const,
+			priceUsd: PRICE_PER_ANSWER_USD,
 		})),
+		...(oxylabsSelected
+			? [
+					{
+						systemId: oxylabsVisitorSurface.perplexity,
+						channel: "VISITOR" as const,
+						priceUsd: OXYLABS_PRICE_PER_ANSWER_USD,
+					},
+				]
+			: []),
 		...(selected.has("openrouter")
-			? apiModelIds.map((model: string) => ({ systemId: model, channel: "API" as const }))
+			? apiModelIds.map((model: string) => ({
+					systemId: model,
+					channel: "API" as const,
+					priceUsd: API_PRICE_PER_ANSWER_USD,
+				}))
 			: []),
 	];
+	const systems = priced.map(({ systemId, channel }) => ({ systemId, channel }));
 	const expectedRuns = rows.length * systems.length;
-	// Priced per channel: an API answer is bought by the token and a scraped one
-	// by the request, and one rate over both would under-price whichever is
-	// dearer — which is the direction that matters for a ceiling.
-	const cost = systems.reduce(
-		(total, system) =>
-			total + rows.length * (system.channel === "API" ? API_PRICE_PER_ANSWER_USD : PRICE_PER_ANSWER_USD),
-		0,
-	);
+	// Priced per adapter: an API answer is bought by the token, a scraped one
+	// by the request, and the two scrapers charge differently; one rate over
+	// all of them would under-price whichever is dearer — which is the
+	// direction that matters for a ceiling.
+	const cost = priced.reduce((total, system) => total + rows.length * system.priceUsd, 0);
 	if (cost > maxCostUsd) {
 		console.error(
 			`${slug}: ${expectedRuns} answers cost about $${cost.toFixed(4)}, ceiling is $${maxCostUsd.toFixed(4)}`,

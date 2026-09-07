@@ -50,8 +50,11 @@ be the side effect of a typo in a variable.
 
 The list currently holds the inert adapters, `openrouter`, and the three Visitor
 View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
-`brightdata-perplexity` — so `brightdata` as a family name does select a live
-paid path, and the credentials are the remaining requirement. While `noop` is
+`brightdata-perplexity`, and `oxylabs-perplexity` — so `brightdata` as a family
+name does select a live paid path, and the credentials are the remaining
+requirement. `oxylabs-perplexity` belongs to no family: it is the second
+Perplexity transport, approved on 2026-09-06 for a canary, and it runs only
+when named outright, which is a one-surface scope by construction. While `noop` is
 selected every run is recorded as `INVALID`, so an accidental run cannot produce
 something that reads like a real measurement.
 
@@ -248,6 +251,11 @@ Visitor View is what the local plan sells: what a person actually sees on
 ChatGPT, Gemini and Perplexity. One adapter instance measures one surface, and
 the account supplies one collector per surface, so the worker holds three of
 them — `brightdata-chatgpt`, `brightdata-gemini`, `brightdata-perplexity`.
+A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
+surface through Oxylabs' `perplexity` source and takes `OXYLABS_USERNAME` and
+`OXYLABS_PASSWORD` on the worker. It is not part of the `brightdata` family
+and no family routes to it: name it directly for a canary, and only for a
+scope that sells Perplexity alone.
 
 `BRIGHTDATA_API_TOKEN` on the worker is the only account-specific value. The
 collector ids are defaults in the code because a dataset id names a public
