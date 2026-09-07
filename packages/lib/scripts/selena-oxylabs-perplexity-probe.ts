@@ -79,16 +79,23 @@ async function main(): Promise<void> {
 	const answerField = content
 		? ANSWER_FIELDS.find((field) => typeof content[field] === "string" && (content[field] as string).trim() !== "")
 		: undefined;
-	const text = answerField ? (content?.[answerField] as string).trim() : "";
+	const text = content && answerField ? (content[answerField] as string).trim() : "";
 	const wall = text.length < 600 && WALL_PATTERN.test(text);
 
 	console.log(`job finished in ${elapsedS}s`);
 	console.log(`content keys: ${content ? keysOf(content) : "none — results[0].content absent"}`);
 	console.log(`llm_model: ${String(content?.llm_model ?? content?.model ?? "-")}`);
-	console.log(`answer field: ${answerField ?? "none of " + ANSWER_FIELDS.join(",")}`);
-	console.log(
-		`answer: ${text.length} chars, ${result.citations.length} citations, ${result.webQueries.length} web queries`,
-	);
+	console.log(`answer field: ${answerField ?? `none of ${ANSWER_FIELDS.join(",")}`}`);
+	// The registry reports `["unavailable"]` when citations prove a search ran
+	// but the payload exposed no query; that sentinel is not a query to count.
+	const exposedQueries = result.webQueries.filter((query) => query !== "unavailable");
+	const queryNote =
+		exposedQueries.length > 0
+			? `${exposedQueries.length} web queries`
+			: result.webQueries.includes("unavailable")
+				? "no web query exposed"
+				: "0 web queries";
+	console.log(`answer: ${text.length} chars, ${result.citations.length} citations, ${queryNote}`);
 	console.log(`excerpt: ${JSON.stringify(text.slice(0, EXCERPT_CHARS))}`);
 	console.log(`fixture written: ${fixturePath}`);
 
