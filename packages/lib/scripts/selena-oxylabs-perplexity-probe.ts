@@ -19,7 +19,11 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { looksLikeOxylabsAuthWall } from "../src/adapters/oxylabs-measurement-adapter";
+import {
+	buildOxylabsAuthorization,
+	looksLikeOxylabsAuthWall,
+	oxylabsCredentialFingerprint,
+} from "../src/adapters/oxylabs-measurement-adapter";
 import { oxylabs } from "../src/providers/registry/oxylabs";
 
 // A question the Bright Data collector answered with MALFORMED_RESPONSE on
@@ -60,6 +64,17 @@ async function main(): Promise<void> {
 
 	console.log(`source: perplexity (provider "${oxylabs.id}", access "${oxylabs.access}")`);
 	console.log(`prompt: ${prompt}`);
+	// The registry reads the environment itself, so this is the header it will
+	// send. Printed in the same form the adapter prints, because comparing the
+	// two is how a 401 from one deployment and an answer from another is told
+	// apart from a credential that only looks the same in two dashboards.
+	const rawUsername = process.env.OXYLABS_USERNAME ?? "";
+	const rawPassword = process.env.OXYLABS_PASSWORD ?? "";
+	console.log(
+		`credential ${rawUsername.length}:${rawPassword.length} chars, header ${oxylabsCredentialFingerprint(
+			buildOxylabsAuthorization(rawUsername, rawPassword),
+		)}`,
+	);
 	const startedAt = Date.now();
 
 	const result = await oxylabs.run("perplexity", prompt, { webSearch: true });

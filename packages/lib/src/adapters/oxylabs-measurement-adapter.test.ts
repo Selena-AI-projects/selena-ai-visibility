@@ -8,12 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SelenaExecutablePermit } from "../selena-measurement";
 import { estimateRunCostUsd } from "../usage/cost";
 import {
+	buildOxylabsAuthorization,
 	buildOxylabsRequestBody,
 	createOxylabsAdapter,
 	describeUnreadableOxylabsPayload,
 	looksLikeOxylabsAuthWall,
 	OXYLABS_AUTH_WALL_MAX_CHARS,
 	OXYLABS_DEFAULT_ENDPOINT,
+	oxylabsCredentialFingerprint,
 	oxylabsVisitorSurface,
 	parseOxylabsAnswer,
 	resolveOxylabsCost,
@@ -381,6 +383,28 @@ describe("Oxylabs measurement adapter", () => {
 			}),
 		).execute(permitFor());
 		expect(long.validity).toBe("VALID");
+	});
+
+	it("builds the header the working provider path builds, and refuses what Basic cannot carry", () => {
+		// btoa is what the registry reaches this account with; matching it byte
+		// for byte is the point, because UTF-8 would send a different password.
+		for (const password of ["oxy-secret", "pa55!@#", "café±§", "ÿ"]) {
+			expect(buildOxylabsAuthorization("user", password)).toBe(`Basic ${btoa(`user:${password}`)}`);
+		}
+		// A trailing newline is part of the credential, not noise to tidy away.
+		expect(buildOxylabsAuthorization("user", "secret\n")).not.toBe(buildOxylabsAuthorization("user", "secret"));
+		for (const beyondLatin1 of ["пароль", "naïve—dash", "🔑"]) {
+			expect(() => buildOxylabsAuthorization("user", beyondLatin1)).toThrow("OXYLABS_CREDENTIAL_NOT_LATIN1");
+		}
+	});
+
+	it("identifies the header it sent without revealing it", () => {
+		const authorization = buildOxylabsAuthorization(USERNAME, PASSWORD);
+		const fingerprint = oxylabsCredentialFingerprint(authorization);
+		expect(fingerprint).toMatch(/^[0-9a-f]{12}$/);
+		expect(fingerprint).toBe(oxylabsCredentialFingerprint(authorization));
+		expect(fingerprint).not.toBe(oxylabsCredentialFingerprint(buildOxylabsAuthorization(USERNAME, `${PASSWORD}x`)));
+		expect(authorization).not.toContain(fingerprint);
 	});
 
 	it("tells a wall from an answer by phrase and length together", () => {

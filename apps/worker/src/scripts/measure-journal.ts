@@ -98,6 +98,21 @@ function required(name: string): string {
 	return value;
 }
 
+/**
+ * A credential reaches the provider as configured. Trimming it here would send
+ * a different password than the deployment holds whenever a paste carried a
+ * trailing newline — and the provider answers that with the same 401 as a
+ * wrong one.
+ */
+function requiredCredential(name: string): string {
+	const value = process.env[name];
+	if (!value || value.trim() === "") {
+		console.error(`${name} is required`);
+		process.exit(2);
+	}
+	return value;
+}
+
 const DATABASE_URL = required("DATABASE_URL");
 const tenantId = required("SELENA_JOURNAL_TENANT");
 const maxCostUsd = Number(required("SELENA_JOURNAL_MAX_COST_USD"));
@@ -169,8 +184,8 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 );
 if (oxylabsSelected) {
 	adapters["oxylabs-perplexity"] = createOxylabsAdapter({
-		username: required("OXYLABS_USERNAME"),
-		password: required("OXYLABS_PASSWORD"),
+		username: requiredCredential("OXYLABS_USERNAME"),
+		password: requiredCredential("OXYLABS_PASSWORD"),
 		system: "perplexity",
 		fetchImpl: fetch,
 		resolveScenarioText: resolvers.resolveScenarioText,

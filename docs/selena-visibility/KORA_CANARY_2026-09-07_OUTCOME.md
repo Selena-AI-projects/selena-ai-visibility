@@ -344,3 +344,59 @@ leaving the claim `EXECUTING` when every run is closed — is not changed
 here: with `0065` in place that state has an owner exit, and moving the
 claim automatically would decide for the owner what the function asks the
 owner to acknowledge.
+
+## The 401, and the second held claim
+
+The canary ran on `avlibali` at 08:36Z from deployment
+`66460751-e3c0-4e07-9ec3-3d8eee86267b` on `8f1965e`. Merging the migration
+touched `packages/lib/**`, which is in the `measure` service's watch
+patterns, so that merge and the variable change raced: two deployments, both
+carrying the new variables, and the earlier one ran the canary while the
+later one found the claim it had just made. A canary should be started from
+a commit already deployed, or with the service's automatic deploys quiet.
+
+```
+AVLI Bali — 25 questions × 1 systems (~$0.2500)
+  cycle 81037955-40ec-4931-8cca-182e58b6054c: 0 valid of 25 asked, 0 mention rows, 25 did not complete
+  did not complete: SELENA_ORDER_STOPPED ×19, PROVIDER_HTTP_401 ×6
+```
+
+The reason breakdown is the line the first canary was spent learning, and it
+names the code: **401**. Not 402, not 403. That settles three things at
+once — the account needs no payment, the plan covers the source, and the
+"activated between 04:23Z and 05:22Z" reading is wrong, because 08:36Z is
+three hours after the probe answered.
+
+What is left is that the same credential is refused from a Railway container
+and accepted from a Blacksmith runner, with the owner having compared the two
+stored values character by character. Three mechanisms produce exactly that,
+and two of them were ours:
+
+- **The Basic header was built differently.** The registry the probe uses
+  encodes with `btoa`, one byte per code unit; the adapter used
+  `Buffer.from`, which is UTF-8. For `café±§` those differ —
+  `dTpjYWbpsac=` against `dTpjYWbDqcKxwqc=` — so a password holding any
+  character between U+0080 and U+00FF reaches the provider as a different
+  password from the same configured value.
+- **The journal script trimmed the credential.** `required()` trims; the
+  registry does not. A value stored with a trailing newline is one password
+  through the probe and another through the canary.
+- **An IP restriction on the Oxylabs account**, which no code change can
+  reach.
+
+The first two are fixed: `buildOxylabsAuthorization` is the registry's
+encoding byte for byte and refuses a credential Basic cannot carry rather
+than guessing at it, and `requiredCredential` passes the value as configured.
+Both the adapter and the probe now print
+`credential <user>:<pass> chars, header <12 hex>` — lengths catch the
+whitespace a dashboard hides, the fingerprint catches everything else, and
+neither can be read back into a credential. **Two runs whose fingerprints
+match and whose outcomes differ leave only the network.**
+
+Spend was again nothing: a 401 creates no job, and after the submission-cost
+fix those six rows carry no charge — the first live confirmation that both
+changes from that fix behave as designed.
+
+`avlibali` now carries a held claim of the same shape as `korafoodhall`'s,
+made by this run. Migration `0065` releases both; it is merged and not yet
+applied.
