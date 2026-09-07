@@ -32,7 +32,37 @@ They are different observations and are never averaged together.
 - **API View** — the model answering from its own knowledge, no web search.
   Runs through OpenRouter. Part of the $79 plan.
 
-## Current open problem — Perplexity collector returns an auth wall (5 September 2026)
+## Where Perplexity stands (7 September 2026, 15:33 UTC)
+
+Read this before the history below it, which is still accurate but no longer
+current.
+
+**A third vendor answers.** `olostep` returned a visitor answer with sources —
+643 characters, 10 citations — through the parser
+`@olostep/perplexity-results` over `perplexity.ai/?q=`, on the same question
+Bright Data failed. Run
+[34137495520](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34137495520).
+It is not adopted: a vendor needs two passing probes at least six hours apart,
+because both previous ones would have passed a single run and stopped
+answering within days.
+
+- **Bright Data** returns the sign-up wall. Not a parser bug; not fixable here.
+- **Oxylabs** answers `401` from every machine since about 06:00 UTC that day,
+  including the runner it served an hour earlier. Nothing was spent; the
+  account holds credit. `PERPLEXITY_REVIEW_2026-09-07.md` has the evidence and
+  the readings that turned out wrong.
+- **Olostep** answers, slowly — 944 s for one question — and its
+  `search_queries` field returns the prompt verbatim rather than real fan-out
+  queries.
+
+The route is still `brightdata-perplexity` and changes only by a code change
+after a canary. `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`
+carries the full Olostep record;
+`docs/selena-visibility/HOW_THE_INDUSTRY_MEASURES_PERPLEXITY.md` explains why
+scraping the public UI is the right channel and why the wall is a proxy
+problem rather than a locked door.
+
+## The history — Perplexity collector returns an auth wall (5 September 2026)
 
 Search for this block with the words: **Perplexity**, **auth wall**,
 **brightdata-perplexity**, **PROVIDER_ERROR_ROW**, **issue #141**.

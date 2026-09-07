@@ -107,7 +107,7 @@ already implemented in `packages/lib/src/providers/registry/`.
 | Vendor | Endpoint / auth | Free tier | In our registry |
 |---|---|---|---|
 | **Cloro** | `POST https://api.cloro.dev/v1/monitor/perplexity`, `Authorization: Bearer <key>` | **500 credits/month**, then $30/mo Lite | **yes** — `cloro.ts`, task `PERPLEXITY`, `CLORO_API_KEY` |
-| **Olostep** | parser `@olostep/perplexity-results` over `perplexity.ai/?q=` | **500 requests**, then $9/mo for 5 000 credits | **yes** — `olostep.ts`, 3 credits/answer, `OLOSTEP_API_KEY` |
+| **Olostep** | parser `@olostep/perplexity-results` over `perplexity.ai/?q=` | **500 requests**, then $9/mo for 5 000 credits | **yes** — `olostep.ts`, 3 credits/answer, `OLOSTEP_API_KEY` — **answered 2026-09-07** |
 | Oxylabs | `POST https://data.oxylabs.io/v1/queries`, Basic user+password | trial capped at $1 | yes — currently answering `401` |
 | Bright Data | collector `gd_m7dhdot1vw9a7gc1n` | advertises 5K records/month free | yes — returns the wall |
 | Scrapeless, Decodo, Apify | dedicated Perplexity scrapers | varies | no |
@@ -126,6 +126,17 @@ tells a client *why* they were or were not cited.
 buying anything.** A canary is 25 questions. Cloro's free 500 credits and
 Olostep's free 500 requests each cover several canaries and the repeat-probe
 gate on top.
+
+Olostep was probed the same evening, on the free tier, and answered: 643
+characters with 10 citations, the first Perplexity visitor answer this
+repository has obtained since 2026-09-04. It cost 3 credits and confirmed the
+argument above — the surface is reachable, the vendor is a commodity, and the
+one already in the registry was worth trying before buying anything. Two
+measured caveats are in
+`BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`: it took 944 seconds, and its
+`search_queries` returned the prompt verbatim rather than the fan-out queries
+Cloro's payload advertises. The second is the field that would tell a client
+*why* they were cited, so it stays a reason to keep Cloro on the list.
 
 ## What this changes
 
