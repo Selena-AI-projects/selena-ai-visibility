@@ -88,14 +88,19 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   the surface, not the collector. (If the API channel is ever sold for
   Perplexity, it is already reachable through the approved `openrouter`
   adapter — no new provider needed.)
-- **2 is open: there is no Oxylabs account yet.** Nothing is wired and nothing
-  is billed. The step before any adapter is one live probe —
-  `Oxylabs Perplexity probe` workflow, `packages/lib/scripts/selena-oxylabs-perplexity-probe.ts`
-  — which refuses to run without `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` as
-  Actions secrets. Its verdict (answer with sources / text without sources /
-  empty / wall) decides whether an `oxylabs-perplexity` measurement adapter is
-  written at all. `SELENA_EMERGENCY_STOP=true` stays on throughout; the probe
-  never touches the measurement path.
+- **2 is half-decided: the account exists and the probe passed.** Secrets
+  `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` were added on 2026-09-06 and the
+  `Oxylabs Perplexity probe` workflow ran once (run `34041688953`): **a visitor
+  answer with sources** — 447 characters, 10 citations, 21 seconds, no wall.
+  Details and the two open caveats (answer length; one run is not a
+  reliability figure) are in `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`.
+  The owner approved writing the `oxylabs-perplexity` measurement adapter the
+  same day, so that decision is made — do not ask for it again; the adapter
+  arrives in a separate pull request. What is still the owner's to approve,
+  after that adapter lands: the canary spend through it, and any route change
+  the canary's result would justify. Nothing is wired yet;
+  `SELENA_EMERGENCY_STOP=true` stays on; the `Perplexity` visitor route is
+  still `brightdata-perplexity`.
 - **The 2026-09-04 KORA numbers in the repo were wrong** and are corrected in
   `docs/selena-visibility/KORA_CYCLE_2026-09-04_OUTCOME.md`: 16 of 30 answers
   failed, not 5 — Perplexity 8× `MALFORMED_RESPONSE`, Gemini 4×
