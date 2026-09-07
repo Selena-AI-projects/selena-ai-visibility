@@ -185,6 +185,21 @@ Two things follow, and neither is a retry:
   Both now print a credential fingerprint, so the next pair of runs either
   agrees and leaves only an account IP restriction, or disagrees and names
   which value differs.
+- **That pair of runs happened, and it is the account.** The probe workflow
+  was dispatched twice more on 09-07 — 09:18Z and 13:45Z, runs `34105174822`
+  and `34129079327` — from the same Blacksmith runner that answered at
+  05:22Z. Both printed `credential 19:13 chars, header 4f0d071cd42f`, the
+  fingerprint the Railway canary prints, and both returned
+  `Oxylabs job submission failed (401:)`. An IP restriction cannot refuse a
+  machine it served four hours earlier, so the network reading is retired.
+  The Oxylabs account served this credential at 05:22Z and refused it by
+  09:18Z, and nothing of ours changed in that window. **Do not buy a plan
+  until Oxylabs explains the 401** — that is what the account statistics
+  (`$0 / $1`, two successful results) and these four runs are the evidence
+  for. The whole review, including two Visitor-channel Perplexity providers
+  the repository already ships and no decision document has weighed
+  (`olostep`, `cloro`), is
+  `docs/selena-visibility/PERPLEXITY_REVIEW_2026-09-07.md`.
 - **The wall detector is still unproven against live output.** No answer was
   reached, so the canary's first question is exactly where it was.
 - **`avlibali` is held too, by that canary.** Same shape as `korafoodhall`;
