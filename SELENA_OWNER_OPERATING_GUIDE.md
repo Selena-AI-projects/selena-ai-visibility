@@ -352,6 +352,15 @@ If a process disappears and the heartbeat remains unchanged for 45 minutes, the
 next invocation records the old attempt as `ABANDONED`, audits its recorded runs
 and cost, and allocates a new attempt. `HOLD` is different: it means spend is
 still ambiguous after an observed failure and remains blocked for owner review.
+An attempt that failed in the open — every run closed by the executor, the
+cycle stopped, the claim still `EXECUTING` — is held the same way and is not
+abandoned by time either. Two owner-only PostgreSQL functions are the only
+releases, both taking a decision reference and an explicit acknowledgement of
+the ambiguous spend: `sv_reconcile_journal_hold` for an attempt whose runs
+were still open when it vanished, `sv_reconcile_journal_executor_settled` for
+one whose runs the executor closed. Neither is wrapped by a script; the
+application role cannot call them. A held claim blocks its project on every
+day until one of them has run.
 
 The question sets live in `packages/lib/src/selena-journal-scenarios.ts` and are
 versioned: the version is the prompt family's identity, so changing a question

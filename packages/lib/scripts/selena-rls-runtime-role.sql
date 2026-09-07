@@ -211,6 +211,10 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060';
 	END IF;
 
+	IF to_regprocedure('public.sv_reconcile_journal_executor_settled(uuid,text,text,boolean,boolean)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0065';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -272,6 +276,8 @@ FROM selena_app;
 -- 0060's ambiguous-spend reconciliation is also owner-only. The application
 -- role can observe allowlisted claim metadata but cannot invoke the owner write.
 REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app;
+-- 0065's executor-settled release is the same boundary for the other shape.
+REVOKE ALL ON FUNCTION sv_reconcile_journal_executor_settled(uuid, text, text, boolean, boolean) FROM selena_app;
 
 -- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
 -- runtime allowlist: schema state is read-only, queue data is mutable, and only

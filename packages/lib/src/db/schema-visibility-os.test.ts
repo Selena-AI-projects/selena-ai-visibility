@@ -375,8 +375,12 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0058");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0059");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0065");
 		expect(roleBootstrap).toContain(
 			"REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app",
+		);
+		expect(roleBootstrap).toContain(
+			"REVOKE ALL ON FUNCTION sv_reconcile_journal_executor_settled(uuid, text, text, boolean, boolean) FROM selena_app",
 		);
 		expect(roleBootstrap).toContain("GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app");
 		expect(roleBootstrap).toContain("GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text)");
@@ -1548,6 +1552,36 @@ exit "\${FAKE_SUITE_EXIT:-0}"
 		expect(journal).toContain('"tag": "0059_journal_no_spend_reconciliation"');
 		expect(journal).toContain('"tag": "0060_journal_hold_owner_reconciliation"');
 	});
+
+	it("releases an executor-settled claim only through an owner-scoped sibling of the HOLD reconciliation", () => {
+		const migration = readFileSync(
+			new URL("./migrations/0065_journal_executor_settled_reconciliation.sql", import.meta.url),
+			"utf8",
+		);
+		const journal = readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8");
+
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_REQUIRES_MIGRATION_0060");
+		expect(migration).toContain("session_user <> table_owner");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_OWNER_REQUIRED");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_RUNTIME_NOT_QUIESCED");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_LEASE_ACTIVE");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_ACTIVE_JOB");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_RUNS_STILL_OPEN");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_EXECUTION_INVARIANT");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_AMBIGUOUS_SPEND_ACK_REQUIRED");
+		expect(migration).toContain("JOURNAL_EXECUTOR_SETTLED_RECONCILIATION_REPLAY_IDENTITY_MISMATCH");
+		expect(migration).toContain("'settlementShape', 'EXECUTOR_SETTLED'");
+		expect(migration).toContain("'OWNER_RECONCILED_JOURNAL_EXECUTOR_SETTLED'");
+		expect(migration).toContain("set_config('app.journal_hold_reconciliation'");
+		expect(migration).toContain("'UNKNOWN_WITHIN_UPPER_BOUND'");
+		expect(migration).toContain("'recurring', false");
+		expect(migration).toContain('REVOKE ALL ON FUNCTION "sv_reconcile_journal_executor_settled"');
+		expect(migration).not.toContain("GRANT ");
+		expect(migration).not.toContain('INSERT INTO "public"."sv_cost_events"');
+		// The executor's verdict on each run stands; this function never rewrites a run.
+		expect(migration).not.toContain('UPDATE "public"."sv_runs"');
+		expect(journal).toContain('"tag": "0065_journal_executor_settled_reconciliation"');
+	});
 });
 
 describe("Visibility OS Search and Reputation schema", () => {
@@ -1717,7 +1751,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-25)).toEqual([
+		expect(journal.entries.slice(-26)).toEqual([
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1809,6 +1843,13 @@ describe("Visibility OS Outcome Layer schema", () => {
 			{ idx: 62, version: "7", when: 1787940024000, tag: "0062_provider_spend_reservation", breakpoints: true },
 			{ idx: 63, version: "7", when: 1787940025000, tag: "0063_staging_verification_simulation", breakpoints: true },
 			{ idx: 64, version: "7", when: 1787940026000, tag: "0064_simulation_delivery_claim", breakpoints: true },
+			{
+				idx: 65,
+				version: "7",
+				when: 1787940027000,
+				tag: "0065_journal_executor_settled_reconciliation",
+				breakpoints: true,
+			},
 		]);
 	});
 

@@ -165,14 +165,15 @@ Two things follow, and neither is a retry:
 
 - **The account question is answered: the Oxylabs account works.** The probe
   workflow ran again at 05:22Z (run `34086543400`) with the GitHub Actions
-  secrets and returned a visitor answer in 29 s with ten citations. The
-  request code the probe and the adapter send is identical, so the only
-  difference between the accepted job and the refused canary is which copy of
-  the credentials was used: **the `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` on
-  the staging `measure` service are not the working pair.** Overwrite them
-  from the Oxylabs dashboard, in the Railway dashboard. Nothing needs paying.
-  Details, the 105-character answer and the published price are in the
-  outcome record.
+  secrets and returned a visitor answer in 29 s with ten citations. Nothing
+  needs paying. The request code the probe and the adapter send is
+  identical, and **the owner compared the Railway pair with the working one:
+  identical too.** What still differs between the refused 04:23Z canary and
+  the accepted 05:22Z probe is the hour (the dashboard looked freshly
+  activated at 05:0xZ) and the network (Railway container against a
+  Blacksmith runner). One more adapter run from Railway, on a project that is
+  not held, decides it — the script now prints the reason. Details, the
+  105-character answer and the published price are in the outcome record.
 - **The wall detector is still unproven against live output.** No answer was
   reached, so the canary's first question is exactly where it was.
 - **A repeat is blocked by the daily claim, and that is not a timer.** Two
@@ -185,12 +186,16 @@ Two things follow, and neither is a retry:
   writing; the guard admits `EXECUTING → HOLD` but `HOLD` is terminal; and
   `sv_reconcile_journal_hold`, the only exit, refuses a claim whose runs are
   closed — its invariant counts every non-`RUNNING` run as a violation
-  (`0060:497-520`), and the executor closed all 25 as `FAILED`. Releasing it
-  takes a migration that teaches the reconciler an executor-settled shape,
-  which is owner-gated. Until then **`korafoodhall` cannot be journaled on
-  any day** — the unresolved lookup is per project, not per day — while the
-  other projects are unaffected. The reading, the safe readback queries and
-  the rollback-only rehearsal that proves the refusal on staging are in
+  (`0060:497-520`), and the executor closed all 25 as `FAILED`. Until it is
+  released **`korafoodhall` cannot be journaled on any day** — the unresolved
+  lookup is per project, not per day — while the other projects are
+  unaffected. **The release is written: migration `0065` adds
+  `sv_reconcile_journal_executor_settled`**, `0060`'s sibling for the
+  executor-settled shape, owner-only, same receipt. It has not been applied:
+  applying it means raising `SELENA_MIGRATION_MAX_INDEX` to `65` on the
+  staging `migrate` service, deploying, and then calling the function as the
+  table owner with a decision reference. The reading, the readback queries,
+  the rehearsal and the expected receipt are in
   `docs/selena-visibility/KORA_CANARY_2026-09-07_OUTCOME.md`.
 
 The run also exposed a ledger defect, fixed here: a submission the provider
