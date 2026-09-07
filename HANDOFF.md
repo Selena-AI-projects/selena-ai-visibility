@@ -136,8 +136,9 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   service, and the whole runtime log of its last deployment
   (2026-09-06 15:20Z) is `Starting Container` then
   `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. No document in this repository
-  named those two variables before now — the canary runbook is still missing
-  them, and correcting it is an open task.
+  named those two variables before now; the canary runbook and the owner
+  guide's journal section both carry them now, with the three refusals read as
+  a diagnosis.
 - **Read from the same log: the emergency stop was not what was holding.** The
   gate returns `DEPLOYMENT_NOT_APPROVED` only after passing the stop and the
   enable flag, so at that deployment `SELENA_EMERGENCY_STOP` was not `1`,

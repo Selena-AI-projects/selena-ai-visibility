@@ -127,6 +127,19 @@ SELENA_JOURNAL_MAX_COST_USD=0.50 \
 pnpm -C apps/worker measure:journal
 ```
 
+On Railway that command is the `measure` service, and the shell above is not
+the whole list. The script's first act is the deployment gate, which also
+needs `SELENA_MEASUREMENT_APPROVED_COMMIT_SHA` — the 40-character SHA of the
+commit being deployed — and `SELENA_MEASUREMENT_APPROVED_ENVIRONMENT`, the
+name of the environment, each matching the `RAILWAY_GIT_COMMIT_SHA` and
+`RAILWAY_ENVIRONMENT_NAME` that Railway supplies. Without them the container
+starts, prints `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`, exits, and buys
+nothing — which is what the last `measure` deployment did on 2026-09-06.
+Set them in the same staged change as the credentials and the ceiling, and
+deploy that change; a variable edit alone reaches no running container. The
+owner guide's "Measuring the owner's own projects on Railway" carries the full
+list and reads the three refusals as a diagnosis.
+
 Named outright, the adapter measures Perplexity alone: the script mints
 permits only for the surfaces its registered adapters can honour, so no
 ChatGPT or Gemini permit is paid for and then refused. The ceiling is priced
