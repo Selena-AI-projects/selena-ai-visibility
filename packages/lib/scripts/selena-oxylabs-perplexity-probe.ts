@@ -19,13 +19,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { looksLikeOxylabsAuthWall } from "../src/adapters/oxylabs-measurement-adapter";
 import { oxylabs } from "../src/providers/registry/oxylabs";
 
 // A question the Bright Data collector answered with MALFORMED_RESPONSE on
 // 2026-09-04, so the two collectors are compared on the same input.
 const DEFAULT_PROMPT = "What are the best food halls in Ubud, Bali?";
 const EXCERPT_CHARS = 160;
-const WALL_PATTERN = /sign up|sign in|log in|create a free account|continue with google|verify you are human/i;
 // The fields extractTextFromOxylabs reads, in its order. The probe reads the
 // raw payload itself because the extractor answers an empty payload with a
 // sentence ("No content in Oxylabs output."), and a sentence is not an empty
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 		? ANSWER_FIELDS.find((field) => typeof content[field] === "string" && (content[field] as string).trim() !== "")
 		: undefined;
 	const text = content && answerField ? (content[answerField] as string).trim() : "";
-	const wall = text.length < 600 && WALL_PATTERN.test(text);
+	const wall = looksLikeOxylabsAuthWall(text);
 
 	console.log(`job finished in ${elapsedS}s`);
 	console.log(`content keys: ${content ? keysOf(content) : "none — results[0].content absent"}`);

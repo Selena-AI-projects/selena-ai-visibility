@@ -73,6 +73,12 @@ export type OxylabsAnswer = {
 	providerRequestId?: string;
 	/** What the provider says this call cost, when the payload reports it. */
 	costUsd?: number;
+	/**
+	 * The provider's own parse status, when the payload names one. Recorded and
+	 * logged, never gated on: the probe of 2026-09-06 observed 12000 on a good
+	 * answer, which is one observation and not the provider's code list.
+	 */
+	parseStatusCode?: number;
 };
 
 export type OxylabsRequestInput = {
@@ -139,6 +145,26 @@ export function resolveOxylabsCost(reportedCostUsd?: number | null): {
 	// taken with web search on. The results payload names no charge, so every
 	// row this adapter writes is an estimate until the invoice says otherwise.
 	return { costUsd: estimateRunCostUsd("oxylabs", true), basis: "estimated" };
+}
+
+/** Past this, prose that mentions signing up is prose, not an interstitial. */
+export const OXYLABS_AUTH_WALL_MAX_CHARS = 600;
+const AUTH_WALL_PATTERN = /sign up|sign in|log in|create a free account|continue with google|verify you are human/i;
+
+/**
+ * A wall is not a short answer, and which of the two a row is decides whether
+ * it is evidence at all. The Bright Data collector returns Perplexity's
+ * sign-up page on every call, and one of its rows — 366 characters, no
+ * sources — was stored VALID on 2026-09-04. A canary that counts a row like
+ * that as healthy measures the collector rather than the brand.
+ *
+ * The phrases are the ones the live probe watches for, and it imports this
+ * rather than keeping a second copy, so the verdict a probe gives and the
+ * verdict a paid run gives cannot drift apart.
+ */
+export function looksLikeOxylabsAuthWall(text: string): boolean {
+	const trimmed = text.trim();
+	return trimmed !== "" && trimmed.length < OXYLABS_AUTH_WALL_MAX_CHARS && AUTH_WALL_PATTERN.test(trimmed);
 }
 
 /**
@@ -212,7 +238,12 @@ export function parseOxylabsAnswer(raw: unknown): OxylabsAnswer | null {
 		domain,
 		...(title ? { title } : {}),
 	}));
-	return { answerText, sources };
+	const parseStatusCode = content.parse_status_code;
+	return {
+		answerText,
+		sources,
+		...(typeof parseStatusCode === "number" ? { parseStatusCode } : {}),
+	};
 }
 
 /**
@@ -538,6 +569,17 @@ export function createOxylabsAdapter(deps: OxylabsAdapterDeps): SelenaMeasuremen
 		if (answer.answerText.trim() === "")
 			return invalidOutcome(permit, "EMPTY_RESPONSE", { ...costFields(answer.costUsd), ...reference });
 
+		// Both conditions together, because either alone misreads a row: a real
+		// answer to "where can I sign up for a cooking class" carries the phrase,
+		// and the sign-up page carries no citations. The charge stands — the job
+		// was submitted and the wall was served — but the row is not an answer.
+		if (answer.sources.length === 0 && looksLikeOxylabsAuthWall(answer.answerText)) {
+			console.warn(
+				`[oxylabs] ${deps.system} job ${jobId} served a sign-up wall, not an answer — ${answer.answerText.length} chars, no sources`,
+			);
+			return invalidOutcome(permit, "PROVIDER_AUTH_WALL", { ...costFields(answer.costUsd), ...reference });
+		}
+
 		// Extraction is an enrichment of a call that already succeeded and was
 		// paid for: a context failure must not turn paid evidence into a FAILED
 		// row. The raw response is stored either way, so a missing measurement
@@ -565,6 +607,14 @@ export function createOxylabsAdapter(deps: OxylabsAdapterDeps): SelenaMeasuremen
 				measurement = null;
 			}
 		}
+		// What the canary reads to decide whether the route can move: the probe
+		// of 2026-09-06 answered in 447 characters with ten sources, so a run of
+		// shorter and sourceless answers is the wall in another shape even when
+		// no row matched the pattern above.
+		console.info(
+			`[oxylabs] ${deps.system} job ${jobId} answered ${answer.answerText.length} chars, ${answer.sources.length} sources` +
+				(answer.parseStatusCode === undefined ? "" : `, parse_status_code=${answer.parseStatusCode}`),
+		);
 		return {
 			dispatchKey: permit.dispatchKey,
 			status: "SUCCEEDED",
