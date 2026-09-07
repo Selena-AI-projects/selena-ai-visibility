@@ -62,6 +62,80 @@ carries the full Olostep record;
 scraping the public UI is the right channel and why the wall is a proxy
 problem rather than a locked door.
 
+## What works and what does not (7 September 2026)
+
+| Part | State | Evidence |
+|---|---|---|
+| API View (OpenRouter) | works | a real paid measurement, $0.00171 per answer |
+| Visitor View — ChatGPT | works | end-to-end run, 09-05 |
+| Visitor View — Gemini | works | end-to-end run, 09-05 |
+| Visitor View — Perplexity | **a vendor answers, none adopted** | run `34137495520` |
+| ├ Bright Data | does not work | 24 of 24 walls, 09-05 |
+| ├ Oxylabs | does not work | `401` from every machine since ~06:00Z 09-07 |
+| └ Olostep | answers | 643 chars, 10 citations, 944 s |
+| Perplexity canary | not possible yet | no `olostep-perplexity` adapter exists |
+| Free auto-dispatch | off on purpose | `SELENA_FREE_AUTO_DISPATCH_ENABLED` |
+
+## What this session established
+
+Four findings that outlive it and change decisions.
+
+**The wall is Cloudflare, not Perplexity policy.** Anonymous basic search on
+perplexity.ai needs no account; the web UI sits behind Cloudflare, which
+challenges traffic that looks automated. `error=Auth wall: sign-up prompt
+detected` is what a session read as a bot is served, not a rule applied to
+visitors. So the problem is solvable and is about proxy quality.
+
+**The market drives the public UI with a browser; nobody uses the Sonar API
+for this.** Ahrefs Brand Radar and Profound both do it that way. The channel
+this repository chose is correct and should not change.
+`docs/selena-visibility/HOW_THE_INDUSTRY_MEASURES_PERPLEXITY.md` carries the
+sources.
+
+**The vendor is a commodity, not a commitment.** Bright Data worked and
+stopped; Oxylabs worked and stopped within four hours. Hence the rule: **two
+passing probes at least six hours apart** before a provider is adopted. Both
+previous vendors would have passed a single run. The probe prints the rule
+itself.
+
+**An SDK's message is not a diagnosis.** "The Olostep API rejected API key as
+invalid" was printed for HTTP 402 (Payment Required) with 497 live credits in
+the account. The probe now prints the status and body the transport actually
+saw, with every configured credential scrubbed out of it.
+
+## What is still open
+
+- **The second Olostep probe** — this is the adoption gate. Actions →
+  "Perplexity scraper probe" → provider `olostep`, 3 credits. Compare against
+  `34137495520`: the verdict, an answer length near 643 characters, non-empty
+  citations, and the elapsed time.
+- **No `olostep-perplexity` adapter.** It is what stands between a probe and a
+  canary. Model it on `oxylabs-measurement-adapter.ts`. Two decisions are
+  known in advance: the job budget must be at least 20 minutes (the window is
+  15, and the 15 min 44 s answer above would have been discarded), and
+  `olostep` in `packages/lib/src/usage/cost.ts` reads `0.01` where the real
+  price is $0.0054.
+- **Three daily claims are held** — `korafoodhall`
+  (`63e3103d-4d41-4716-ba86-9dd786ef0b1c`), `avlibali`
+  (`81037955-40ec-4931-8cca-182e58b6054c`), `otherbali`
+  (`3ff898c1-4466-4d94-bd53-7a276005a658`). Each blocks every future journal
+  run for its project. Migration `0065` is applied and can release them; the
+  function call is an owner `psql` step and has not been taken.
+  `docs/selena-visibility/KORA_CANARY_2026-09-07_OUTCOME.md` has the reading.
+- **Oxylabs answers `401`.** Not a blocker while Olostep answers. The account
+  holds credit and nothing was spent; do not buy a plan before Oxylabs
+  explains the refusal.
+- **Railway `worker`, `web` and `publish` are bound to the old repository
+  path** (`parkourcafe/...`). Noted early in the session and **not
+  re-verified** — check before the next deploy.
+- **The emergency stop** was restored (`SELENA_EMERGENCY_STOP=true`,
+  `SELENA_MEASUREMENT_ENABLED=false`) after the last canary and **has not been
+  re-checked since**.
+
+Session cost: **nothing**. Olostep credits used: **6 of 500**. GitHub Actions
+minutes: **none** — every runner in this repository is Blacksmith, so that
+counter does not move. Merged: #153, #154, #155.
+
 ## The history — Perplexity collector returns an auth wall (5 September 2026)
 
 Search for this block with the words: **Perplexity**, **auth wall**,
@@ -272,7 +346,8 @@ which is what this canary was spent learning.
 - Visitor View runs for **ChatGPT and Gemini** are proven end to end. The third
   surface, **Perplexity, is blocked on Bright Data's auth wall** (see the block
   above) — that is the next thing to unblock, and it is a provider decision, not
-  code.
+  code. *(Superseded on 09-07: a third vendor answers. Read "Where Perplexity
+  stands" and "What works and what does not" above.)*
 - Free auto-dispatch of promo-code orders is built and **switched off**
   (`SELENA_FREE_AUTO_DISPATCH_ENABLED`). It stays off until Visitor View is
   healthy across the surfaces a customer's plan sells.
@@ -289,6 +364,10 @@ Names only; values live in Railway. The owner guide explains each one.
 `SELENA_MEASUREMENT_ADAPTER=brightdata` and `=auto` are **families** that route
 per permit; a plain name pins one adapter for every permit and mismeasures a
 multi-surface order.
+
+`OLOSTEP_API_KEY` lives in **GitHub Actions Secrets, not Railway** — the probe
+runs from Actions rather than from a service. Looking for it on a Railway
+service and concluding the vendor is unconfigured is the trap that shape sets.
 
 ## Working notes
 
