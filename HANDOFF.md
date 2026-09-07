@@ -180,9 +180,17 @@ Two things follow, and neither is a retry:
   `SELENA_JOURNAL_DAILY_CLAIM_HOLD: 2026-09-07 attempt 1 is EXECUTING`. The
   45-minute rule turns a silently vanished attempt into `ABANDONED`; an
   observed failure with ledger rows is held for the owner instead, and
-  `SELENA_JOURNAL_FORCE` does not pass it. The release is
-  `sv_reconcile_journal_hold` in PostgreSQL, owner role only, with a decision
-  reference — no script wraps it. The procedure is in
+  `SELENA_JOURNAL_FORCE` does not pass it. **Nothing shipped can release
+  it.** The recovery function returns `HOLD` for an `EXECUTING` claim without
+  writing; the guard admits `EXECUTING → HOLD` but `HOLD` is terminal; and
+  `sv_reconcile_journal_hold`, the only exit, refuses a claim whose runs are
+  closed — its invariant counts every non-`RUNNING` run as a violation
+  (`0060:497-520`), and the executor closed all 25 as `FAILED`. Releasing it
+  takes a migration that teaches the reconciler an executor-settled shape,
+  which is owner-gated. Until then **`korafoodhall` cannot be journaled on
+  any day** — the unresolved lookup is per project, not per day — while the
+  other projects are unaffected. The reading, the safe readback queries and
+  the rollback-only rehearsal that proves the refusal on staging are in
   `docs/selena-visibility/KORA_CANARY_2026-09-07_OUTCOME.md`.
 
 The run also exposed a ledger defect, fixed here: a submission the provider
