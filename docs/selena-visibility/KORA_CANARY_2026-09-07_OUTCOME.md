@@ -69,3 +69,58 @@ as a wall — remains open.
    restored immediately after the run and confirmed by deployment
    `a9654238-44fd-4f33-b646-c3ba4b532d59`, whose log is `Starting Container`
    then `PROVIDER_CALLS_STOPPED`.
+
+## What the probe of 05:22Z settled
+
+Item 1 above is answered. The `Oxylabs Perplexity probe` workflow — one live
+job through the same `perplexity` source, credentials from the GitHub
+Actions secrets — ran as
+[34086543400](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34086543400)
+on `4d6b576` and returned:
+
+```
+source: perplexity (provider "oxylabs", access "scraped")
+job finished in 29s
+content keys: additional_results,answer_results,answer_results_md,displayed_tabs,model,parse_status_code,prompt_query,raw_response,related_queries,url
+llm_model: turbo
+answer field: answer_results_md
+answer: 105 chars, 10 citations, no web query exposed
+VERDICT: a visitor answer with sources — the shape an adapter can be built on.
+```
+
+The account is live, the source is served, and nothing needs paying. The
+dashboard agrees: Web Scraper API `Active`, no usage-limit rules, spending
+analytics not yet populated.
+
+What differs between that job and the refused canary is one thing. The
+request code is the same in every material respect — `POST
+https://data.oxylabs.io/v1/queries`, Basic authorization, JSON content type,
+body `{ source: "perplexity", prompt, parse: true }` — in the registry
+provider the probe uses and in the adapter the canary uses. The probe took
+its credentials from the GitHub Actions secrets; the canary took them from
+`OXYLABS_USERNAME` and `OXYLABS_PASSWORD` on the staging `measure` service.
+One pair is accepted and the other is refused with a 4xx, so the Railway
+values are not the pair that works. The fix is to overwrite them from the
+Oxylabs dashboard (My account → Web Scraper API user), in the Railway
+dashboard, never through a chat. The one residual alternative — an IP
+restriction on the account that a Railway egress address fails — is unlikely
+for a password-authenticated Web Scraper API user and is where to look only
+if the rewritten pair is refused too.
+
+Two more things the probe said:
+
+**The answer was 105 characters, not 447.** `answer_results_md` on this run
+is four venue names as a bulleted list, where the 09-06 run carried prose.
+The payload also names `answer_results` and `raw_response`; whether one of
+those holds the full answer is a question for the run's artifact, and it
+decides what a canary should treat as the answer text. The wall detector
+read this row correctly — ten sources, no wall phrase — and the 105-character
+genuine answer is why the detector requires the absence of sources and not
+only a short length.
+
+**The published price is about eight times below the estimate.** The
+Web Scraper API pricing page lists `Other: $1.15/1k results` without JS
+rendering and `$1.35/1k` with it on the Micro plan, so one Perplexity answer
+is roughly $0.0012 and a 25-question canary roughly three cents. The cost
+table's `0.01` errs in the safe direction and stays until an invoice, not a
+price list, replaces it.

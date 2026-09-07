@@ -163,11 +163,27 @@ confirmed by a deployment whose log is `PROVIDER_CALLS_STOPPED`.
 
 Two things follow, and neither is a retry:
 
-- **The next question is on the Oxylabs account, not in this repository.**
-  Whether the credentials on the `measure` service are the pair the 09-06
-  probe used, and whether the account can serve the `perplexity` source.
+- **The account question is answered: the Oxylabs account works.** The probe
+  workflow ran again at 05:22Z (run `34086543400`) with the GitHub Actions
+  secrets and returned a visitor answer in 29 s with ten citations. The
+  request code the probe and the adapter send is identical, so the only
+  difference between the accepted job and the refused canary is which copy of
+  the credentials was used: **the `OXYLABS_USERNAME`/`OXYLABS_PASSWORD` on
+  the staging `measure` service are not the working pair.** Overwrite them
+  from the Oxylabs dashboard, in the Railway dashboard. Nothing needs paying.
+  Details, the 105-character answer and the published price are in the
+  outcome record.
 - **The wall detector is still unproven against live output.** No answer was
   reached, so the canary's first question is exactly where it was.
+- **A repeat is blocked by the daily claim, and that is not a timer.** Two
+  retries (04:47Z and 05:14Z) were refused with
+  `SELENA_JOURNAL_DAILY_CLAIM_HOLD: 2026-09-07 attempt 1 is EXECUTING`. The
+  45-minute rule turns a silently vanished attempt into `ABANDONED`; an
+  observed failure with ledger rows is held for the owner instead, and
+  `SELENA_JOURNAL_FORCE` does not pass it. The release is
+  `sv_reconcile_journal_hold` in PostgreSQL, owner role only, with a decision
+  reference — no script wraps it. The procedure is in
+  `docs/selena-visibility/KORA_CANARY_2026-09-07_OUTCOME.md`.
 
 The run also exposed a ledger defect, fixed here: a submission the provider
 refused was carrying the `$0.01` estimate although no job existed to be
