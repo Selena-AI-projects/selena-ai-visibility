@@ -148,6 +148,34 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   service before re-linking its source to the new repository path: the
   re-link is what restores the deploy path.
 
+### The canary ran on 7 September 2026 and bought nothing
+
+The owner approved the provider call and a `$0.50` ceiling; the run went out
+on commit `95d304a` and returned `0 valid of 25`, cycle `STOPPED`, in four
+tenths of a second. Oxylabs refused the submission with a 4xx — the only
+thing that stops a Perplexity cycle — and the breaker refused the remaining
+permits before they built a request, so at most six reached the provider. The
+full record, including which 4xx codes are still consistent with the log, is
+`docs/selena-visibility/KORA_CANARY_2026-09-07_OUTCOME.md`.
+
+The emergency stop and the enable flag were restored immediately and
+confirmed by a deployment whose log is `PROVIDER_CALLS_STOPPED`.
+
+Two things follow, and neither is a retry:
+
+- **The next question is on the Oxylabs account, not in this repository.**
+  Whether the credentials on the `measure` service are the pair the 09-06
+  probe used, and whether the account can serve the `perplexity` source.
+- **The wall detector is still unproven against live output.** No answer was
+  reached, so the canary's first question is exactly where it was.
+
+The run also exposed a ledger defect, fixed here: a submission the provider
+refused was carrying the `$0.01` estimate although no job existed to be
+invoiced. A 4xx on submission now carries no cost; a 5xx and a submission
+that never came back keep theirs, because a job may exist behind those. And
+the journal script now prints the failure reasons it already had in hand,
+which is what this canary was spent learning.
+
 ## State as of 5 September 2026
 
 - API View has produced a real, paid measurement. Measured cost per answer:

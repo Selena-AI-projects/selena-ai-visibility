@@ -440,11 +440,21 @@ export function createOxylabsAdapter(deps: OxylabsAdapterDeps): SelenaMeasuremen
 			},
 			deadlineAt,
 		);
+		// A submission that timed out or died in transit may still have reached
+		// the provider and become a job, so its charge is recorded: an
+		// unrecorded charge is how a cap alert reads $0 while a cycle burns
+		// budget.
 		if (submitted.kind === "aborted") return invalidOutcome(permit, "TIMEOUT", costFields());
 		if (submitted.kind === "transport") return failedOutcome(permit, "TRANSPORT_ERROR", costFields());
 		if (!submitted.response.ok) {
+			const status = submitted.response.status;
 			await discard(submitted.response);
-			return failedOutcome(permit, `PROVIDER_HTTP_${submitted.response.status}`, costFields());
+			// A 4xx is the provider answering that it refused the request: no job
+			// was created, so nothing will be invoiced for it and an estimate
+			// here would be spend the ledger has to explain away later. A 5xx is
+			// the ambiguous case — the job may exist behind the error — and keeps
+			// its charge.
+			return failedOutcome(permit, `PROVIDER_HTTP_${status}`, status >= 400 && status < 500 ? {} : costFields());
 		}
 		let submitBody: string;
 		try {

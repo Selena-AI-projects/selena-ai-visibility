@@ -32,8 +32,8 @@
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
-import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from "@workspace/lib/adapters/oxylabs";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
+import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from "@workspace/lib/adapters/oxylabs";
 import { db } from "@workspace/lib/db/db";
 import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
 import * as schema from "@workspace/lib/db/schema";
@@ -614,6 +614,17 @@ async function measure(slug: string): Promise<void> {
 		const failed = outcomes.filter(
 			(outcome) => outcome.status !== "completed" || outcome.outcome.status !== "SUCCEEDED",
 		).length;
+		// Why they did not complete, counted off the results already in hand. A
+		// cycle that reports only how many failed sends its reader to the
+		// database or to guessing from which guard tripped, and the canary of
+		// 2026-09-07 was spent learning that.
+		const reasons = new Map<string, number>();
+		for (const result of outcomes) {
+			if (result.status === "completed" && result.outcome.status === "SUCCEEDED") continue;
+			const reason =
+				result.status === "completed" ? (result.outcome.invalidReason ?? result.outcome.status) : result.reason;
+			reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+		}
 		const { rows: ledger, mentions } = await repositories.runs.ledgerForCycle(ctx, dispatch.cycleId);
 		const [terminalCycle] = await db
 			.select({
@@ -629,6 +640,13 @@ async function measure(slug: string): Promise<void> {
 			`  cycle ${dispatch.cycleId}: ${valid} valid of ${dispatch.permits.length} asked, ${mentions.length} mention rows` +
 				(failed > 0 ? `, ${failed} did not complete` : ""),
 		);
+		if (reasons.size > 0)
+			console.log(
+				`  did not complete: ${[...reasons]
+					.sort(([, a], [, b]) => b - a)
+					.map(([reason, count]) => `${reason} ×${count}`)
+					.join(", ")}`,
+			);
 		// Coverage before conclusions: a rate over a fraction of the sample is a
 		// different number wearing the same sign.
 		if (valid / dispatch.permits.length < 0.8) {

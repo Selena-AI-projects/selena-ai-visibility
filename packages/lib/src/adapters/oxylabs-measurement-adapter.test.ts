@@ -268,15 +268,31 @@ describe("Oxylabs measurement adapter", () => {
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	it("maps a provider HTTP error on submission to a failed outcome carrying only the status code", async () => {
+	it("maps a refused submission to a failed outcome carrying the status code and no charge", async () => {
 		const fetchImpl = routed({
-			submit: new Response('{"message":"Unauthorized for ' + USERNAME + '"}', { status: 401 }),
+			submit: new Response(`{"message":"Unauthorized for ${USERNAME}"}`, { status: 401 }),
 		});
 		const outcome = await adapterWith(fetchImpl).execute(permitFor());
 		expect(outcome).toMatchObject({ status: "FAILED", validity: "INVALID", invalidReason: "PROVIDER_HTTP_401" });
-		expectCostUsd(outcome, expectedOxylabsCost());
+		// The provider refused the request, so no job exists to be invoiced.
+		expect(outcome.costUsd).toBeUndefined();
+		expect(outcome.provider).toBeUndefined();
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		expect(JSON.stringify(outcome)).not.toContain(USERNAME);
+	});
+
+	it("keeps the charge when the submission fails ambiguously", async () => {
+		// A 5xx may hide a job that was created before the error, and a
+		// submission that never came back may have arrived all the same.
+		const serverError = await adapterWith(
+			routed({ submit: new Response("upstream unavailable", { status: 503 }) }),
+		).execute(permitFor());
+		expect(serverError.invalidReason).toBe("PROVIDER_HTTP_503");
+		expectCostUsd(serverError, expectedOxylabsCost());
+
+		const transport = await adapterWith(routed({ submit: new Error("ECONNRESET") })).execute(permitFor());
+		expect(transport.invalidReason).toBe("TRANSPORT_ERROR");
+		expectCostUsd(transport, expectedOxylabsCost());
 	});
 
 	it("maps a transport failure to a failed outcome without quoting the error", async () => {
