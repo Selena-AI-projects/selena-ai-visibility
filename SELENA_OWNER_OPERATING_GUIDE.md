@@ -255,7 +255,10 @@ A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
 surface through Oxylabs' `perplexity` source and takes `OXYLABS_USERNAME` and
 `OXYLABS_PASSWORD` on the worker. It is not part of the `brightdata` family
 and no family routes to it: name it directly for a canary, and only for a
-scope that sells Perplexity alone.
+scope that sells Perplexity alone. A short, sourceless answer carrying a
+sign-up phrase is recorded `PROVIDER_AUTH_WALL` rather than counted as an
+answer, so a run that met a wall reads as a failed run and not as a brand that
+is invisible.
 
 `BRIGHTDATA_API_TOKEN` on the worker is the only account-specific value. The
 collector ids are defaults in the code because a dataset id names a public
@@ -306,8 +309,35 @@ first request:
 | `SELENA_JOURNAL_MAX_COST_USD` | Refuses to run if the plan would exceed it |
 
 It also needs what any live measurement needs: `DATABASE_URL`,
-`BRIGHTDATA_API_TOKEN`, `SELENA_MEASUREMENT_ENABLED=true` and a
-`SELENA_MEASUREMENT_ADAPTER` that reaches a Visitor View collector.
+`SELENA_MEASUREMENT_ENABLED=true`, a `SELENA_MEASUREMENT_ADAPTER` that reaches
+a Visitor View collector, and that adapter's own credential —
+`BRIGHTDATA_API_TOKEN` for a Bright Data adapter, `OXYLABS_USERNAME` and
+`OXYLABS_PASSWORD` for `oxylabs-perplexity`. Each is demanded only by a run
+that would spend it.
+
+Two more are the deployment gate, and they are the pair a runbook forgets:
+
+| Variable | What it does |
+|---|---|
+| `SELENA_MEASUREMENT_APPROVED_COMMIT_SHA` | The 40-character SHA of the commit being deployed |
+| `SELENA_MEASUREMENT_APPROVED_ENVIRONMENT` | The name of the environment it runs in |
+
+Railway supplies the deployed values as `RAILWAY_GIT_COMMIT_SHA` and
+`RAILWAY_ENVIRONMENT_NAME`, and the script refuses to start unless each pair
+matches exactly. That is the point of it: an approval covers one commit in one
+environment, so the next commit does not inherit the last one's permission to
+spend. Set the SHA to the commit you are about to deploy, in the same staged
+change as the rest.
+
+The three refusals are ordered, which turns the log line into a diagnosis.
+`PROVIDER_CALLS_STOPPED` means the emergency stop is engaged.
+`JOURNAL_MEASUREMENT_DISABLED` means the stop is not engaged but
+`SELENA_MEASUREMENT_ENABLED` is not exactly `true`.
+`JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED` means both of those already
+passed and only the commit or the environment did not match — so reading it on
+a service that is supposed to be stopped is how you learn the stop is not
+engaged. The stop is engaged by `1`, `true` or `yes`, surrounding whitespace
+aside, and by nothing else: `TRUE` is not one of them.
 
 On Railway it runs as its own service. The Dockerfile picks its stage from the
 service name — `web`, `worker`, `migrate` and now `measure` — so a service named

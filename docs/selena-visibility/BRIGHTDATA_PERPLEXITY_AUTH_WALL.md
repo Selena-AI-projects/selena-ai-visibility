@@ -103,6 +103,16 @@ credentials scrubbed from anything stored; an unrecognized payload recorded as
 id kept for a later fetch. It is on the owner-approved list under that name
 and in no routing family, so it runs only when named outright.
 
+Since 2026-09-07 it also refuses the wall itself. A row whose text carries a
+sign-up phrase, stays under 600 characters and shows no sources is recorded
+`PROVIDER_AUTH_WALL` — invalid, with its charge, never an answer. Both halves
+are required because either alone misreads a row: an answer about where to
+sign up for a class carries the phrase, and the sign-up page carries no
+citations. `looksLikeOxylabsAuthWall` is the one definition, and the probe
+script imports it rather than keeping a second copy. A wall that somehow
+carried a citation would still pass, which is what the per-row log below is
+for.
+
 ## The canary
 
 The Perplexity visitor route is still `brightdata-perplexity`. What decides
@@ -113,23 +123,47 @@ runs, by the journal script that already measures the owner's own projects:
 SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity \
 OXYLABS_USERNAME=... OXYLABS_PASSWORD=... \
 SELENA_JOURNAL_TENANT=<organization id> SELENA_JOURNAL_PROJECTS=korafoodhall \
-SELENA_JOURNAL_MAX_COST_USD=<ceiling> \
+SELENA_JOURNAL_MAX_COST_USD=0.50 \
 pnpm -C apps/worker measure:journal
 ```
+
+On Railway that command is the `measure` service, and the shell above is not
+the whole list. The script's first act is the deployment gate, which also
+needs `SELENA_MEASUREMENT_APPROVED_COMMIT_SHA` — the 40-character SHA of the
+commit being deployed — and `SELENA_MEASUREMENT_APPROVED_ENVIRONMENT`, the
+name of the environment, each matching the `RAILWAY_GIT_COMMIT_SHA` and
+`RAILWAY_ENVIRONMENT_NAME` that Railway supplies. Without them the container
+starts, prints `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`, exits, and buys
+nothing — which is what the last `measure` deployment did on 2026-09-06.
+Set them in the same staged change as the credentials and the ceiling, and
+deploy that change; a variable edit alone reaches no running container. The
+owner guide's "Measuring the owner's own projects on Railway" carries the full
+list and reads the three refusals as a diagnosis.
 
 Named outright, the adapter measures Perplexity alone: the script mints
 permits only for the surfaces its registered adapters can honour, so no
 ChatGPT or Gemini permit is paid for and then refused. The ceiling is priced
 at the cost table's Oxylabs estimate because no invoice exists yet; replace
-that constant with the invoiced figure once one does. The script already
+that constant with the invoiced figure once one does. KORA's set is 25
+questions, so the plan prices at $0.25 and the owner's ceiling of $0.50 leaves
+the run a margin rather than sitting on its own total. The script already
 refuses to declare a cycle healthy below 80% valid, which is the reliability
 figure the single probe could not give.
 
 What the canary has to show before the route changes: the valid rate, the
-answer lengths against the 447-character probe, how often the sources list is
-empty, and the invoiced price. The route change itself is one more owner
-decision and one more code change — `visitorRoutes` in
-`measurement-execution.ts` — not a configuration flip.
+answer lengths against the 447-character probe, and how often the sources list
+is empty. The first of those means something only because a wall is now
+refused rather than counted valid; the other two are logged per row, as
+`answered N chars, M sources`, with the provider's `parse_status_code` when
+the payload names one. That status is recorded and never gated on: 12000 is
+one observation from the probe, not the provider's code list.
+
+The invoiced price is not one of them. Oxylabs bills after the fact, so the
+canary cannot produce it on the day; the ledger rows stay `estimated` until an
+invoice is reconciled against them, and that reconciliation is its own step.
+
+The route change itself is one more owner decision and one more code change —
+`visitorRoutes` in `measurement-execution.ts` — not a configuration flip.
 
 Not chosen:
 

@@ -113,6 +113,41 @@ keys=timestamp,input,error,error_code error=Auth wall: sign-up prompt detected
   but not for 09-04; whether that row is the wall in another shape is open.
   The ledger is 30 events at $0.30, all `estimated`, none `actual`.
 
+### Decisions taken on 7 September 2026
+
+- **The wall detector was built before the canary, not after.** The owner chose
+  to close the adapter's second caveat first: a short, sourceless answer
+  carrying a sign-up phrase is now `PROVIDER_AUTH_WALL`, invalid with its
+  charge, instead of a VALID row. Without it the canary's "80% valid" could
+  have been 25 walls. The definition is
+  `looksLikeOxylabsAuthWall` in the adapter and the probe imports it, so the
+  two cannot drift. Each valid row now logs its length and source count —
+  `answered N chars, M sources` — which is what the canary is read against.
+  `parse_status_code` is carried into that log and still not gated: 12000 is
+  one observation, not the provider's code list.
+- **The canary ceiling is `SELENA_JOURNAL_MAX_COST_USD=0.50`,** approved by the
+  owner. KORA is 25 questions and the plan prices at $0.25 against the cost
+  table's estimate, so the ceiling is double the plan rather than equal to it.
+- **The canary still cannot run, for a reason that is not the credentials.**
+  `measure-journal.ts` calls `assertMeasurementDeploymentApproved` at load, and
+  that gate also needs `SELENA_MEASUREMENT_APPROVED_COMMIT_SHA` (40 hex,
+  equal to `RAILWAY_GIT_COMMIT_SHA`) and `SELENA_MEASUREMENT_APPROVED_ENVIRONMENT`
+  (equal to `RAILWAY_ENVIRONMENT_NAME`). Neither is on the staging `measure`
+  service, and the whole runtime log of its last deployment
+  (2026-09-06 15:20Z) is `Starting Container` then
+  `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`. No document in this repository
+  named those two variables before now; the canary runbook and the owner
+  guide's journal section both carry them now, with the three refusals read as
+  a diagnosis.
+- **Read from the same log: the emergency stop was not what was holding.** The
+  gate returns `DEPLOYMENT_NOT_APPROVED` only after passing the stop and the
+  enable flag, so at that deployment `SELENA_EMERGENCY_STOP` was not `1`,
+  `true` or `yes` and `SELENA_MEASUREMENT_ENABLED` was exactly `true`. The
+  affirmative check is case-sensitive everywhere it is used, so `TRUE` or
+  `True` in a dashboard reads as "not engaged". Confirm both values on the
+  service before re-linking its source to the new repository path: the
+  re-link is what restores the deploy path.
+
 ## State as of 5 September 2026
 
 - API View has produced a real, paid measurement. Measured cost per answer:

@@ -11,6 +11,8 @@ import {
 	buildOxylabsRequestBody,
 	createOxylabsAdapter,
 	describeUnreadableOxylabsPayload,
+	looksLikeOxylabsAuthWall,
+	OXYLABS_AUTH_WALL_MAX_CHARS,
 	OXYLABS_DEFAULT_ENDPOINT,
 	oxylabsVisitorSurface,
 	parseOxylabsAnswer,
@@ -328,6 +330,49 @@ describe("Oxylabs measurement adapter", () => {
 		const noJob = await adapterWith(routed({ submit: jsonResponse({ ok: true }, 201) })).execute(permitFor());
 		expect(noJob.invalidReason).toBe("MALFORMED_RESPONSE");
 		expect(noJob.rawResponseReference).toMatch(/^oxylabs:sha256:[0-9a-f]{64}$/);
+	});
+
+	it("refuses a sign-up wall as an answer, and keeps the charge it cost", async () => {
+		const wall = await adapterWith(
+			happyPath({
+				answer_results_md: "Sign up to continue. Create a free account to see this answer.",
+				additional_results: {},
+			}),
+		).execute(permitFor());
+		expect(wall.invalidReason).toBe("PROVIDER_AUTH_WALL");
+		expect(wall.validity).toBe("INVALID");
+		// The job was submitted and the wall was served, so the charge stands.
+		expectCostUsd(wall, expectedOxylabsCost());
+		expect(wall.rawResponseReference).toBe(`oxylabs:${JOB_ID}`);
+		// A wall is never kept as evidence of what the surface said.
+		expect(wall.answer).toBeUndefined();
+	});
+
+	it("keeps an answer that showed its sources, whatever phrase it used", async () => {
+		// The question sets ask where to hold events, so an answer can name a
+		// sign-up without being a sign-up page. Its citations are the difference.
+		const cited = await adapterWith(
+			happyPath({ answer_results_md: "Kafe Ubud hosts classes; sign up on their site." }),
+		).execute(permitFor());
+		expect(cited.validity).toBe("VALID");
+		expect(cited.answer?.text).toContain("sign up");
+
+		// Long prose that mentions signing up is prose, sources or not.
+		const long = await adapterWith(
+			happyPath({
+				answer_results_md: `Sign up is not needed. ${"Ubud has many food halls. ".repeat(40)}`,
+				additional_results: {},
+			}),
+		).execute(permitFor());
+		expect(long.validity).toBe("VALID");
+	});
+
+	it("tells a wall from an answer by phrase and length together", () => {
+		expect(looksLikeOxylabsAuthWall("Sign up to continue")).toBe(true);
+		expect(looksLikeOxylabsAuthWall("Verify you are human")).toBe(true);
+		expect(looksLikeOxylabsAuthWall("Kafe Ubud and Hujan Locale are the best known food halls in Ubud.")).toBe(false);
+		expect(looksLikeOxylabsAuthWall("   ")).toBe(false);
+		expect(looksLikeOxylabsAuthWall(`sign up ${"a".repeat(OXYLABS_AUTH_WALL_MAX_CHARS)}`)).toBe(false);
 	});
 
 	it("says what an unreadable payload carried, without quoting it or the credentials", () => {
