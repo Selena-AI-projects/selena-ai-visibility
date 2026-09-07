@@ -170,3 +170,54 @@ Not chosen:
 - DataForSEO Sonar — `API` channel; if that channel is ever sold for Perplexity
   it is already reachable through the approved `openrouter` adapter.
 - Another Bright Data Perplexity dataset — none is known on the account.
+## Olostep answered where both of the others stopped
+
+By the evening of 2026-09-07 neither chosen provider served this surface:
+Bright Data returns the wall, and Oxylabs answers `401` from every machine,
+including the Blacksmith runner that it had served four hours earlier
+(`PERPLEXITY_REVIEW_2026-09-07.md`). A third vendor was probed because the
+registry already shipped it and no decision document had ever weighed it.
+
+`olostep` drives `perplexity.ai/?q=` through the parser
+`@olostep/perplexity-results` and authenticates with one API key. Run
+[34137495520](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34137495520),
+15:33 UTC, on the same question the Bright Data collector failed on 09-04:
+
+```
+job finished in 944s
+model: perplexity
+answer: 643 chars, 10 citations, 1 web queries
+web queries: ["What are the best food halls in Ubud, Bali?"]
+VERDICT: a visitor answer with sources — the shape an adapter can be built on.
+```
+
+643 characters against the 447 and 105 the two Oxylabs probes returned, and
+the text reads as a real Perplexity answer, hedges included. The raw payload
+is the run's `olostep-perplexity-live-probe` artifact (id `10025081799`,
+12 759 bytes, kept until 2026-09-21); it was not committed.
+
+Two findings come with it, and both shape the adapter rather than the
+decision.
+
+**944 seconds for one answer.** A canary is 25 questions, so even six in
+flight is over an hour, and the job budget has to be at least twenty minutes:
+the registry's Oxylabs constant is ten, and an answer like this would be
+recorded `JOB_NOT_READY` under it. Whether 944 s is typical or an outlier is
+what the second probe measures.
+
+**The `search_queries` field carries the prompt back verbatim.** One entry,
+byte for byte the question asked. `cloro.ts` already documents this as
+Perplexity's habit, and the fan-out read path drops verbatim repeats — so the
+field is populated but currently worth nothing, and no client promise should
+rest on it until a run shows a query that differs from its prompt.
+
+An earlier attempt the same day failed with `The Olostep API rejected API key
+… as invalid` on `GET /batches/{id}` while the account held 497 of 500
+credits. The key was fine: that sentence is what the client prints for **HTTP
+402** without a usage flag, and 402 is Payment Required. The condition cleared
+on its own within the hour and has not recurred. The probe now prints the
+status and body the transport saw, so the next such message names itself.
+
+Adoption still needs a second passing probe at least six hours after the
+first — the rule exists because both previous vendors would have passed a
+single run and stopped answering within days.
