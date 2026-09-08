@@ -1,5 +1,91 @@
 # Handoff — Selena Systems measurement app
 
+## Status on 8 September 2026, 13:10 UTC
+
+Written after the block below it, which was the morning's reading. Nothing
+there is contradicted here; this adds what the afternoon established.
+
+**Olostep passed the second probe, so the vendor is accepted on the technical
+rule.** Run
+[34228692284](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34228692284),
+dispatched 12:53Z on `dd5f3d2`, provider `olostep`, the same question: answered
+in 916 s, 695 characters, 10 citations, `model: perplexity`, verdict *a visitor
+answer with sources*. Against run `34137495520` (643 characters, 10 citations,
+944 s) that is the same shape, the same source count and the same order of
+duration, 21 h 36 m after the first pass, where the rule asks for six. The
+`search_queries` field returned the prompt verbatim again, so it is still worth
+nothing. Credits: 3 more, 9 of 500 by this repository's count. The raw payload
+is artifact `10057454222` (11 467 bytes, kept until 2026-09-22); the artifact
+host is not reachable from this session's network, so the adapter's default
+reader is pinned to the field order the registry provider proved on both runs
+rather than to a captured fixture. What two probes still do not say: how often
+900 seconds becomes 1 500 — the probe workflow's own 20-minute job timeout would
+cut a run at about 19 minutes, before the client's 20-minute wait gives up — and
+whether the answer rate holds over 25 questions, which is the canary's question.
+
+**The adapter exists: `olostep-perplexity`.**
+`packages/lib/src/adapters/olostep-measurement-adapter.ts`, modelled on the
+Oxylabs one: one single-item batch per permit under
+`@olostep/perplexity-results`, polled to completion, its item's retrieve id
+read, the parsed content retrieved as JSON — the exchanges the registry
+provider made on both probes, sent over an injected fetch so each is bounded
+by the permit's deadline. Job budget 25 minutes; the 15-minute window the
+faster collectors run under would have discarded both probe answers. A 4xx on
+batch creation carries no charge, and 402 is stored as `PROVIDER_HTTP_402` —
+the vendor's payment or credit refusal, not the invalid-key sentence its client
+prints. The wall definition is the one the Oxylabs adapter and the probe
+share. It is on the owner-approved list under that name, registered in the
+worker job and the journal script, and a member of no family: the Perplexity
+route is still `brightdata-perplexity`. Merging the branch is the owner's
+approval of the allowlist entry; it turns nothing on by itself. **For a canary
+the key is `OLOSTEP_API_KEY` on the Railway `measure` service** — the Actions
+secret never reaches a container. The key that answered both probes prints as
+`44 chars, digest 3791d66d3a88`; the adapter prints the same digest at start,
+so a refused canary can be compared with the probes on whether it sent the
+same key.
+
+**The price is corrected, downward.** `olostep` in
+`packages/lib/src/usage/cost.ts` reads `0.0054` — three credits at the
+smallest paid plan's $0.0018 — where it read `0.01`. The old figure overstated
+the spend, which is the safe direction, so the journal ceiling is now less
+conservative rather than more: a 25-question canary plans at $0.135 against
+the $0.50 ceiling. On the free tier the credits are prepaid and the marginal
+cost is nil; the ledger still books the estimate so the use stays visible.
+
+**Railway, re-read 8 September 12:50Z.** worker, web, measure and migrate are
+bound to `Selena-AI-projects/selena-ai-visibility` on
+`release/selena-visibility-mvp`; publish has no source. That matches the
+table below. The stop: `measure`'s last real deployment (`a360bedc`,
+2026-09-07 15:12Z) logged `PROVIDER_CALLS_STOPPED`, and every later commit was
+`SKIPPED` by its watch paths, so the stop is engaged on the container it would
+start. On `worker` and `web` the value cannot be read through the connector
+this session held (names only, values redacted), so the reading of `true`
+below stands as the morning's, not as this session's. **A staged patch is
+uncommitted on staging**: `8078e269`, status `STAGED`, touching worker (46
+changes), web (48), publish (5), measure (17) and migrate (4). What it holds
+is not readable here. Until it is opened and either deployed or discarded,
+the Variables screen can show values no running container has — the trap
+"Applying Railway variable changes" in the owner guide describes.
+
+**What none of this changes.** The access-class decision in the block below. A
+second answer from a vendor's browser is a fact about the vendor; whether a
+paid run against the surface is permitted is the owner's decision, with legal
+advice, and the canary waits on it. The adapter is routed nowhere and spends
+nothing until that yes.
+
+**Next, in order.** (1) The access-class decision. (2) If yes: on the `measure`
+service, `OLOSTEP_API_KEY`, `SELENA_MEASUREMENT_ADAPTER=olostep-perplexity`,
+the approved commit SHA and environment, `SELENA_JOURNAL_MAX_COST_USD=0.50`,
+one project (all three claims are released), and the stop off with
+`SELENA_MEASUREMENT_ENABLED=true` on that one deployment, restored after — the
+runbook is the Olostep section of
+`docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`. Expect over an
+hour: six batches in flight at about fifteen minutes each. (3) The route
+change after the canary, one line in `measurement-execution.ts`. (4) The
+staged patch. (5) The stop values on worker and web, read on the Variables
+screen. Session cost: 3 Olostep credits, no Actions minutes, no Railway
+change.
+
 ## Status on 8 September 2026
 
 Three statements further down were true when they were written on 7 September and are not true now. They are corrected here rather than edited in place, so the earlier reading stays visible.
