@@ -28,10 +28,14 @@
  * The same command with SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity and
  * OXYLABS_USERNAME / OXYLABS_PASSWORD in place of the Bright Data token
  * measures the Perplexity surface alone, through the Oxylabs source — which is
- * how that adapter's canary runs before any route changes.
+ * how that adapter's canary runs before any route changes. With
+ * SELENA_MEASUREMENT_ADAPTER=olostep-perplexity and OLOSTEP_API_KEY it does the
+ * same through Olostep's browsers; one answer there took 944 seconds, so a
+ * 25-question set at this script's concurrency is over an hour of waiting.
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { createOlostepAdapter, olostepVisitorSurface, resolveOlostepCost } from "@workspace/lib/adapters/olostep";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from "@workspace/lib/adapters/oxylabs";
 import { db } from "@workspace/lib/db/db";
@@ -63,6 +67,13 @@ const PRICE_PER_ANSWER_USD = 0.0015;
  * invoice's figure once one exists.
  */
 const OXYLABS_PRICE_PER_ANSWER_USD = resolveOxylabsCost(undefined).costUsd ?? 0.01;
+
+/**
+ * Olostep bills three credits per Perplexity answer, and the cost table prices
+ * a credit at the smallest paid plan's rate; on the free tier the credits are
+ * prepaid, so the ceiling meters them as if bought rather than as nothing.
+ */
+const OLOSTEP_PRICE_PER_ANSWER_USD = resolveOlostepCost(undefined).costUsd ?? 0.0054;
 
 /**
  * An API View answer is bought by the token and costs more than a scraped one,
@@ -132,6 +143,7 @@ if (!config.enabled) {
 const selected = new Set(measurementAdapterNamesFor(config.adapter));
 const brightDataSelected = BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`));
 const oxylabsSelected = selected.has("oxylabs-perplexity");
+const olostepSelected = selected.has("olostep-perplexity");
 // Each credential is demanded only by the run that would spend it: a canary
 // through Oxylabs must not stop on a Bright Data token it never uses.
 const apiKey = brightDataSelected.length > 0 ? required("BRIGHTDATA_API_TOKEN") : "";
@@ -186,6 +198,15 @@ if (oxylabsSelected) {
 	adapters["oxylabs-perplexity"] = createOxylabsAdapter({
 		username: requiredCredential("OXYLABS_USERNAME"),
 		password: requiredCredential("OXYLABS_PASSWORD"),
+		system: "perplexity",
+		fetchImpl: fetch,
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
+}
+if (olostepSelected) {
+	adapters["olostep-perplexity"] = createOlostepAdapter({
+		apiKey: requiredCredential("OLOSTEP_API_KEY"),
 		system: "perplexity",
 		fetchImpl: fetch,
 		resolveScenarioText: resolvers.resolveScenarioText,
@@ -505,6 +526,15 @@ async function measure(slug: string): Promise<void> {
 						systemId: oxylabsVisitorSurface.perplexity,
 						channel: "VISITOR" as const,
 						priceUsd: OXYLABS_PRICE_PER_ANSWER_USD,
+					},
+				]
+			: []),
+		...(olostepSelected
+			? [
+					{
+						systemId: olostepVisitorSurface.perplexity,
+						channel: "VISITOR" as const,
+						priceUsd: OLOSTEP_PRICE_PER_ANSWER_USD,
 					},
 				]
 			: []),

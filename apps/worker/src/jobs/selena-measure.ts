@@ -1,11 +1,12 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
-import { createOxylabsAdapter } from "@workspace/lib/adapters/oxylabs";
+import { createOlostepAdapter } from "@workspace/lib/adapters/olostep";
 import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
+import { createOxylabsAdapter } from "@workspace/lib/adapters/oxylabs";
 import { db } from "@workspace/lib/db/db";
 import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
-import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import { createNoopMeasurementAdapter } from "@workspace/lib/selena-measurement";
+import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import {
 	assertDispatchModes,
 	type MeasurementAdapterRegistry,
@@ -114,6 +115,21 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					"oxylabs-perplexity": createOxylabsAdapter({
 						username: process.env.OXYLABS_USERNAME ?? "",
 						password: process.env.OXYLABS_PASSWORD ?? "",
+						system: "perplexity",
+						fetchImpl: fetch,
+						resolveScenarioText: resolvers.resolveScenarioText,
+						resolveExtractionContext: resolvers.resolveExtractionContext,
+					}),
+				}
+			: {}),
+		// The third Perplexity transport, on the same terms as Oxylabs above:
+		// built only when named, reachable only by its own name, and the key it
+		// needs is OLOSTEP_API_KEY on this service — the probe's copy lives in
+		// GitHub Actions secrets and never reaches a container.
+		...(selected.has("olostep-perplexity")
+			? {
+					"olostep-perplexity": createOlostepAdapter({
+						apiKey: process.env.OLOSTEP_API_KEY ?? "",
 						system: "perplexity",
 						fetchImpl: fetch,
 						resolveScenarioText: resolvers.resolveScenarioText,

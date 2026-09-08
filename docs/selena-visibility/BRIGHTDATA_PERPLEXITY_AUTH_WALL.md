@@ -221,3 +221,60 @@ status and body the transport saw, so the next such message names itself.
 Adoption still needs a second passing probe at least six hours after the
 first — the rule exists because both previous vendors would have passed a
 single run and stopped answering within days.
+
+That probe ran on 2026-09-08: run
+[34228692284](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34228692284),
+dispatched 12:53 UTC, 21 h 20 m after the first, on the same question:
+
+```
+job finished in 916s
+model: perplexity
+answer: 695 chars, 10 citations, 1 web queries
+web queries: ["What are the best food halls in Ubud, Bali?"]
+VERDICT: a visitor answer with sources — the shape an adapter can be built on.
+```
+
+Two passes, the same shape, a day apart: the rule is met. The two durations
+sit within half a minute of each other, which is one observation of
+consistency and not a distribution; how often 900 seconds becomes 1 500 is
+what a 25-question canary measures. The raw payload is artifact
+`10057454222` (11 467 bytes, kept until 2026-09-22); it was not committed.
+
+The adapter followed the same day: `olostep-perplexity`
+(`packages/lib/src/adapters/olostep-measurement-adapter.ts`), under the same
+permit, cost and evidence contract as the Oxylabs one. One single-item batch
+per permit, polled to `completed`, the item's retrieve id read, the content
+retrieved as JSON — the exchanges the registry provider made on both probes.
+The answer is read off the fields the registry reads, in its order
+(`result.markdown_content`, `answer_markdown`, `result.text_content`,
+`answer`) and the displayed sources off whichever of `sources`, `citations`,
+`result.links_on_page` and `inline_references` the payload carries first, so
+what the adapter stores is what the probe counted. The key is scrubbed from
+anything stored; an unrecognized payload is `MALFORMED_RESPONSE`, an empty one
+`EMPTY_RESPONSE`, a `failed` batch `JOB_FAULTED`, a batch that outlives the
+25-minute budget `JOB_NOT_READY` with its id kept for a later look; a 4xx on
+creation carries no charge, `402` among them — the vendor's payment or credit
+refusal, which its client prints as an invalid key. The sign-up wall is
+refused by the definition the Oxylabs adapter and the probe share. It is on
+the owner-approved list under its one-surface name and in no family; the
+route is unchanged.
+
+Its canary is the command above with the adapter and the credential swapped:
+
+```
+SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=olostep-perplexity \
+OLOSTEP_API_KEY=... \
+SELENA_JOURNAL_TENANT=<organization id> SELENA_JOURNAL_PROJECTS=korafoodhall \
+SELENA_JOURNAL_MAX_COST_USD=0.50 \
+pnpm -C apps/worker measure:journal
+```
+
+with the same two deployment-gate variables, on the `measure` service — where
+`OLOSTEP_API_KEY` has to be set by hand, because the GitHub Actions secret the
+probe reads never reaches a container. The plan prices at $0.135 (25 answers
+at three credits, $0.0054 each) under the $0.50 ceiling. Budget the wall
+clock rather than the money: six batches in flight at about fifteen minutes
+each is over an hour for one project, and the worker's lease and the adapter's
+budget both allow for it. The access-class question `HANDOFF.md` recorded on
+8 September is answered by neither probe; the canary is a paid run against
+the surface, and it waits for that decision.

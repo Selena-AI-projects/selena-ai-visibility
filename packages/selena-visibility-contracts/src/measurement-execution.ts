@@ -44,6 +44,12 @@ export const ownerApprovedMeasurementAdapters = [
 	// route stays on Bright Data until a canary through this adapter decides
 	// otherwise, so it runs only when named outright — a one-surface scope.
 	"oxylabs-perplexity",
+	// The third Perplexity transport, built after two probes through the
+	// vendor's own browsers answered where Bright Data returns the sign-up wall
+	// and Oxylabs answers 401. Same terms as the Oxylabs one: no family routes
+	// to it, the Perplexity visitor route stays on Bright Data until a canary
+	// through it decides otherwise, and it runs only when named outright.
+	"olostep-perplexity",
 ] as const;
 export type OwnerApprovedMeasurementAdapter = (typeof ownerApprovedMeasurementAdapters)[number];
 
