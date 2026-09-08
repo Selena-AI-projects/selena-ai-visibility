@@ -13,25 +13,16 @@
  *   DATABASE_URL=postgres://... pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest 50
  *   DATABASE_URL=postgres://... pnpm -C packages/lib exec tsx scripts/set-provider-spend-budget.ts suggest
  *
- * With no amount it reports the current ceiling and what is committed against it.
+ * With no amount it reports the current ceiling and what is committed against
+ * it. The same read and write run on Railway as the owner service's
+ * `read-spend-budget` and `set-spend-budget` tasks.
  */
-import { sql } from "drizzle-orm";
 import { db } from "../src/db/db";
-
-async function report(scope: string): Promise<void> {
-	const result = await db.execute(sql`
-		SELECT
-			(SELECT "cap_usd"::float8 FROM "sv_provider_spend_budgets" WHERE "scope" = ${scope}) AS cap_usd,
-			public.sv_provider_spend_committed(${scope})::float8 AS committed_usd,
-			(SELECT count(*) FROM "sv_provider_spend_reservations"
-				WHERE "scope" = ${scope} AND "status" = 'RESERVED') AS open_reservations
-	`);
-	const row = (result.rows?.[0] ?? {}) as { cap_usd?: number; committed_usd?: number; open_reservations?: number };
-	console.log(`scope: ${scope}`);
-	console.log(`cap: ${row.cap_usd ?? "not funded"}`);
-	console.log(`committed: ${row.committed_usd ?? 0}`);
-	console.log(`open reservations: ${row.open_reservations ?? 0}`);
-}
+import {
+	formatProviderSpendBudget,
+	readProviderSpendBudget,
+	setProviderSpendBudget,
+} from "../src/selena-provider-spend-budget";
 
 async function main(): Promise<void> {
 	const [scope, amount] = process.argv.slice(2);
@@ -40,14 +31,10 @@ async function main(): Promise<void> {
 	if (amount !== undefined) {
 		const capUsd = Number(amount);
 		if (!Number.isFinite(capUsd) || capUsd < 0) throw new Error("The cap must be a non-negative number of dollars");
-		await db.execute(sql`
-			INSERT INTO "sv_provider_spend_budgets" ("scope", "cap_usd")
-			VALUES (${scope}, ${capUsd})
-			ON CONFLICT ("scope") DO UPDATE SET "cap_usd" = excluded."cap_usd", "updated_at" = now()
-		`);
+		await setProviderSpendBudget(db, scope, capUsd);
 	}
 
-	await report(scope);
+	for (const line of formatProviderSpendBudget(await readProviderSpendBudget(db, scope))) console.log(line);
 }
 
 main().then(

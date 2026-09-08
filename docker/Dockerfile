@@ -156,6 +156,19 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
+# Owner stage — one database step that needs owner rights, then exits: minting
+# pilot seats, reading or setting a spend ceiling. It takes the migration
+# runner's connection, not the product runtime's, because the runtime role is
+# deliberately unable to mint a seat or raise its own limit. Which step, and
+# with what inputs, is named by variables on the service, and the log carries
+# counts and ceilings only.
+FROM base AS owner
+WORKDIR /app
+
+COPY --from=builder /deploy/worker ./
+
+CMD ["./node_modules/.bin/tsx", "src/scripts/owner-task-entrypoint.ts"]
+
 # The service name selects the final runtime stage: web or worker. A service
 # named for what it proves rather than for what it runs — a gate or a rehearsal
 # rig — cannot borrow a stage name another service already holds, so it names
