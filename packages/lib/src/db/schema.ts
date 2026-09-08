@@ -609,6 +609,23 @@ export const svPilotInvites = pgTable("sv_pilot_invites", {
 	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({ codeHashKey: unique("sv_pilot_invites_code_hash_key").on(table.codeHash) })).enableRLS();
 
+// One free auto-dispatch slot taken on one UTC day. The two daily caps span
+// every tenant, so the runtime role holds no privilege on this table: slots
+// are taken and given back through sv_claim_free_auto_dispatch and
+// sv_release_free_auto_dispatch, which count and decide in one statement.
+export const svFreeAutoDispatchClaims = pgTable("sv_free_auto_dispatch_claims", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	utcDay: date("utc_day").notNull(),
+	organizationId: text("organization_id").notNull(),
+	projectId: uuid("project_id").notNull(),
+	requestId: uuid("request_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+	requestKey: unique("sv_free_auto_dispatch_claims_request_key").on(table.requestId),
+	dayIdx: index("sv_free_auto_dispatch_claims_day_idx").on(table.utcDay),
+	dayProjectIdx: index("sv_free_auto_dispatch_claims_day_project_idx").on(table.utcDay, table.projectId),
+})).enableRLS();
+
 export type SvProject = typeof svProjects.$inferSelect;
 export type NewSvProject = typeof svProjects.$inferInsert;
 export type SvScenario = typeof svScenarios.$inferSelect;
