@@ -67,6 +67,15 @@ is not readable here. Until it is opened and either deployed or discarded,
 the Variables screen can show values no running container has — the trap
 "Applying Railway variable changes" in the owner guide describes.
 
+Read by the owner on the Variables screen after this block was first written:
+`worker` carries `SELENA_EMERGENCY_STOP=true` and
+`SELENA_MEASUREMENT_ENABLED=false`, both lower case, so the morning's reading
+holds for that service; `web` is still to be read the same way. The same
+canvas showed no staged-changes banner and no purple card, which is how
+Railway presents a pending patch, so the patch above reads as a re-apply of
+unchanged values that the interface hides. That is the likely reading, not a
+proven one: the patch's contents are still unread.
+
 **What none of this changes.** The access-class decision in the block below. A
 second answer from a vendor's browser is a fact about the vendor; whether a
 paid run against the surface is permitted is the owner's decision, with legal
