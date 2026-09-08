@@ -186,3 +186,43 @@ code change. A name outside the list is refused with
 The owner guide said this needed a code change even for an approved adapter,
 which stopped being true when those three were added. It has been corrected in
 the same commit as this runbook.
+
+## What the first live measurement returned
+
+Order `239c25cb`, cycle `882f3ea3`, lock `8e53e776` v3, project KORA Food Hall.
+Approved and enqueued 2026-09-04 11:50 UTC, last run finished 14:18 UTC.
+Ten questions about eating in Ubud, none containing the brand name, on three
+Bright Data Visitor View surfaces.
+
+| | ChatGPT | Gemini | Perplexity |
+|---|---|---|---|
+| Valid answers | 10 / 10 | 4 / 10 | 2 / 10 |
+| Brand named | 2 | 1 | 0 |
+| Own domain cited | 2 | 0 | 0 |
+
+Thirty permits, thirty runs, thirty ledger rows — no permit consumed without a
+run. The brand was named on two questions: *"Where can I find a good food court
+in Ubud?"* (ChatGPT and Gemini) and *"What are the best food halls in Ubud,
+Bali?"* (ChatGPT), first position each time, with `korafoodhall.com` cited in
+both ChatGPT answers. It was named on none of the other eight questions.
+
+Three things this run says about the platform rather than about the brand:
+
+1. **Fourteen of thirty runs came back invalid and every one of them was still
+   billed.** Perplexity failed eight times with `MALFORMED_RESPONSE` and Gemini
+   six times (`SNAPSHOT_NOT_READY` ×4, `RESPONSE_TOO_LARGE` ×2). Perplexity is
+   effectively unmeasured at this sample size, and a customer paying per run
+   would be paying for answers nobody can read.
+2. **Every ledger row reads `basis = estimated`**, a flat $0.01 per run for
+   $0.30 total. Nothing reconciles that against what Bright Data actually
+   charged, so the platform can report what it expects to have spent and not
+   what it spent. The check that mattered here was the cap, and $0.30 sits well
+   inside the $2 order cap and the $12 remaining provider budget.
+3. **Only the owned brand is extracted.** `sv_response_mentions` holds three
+   rows, all `KORA Food Hall`, though the answers name many other Ubud
+   restaurants. Competitor and share-of-voice numbers cannot be derived from
+   this dataset until competitor entities are extracted too.
+
+Against `deriveFindings`, this cycle raises three: low mention rate
+(0.19 < 0.20, high), weak owned citation coverage (0.13 < 0.20, high), and an
+elevated invalid rate (0.47 > 0.10, medium).
