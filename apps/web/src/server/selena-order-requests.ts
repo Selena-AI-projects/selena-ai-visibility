@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svAuditEvents, svOrderRequests, svProjects, svScenarios } from "@workspace/lib/db/schema";
+import { claimFreeAutoDispatch, releaseFreeAutoDispatchClaim } from "@workspace/lib/selena-free-auto-dispatch-claims";
 import { redeemPilotInvite } from "@workspace/lib/selena-pilot-invites";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import {
@@ -54,13 +55,23 @@ async function autoDispatchFreeRequest(input: {
 	promoApplied: boolean;
 }): Promise<{ status: FreeAutoDispatchStatus; expectedRuns: number } | { status: null; reason: string }> {
 	const config = freeAutoDispatchConfigFromEnv(process.env);
-	const capsApply = config.enabled && input.promoApplied;
-	if (capsApply) {
-		// The global promo ceiling intentionally spans tenants. A non-owner RLS
-		// role cannot safely count it, and a count followed by dispatch races with
-		// concurrent requests. Keep free auto-dispatch closed until one atomic DB
-		// claim enforces both global and project caps.
-		const reason = "RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED";
+	// The flag and the promo are decided here. The two daily caps are decided
+	// by the database in one claim, because they span every tenant: the runtime
+	// role cannot count other tenants' rows under RLS, and a count followed by
+	// a dispatch races with a concurrent request.
+	const gate = decideFreeAutoDispatch({
+		config,
+		promoApplied: input.promoApplied,
+		dispatchedToday: 0,
+		dispatchedTodayForProject: 0,
+	});
+	// The flag being off is not an event, and a paid request is the desk's.
+	if (!gate.dispatch) return { status: null, reason: gate.reason };
+
+	const refuse = async (reason: string) => {
+		// A cap refusal is a free measurement the customer expected and did not
+		// get, so it is recorded. The request itself is already saved and stays
+		// in the inbox as ordinary work.
 		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
 			await tx.insert(svAuditEvents).values({
 				organizationId: input.context.tenantId,
@@ -71,22 +82,30 @@ async function autoDispatchFreeRequest(input: {
 				details: { planId: input.planId, reason },
 			});
 		});
-		return { status: null, reason };
+		return { status: null, reason } as const;
+	};
+
+	let claim: Awaited<ReturnType<typeof claimFreeAutoDispatch>>;
+	try {
+		claim = await withOrganizationTransaction(db, input.context.tenantId, (tx) =>
+			claimFreeAutoDispatch(tx, {
+				requestId: input.requestId,
+				organizationId: input.context.tenantId,
+				projectId: input.projectId,
+				maxPerDay: config.maxPerDay,
+				maxPerProjectPerDay: config.maxPerProjectPerDay,
+			}),
+		);
+	} catch {
+		// The claim lives in the database; a deployment whose migrations do not
+		// yet carry it must refuse, not throw the lead away.
+		return refuse("CLAIM_UNAVAILABLE");
 	}
-	const decision = decideFreeAutoDispatch({
-		config,
-		promoApplied: input.promoApplied,
-		dispatchedToday: 0,
-		dispatchedTodayForProject: 0,
-	});
-	if (!decision.dispatch) {
-		// A cap refusal is a free measurement the customer expected and did not
-		// get, so it is recorded; the flag being off is not an event.
-		return { status: null, reason: decision.reason };
-	}
+	if (claim !== "CLAIMED") return refuse(claim);
 
 	const plan = SELENA_CATALOG[input.planId];
 	const questionCap = (plan.questionLimitPerMeasurement ?? 25) * Math.max(1, plan.languageLimit);
+	let reachedOrder = false;
 	try {
 		const { familyId } = await prepareSelenaScenarios(input.context, input.projectId);
 		const proposed = (await repositories.scenarios.list(input.context, familyId))
@@ -101,6 +120,7 @@ async function autoDispatchFreeRequest(input: {
 				.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, input.context.tenantId)));
 		});
 
+		reachedOrder = true;
 		const started = await startSelenaMeasurement(input.context, {
 			projectId: input.projectId,
 			planId: input.planId,
@@ -126,6 +146,15 @@ async function autoDispatchFreeRequest(input: {
 		});
 		return { status: "AUTO_QUEUED", expectedRuns: started.expectedRuns };
 	} catch (cause) {
+		// A failure before any order exists gives the slot back, so a corrected
+		// profile can try again today. Once an order exists the slot stays
+		// taken: that order is now the desk's to finish, and a second one would
+		// be a second measurement.
+		if (!reachedOrder) {
+			await withOrganizationTransaction(db, input.context.tenantId, (tx) =>
+				releaseFreeAutoDispatchClaim(tx, { requestId: input.requestId, organizationId: input.context.tenantId }),
+			).catch(() => undefined);
+		}
 		await withOrganizationTransaction(db, input.context.tenantId, async (tx) => {
 			await tx.insert(svAuditEvents).values({
 				organizationId: input.context.tenantId,

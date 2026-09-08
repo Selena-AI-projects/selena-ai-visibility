@@ -1751,7 +1751,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-26)).toEqual([
+		expect(journal.entries.slice(-27)).toEqual([
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1850,6 +1850,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 				tag: "0065_journal_executor_settled_reconciliation",
 				breakpoints: true,
 			},
+			{ idx: 66, version: "7", when: 1787940028000, tag: "0066_free_auto_dispatch_claim", breakpoints: true },
 		]);
 	});
 

@@ -1,5 +1,55 @@
 # Handoff — Selena Systems measurement app
 
+## Status on 8 September 2026, evening
+
+Written after the 13:10 block below, which stands. Two things changed.
+
+**The Olostep branch is merged.** PR #158 went into `release/selena-visibility-mvp`
+at 13:47Z as `5648798`; worker, web, measure and migrate rebuilt from it, and
+measure logged `PROVIDER_CALLS_STOPPED` on the build before it as well, so the
+stop holds on a live container. The owner read `SELENA_EMERGENCY_STOP=true`
+and `SELENA_MEASUREMENT_ENABLED=false` on both worker and web on the Variables
+screen, lower case. Every item of the morning's "not re-verified" list is
+closed.
+
+**Free auto-dispatch is unblocked in code, and needs migration `0066`.** The
+owner asked for two pilot clients to sign in and run their own test
+measurements. Reading the path showed why that could not happen: each pilot
+guest gets their own workspace, the operator desk is platform-admin only and
+sees only the operator's own tenant, and the one automated path — a free
+request starting itself — was closed by a deliberate stub returning
+`RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED`, because the two daily caps span every
+tenant and the runtime role cannot count other tenants' rows. Migration
+`0066` adds the claim: a runtime-invisible table of slots per UTC day and
+`sv_claim_free_auto_dispatch`, which counts and decides under an advisory
+lock in one statement, with `sv_release_free_auto_dispatch` for a failure
+that reached no order. The request handler now calls it; a deployment without
+the migration refuses with `CLAIM_UNAVAILABLE` and the request stays in the
+inbox as before. The E2E workflow's frontier is `66`, so CI applies the SQL
+on a real Postgres; nothing here was run against a database by hand.
+
+**What turning it on takes, in order.** (1) Merge the branch. (2) On the
+`migrate` service set `SELENA_MIGRATION_MAX_INDEX=66` and deploy; if it asks,
+set `SELENA_MIGRATION_APPROVED_SHA` to the commit it names and deploy again.
+(3) On `web`: `SELENA_SELF_SERVE_SIGNUP_ENABLED=true`,
+`SELENA_PILOT_SIGNUP_ALLOWLIST` with the exact client addresses,
+`SELENA_PILOT_SEAT_CAP` above the number of accounts that exist plus the
+guests, `SELENA_FREE_AUTO_DISPATCH_ENABLED=true`. (4) One pilot seat per
+client, minted as a row through `scripts/issue-pilot-invites.ts` or the same
+insert by hand; the code is what the client types on the order page. (5) On
+`worker`: the stop off, `SELENA_MEASUREMENT_ENABLED=true`,
+`SELENA_MEASUREMENT_ADAPTER=auto`, `SCHEDULE_MAINTENANCE_ENABLED=false`,
+`SELENA_PROVIDER_BUDGET_USD=2`. (6) The `measure` spend scope read back
+first: the last readback said `$2` cap, and two Landscape tests of twenty
+questions are about forty cents each. What the client will see: ChatGPT and
+the five API models answer; Gemini answered four of ten on 09-04; Perplexity
+through Bright Data returns the wall and every Perplexity row reads invalid.
+The access-class decision below is unchanged by any of this.
+
+One client is known: victorialarust@gmail.com; the site given as
+booberid.com does not resolve from this session and the spelling is
+unconfirmed. The second client is not yet named.
+
 ## Status on 8 September 2026, 13:10 UTC
 
 Written after the block below it, which was the morning's reading. Nothing

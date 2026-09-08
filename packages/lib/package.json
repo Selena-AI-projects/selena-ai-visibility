@@ -49,6 +49,7 @@
 		"./usage": "./src/usage/cost.ts",
 		"./selena-provider-spend": "./src/selena-provider-spend.ts",
 		"./selena-pilot-invites": "./src/selena-pilot-invites.ts",
+		"./selena-free-auto-dispatch-claims": "./src/selena-free-auto-dispatch-claims.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
 		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",
 		"./selena-export": "./src/selena-export.ts",

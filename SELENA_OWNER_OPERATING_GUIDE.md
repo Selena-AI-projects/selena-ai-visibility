@@ -145,6 +145,19 @@ never. A request that hits a cap, or whose measurement fails to start, stays in
 the operator inbox as `AUTO_FAILED` or unchanged with the reason in the audit
 log — the lead is written before any of this runs and is never lost to it.
 
+The caps are counted in the database, not in the application: they span every
+account, and the runtime role cannot count other tenants' rows, so one claim
+function (`sv_claim_free_auto_dispatch`, migration `0066`) counts and decides
+under a lock, and a request refused by a cap is recorded as
+`ORDER_REQUEST_AUTO_DISPATCH_REFUSED` with the cap's name. A slot is given
+back only when the failure came before any order existed — a profile with no
+questions — so a corrected profile can try again the same day. On a
+deployment whose migrations stop before `0066`, the flag refuses every free
+request with `CLAIM_UNAVAILABLE` and the request waits in the inbox as
+before: switching the flag on is the second step, raising
+`SELENA_MIGRATION_MAX_INDEX` to `66` on the `migrate` service and deploying
+it is the first.
+
 Measurement jobs are never scheduled. A run starts from an explicit action on a
 specific permit, and a claimed permit is spent: it cannot be retried into a
 second provider call.
