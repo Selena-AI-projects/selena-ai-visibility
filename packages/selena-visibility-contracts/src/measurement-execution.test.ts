@@ -61,6 +61,15 @@ describe("Selena measurement execution boundary", () => {
 		expect(measurementAdapterNamesFor("auto")).not.toContain("oxylabs-perplexity");
 	});
 
+	it("approves the Olostep Perplexity adapter on the same one-surface terms", () => {
+		expect(() => assertAdapterAllowed("olostep-perplexity", ["noop", "olostep-perplexity"])).not.toThrow();
+		expect(() => assertAdapterAllowed("olostep", ["noop", "olostep"])).toThrow("SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO");
+		expect(resolveMeasurementAdapterName("olostep-perplexity", "Perplexity")).toBe("olostep-perplexity");
+		// The route itself has not moved: a family still sends Perplexity to Bright Data.
+		expect(resolveMeasurementAdapterName("brightdata", "Perplexity")).toBe("brightdata-perplexity");
+		expect(measurementAdapterNamesFor("auto")).not.toContain("olostep-perplexity");
+	});
+
 	it("holds every adapter a family can reach to the same owner gate", () => {
 		const brightData = ["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity"];
 		expect(measurementAdapterNamesFor("brightdata").sort()).toEqual([...brightData].sort());
