@@ -397,6 +397,32 @@ may be measured — the answers are public and the cost is ours — but its resu
 does not reach a public page without that owner's recorded yes, and the script
 says so as it runs.
 
+### Owner database steps on Railway
+
+Minting pilot seats and reading or setting a spend ceiling need a connection
+with owner rights, which the product runtime deliberately does not hold and
+which should not live on anyone's laptop either. The `owner` service is where
+those steps run: a one-shot job built from the worker image (the Dockerfile's
+`owner` stage), whose `DATABASE_URL` and `SELENA_RUNTIME_DATABASE_CA_PEM` are
+references to the `migrate` service's own, so no connection string is ever
+copied. It runs the task its variables name, prints counts and ceilings, and
+exits; nothing here spends on a provider. Keep its restart policy at never.
+
+| Variable | What it does |
+|---|---|
+| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget` or `set-spend-budget` |
+| `SELENA_PILOT_SEATS_CSV` | The seats file's contents, one `CODE,planId[,label]` per line |
+| `SELENA_PILOT_SEAT_DAYS` | How many days the seats stay redeemable; default 30 |
+| `SELENA_SPEND_SCOPE` | The scope to read or set; default `measure` |
+| `SELENA_SPEND_CAP_USD` | The ceiling to set, for `set-spend-budget` only |
+
+A run is: set the task and its inputs, deploy, read the log. The seat task
+logs how many seats were new and how many already existed and never a code,
+so delete `SELENA_PILOT_SEATS_CSV` once the seats are issued — until then the
+codes sit in a variable anyone with the dashboard can read. A second deploy
+of the seat task with the same contents issues nothing and says so, so a
+restart cannot double-mint.
+
 ### Applying Railway variable changes
 
 Railway variable edits are staged changes, not live edits to a running
