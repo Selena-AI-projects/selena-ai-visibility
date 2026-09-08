@@ -1,5 +1,34 @@
 # Handoff — Selena Systems measurement app
 
+## Status on 8 September 2026
+
+Three statements further down were true when they were written on 7 September and are not true now. They are corrected here rather than edited in place, so the earlier reading stays visible.
+
+**The three held daily claims are released.** korafoodhall, cycle 63e3103d-4d41-4716-ba86-9dd786ef0b1c; avlibali, cycle 81037955-40ec-4931-8cca-182e58b6054c; otherbali, cycle 3ff898c1-4466-4d94-bd53-7a276005a658. All three read RECONCILED, utc_day 2026-09-07, attempt 1, cycle STOPPED 25 of 25, unfinished_runs 0. Read as postgres against staging on 2026-09-08. No owner psql call is outstanding. The same read answers a question no document had asked: otherbali carried the same executor-settled shape as the other two, so 0065 was its exit as well.
+
+**Migration 0065 is applied.** The migrate service deployed 2026-09-07 23:59:44Z and logged: prepared 66 migrations through index 65 in bounded runtime bundle, journal before and after both 66, migrations complete, runner exit 0. The canary section below says it has not been applied. That sentence is stale.
+
+**The Railway bindings, as they actually were.** The line further down naming worker, web and publish is wrong about publish and was already out of date about the rest.
+
+| Service | Source before 8 September | Now |
+|---|---|---|
+| worker | parkourcafe, pinned at b4e678b8 | Selena-AI-projects, tracking branch head |
+| web | parkourcafe, pinned at b4e678b8 | Selena-AI-projects, tracking branch head |
+| publish | no source at all | unchanged, still none |
+| measure | Selena-AI-projects | unchanged |
+| migrate | Selena-AI-projects | unchanged |
+
+worker and web were 89 commits and 160 files behind the branch head, not four days behind: b4e678b8 predates 31 August, and the deployments of 4 and 5 September rebuilt that same old commit. Both were moved on 8 September and now track the branch head at 4e0bd430. worker came up with every handler registered and the recurring scheduler disabled. web passed its healthcheck, and app.selenasystems.com never went down, because the previous deployment kept serving until the new one was healthy. Two deployments were created from the same commit 54 seconds apart, the source change and the variable commit each triggering one. That is the same race the canary record describes, so it is a property of this setup rather than an accident.
+
+**The stop, and what to restore.** SELENA_EMERGENCY_STOP is true on worker, web and measure, in the lower-case form the affirmative check accepts. measure proves it behaviourally: its deployment of 2026-09-07 15:12:26Z logged PROVIDER_CALLS_STOPPED and nothing else. SELENA_MEASUREMENT_ENABLED read true on worker and web, which is not the state this file records as restored after the canary. It was set to false on both before the 8 September rollout, so the second gate is back in place. Turning it on again is an owner decision, not a cleanup step.
+
+**A volume backup was taken before any of the above**, 2026-09-08 10:23, 467 MB, alongside PITR whose window covers the same day. The backups before it are named pre-0053, pre-0056, pre-0057-0058 and pre-0059-0060. Every earlier migration batch was preceded by a snapshot and 0065 was not.
+
+**Both services log dead environment variables at every start.** worker names five, web names seven. Three of web's read like features somebody believes are on: SELENA_STAGING_GOOGLE_SIGN_IN_ENABLED, SELENA_STAGING_PREVIEW_ENABLED and SELENA_STAGING_MVP. The first two print a did-you-mean pointing at SELENA_STAGING_SIMULATION_ENABLED.
+
+**The access class of the consumer surfaces is an open owner decision, and no document here has ever recorded it.** Perplexity's terms of 23 January 2026 prohibit robots, crawlers and scrapers that collect data from the service and, in the same clause, manual acts performed for that purpose; prohibit circumventing technological measures protecting the service, which is what the Cloudflare wall is; and license the service for personal, non-commercial use only. OpenAI's terms prohibit automated or programmatic extraction of data or Outputs, and circumventing rate limits or protective measures. Google's clause is narrower and conditional, prohibiting automated access that violates the machine-readable instructions on its pages, and gemini.google.com/robots.txt disallows /app/, which is the conversation surface. So the finding below that the wall is Cloudflare rather than Perplexity policy, and that the problem is therefore about proxy quality, is answered by the circumvention clause and should not be relied on. Under sections 12.1 and 24.3 this is a decision the owner takes with legal advice; it is not a fact this file can settle, and it applies to all three surfaces, not only Perplexity.
+
+
 Start here when opening a fresh session on this repository. The company-wide
 handoff (product, site, funnel, both repositories in one place) lives in
 `parkourcafe/SELENA-AI-COMPANY`, file `HANDOFF.md`.
