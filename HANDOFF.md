@@ -46,9 +46,19 @@ the five API models answer; Gemini answered four of ten on 09-04; Perplexity
 through Bright Data returns the wall and every Perplexity row reads invalid.
 The access-class decision below is unchanged by any of this.
 
-One client is known: victorialarust@gmail.com; the site given as
-booberid.com does not resolve from this session and the spelling is
-unconfirmed. The second client is not yet named.
+The two clients: victorialarust@gmail.com and booberid@gmail.com, sites
+doki.help and petid.care, both on the Landscape plan with Visitor View
+included by the owner's decision. Neither site is reachable from this
+session's network, so the profiles are the clients' own to fill.
+
+**The owner's database steps get a service.** The owner has no query window
+and the Railway agent cannot read variable values, so nothing could mint a
+pilot seat or read the `measure` ceiling. The `owner` service — a one-shot
+job from the worker image whose database connection is a reference to the
+`migrate` service's — runs those steps from variables and logs counts only;
+the owner guide's "Owner database steps on Railway" carries the table. The
+seat and ceiling scripts kept their command lines and now share their logic
+with that service.
 
 ## Status on 8 September 2026, 13:10 UTC
 
