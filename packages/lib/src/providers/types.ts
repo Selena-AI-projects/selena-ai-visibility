@@ -13,6 +13,12 @@ export interface ScrapeResult {
 	webQueries: string[];
 	citations: Citation[];
 	modelVersion?: string;
+	/**
+	 * What the provider says this call cost, in USD, when its response reports
+	 * it. Absent for providers that report nothing — the caller then has an
+	 * estimate and must not present it as the charge.
+	 */
+	costUsd?: number;
 }
 
 export interface ProviderOptions {

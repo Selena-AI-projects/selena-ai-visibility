@@ -9,15 +9,7 @@ import {
 	extractTextFromGoogle,
 } from "../../text-extraction";
 import type { ModelConfig, Provider, ProviderAccess, ProviderOptions, ScrapeResult } from "../types";
-import {
-	assertPromptLength,
-	createDfsAiApi,
-	createDfsSerpApi,
-	DFS_LANGUAGE_CODE,
-	DFS_LOCATION_CODE,
-	isDataforseoConfigured,
-	sanitizeForJson,
-} from "./dataforseo-shared";
+import { assertPromptLength, createDfsAiApi, createDfsSerpApi, DFS_LANGUAGE_CODE, DFS_LOCATION_CODE, isDataforseoConfigured, sanitizeForJson, taskCostUsd } from "./dataforseo-shared";
 
 /**
  * Models served via the SERP Google AI Mode endpoint (SerpApi). These always
@@ -141,6 +133,7 @@ async function runGoogleAiMode(prompt: string): Promise<ScrapeResult> {
 		textContent: extractTextFromGoogle(response),
 		citations,
 		modelVersion: "dataforseo",
+		costUsd: taskCostUsd(task),
 	};
 }
 
@@ -176,6 +169,7 @@ async function runGoogleAiOverview(prompt: string): Promise<ScrapeResult> {
 					textContent: extractTextFromGoogle(response),
 					citations,
 					modelVersion: "dataforseo",
+					costUsd: taskCostUsd(task),
 				};
 			}
 			lastError = task ? `${task.status_code} ${task.status_message}` : "No response or tasks.";
@@ -283,6 +277,7 @@ async function runLlmResponse(model: string, prompt: string, options?: ProviderO
 		textContent: extractTextFromDataforseoLlm(raw),
 		citations,
 		modelVersion: result.model_name ?? modelName,
+		costUsd: taskCostUsd(task),
 	};
 }
 
@@ -315,6 +310,7 @@ async function runLlmScraper(model: keyof typeof SCRAPER_CALLS, prompt: string):
 		textContent: extractTextFromDataforseoScraper(raw),
 		citations,
 		modelVersion: result.model ?? model,
+		costUsd: taskCostUsd(task),
 	};
 }
 
