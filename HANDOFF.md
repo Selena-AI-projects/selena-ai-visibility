@@ -1,5 +1,147 @@
 # Handoff — Selena Systems measurement app
 
+## Start here: session of 8 September 2026, close of day
+
+Read this block first — it is the chronology of everything done today, in
+order, and the one open action. The three blocks below it are that session's
+own working notes, written as it went; they still hold as detail and
+evidence, and nothing here contradicts them.
+
+### What happened, in order
+
+1. Read `AGENTS.md`, this file and the owner guide, then re-verified the two
+   things the owner had flagged as unchecked: Railway's `worker`/`web`/
+   `measure`/`migrate` all bind to `Selena-AI-projects/selena-ai-visibility`
+   on `release/selena-visibility-mvp` (`publish` has no source, unchanged),
+   and `SELENA_EMERGENCY_STOP=true` / `SELENA_MEASUREMENT_ENABLED=false` hold
+   on all three services that can reach a provider — `measure` behaviourally
+   (deploy log `PROVIDER_CALLS_STOPPED`), `worker` and `web` read by the owner
+   on the Variables screen, lower case on both.
+2. Dispatched the second Olostep probe the adoption rule required. Run
+   [34228692284](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34228692284):
+   695 characters, 10 citations, 916 s, 21 h 36 m after the first pass
+   ([34137495520](https://github.com/Selena-AI-projects/selena-ai-visibility/actions/runs/34137495520):
+   643 characters, 10 citations, 944 s). Same shape, past the six-hour rule —
+   the vendor is accepted on the technical rule.
+3. Built the `olostep-perplexity` adapter
+   (`packages/lib/src/adapters/olostep-measurement-adapter.ts`, modelled on
+   the Oxylabs one, 25 tests), corrected `olostep`'s price in
+   `packages/lib/src/usage/cost.ts` from `0.01` to `0.0054`, and registered
+   the adapter on the owner-approved list and in the worker job and journal
+   script — in no routing family, so it spends nothing until named outright.
+   **PR [#158](https://github.com/Selena-AI-projects/selena-ai-visibility/pull/158)
+   merged** into `release/selena-visibility-mvp`; Railway rebuilt from it,
+   `measure` logged `PROVIDER_CALLS_STOPPED` again on the new build.
+4. The owner asked for two pilot clients to sign in and run their own test
+   measurements. Tracing the path found it structurally closed: a free
+   request's auto-dispatch always refused with
+   `RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED`, a deliberate stub, because the two
+   daily caps span every tenant and the runtime role cannot count other
+   tenants' rows under RLS. Wrote migration `0066`
+   (`sv_free_auto_dispatch_claims`, `sv_claim_free_auto_dispatch`,
+   `sv_release_free_auto_dispatch`) and wired the request handler to it.
+   **PR [#159](https://github.com/Selena-AI-projects/selena-ai-visibility/pull/159)
+   merged.** The owner then set `SELENA_MIGRATION_MAX_INDEX=66` on `migrate`,
+   deployed, set `SELENA_MIGRATION_APPROVED_SHA` to the commit it named, and
+   deployed again — **migration `0066` is applied** (`journal after:
+   67/…`, `migrations complete`).
+5. The owner has no database query window and the Railway agent cannot read
+   variable values back, so nothing could mint a pilot seat or read the
+   `measure` spend ceiling. Built a one-shot `owner` service — the Dockerfile
+   `owner` stage, `apps/worker/src/scripts/owner-task.ts` /
+   `owner-task-entrypoint.ts`, and two new library modules
+   (`selena-pilot-seat-issuance`, `selena-provider-spend-budget`) shared with
+   the existing command-line scripts, driven by `SELENA_OWNER_TASK`. **PR
+   [#160](https://github.com/Selena-AI-projects/selena-ai-visibility/pull/160)
+   merged.**
+6. Created the `owner` Railway service by hand (its `DATABASE_URL` and
+   `SELENA_RUNTIME_DATABASE_CA_PEM` are references to `migrate`'s own, so no
+   connection string was copied anywhere). First read of the `measure` spend
+   scope: **cap $2, committed $0.30, no open reservations.** Ran
+   `issue-pilot-invites` once: two seats minted, both plan
+   `full-ai-landscape`, both valid 30 days from ~15:17Z — `seats in file: 2,
+   newly issued: 2, already present: 0`. Cleared `SELENA_PILOT_SEATS_CSV` and
+   set `SELENA_OWNER_TASK=read-spend-budget` (its safe idle task) and
+   redeployed; the service is idle now, holding no code.
+
+### Where the pilot codes are
+
+Not in this file, on purpose — a pilot code is a live credential until
+redeemed, and only its SHA-256 digest is in the database. The two codes were
+printed once, to the owner, in this session's own chat; she has them. If
+they are lost, mint two more the same way (§ below) rather than trying to
+recover the old ones — nothing here can read a code back out of its digest.
+
+### The two clients — one thing left unconfirmed
+
+Emails: `victorialarust@gmail.com`, `booberid@gmail.com`. Sites named:
+`doki.help`, `petid.care`. **Which email belongs to which site was asked and
+never answered** — it does not matter to the pilot-seat mechanism (a seat is
+redeemed by whichever account uses its code first, not bound to an email),
+but it matters for talking to the clients. Ask before it matters.
+
+### The one open action: turn the pilot on
+
+Nothing above changes what a client can do yet. Signup is still closed and
+the worker's stop is still engaged. Flip both, in this order:
+
+**On `web`:**
+
+| Variable | Value |
+|---|---|
+| `SELENA_SELF_SERVE_SIGNUP_ENABLED` | `true` |
+| `SELENA_PILOT_SIGNUP_ALLOWLIST` | `victorialarust@gmail.com,booberid@gmail.com` |
+| `SELENA_PILOT_SEAT_CAP` | `20` — see caveat below |
+| `SELENA_FREE_AUTO_DISPATCH_ENABLED` | `true` |
+
+**On `worker`:**
+
+| Variable | Value |
+|---|---|
+| `SELENA_EMERGENCY_STOP` | remove, or `false` |
+| `SELENA_MEASUREMENT_ENABLED` | `true` |
+| `SELENA_MEASUREMENT_ADAPTER` | `auto` |
+| `SCHEDULE_MAINTENANCE_ENABLED` | `false` |
+| `SELENA_PROVIDER_BUDGET_USD` | `2` |
+
+**`SELENA_PILOT_SEAT_CAP=20` is a guess, not a read fact.** The gate is
+`seatsTaken >= seatCap` where `seatsTaken` counts every row in the `user`
+table, not only pilot guests — nobody has read that count this session. If
+the real count plus the two guests already exceeds 20, both clients are
+refused as `PILOT_FULL` with no distinguishing error. There is no downside to
+setting it higher (the allowlist alone gates who may actually register), so
+raise it if in doubt rather than trust this number.
+
+After this: the two clients can register (allowlisted addresses only), enter
+their promo code on the order page, and — because
+`SELENA_FREE_AUTO_DISPATCH_ENABLED` is on — their first Landscape request
+starts itself. Expect ChatGPT and the five API models to answer; Gemini
+answered four of ten on the 09-04 reading; Perplexity through Bright Data
+still returns the wall and every Perplexity row reads invalid, because the
+Olostep canary below has not run. The $2 measure-scope ceiling covers roughly
+one Landscape test each with room to spare.
+
+### Still open, unrelated to the pilot
+
+- **The Olostep canary and the route change are untouched.** The adapter
+  merged in step 3 is not routed: `Perplexity` still resolves to
+  `brightdata-perplexity`, which returns the wall. Running the canary needs
+  `OLOSTEP_API_KEY` on `measure`, the deployment-gate pair, the stop lifted
+  for that one deployment, and — before any of that — the access-class
+  decision below. Full runbook in
+  `docs/selena-visibility/BRIGHTDATA_PERPLEXITY_AUTH_WALL.md`.
+- **The access-class decision is still the owner's, with legal advice**,
+  unrelated to anything built today: whether scraping Perplexity, ChatGPT and
+  Gemini through Bright Data / Oxylabs / Olostep is a use the terms of each
+  service permit. See "The access class of the consumer surfaces" further
+  down. Nothing today depends on it except the Olostep canary above.
+- **A staged Railway patch (`8078e269`) was seen once, mid-session,** touching
+  variable counts on worker/web/publish/measure/migrate with no
+  staged-changes banner visible on the canvas — read as a likely no-op
+  re-apply the interface was hiding, never confirmed by opening its Details.
+  Worth a look before the next round of variable edits on any of those five
+  services.
+
 ## Status on 8 September 2026, evening
 
 Written after the 13:10 block below, which stands. Two things changed.
