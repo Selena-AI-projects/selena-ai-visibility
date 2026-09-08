@@ -48,15 +48,17 @@ adapter on that list is the deliberate code change; naming one that is not there
 is refused with `SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO`, so real spend can never
 be the side effect of a typo in a variable.
 
-The list currently holds the inert adapters, `openrouter`, and the three Visitor
+The list currently holds the inert adapters, `openrouter`, the three Visitor
 View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
-`brightdata-perplexity`, and `oxylabs-perplexity` — so `brightdata` as a family
+`brightdata-perplexity`, and the two stand-alone Perplexity transports
+`oxylabs-perplexity` and `olostep-perplexity` — so `brightdata` as a family
 name does select a live paid path, and the credentials are the remaining
-requirement. `oxylabs-perplexity` belongs to no family: it is the second
-Perplexity transport, approved on 2026-09-06 for a canary, and it runs only
-when named outright, which is a one-surface scope by construction. While `noop` is
-selected every run is recorded as `INVALID`, so an accidental run cannot produce
-something that reads like a real measurement.
+requirement. Neither Perplexity transport belongs to a family: `oxylabs-perplexity`
+was approved on 2026-09-06 for a canary, `olostep-perplexity` was built on
+2026-09-08 for the same purpose, and each runs only when named outright, which
+is a one-surface scope by construction. While `noop` is selected every run is
+recorded as `INVALID`, so an accidental run cannot produce something that
+reads like a real measurement.
 
 Spending is metered separately. Each permit holds a reservation in the `measure`
 scope before it is claimed and settles when the run reaches a terminal state, so
@@ -253,12 +255,17 @@ the account supplies one collector per surface, so the worker holds three of
 them — `brightdata-chatgpt`, `brightdata-gemini`, `brightdata-perplexity`.
 A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
 surface through Oxylabs' `perplexity` source and takes `OXYLABS_USERNAME` and
-`OXYLABS_PASSWORD` on the worker. It is not part of the `brightdata` family
-and no family routes to it: name it directly for a canary, and only for a
-scope that sells Perplexity alone. A short, sourceless answer carrying a
-sign-up phrase is recorded `PROVIDER_AUTH_WALL` rather than counted as an
-answer, so a run that met a wall reads as a failed run and not as a brand that
-is invisible.
+`OXYLABS_PASSWORD` on the worker. A fifth, `olostep-perplexity`, measures it
+through Olostep's browsers and takes `OLOSTEP_API_KEY` on the worker — the
+copy of that key in GitHub Actions secrets serves the probe workflow only and
+never reaches a container, so a canary needs the variable set on the service
+that runs it. Neither is part of the `brightdata` family and no family routes
+to them: name one directly for a canary, and only for a scope that sells
+Perplexity alone. Olostep answers slowly — one answer took 944 seconds — and
+the adapter waits up to 25 minutes for it, inside the worker's lease. A short,
+sourceless answer carrying a sign-up phrase is recorded `PROVIDER_AUTH_WALL`
+rather than counted as an answer, so a run that met a wall reads as a failed
+run and not as a brand that is invisible.
 
 `BRIGHTDATA_API_TOKEN` on the worker is the only account-specific value. The
 collector ids are defaults in the code because a dataset id names a public
@@ -312,8 +319,8 @@ It also needs what any live measurement needs: `DATABASE_URL`,
 `SELENA_MEASUREMENT_ENABLED=true`, a `SELENA_MEASUREMENT_ADAPTER` that reaches
 a Visitor View collector, and that adapter's own credential —
 `BRIGHTDATA_API_TOKEN` for a Bright Data adapter, `OXYLABS_USERNAME` and
-`OXYLABS_PASSWORD` for `oxylabs-perplexity`. Each is demanded only by a run
-that would spend it.
+`OXYLABS_PASSWORD` for `oxylabs-perplexity`, `OLOSTEP_API_KEY` for
+`olostep-perplexity`. Each is demanded only by a run that would spend it.
 
 Two more are the deployment gate, and they are the pair a runbook forgets:
 
