@@ -185,3 +185,15 @@ describe("journal durable daily claim", () => {
 		expect(runClaim.indexOf("schema.svJournalProviderBoundaries")).toBeLessThan(runClaim.indexOf("RUN_CLAIMED"));
 	});
 });
+
+describe("journal Branch C scope", () => {
+	it("includes DataForSEO Perplexity in the priced system list", () => {
+		const pricedStart = source.indexOf("const priced =");
+		const systemsStart = source.indexOf("const systems =", pricedStart);
+		const priced = source.slice(pricedStart, systemsStart);
+
+		expect(priced).toContain("dataForSeoSelected");
+		expect(priced).toContain("brightDataVisitorSurface.perplexity");
+		expect(priced).toContain("DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD");
+	});
+});

@@ -144,6 +144,7 @@ if (!config.enabled) {
 /** Only the surfaces the configured name can actually route to are built. */
 const selected = new Set(measurementAdapterNamesFor(config.adapter));
 const brightDataSelected = BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`));
+const dataForSeoSelected = selected.has("dataforseo-perplexity");
 const oxylabsSelected = selected.has("oxylabs-perplexity");
 const olostepSelected = selected.has("olostep-perplexity");
 // Each credential is demanded only by the run that would spend it: a canary
@@ -529,6 +530,15 @@ async function measure(slug: string): Promise<void> {
 			channel: "VISITOR" as const,
 			priceUsd: PRICE_PER_ANSWER_USD,
 		})),
+		...(dataForSeoSelected
+			? [
+					{
+						systemId: brightDataVisitorSurface.perplexity,
+						channel: "VISITOR" as const,
+						priceUsd: DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD,
+					},
+				]
+			: []),
 		...(oxylabsSelected
 			? [
 					{
