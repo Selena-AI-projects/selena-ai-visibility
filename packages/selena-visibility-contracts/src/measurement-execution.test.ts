@@ -37,8 +37,13 @@ describe("Selena measurement execution boundary", () => {
 	it("measures each system on the adapter that sells it, not on one name for the whole service", () => {
 		expect(resolveMeasurementAdapterName("brightdata", "ChatGPT")).toBe("brightdata-chatgpt");
 		expect(resolveMeasurementAdapterName("brightdata", "Perplexity")).toBe("brightdata-perplexity");
+		expect(resolveMeasurementAdapterName("branch-c", "Perplexity")).toBe("dataforseo-perplexity");
+		expect(resolveMeasurementAdapterName("branch-c", "ChatGPT")).toBe("brightdata-chatgpt");
+		expect(resolveMeasurementAdapterName("branch-c", "Gemini")).toBe("brightdata-gemini");
 		// Both channels of the full landscape plan, from one configured name.
+		expect(resolveMeasurementAdapterName("auto", "ChatGPT")).toBe("brightdata-chatgpt");
 		expect(resolveMeasurementAdapterName("auto", "Gemini")).toBe("brightdata-gemini");
+		expect(resolveMeasurementAdapterName("auto", "Perplexity")).toBe("dataforseo-perplexity");
 		expect(resolveMeasurementAdapterName("auto", "anthropic/claude-haiku-4.5")).toBe("openrouter");
 		// A plain name still means itself, so a single-surface run stays possible.
 		expect(resolveMeasurementAdapterName("brightdata-chatgpt", "ChatGPT")).toBe("brightdata-chatgpt");
@@ -55,8 +60,14 @@ describe("Selena measurement execution boundary", () => {
 	it("holds every adapter a family can reach to the same owner gate", () => {
 		const brightData = ["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity"];
 		expect(measurementAdapterNamesFor("brightdata").sort()).toEqual([...brightData].sort());
-		expect(measurementAdapterNamesFor("auto").sort()).toEqual([...brightData, "openrouter"].sort());
+		expect(measurementAdapterNamesFor("branch-c").sort()).toEqual(
+			["brightdata-chatgpt", "brightdata-gemini", "dataforseo-perplexity"].sort(),
+		);
+		expect(measurementAdapterNamesFor("auto").sort()).toEqual(
+			["brightdata-chatgpt", "brightdata-gemini", "dataforseo-perplexity", "openrouter"].sort(),
+		);
 		expect(() => assertAdaptersConfigured("brightdata", ["noop", ...brightData])).not.toThrow();
+		expect(() => assertAdaptersConfigured("branch-c", ["noop", ...brightData, "dataforseo-perplexity"])).not.toThrow();
 		// One missing member is enough: the family is refused before a permit is spent.
 		expect(() => assertAdaptersConfigured("brightdata", ["noop", "brightdata-chatgpt"])).toThrow(
 			"SELENA_ADAPTER_NOT_REGISTERED",

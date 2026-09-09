@@ -1,6 +1,7 @@
 import {
 	assertAdaptersConfigured,
 	assertMeasurementAllowed,
+	measurementAdapterNamesFor,
 	type RunOutcome,
 	resolveMeasurementAdapterName,
 	runOutcomeSchema,
@@ -84,6 +85,13 @@ export type MeasurementSpendMeter = {
  * account's own usage on 2026-09-01: nine ChatGPT records cost USD 0.0135.
  */
 export const MEASUREMENT_ESTIMATED_COST_USD = 0.0015;
+const DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD = 0.005;
+
+function estimatedCostForAdapter(configuredAdapter: string): number {
+	return measurementAdapterNamesFor(configuredAdapter).includes("dataforseo-perplexity")
+		? DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD
+		: MEASUREMENT_ESTIMATED_COST_USD;
+}
 
 /**
  * Storage port for the runner. Kept structural so this module stays free of
@@ -144,8 +152,8 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
 	// Held before the claim for the same reason, and keyed by the permit so a
 	// redelivered job rides on the reservation it already made.
-	if (input.spend)
-		await input.spend.reserve({ requestKey: input.permitId, estimatedUsd: MEASUREMENT_ESTIMATED_COST_USD });
+	const estimatedCostUsd = estimatedCostForAdapter(input.config.adapter);
+	if (input.spend) await input.spend.reserve({ requestKey: input.permitId, estimatedUsd: estimatedCostUsd });
 	const claimTime = input.now ?? input.clock?.() ?? new Date();
 	const completionTime = () => input.clock?.() ?? new Date();
 	const { permit, run, cycle, claimed, providerBoundary } = await input.store.claim(input.ctx, input.permitId, {
@@ -190,7 +198,7 @@ export async function runMeasurementForPermit<Ctx>(input: {
 		if (input.spend)
 			await input.spend.settle({
 				requestKey: input.permitId,
-				actualUsd: outcome.costUsd ?? MEASUREMENT_ESTIMATED_COST_USD,
+				actualUsd: outcome.costUsd ?? estimatedCostUsd,
 			});
 		return { status: "completed", runId: run.id, outcome };
 	} catch (error) {
@@ -204,8 +212,7 @@ export async function runMeasurementForPermit<Ctx>(input: {
 		// A failed run may still have reached the provider, so this is not a
 		// release: the transport boundary decides, and until it says otherwise
 		// the estimate stays committed rather than being handed back.
-		if (input.spend)
-			await input.spend.settle({ requestKey: input.permitId, actualUsd: MEASUREMENT_ESTIMATED_COST_USD });
+		if (input.spend) await input.spend.settle({ requestKey: input.permitId, actualUsd: estimatedCostUsd });
 		return { status: "failed", runId: run.id, reason };
 	}
 }

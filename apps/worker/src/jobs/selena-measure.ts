@@ -1,10 +1,11 @@
 import { createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { createDataForSeoPerplexityAdapter } from "@workspace/lib/adapters/dataforseo-perplexity";
 import { createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import { isGlobalProviderStopEngaged, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
-import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import { createNoopMeasurementAdapter } from "@workspace/lib/selena-measurement";
+import { createMeasurementSpendMeter } from "@workspace/lib/selena-provider-spend";
 import {
 	assertDispatchModes,
 	type MeasurementAdapterRegistry,
@@ -98,6 +99,14 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 					openrouter: createOpenRouterFamilyAdapter({
 						apiKey: process.env.OPENROUTER_API_KEY ?? "",
 						fetchImpl: fetch,
+						resolveScenarioText: resolvers.resolveScenarioText,
+						resolveExtractionContext: resolvers.resolveExtractionContext,
+					}),
+				}
+			: {}),
+		...(selected.has("dataforseo-perplexity")
+			? {
+					"dataforseo-perplexity": createDataForSeoPerplexityAdapter({
 						resolveScenarioText: resolvers.resolveScenarioText,
 						resolveExtractionContext: resolvers.resolveExtractionContext,
 					}),

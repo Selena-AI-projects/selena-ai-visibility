@@ -268,6 +268,39 @@ describe("Selena measurement runner", () => {
 		}
 	});
 
+	it("routes Branch C Perplexity permits and reserves its higher provider estimate", async () => {
+		const { store } = storeFor(permitFor({ systemId: "Perplexity", channel: "VISITOR" }));
+		const reached: string[] = [];
+		const adapters = Object.fromEntries(
+			["brightdata-chatgpt", "brightdata-gemini", "dataforseo-perplexity"].map((name) => {
+				const { adapter, execute } = spyAdapter();
+				execute.mockImplementation(async (permit: SelenaExecutablePermit) => {
+					reached.push(name);
+					return { dispatchKey: permit.dispatchKey, status: "SUCCEEDED", validity: "VALID" } as const;
+				});
+				return [name, adapter];
+			}),
+		);
+		const reserve = vi.fn(async (_request: { requestKey: string; estimatedUsd: number }) => {});
+		const settle = vi.fn(async (_request: { requestKey: string; actualUsd: number }) => {});
+		const release = vi.fn(async (_request: { requestKey: string }) => {});
+
+		await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: createNoopMeasurementAdapter(), ...adapters },
+			config: { enabled: true, adapter: "branch-c" },
+			spend: { reserve, settle, release },
+			now,
+		});
+
+		expect(reached).toEqual(["dataforseo-perplexity"]);
+		expect(reserve).toHaveBeenCalledWith({ requestKey: "permit-1", estimatedUsd: 0.005 });
+		expect(settle).toHaveBeenCalledWith({ requestKey: "permit-1", actualUsd: 0.005 });
+		expect(release).not.toHaveBeenCalled();
+	});
+
 	it("refuses a family whose adapters are not all registered, before a permit is spent", async () => {
 		const { store, claim } = storeFor();
 		const { adapter } = spyAdapter();

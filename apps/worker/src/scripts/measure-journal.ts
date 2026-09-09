@@ -16,8 +16,8 @@
  * ceiling it can check before the first request.
  *
  * Usage:
- *   DATABASE_URL=postgres://... BRIGHTDATA_API_TOKEN=... \
- *   SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=brightdata \
+ *   DATABASE_URL=postgres://... BRIGHTDATA_API_TOKEN=... DATAFORSEO_LOGIN=... DATAFORSEO_PASSWORD=... \
+ *   SELENA_MEASUREMENT_ENABLED=true SELENA_MEASUREMENT_ADAPTER=branch-c \
  *   SELENA_MEASUREMENT_APPROVED_COMMIT_SHA=<exact commit> \
  *   RAILWAY_GIT_COMMIT_SHA=<same exact commit> \
  *   SELENA_MEASUREMENT_APPROVED_ENVIRONMENT=staging RAILWAY_ENVIRONMENT_NAME=staging \
@@ -27,6 +27,7 @@
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
+import { createDataForSeoPerplexityAdapter } from "@workspace/lib/adapters/dataforseo-perplexity";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
 import { db } from "@workspace/lib/db/db";
 import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
@@ -56,6 +57,7 @@ const PRICE_PER_ANSWER_USD = 0.0015;
  * refuse a run before it spends, and an estimate that runs low would not.
  */
 const API_PRICE_PER_ANSWER_USD = 0.005;
+const DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD = 0.005;
 
 /** The collector is the bottleneck and it is patient, so many can wait at once. */
 // The pace that lost the 2026-08-29 run — 0 valid of 200, every permit
@@ -84,7 +86,6 @@ function required(name: string): string {
 }
 
 const DATABASE_URL = required("DATABASE_URL");
-const apiKey = required("BRIGHTDATA_API_TOKEN");
 const tenantId = required("SELENA_JOURNAL_TENANT");
 const maxCostUsd = Number(required("SELENA_JOURNAL_MAX_COST_USD"));
 if (!Number.isFinite(maxCostUsd) || maxCostUsd <= 0) {
@@ -98,6 +99,12 @@ if (!config.enabled) {
 	console.error("SELENA_MEASUREMENT_ENABLED must be true — this spends money on the Bright Data account");
 	process.exit(2);
 }
+
+const selected = new Set(measurementAdapterNamesFor(config.adapter));
+const apiKey =
+	selected.has("brightdata-chatgpt") || selected.has("brightdata-gemini") || selected.has("brightdata-perplexity")
+		? required("BRIGHTDATA_API_TOKEN")
+		: "";
 
 const requested = (process.env.SELENA_JOURNAL_PROJECTS ?? "").trim();
 const slugs =
@@ -123,7 +130,6 @@ const repositories = createSelenaRepositories(db);
 const resolvers = createSelenaMeasurementResolvers(db);
 
 /** Only the surfaces the configured name can actually route to are built. */
-const selected = new Set(measurementAdapterNamesFor(config.adapter));
 const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 	BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`)).map((surface) => [
 		`brightdata-${surface}`,
@@ -147,6 +153,12 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 		}),
 	]),
 );
+if (selected.has("dataforseo-perplexity")) {
+	adapters["dataforseo-perplexity"] = createDataForSeoPerplexityAdapter({
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
+}
 if (selected.has("openrouter")) {
 	adapters.openrouter = createOpenRouterFamilyAdapter({
 		apiKey: required("OPENROUTER_API_KEY"),
@@ -458,11 +470,13 @@ async function measure(slug: string): Promise<void> {
 	// Priced per channel: an API answer is bought by the token and a scraped one
 	// by the request, and one rate over both would under-price whichever is
 	// dearer — which is the direction that matters for a ceiling.
-	const cost = systems.reduce(
-		(total, system) =>
-			total + rows.length * (system.channel === "API" ? API_PRICE_PER_ANSWER_USD : PRICE_PER_ANSWER_USD),
-		0,
-	);
+	const cost = systems.reduce((total, system) => {
+		const visitorCost =
+			system.systemId === brightDataVisitorSurface.perplexity && selected.has("dataforseo-perplexity")
+				? DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD
+				: PRICE_PER_ANSWER_USD;
+		return total + rows.length * (system.channel === "API" ? API_PRICE_PER_ANSWER_USD : visitorCost);
+	}, 0);
 	if (cost > maxCostUsd) {
 		console.error(
 			`${slug}: ${expectedRuns} answers cost about $${cost.toFixed(4)}, ceiling is $${maxCostUsd.toFixed(4)}`,

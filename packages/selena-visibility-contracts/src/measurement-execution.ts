@@ -28,7 +28,8 @@ export type InertMeasurementAdapter = (typeof inertMeasurementAdapters)[number];
  * it is registered, so configuration alone can never turn spend on. Every
  * name beyond the inert pair is an explicit owner decision made together with
  * supplying credentials and a provider-side spend cap: `openrouter` (API View)
- * is approved on those terms.
+ * and `dataforseo-perplexity` (Branch C Visitor View) are approved on those
+ * terms.
  */
 export const ownerApprovedMeasurementAdapters = [
 	...inertMeasurementAdapters,
@@ -38,6 +39,7 @@ export const ownerApprovedMeasurementAdapters = [
 	"brightdata-chatgpt",
 	"brightdata-gemini",
 	"brightdata-perplexity",
+	"dataforseo-perplexity",
 ] as const;
 export type OwnerApprovedMeasurementAdapter = (typeof ownerApprovedMeasurementAdapters)[number];
 
@@ -58,7 +60,13 @@ const visitorRoutes = {
 	Perplexity: "brightdata-perplexity",
 } as const satisfies Record<(typeof visitorSurfaces)[number], OwnerApprovedMeasurementAdapter>;
 
+const branchCFallbackRoutes = {
+	...visitorRoutes,
+	Perplexity: "dataforseo-perplexity",
+} as const satisfies Record<(typeof visitorSurfaces)[number], OwnerApprovedMeasurementAdapter>;
+
 const bothChannelRoutes: Record<string, OwnerApprovedMeasurementAdapter> = { ...visitorRoutes };
+bothChannelRoutes.Perplexity = "dataforseo-perplexity";
 for (const model of apiModelIds) bothChannelRoutes[model] = "openrouter";
 
 export const measurementAdapterFamilies: Readonly<
@@ -66,7 +74,9 @@ export const measurementAdapterFamilies: Readonly<
 > = {
 	/** Visitor View across every sold surface; needs the Bright Data token only. */
 	brightdata: visitorRoutes,
-	/** Both channels at once, which is what the full landscape plan sells. */
+	/** Visitor View with the owner-selected replacement provider for Perplexity. */
+	"branch-c": branchCFallbackRoutes,
+	/** Both channels at once, with the selected Branch C Perplexity fallback. */
 	auto: bothChannelRoutes,
 };
 
