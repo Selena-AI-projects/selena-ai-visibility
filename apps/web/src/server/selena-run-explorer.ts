@@ -16,16 +16,18 @@ import {
 
 export type RunListItem = {
 	id: string;
+	scenarioId: string;
+	scenarioText: string | null;
 	system: string | null;
 	channel: string;
 	status: string;
 	validity: string | null;
+	invalidReason: string | null;
 	captureMode: string | null;
 	finishedAt: string | null;
 };
 
 export type RunDetail = RunListItem & {
-	scenarioText: string | null;
 	language: string | null;
 	answer: RunAnswer;
 	mentions: { entityType: string; name: string; ordinalPosition: number | null }[];
@@ -46,15 +48,22 @@ export const listSelenaRunsFn = createServerFn({ method: "GET" })
 			tx
 				.select({
 					id: svRuns.id,
+					scenarioId: svRuns.scenarioId,
+					scenarioText: svScenarios.text,
 					system: svRuns.system,
 					systemId: svRuns.systemId,
 					channel: svRuns.channel,
 					status: svRuns.status,
 					validity: svRuns.validity,
+					invalidReason: svRuns.invalidReason,
 					captureMode: svRuns.captureMode,
 					finishedAt: svRuns.finishedAt,
 				})
 				.from(svRuns)
+				.leftJoin(
+					svScenarios,
+					and(eq(svRuns.scenarioId, svScenarios.id), eq(svScenarios.organizationId, context.tenantId)),
+				)
 				.where(and(eq(svRuns.cycleId, data.cycleId), eq(svRuns.organizationId, context.tenantId)))
 				.orderBy(desc(svRuns.finishedAt))
 				.limit(100),
@@ -62,10 +71,13 @@ export const listSelenaRunsFn = createServerFn({ method: "GET" })
 		return {
 			runs: rows.map((row) => ({
 				id: row.id,
+				scenarioId: row.scenarioId,
+				scenarioText: row.scenarioText,
 				system: row.system ?? row.systemId,
 				channel: row.channel,
 				status: row.status,
 				validity: row.validity,
+				invalidReason: row.invalidReason,
 				captureMode: row.captureMode,
 				finishedAt: row.finishedAt?.toISOString() ?? null,
 			})),
@@ -101,13 +113,15 @@ export const getSelenaRunDetailFn = createServerFn({ method: "GET" })
 			]);
 			return {
 				id: run.id,
+				scenarioId: run.scenarioId,
+				scenarioText: scenario?.text ?? null,
 				system: run.system ?? run.systemId,
 				channel: run.channel,
 				status: run.status,
 				validity: run.validity,
+				invalidReason: run.invalidReason,
 				captureMode: run.captureMode,
 				finishedAt: run.finishedAt?.toISOString() ?? null,
-				scenarioText: scenario?.text ?? null,
 				language: run.language,
 				answer: readAnswer(run.canonicalPayload),
 				mentions,

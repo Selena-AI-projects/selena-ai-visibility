@@ -32,6 +32,7 @@ import {
 	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
 	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
 } from "@/lib/selena-monthly-allowance";
+import { selectReportAnchor } from "@/lib/selena-report-anchor";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 import { readRetainedAnswer, readStoredAnalysis } from "./selena-order-analysis";
 
@@ -173,22 +174,62 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			freeAudit,
 		};
 
-		const [order] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			tx
-				.select({ id: svOrders.id, lockId: svOrders.lockId })
-				.from(svOrders)
-				.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
-				.orderBy(desc(svOrders.createdAt))
-				.limit(1),
+		const [cycleRows, orderRows] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			Promise.all([
+				tx
+					.select({
+						id: svCycles.id,
+						orderId: svCycles.orderId,
+						lockId: svCycles.lockId,
+						status: svCycles.status,
+						expectedRuns: svCycles.expectedRuns,
+						completedRuns: svCycles.completedRuns,
+						createdAt: svCycles.createdAt,
+					})
+					.from(svCycles)
+					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+					.where(
+						and(
+							eq(svOrders.projectId, data.projectId),
+							eq(svOrders.organizationId, context.tenantId),
+							eq(svCycles.organizationId, context.tenantId),
+						),
+					)
+					.orderBy(desc(svCycles.createdAt))
+					.limit(1),
+				tx
+					.select({ id: svOrders.id, lockId: svOrders.lockId, createdAt: svOrders.createdAt })
+					.from(svOrders)
+					.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
+					.orderBy(desc(svOrders.createdAt))
+					.limit(1),
+			]),
 		);
-		if (!order) return view;
+		const latestCycle = cycleRows[0];
+		const anchor = selectReportAnchor(
+			latestCycle
+				? {
+						orderId: latestCycle.orderId,
+						lockId: latestCycle.lockId,
+						cycle: {
+							id: latestCycle.id,
+							status: latestCycle.status,
+							expectedRuns: latestCycle.expectedRuns,
+							completedRuns: latestCycle.completedRuns,
+							createdAt: latestCycle.createdAt,
+						},
+					}
+				: null,
+			orderRows[0] ?? null,
+		);
+		if (!anchor) return view;
 
 		const [lock] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
 			tx
 				.select({ snapshot: svConfigurationLocks.snapshot })
 				.from(svConfigurationLocks)
 				.where(
-					and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)),
+					and(eq(svConfigurationLocks.id, anchor.lockId), eq(svConfigurationLocks.organizationId, context.tenantId)),
 				)
 				.limit(1),
 		);
@@ -221,39 +262,17 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			view.monthUsage = { used: Number(usage?.used ?? 0), allowance: planForAllowance };
 		}
 
-		const [cycle] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			tx
-				.select({
-					status: svCycles.status,
-					expectedRuns: svCycles.expectedRuns,
-					completedRuns: svCycles.completedRuns,
-					createdAt: svCycles.createdAt,
-				})
-				.from(svCycles)
-				.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
-				.orderBy(desc(svCycles.createdAt))
-				.limit(1),
-		);
+		const cycle = anchor.cycle;
 		if (cycle) {
 			view.cycle = { status: cycle.status, expectedRuns: cycle.expectedRuns, completedRuns: cycle.completedRuns };
 			view.measuredAt = cycle.createdAt.toISOString();
 		}
 		if (!subjects) return view;
 
-		const allRuns = await repositories.runs.listForOrder(context, order.id);
+		const allRuns = await repositories.runs.listForOrder(context, anchor.orderId);
 		// The report speaks for the newest cycle: mixing runs from an order's
 		// earlier cycles would double-count questions and misstate the counts.
-		const latestCycleId = (
-			await withOrganizationTransaction(db, context.tenantId, (tx) =>
-				tx
-					.select({ id: svCycles.id })
-					.from(svCycles)
-					.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
-					.orderBy(desc(svCycles.createdAt))
-					.limit(1),
-			)
-		)[0]?.id;
-		const runs = latestCycleId ? allRuns.filter((run) => run.cycleId === latestCycleId) : allRuns;
+		const runs = cycle ? allRuns.filter((run) => run.cycleId === cycle.id) : [];
 
 		const scenarioIds = [...new Set(runs.map((run) => run.scenarioId))];
 		const scenarioRows =

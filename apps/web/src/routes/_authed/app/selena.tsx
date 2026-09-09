@@ -1,6 +1,8 @@
 import {
 	IconArrowRight,
 	IconCheck,
+	IconChevronDown,
+	IconChevronRight,
 	IconCircleDashed,
 	IconExternalLink,
 	IconGlobe,
@@ -20,13 +22,14 @@ import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SelenaWordmark } from "@/components/selena-wordmark";
 import { useAuth } from "@/hooks/use-auth";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import { resetPostHog } from "@/lib/posthog";
 import { formatShare, type GroupView, groupView } from "@/lib/selena-measurement-view";
 import { ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
+import { groupRunsByQuestion, isRunAvailable } from "@/lib/selena-run-explorer";
 import { SUGGESTION_LIMITS } from "@/lib/selena-suggestion";
 import { humanizeSelenaError } from "@/lib/selena-workspace-errors";
 import { getSelenaAdminAccessFn } from "../../../server/selena-admin-orders";
@@ -1681,8 +1684,11 @@ function CycleComparePanel({
 	projectId: string;
 }) {
 	const [result, setResult] = useState<CycleCompareResult | null>(null);
+	const [showDetails, setShowDetails] = useState(false);
 
 	useEffect(() => {
+		setResult(null);
+		setShowDetails(false);
 		if (cycleCount < 2 || !projectId) return;
 		let cancelled = false;
 		getSelenaCycleCompareFn({ data: { projectId } })
@@ -1723,40 +1729,58 @@ function CycleComparePanel({
 	};
 
 	const unknownGroups = result.report.groups.filter((group) => group.status === "UNKNOWN");
+	const changeCount = result.report.changes.length;
 	return (
 		<div className="rounded-lg border border-[#e5dbcd] bg-[#fffdf8] p-4">
 			<h3 className="text-sm font-semibold text-[#3d362e]">
 				{tr(locale, "What changed between the measurements", "Что изменилось между замерами")}
 			</h3>
-			<p className="mt-1 text-xs text-[#574d45]">
-				{tr(
-					locale,
-					"Observed differences only — engines and competitors also change over the same period.",
-					"Только наблюдаемые различия — за то же время меняются и движки, и конкуренты.",
-				)}
+			<p className="mt-2 text-sm text-[#574d45]">
+				{locale === "ru"
+					? `Изменений: ${changeCount} · несравнимых групп: ${unknownGroups.length}`
+					: `${changeCount} observed change${changeCount === 1 ? "" : "s"} · ${unknownGroups.length} group${unknownGroups.length === 1 ? "" : "s"} not comparable`}
 			</p>
-			{result.report.changes.length === 0 ? (
-				<p className="mt-2 text-sm text-[#574d45]">
-					{tr(locale, "No differences in the compared groups.", "В сравнимых группах различий нет.")}
-				</p>
-			) : (
-				<ul className="mt-2 flex flex-col gap-1 text-sm text-[#3d362e]">
-					{result.report.changes.map((change) => (
-						<li key={`${change.type}-${change.scenarioId}-${change.system}-${JSON.stringify(change.evidence)}`}>
-							{change.system} · {label(change)}{" "}
-							<span className="text-xs text-[#574d45]">
-								({tr(locale, "measured in", "измерено в")} {change.evidence.baseRunIds.length}+
-								{change.evidence.compareRunIds.length} {tr(locale, "answers", "ответах")})
-							</span>
-						</li>
-					))}
-				</ul>
-			)}
-			{unknownGroups.length > 0 && (
-				<p className="mt-2 text-xs text-[#574d45]">
-					{tr(locale, "Groups not comparable between the cycles", "Группы, несравнимые между циклами")}:{" "}
-					{unknownGroups.length}
-				</p>
+			{changeCount > 0 && (
+				<>
+					<button
+						type="button"
+						className="mt-2 inline-flex min-h-11 items-center gap-2 rounded px-2 text-sm font-semibold text-[#8f5c34] outline-none hover:bg-[#f5eee2] focus-visible:ring-2 focus-visible:ring-[#8f5c34]"
+						aria-expanded={showDetails}
+						aria-controls="cycle-compare-details"
+						onClick={() => setShowDetails((value) => !value)}
+					>
+						{showDetails ? (
+							<IconChevronDown className="size-4" aria-hidden="true" />
+						) : (
+							<IconChevronRight className="size-4" aria-hidden="true" />
+						)}
+						{showDetails
+							? tr(locale, "Hide details", "Скрыть подробности")
+							: tr(locale, "Show details", "Показать подробности")}
+					</button>
+					{showDetails && (
+						<div id="cycle-compare-details" className="mt-2 max-h-80 overflow-y-auto border-t border-[#e5dbcd] pt-3">
+							<p className="mb-2 text-xs text-[#574d45]">
+								{tr(
+									locale,
+									"Observed differences only. AI systems and competitors may also have changed.",
+									"Только наблюдаемые различия. AI-системы и конкуренты тоже могли измениться.",
+								)}
+							</p>
+							<ul className="flex flex-col gap-2 text-sm text-[#3d362e]">
+								{result.report.changes.map((change) => (
+									<li key={`${change.type}-${change.scenarioId}-${change.system}-${JSON.stringify(change.evidence)}`}>
+										{change.system} · {label(change)}{" "}
+										<span className="text-xs text-[#574d45]">
+											({tr(locale, "measured in", "измерено в")} {change.evidence.baseRunIds.length}+
+											{change.evidence.compareRunIds.length} {tr(locale, "answers", "ответах")})
+										</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
+				</>
 			)}
 		</div>
 	);
@@ -1768,11 +1792,19 @@ function CycleComparePanel({
  */
 function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLocale }) {
 	const [runs, setRuns] = useState<RunListItem[] | null>(null);
+	const [openQuestionIds, setOpenQuestionIds] = useState<Set<string>>(new Set());
 	const [openRunId, setOpenRunId] = useState("");
 	const [detail, setDetail] = useState<RunDetail | null>(null);
+	const detailRequest = useRef(0);
+	const groups = useMemo(() => groupRunsByQuestion(runs ?? []), [runs]);
 
 	useEffect(() => {
 		let cancelled = false;
+		setRuns(null);
+		setOpenQuestionIds(new Set());
+		setOpenRunId("");
+		setDetail(null);
+		detailRequest.current += 1;
 		listSelenaRunsFn({ data: { cycleId } })
 			.then((data) => {
 				if (!cancelled) setRuns(data.runs);
@@ -1787,17 +1819,33 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 
 	const openRun = async (runId: string) => {
 		if (openRunId === runId) {
+			detailRequest.current += 1;
 			setOpenRunId("");
 			setDetail(null);
 			return;
 		}
+		const request = detailRequest.current + 1;
+		detailRequest.current = request;
 		setOpenRunId(runId);
 		setDetail(null);
 		try {
-			setDetail(await getSelenaRunDetailFn({ data: { runId } }));
+			const nextDetail = await getSelenaRunDetailFn({ data: { runId } });
+			if (detailRequest.current === request) setDetail(nextDetail);
 		} catch {
-			setOpenRunId("");
+			if (detailRequest.current === request) setOpenRunId("");
 		}
+	};
+	const toggleQuestion = (group: (typeof groups)[number]) => {
+		const next = new Set(openQuestionIds);
+		if (next.has(group.scenarioId)) {
+			next.delete(group.scenarioId);
+			if (group.runs.some((run) => run.id === openRunId)) {
+				detailRequest.current += 1;
+				setOpenRunId("");
+				setDetail(null);
+			}
+		} else next.add(group.scenarioId);
+		setOpenQuestionIds(next);
 	};
 
 	if (!runs || runs.length === 0) return null;
@@ -1806,89 +1854,179 @@ function RunExplorer({ cycleId, locale }: { cycleId: string; locale: WorkspaceLo
 			<h3 className="text-sm font-semibold text-[#3d362e]">
 				{tr(locale, "Answers behind the numbers", "Ответы, из которых собраны цифры")}
 			</h3>
-			<ul className="mt-2 flex flex-col gap-1">
-				{runs.map((run) => (
-					<li key={run.id}>
-						<button
-							type="button"
-							className="flex w-full items-center justify-between gap-3 rounded px-2 py-1.5 text-left text-sm hover:bg-[#f5eee2]"
-							onClick={() => openRun(run.id)}
-						>
-							<span className="text-[#3d362e]">
-								{run.system ?? "—"} ·{" "}
-								{run.channel === "VISITOR" || run.channel.toLowerCase().startsWith("visitor")
-									? "Visitor View"
-									: "API View"}
-							</span>
-							<span className="shrink-0 text-xs text-[#574d45]">
-								{run.validity ?? run.status}
-								{run.finishedAt ? ` · ${formatDate(run.finishedAt, locale)}` : ""}
-							</span>
-						</button>
-						{openRunId === run.id && (
-							<div className="mt-1 rounded border border-[#e5dbcd] bg-white p-3 text-sm">
-								{detail === null ? (
-									<p className="text-[#574d45]">{tr(locale, "Loading…", "Загружаем…")}</p>
-								) : (
-									<div className="flex flex-col gap-2">
-										{detail.scenarioText && (
-											<p>
-												<span className="text-[#574d45]">{tr(locale, "Question", "Вопрос")}: </span>
-												{detail.scenarioText}
-											</p>
-										)}
-										{detail.mentions.length > 0 ? (
-											<p>
-												<span className="text-[#574d45]">{tr(locale, "Named", "Названы")}: </span>
-												{detail.mentions
-													.map((m) => `${m.name}${m.ordinalPosition ? ` (#${m.ordinalPosition})` : ""}`)
-													.join(", ")}
-											</p>
-										) : (
-											<p className="text-[#574d45]">
-												{tr(
-													locale,
-													"No tracked entity was named, or the answer is stored but not measured.",
-													"Ни одна отслеживаемая сущность не названа, либо ответ сохранён, но не измерен.",
+			<p className="mt-1 text-sm text-[#574d45]">
+				{tr(
+					locale,
+					"Choose a question, then open an AI system to read its full answer and sources.",
+					"Выберите вопрос, затем AI-систему — откроется полный ответ и его источники.",
+				)}
+			</p>
+			<ul className="mt-2 divide-y divide-[#e5dbcd]">
+				{groups.map((group, index) => {
+					const questionOpen = openQuestionIds.has(group.scenarioId);
+					const groupId = `run-question-${index}`;
+					return (
+						<li key={group.scenarioId}>
+							<button
+								type="button"
+								className="flex min-h-11 w-full flex-col items-start justify-between gap-1 rounded px-2 py-2 text-left outline-none hover:bg-[#f5eee2] focus-visible:ring-2 focus-visible:ring-[#8f5c34] sm:flex-row sm:items-center sm:gap-4"
+								aria-expanded={questionOpen}
+								aria-controls={groupId}
+								onClick={() => toggleQuestion(group)}
+							>
+								<span className="flex min-w-0 items-center gap-2 text-sm font-medium text-[#3d362e]">
+									{questionOpen ? (
+										<IconChevronDown className="size-4 shrink-0" aria-hidden="true" />
+									) : (
+										<IconChevronRight className="size-4 shrink-0" aria-hidden="true" />
+									)}
+									<span>
+										{group.scenarioText ?? tr(locale, "Question text unavailable", "Текст вопроса недоступен")}
+									</span>
+								</span>
+								<span className="pl-6 text-xs leading-5 text-[#574d45] sm:shrink-0 sm:pl-0 sm:text-right">
+									{locale === "ru"
+										? `Ответов: ${group.total} · доступно: ${group.available} · недоступно: ${group.unavailable}`
+										: `${group.total} answer${group.total === 1 ? "" : "s"} · ${group.available} available · ${group.unavailable} unavailable`}
+								</span>
+							</button>
+							{questionOpen && (
+								<ul id={groupId} className="mb-2 ml-6 border-l border-[#dccfbe] pl-2">
+									{group.runs.map((run) => {
+										const runOpen = openRunId === run.id;
+										const detailId = `${groupId}-${run.id}`;
+										return (
+											<li key={run.id}>
+												<button
+													type="button"
+													className="flex min-h-11 w-full flex-col items-start justify-between gap-1 rounded px-2 py-2 text-left text-sm outline-none hover:bg-[#f5eee2] focus-visible:ring-2 focus-visible:ring-[#8f5c34] sm:flex-row sm:items-center sm:gap-3"
+													aria-expanded={runOpen}
+													aria-controls={detailId}
+													onClick={() => openRun(run.id)}
+												>
+													<span className="text-[#3d362e]">
+														{run.system ?? tr(locale, "Unknown system", "Неизвестная система")} · {runViewLabel(run)}
+													</span>
+													<span className="shrink-0 text-right text-xs text-[#574d45]">
+														{runStatusLabel(run, locale)}
+														{run.finishedAt ? ` · ${formatDate(run.finishedAt, locale)}` : ""}
+													</span>
+												</button>
+												{runOpen && (
+													<div id={detailId} className="mx-2 mb-2 border-t border-[#e5dbcd] bg-[#fbf7f1] p-3 text-sm">
+														{detail === null ? (
+															<p className="text-[#574d45]">{tr(locale, "Loading…", "Загружаем…")}</p>
+														) : detail.id === run.id ? (
+															<RunEvidence detail={detail} locale={locale} />
+														) : null}
+													</div>
 												)}
-											</p>
-										)}
-										{detail.citations.length > 0 && (
-											<p>
-												<span className="text-[#574d45]">{tr(locale, "Cited", "Процитированы")}: </span>
-												{detail.citations.map((c) => c.domain).join(", ")}
-											</p>
-										)}
-										{detail.sources.length > 0 && (
-											<p>
-												<span className="text-[#574d45]">
-													{tr(locale, "Shown as sources", "Показаны как источники")}:{" "}
-												</span>
-												{detail.sources.map((s) => s.domain).join(", ")}
-											</p>
-										)}
-										{detail.answer.state === "present" ? (
-											<blockquote className="whitespace-pre-wrap rounded bg-[#faf6ee] p-2 text-[#3d362e]">
-												{detail.answer.text}
-											</blockquote>
-										) : detail.answer.state === "deleted" ? (
-											<p className="text-[#574d45]">
-												{tr(
-													locale,
-													"The verbatim text was deleted at the end of its retention window; the findings above remain.",
-													"Дословный текст удалён по окончании срока хранения; находки выше сохранены.",
-												)}
-											</p>
-										) : null}
-									</div>
-								)}
-							</div>
-						)}
-					</li>
-				))}
+											</li>
+										);
+									})}
+								</ul>
+							)}
+						</li>
+					);
+				})}
 			</ul>
 		</div>
 	);
+}
+
+function RunEvidence({ detail, locale }: { detail: RunDetail; locale: WorkspaceLocale }) {
+	return (
+		<div className="flex flex-col gap-2">
+			{detail.mentions.length > 0 ? (
+				<p>
+					<span className="text-[#574d45]">{tr(locale, "Named", "Названы")}: </span>
+					{detail.mentions
+						.map((mention) => `${mention.name}${mention.ordinalPosition ? ` (#${mention.ordinalPosition})` : ""}`)
+						.join(", ")}
+				</p>
+			) : (
+				<p className="text-[#574d45]">
+					{tr(
+						locale,
+						"No tracked entity was named, or the answer is stored but not measured.",
+						"Ни одна отслеживаемая сущность не названа, либо ответ сохранён, но не измерен.",
+					)}
+				</p>
+			)}
+			{detail.citations.length > 0 && (
+				<p>
+					<span className="text-[#574d45]">{tr(locale, "Cited", "Процитированы")}: </span>
+					{detail.citations.map((citation) => citation.domain).join(", ")}
+				</p>
+			)}
+			{detail.sources.length > 0 && (
+				<p>
+					<span className="text-[#574d45]">{tr(locale, "Shown as sources", "Показаны как источники")}: </span>
+					{detail.sources.map((source) => source.domain).join(", ")}
+				</p>
+			)}
+			{detail.answer.state === "present" ? (
+				<blockquote className="whitespace-pre-wrap rounded bg-[#faf6ee] p-2 text-[#3d362e]">
+					{detail.answer.text}
+				</blockquote>
+			) : detail.answer.state === "deleted" ? (
+				<p className="text-[#574d45]">
+					{tr(
+						locale,
+						"The verbatim text was deleted at the end of its retention window; the findings above remain.",
+						"Дословный текст удалён по окончании срока хранения; находки выше сохранены.",
+					)}
+				</p>
+			) : (
+				<p className="text-[#574d45]">
+					{tr(locale, "No answer text was saved for this run.", "Для этого прогона текст ответа не сохранён.")}
+				</p>
+			)}
+		</div>
+	);
+}
+
+function runViewLabel(run: RunListItem): string {
+	return run.channel === "VISITOR" || run.channel.toLowerCase().startsWith("visitor") ? "Visitor View" : "API View";
+}
+
+function runStatusLabel(run: RunListItem, locale: WorkspaceLocale): string {
+	const reasons: Record<string, [string, string]> = {
+		RESPONSE_TOO_LARGE: [
+			"The AI service answer was too large to save",
+			"Ответ AI-сервиса оказался слишком большим для сохранения",
+		],
+		EMPTY_RESPONSE: ["The AI service returned an empty answer", "AI-сервис вернул пустой ответ"],
+		MALFORMED_RESPONSE: ["The AI service returned an unreadable answer", "AI-сервис вернул ответ в нечитаемом формате"],
+		PROVIDER_AUTH_WALL: ["The AI service required sign-in", "AI-сервис потребовал вход"],
+		PROVIDER_TIMEOUT: ["The AI service did not answer in time", "AI-сервис не ответил вовремя"],
+		TIMEOUT: ["The AI service did not answer in time", "AI-сервис не ответил вовремя"],
+		TRANSPORT_ERROR: ["The AI service could not be reached", "Не удалось связаться с AI-сервисом"],
+		SNAPSHOT_NOT_READY: ["The answer was not ready in time", "Ответ не был готов вовремя"],
+		PROVIDER_ERROR_ROW: ["The AI service returned an error", "AI-сервис вернул ошибку"],
+		SCENARIO_TEXT_UNAVAILABLE: ["The question was unavailable", "Вопрос был недоступен"],
+	};
+	if (run.invalidReason) {
+		const reason = reasons[run.invalidReason];
+		if (reason) return tr(locale, reason[0], reason[1]);
+		if (run.invalidReason.startsWith("PROVIDER_HTTP_"))
+			return tr(locale, "The AI service rejected the request", "AI-сервис отклонил запрос");
+		return tr(locale, "Answer unavailable", "Ответ недоступен");
+	}
+	if (run.validity?.toUpperCase() === "INVALID") return tr(locale, "Answer unavailable", "Ответ недоступен");
+	if (isRunAvailable(run)) return tr(locale, "Available", "Доступен");
+	const statuses: Record<string, [string, string]> = {
+		PENDING: ["Waiting", "Ожидает"],
+		QUEUED: ["Waiting", "Ожидает"],
+		RUNNING: ["In progress", "Выполняется"],
+		STARTED: ["In progress", "Выполняется"],
+		FAILED: ["Answer unavailable", "Ответ недоступен"],
+		INVALID: ["Answer unavailable", "Ответ недоступен"],
+		OVERFLOW: ["Skipped after the cycle limit was reached", "Пропущен после достижения лимита цикла"],
+		STOPPED: ["Measurement stopped", "Замер остановлен"],
+	};
+	const status = statuses[run.status.toUpperCase()] ?? ["Status unavailable", "Статус недоступен"];
+	return tr(locale, status[0], status[1]);
 }
 
 function MeasurementGroup({ locale, title, group }: { locale: WorkspaceLocale; title: string; group: GroupView }) {
