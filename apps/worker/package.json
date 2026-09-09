@@ -10,6 +10,7 @@
 		"build": "tsc -p tsconfig.json",
 		"check-types": "tsc --noEmit",
 		"test": "tsx --test src/*.test.ts src/**/*.test.ts scripts/*.test.ts",
+		"canary:dataforseo-perplexity": "tsx src/scripts/dataforseo-perplexity-canary.ts",
 		"canary:google-ai-mode": "tsx src/scripts/google-ai-mode-dataset-canary.ts",
 		"reconcile:google-ai-mode-historical": "tsx src/scripts/reconcile-google-ai-mode-historical-snapshot.ts",
 		"measure:journal": "tsx src/scripts/measure-journal-entrypoint.ts"

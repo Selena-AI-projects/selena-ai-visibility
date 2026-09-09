@@ -8,10 +8,31 @@ const entrypointUrl = new URL("../../../apps/worker/src/scripts/measure-journal-
 const scriptPath = fileURLToPath(entrypointUrl);
 const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const source = readFileSync(scriptUrl, "utf8");
+const entrypointSource = readFileSync(entrypointUrl, "utf8");
+const canarySource = readFileSync(
+	new URL("../../../apps/worker/src/scripts/dataforseo-perplexity-canary.ts", import.meta.url),
+	"utf8",
+);
+const workerPackage = JSON.parse(
+	readFileSync(new URL("../../../apps/worker/package.json", import.meta.url), "utf8"),
+) as { scripts: Record<string, string> };
 const publishScriptUrl = new URL("../../../apps/worker/src/scripts/publish-journal.ts", import.meta.url);
 const publishScriptPath = fileURLToPath(publishScriptUrl);
 const dockerfile = readFileSync(new URL("../../../docker/Dockerfile", import.meta.url), "utf8");
 const repositorySource = readFileSync(new URL("./selena-visibility-repositories.ts", import.meta.url), "utf8");
+const approvedDeploymentEnv = {
+	SELENA_MEASUREMENT_ENABLED: "true",
+	SELENA_MEASUREMENT_APPROVED_COMMIT_SHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	RAILWAY_GIT_COMMIT_SHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	SELENA_MEASUREMENT_APPROVED_ENVIRONMENT: "staging",
+	RAILWAY_ENVIRONMENT_NAME: "staging",
+};
+
+function expectNoProviderCapabilityError(output: string): void {
+	expect(output).not.toContain("DATAFORSEO_CREDENTIALS_MISSING");
+	expect(output).not.toContain("DataForSEO requires DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD");
+	expect(output).not.toContain("DATABASE_URL is required");
+}
 
 describe("journal provider stop", () => {
 	it("refuses affirmative operator stop values before credentials, database, or provider access", () => {
@@ -20,7 +41,11 @@ describe("journal provider stop", () => {
 			encoding: "utf8",
 			env: {
 				PATH: process.env.PATH,
+				...approvedDeploymentEnv,
 				SELENA_EMERGENCY_STOP: " yes ",
+				SELENA_MEASUREMENT_RUN_MODE: "dataforseo-perplexity-canary",
+				SELENA_DATAFORSEO_PERPLEXITY_CANARY_ENABLED: "true",
+				SELENA_DATAFORSEO_PERPLEXITY_CANARY_COUNT: "1",
 			},
 			timeout: 10_000,
 		});
@@ -29,7 +54,7 @@ describe("journal provider stop", () => {
 		expect(result.error).toBeUndefined();
 		expect(result.status).not.toBe(0);
 		expect(output).toContain("PROVIDER_CALLS_STOPPED");
-		expect(output).not.toContain("DATABASE_URL is required");
+		expectNoProviderCapabilityError(output);
 	}, 15_000);
 
 	it("keeps an enabled auto-deployment closed without exact release approval", () => {
@@ -50,6 +75,80 @@ describe("journal provider stop", () => {
 		expect(output).not.toContain("DATABASE_URL is required");
 		expect(output).not.toContain("BRIGHTDATA_API_TOKEN is required");
 	}, 15_000);
+});
+
+describe("journal measurement run modes", () => {
+	it("keeps an approved canary disabled before credential or database access without exact opt-in", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				...approvedDeploymentEnv,
+				SELENA_MEASUREMENT_RUN_MODE: "dataforseo-perplexity-canary",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(output).toContain("DATAFORSEO_PERPLEXITY_CANARY_DISABLED");
+		expectNoProviderCapabilityError(output);
+	}, 15_000);
+
+	it.each([undefined, "4"])(
+		"rejects canary count %s before credential or database access",
+		(count) => {
+			const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+				cwd: repositoryRoot,
+				encoding: "utf8",
+				env: {
+					PATH: process.env.PATH,
+					...approvedDeploymentEnv,
+					SELENA_MEASUREMENT_RUN_MODE: "dataforseo-perplexity-canary",
+					SELENA_DATAFORSEO_PERPLEXITY_CANARY_ENABLED: "true",
+					...(count === undefined ? {} : { SELENA_DATAFORSEO_PERPLEXITY_CANARY_COUNT: count }),
+				},
+				timeout: 10_000,
+			});
+			const output = `${result.stdout}\n${result.stderr}`;
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).not.toBe(0);
+			expect(output).toContain("DATAFORSEO_PERPLEXITY_CANARY_COUNT_INVALID");
+			expectNoProviderCapabilityError(output);
+		},
+		15_000,
+	);
+
+	it("fails closed on an unknown approved run mode without importing provider-capable modules", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				...approvedDeploymentEnv,
+				SELENA_MEASUREMENT_RUN_MODE: "dataforseo-perplexity-canry",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(output).toContain("JOURNAL_MEASUREMENT_RUN_MODE_INVALID");
+		expectNoProviderCapabilityError(output);
+	}, 15_000);
+
+	it("wires the canary through the approved wrapper and worker package script", () => {
+		expect(entrypointSource).toContain('import("./dataforseo-perplexity-canary.js")');
+		expect(canarySource).toContain("assertMeasurementDeploymentApproved(process.env)");
+		expect(canarySource).toContain("createDataForSeoPerplexityAdapter({");
+		expect(workerPackage.scripts["canary:dataforseo-perplexity"]).toBe(
+			"tsx src/scripts/dataforseo-perplexity-canary.ts",
+		);
+	});
 });
 
 describe("journal publisher opt-in", () => {

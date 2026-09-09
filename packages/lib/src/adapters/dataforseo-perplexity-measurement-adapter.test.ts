@@ -87,6 +87,56 @@ describe("DataForSEO Perplexity measurement adapter", () => {
 		});
 	});
 
+	it("classifies an SDK status without retaining sensitive error fields", async () => {
+		const sensitive = ["sensitive-message", "sensitive-response", "sensitive-body", "sensitive-header"];
+		const run = vi.fn(async () => {
+			throw Object.assign(new Error(sensitive[0]), {
+				status: 401,
+				statusCode: 503,
+				response: sensitive[1],
+				body: sensitive[2],
+				header: sensitive[3],
+			});
+		});
+		const adapter = createDataForSeoPerplexityAdapter({ run, resolveScenarioText: () => "Where should I eat?" });
+
+		const outcome = await adapter.execute(permit());
+
+		expect(outcome.invalidReason).toBe("PROVIDER_HTTP_401");
+		const serialized = JSON.stringify(outcome);
+		for (const value of sensitive) expect(serialized).not.toContain(value);
+	});
+
+	it("classifies DataForSEO task failures", async () => {
+		const run = vi.fn(async () => {
+			throw new Error("DataForSEO API Error: 40602 Internal SE Server Error.");
+		});
+		const adapter = createDataForSeoPerplexityAdapter({ run, resolveScenarioText: () => "Where should I eat?" });
+
+		expect((await adapter.execute(permit())).invalidReason).toBe("PROVIDER_TASK_40602");
+	});
+
+	it("classifies a missing provider task response", async () => {
+		const run = vi.fn(async () => {
+			throw new Error("DataForSEO API Error: No response or tasks.");
+		});
+		const adapter = createDataForSeoPerplexityAdapter({ run, resolveScenarioText: () => "Where should I eat?" });
+
+		expect((await adapter.execute(permit())).invalidReason).toBe("PROVIDER_RESPONSE_MISSING");
+	});
+
+	it("classifies unknown thrown errors as transport failures", async () => {
+		const run = vi.fn(async () => {
+			throw new Error("unknown-sensitive-provider-detail");
+		});
+		const adapter = createDataForSeoPerplexityAdapter({ run, resolveScenarioText: () => "Where should I eat?" });
+
+		const outcome = await adapter.execute(permit());
+
+		expect(outcome.invalidReason).toBe("TRANSPORT_ERROR");
+		expect(JSON.stringify(outcome)).not.toContain("unknown-sensitive-provider-detail");
+	});
+
 	it("rejects API permits instead of silently changing their channel", async () => {
 		const adapter = createDataForSeoPerplexityAdapter({
 			run: vi.fn(),

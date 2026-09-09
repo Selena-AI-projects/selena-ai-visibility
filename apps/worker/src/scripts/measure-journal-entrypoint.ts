@@ -11,7 +11,18 @@ if (decision !== "APPROVED") {
 	process.exit(0);
 }
 
-import("./measure-journal.js").catch((error) => {
-	console.error(error instanceof Error ? error.message : String(error));
-	process.exit(1);
-});
+const runMode = process.env.SELENA_MEASUREMENT_RUN_MODE;
+if (runMode === undefined || runMode === "" || runMode === "journal") {
+	import("./measure-journal.js").catch((error) => {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exit(1);
+	});
+} else if (runMode === "dataforseo-perplexity-canary") {
+	import("./dataforseo-perplexity-canary.js").catch(() => {
+		console.error("DATAFORSEO_PERPLEXITY_CANARY_COMMAND_FAILED");
+		process.exitCode = 1;
+	});
+} else {
+	console.log("JOURNAL_MEASUREMENT_RUN_MODE_INVALID");
+	process.exit(0);
+}

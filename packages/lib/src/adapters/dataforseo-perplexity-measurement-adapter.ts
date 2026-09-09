@@ -47,9 +47,25 @@ function failedOutcome(permit: SelenaExecutablePermit, reason: string): RunOutco
 }
 
 function providerFailureReason(error: unknown): string {
-	const message = error instanceof Error ? error.message : String(error);
+	if (typeof error === "object" && error !== null) {
+		for (const field of ["status", "statusCode"] as const) {
+			const value = (error as Record<string, unknown>)[field];
+			const status =
+				typeof value === "number"
+					? value
+					: typeof value === "string" && /^\d+$/.test(value.trim())
+						? Number(value)
+						: Number.NaN;
+			if (Number.isInteger(status) && status >= 400 && status <= 599) return `PROVIDER_HTTP_${status}`;
+		}
+	}
+
+	const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
 	const status = /(?:HTTP[_ ]|status(?: code)?[:= ]|\b)(4\d\d|5\d\d)\b/i.exec(message)?.[1];
-	return status ? `PROVIDER_HTTP_${status}` : "TRANSPORT_ERROR";
+	if (status) return `PROVIDER_HTTP_${status}`;
+	if (message === "DataForSEO API Error: No response or tasks.") return "PROVIDER_RESPONSE_MISSING";
+	const taskCode = /^DataForSEO API Error:.*?\b(\d{5})\b/s.exec(message)?.[1];
+	return taskCode ? `PROVIDER_TASK_${taskCode}` : "TRANSPORT_ERROR";
 }
 
 /**
