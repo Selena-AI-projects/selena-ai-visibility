@@ -13,7 +13,10 @@
  */
 
 const PROVIDER_COST_ESTIMATES_USD: Record<string, number> = {
-	olostep: 0.01,
+	// Three credits per AI-surface answer at the smallest paid plan's rate
+	// ($9 for 5,000 credits, so $0.0018 a credit). Prepaid free-tier credits
+	// are metered at the same figure so their use stays visible.
+	olostep: 0.0054,
 	brightdata: 0.01,
 	oxylabs: 0.01,
 	cloro: 0.01,

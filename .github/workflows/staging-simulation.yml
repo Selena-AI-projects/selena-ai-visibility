@@ -1,0 +1,191 @@
+name: Staging verification simulation
+
+# Runs the whole rehearsal in one dispatch: activate a staging subscription
+# from a signed payment event, mint a single-use Telegram link, wait for the
+# person holding it to press Start, save the sample report and deliver one
+# digest.
+#
+# It runs here because the rehearsal needs a route to the rig and somewhere to
+# leave its output. Every request it makes is one the rig would accept from any
+# operator, and each response is checked to still report zero provider calls
+# and zero real payments.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "connect = activate and mint the Telegram link. deliver = save the report and send the digest."
+        required: true
+        default: connect
+        type: choice
+        options: [connect, deliver]
+      project_ref:
+        description: "Test project reference"
+        required: true
+        default: test_project_001
+        type: string
+
+concurrency: staging-simulation
+
+jobs:
+  run:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    env:
+      BASE: ${{ secrets.SELENA_SIM_BASE_URL }}
+      SIGNING_SECRET: ${{ secrets.SELENA_SIMULATION_SIGNING_SECRET }}
+      PROJECT_REF: ${{ inputs.project_ref }}
+    steps:
+      - name: Refuse to run without a rig and a secret
+        run: |
+          test -n "$BASE" || { echo "SELENA_SIM_BASE_URL is not set"; exit 1; }
+          test -n "$SIGNING_SECRET" || { echo "SELENA_SIMULATION_SIGNING_SECRET is not set"; exit 1; }
+
+      - name: Take the rig's runner credential
+        id: key
+        run: |
+          BODY=$(jq -cn --arg n "$(openssl rand -hex 16)" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{purpose:"staging-verification-simulation",nonce:$n,issued_at:$t}')
+          SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" -r | cut -d' ' -f1)
+          RESPONSE=$(curl -sS -X POST "$BASE/api/v1/selena/staging/bootstrap" \
+            -H 'content-type: application/json' -H "x-selena-signature: $SIG" -d "$BODY")
+          echo "$RESPONSE" | jq 'del(.apiKey)'
+          KEY=$(echo "$RESPONSE" | jq -r '.apiKey // empty')
+          test -n "$KEY" || { echo "The rig issued no key."; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "value=$KEY" >> "$GITHUB_OUTPUT"
+          # The same request again, byte for byte and with the same signature.
+          # A replay is how a captured bootstrap call would both take a key and
+          # revoke the runner's, so the refusal is checked here rather than
+          # assumed from the unit tests.
+          REPLAY=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$BASE/api/v1/selena/staging/bootstrap" \
+            -H 'content-type: application/json' -H "x-selena-signature: $SIG" -d "$BODY")
+          echo "replayed bootstrap answered $REPLAY"
+          test "$REPLAY" = "409" || { echo "A replayed bootstrap was not refused."; exit 1; }
+
+      - name: Point the bot at this rig
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+        run: |
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d '{"action":"set-webhook"}' | tee /tmp/webhook.json | jq .
+          jq -e '.ok == true' /tmp/webhook.json > /dev/null \
+            || { echo "Telegram refused the webhook. Check the bot token and webhook secret on the rig."; exit 1; }
+
+      - name: Accept one simulated payment event
+        if: inputs.stage == 'connect'
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+        run: |
+          BODY=$(jq -cn --arg p "$PROJECT_REF" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{event_id:("evt_sim_"+(now|floor|tostring)),event_type:"payment_succeeded",environment:"staging",mode:"test",customer_id:"test_customer_001",project_id:$p,plan:"landscape",amount:79,currency:"USD",occurred_at:$t}')
+          SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$SIGNING_SECRET" -r | cut -d' ' -f1)
+          curl -sS -X POST "$BASE/api/v1/selena/staging/payment-event" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -H "x-selena-signature: $SIG" -d "$BODY" | tee /tmp/payment.json | jq .
+          jq -e '.receipt.providerCalls == 0 and .receipt.realPayments == 0' /tmp/payment.json > /dev/null
+
+      - name: Mint the single-use Telegram link
+        if: inputs.stage == 'connect'
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+        run: |
+          curl -sS -o /tmp/link.json -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"connect-link",projectRef:$p,userId:"simulation-operator"}')"
+          # The response carries a live single-use credential. It is masked before
+          # anything is printed, and the run log shows only what is safe to keep:
+          # the link itself is written to the job summary, which is where the
+          # person who has to press Start reads it.
+          echo "::add-mask::$(jq -r .startCommand /tmp/link.json | cut -d' ' -f2)"
+          jq '{expiresAt,correlationId}' /tmp/link.json
+          {
+            echo "# Send this to the bot, then run the deliver stage"
+            echo
+            echo "Telegram shows a Start button only in a chat nobody has opened before."
+            echo "In any other chat, send the command below — it is what that button would have sent."
+            echo
+            echo '```'
+            jq -r .startCommand /tmp/link.json
+            echo '```'
+            echo
+            echo "Or, in a fresh chat, open: $(jq -r .deepLink /tmp/link.json)"
+            echo
+            echo "Single use, expires at $(jq -r .expiresAt /tmp/link.json). Treat this summary as"
+            echo "the credential it contains: once the deliver stage has run, the link is spent."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Confirm the recipient is bound
+        if: inputs.stage == 'deliver'
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+        run: |
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg p "$PROJECT_REF" '{action:"binding-status",projectRef:$p}')" \
+            | tee /tmp/binding.json | jq .
+          jq -e '.connected == true' /tmp/binding.json > /dev/null \
+            || { echo "No recipient is bound. Send the command from the connect stage to the bot first."; exit 1; }
+
+      - name: Save the sample report and create its delivery
+        if: inputs.stage == 'deliver'
+        id: report
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+        run: |
+          # A period is unique per project, so a rehearsal run needs its own
+          # window: pinning both ends to midnight would make the second run of
+          # any day re-find the first run's report and its finished delivery.
+          END=$(date -u +%Y-%m-%dT%H:%M:00Z)
+          START=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:00Z)
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg p "$PROJECT_REF" --arg s "$START" --arg e "$END" \
+              '{action:"prepare-report",projectRef:$p,projectName:"Test Project",periodStart:$s,periodEnd:$e}')" \
+            | tee /tmp/report.json | jq .
+          echo "delivery=$(jq -r .deliveryId /tmp/report.json)" >> "$GITHUB_OUTPUT"
+          echo "correlation=$(jq -r .correlationId /tmp/report.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Send the digest
+        if: inputs.stage == 'deliver'
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+          DELIVERY: ${{ steps.report.outputs.delivery }}
+        run: |
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg d "$DELIVERY" --arg u "$BASE/app/selena-report" \
+              '{action:"deliver",deliveryId:$d,workspaceUrl:$u}')" \
+            | tee /tmp/deliver.json | jq .
+          jq -e '.decision == "DELIVERED"' /tmp/deliver.json > /dev/null \
+            || { echo "The digest was not delivered."; exit 1; }
+          # Asking again is what a redelivered queue job does. One digest per
+          # report is the rule, so the second ask has to be refused rather than
+          # send the same message twice.
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg d "$DELIVERY" --arg u "$BASE/app/selena-report" \
+              '{action:"deliver",deliveryId:$d,workspaceUrl:$u}')" \
+            | tee /tmp/redeliver.json | jq .
+          jq -e '.decision == "REFUSED" and .code == "SELENA_DELIVERY_ALREADY_DELIVERED"' /tmp/redeliver.json > /dev/null \
+            || { echo "A redelivered job was not refused."; exit 1; }
+
+      - name: Read the audit trail
+        if: inputs.stage == 'deliver'
+        env:
+          KEY: ${{ steps.key.outputs.value }}
+          DELIVERY: ${{ steps.report.outputs.delivery }}
+          CORRELATION: ${{ steps.report.outputs.correlation }}
+        run: |
+          curl -sS -X POST "$BASE/api/v1/selena/staging/simulation" \
+            -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+            -d "$(jq -cn --arg d "$DELIVERY" --arg c "$CORRELATION" \
+              '{action:"evidence",deliveryId:$d,correlationId:$c}')" \
+            | tee /tmp/evidence.json | jq .
+          {
+            echo "## Evidence"
+            echo '```json'
+            jq '{delivery:{status:.delivery.status,attempts:.delivery.attemptsMade,deliveredAt:.delivery.deliveredAt},receipt:.receipt,trail:[.trail[].event]}' /tmp/evidence.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -e '.delivery.status == "DELIVERED" and .receipt.providerCalls == 0 and .receipt.realPayments == 0' /tmp/evidence.json > /dev/null

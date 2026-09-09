@@ -144,7 +144,10 @@ if (scenario === "local") {
   // Resubscribe → maintenance revives within one tick.
   await client.query("UPDATE subscription SET status = 'active' WHERE id = 'sub-verify-1'");
   await boss.send("schedule-maintenance", { source: "verify" }, { retryLimit: 0 });
-  await waitFor(async () => (await runCount(prompt.id)) > 3, 120000, "revival runs");
+  // Wait for the count this asserts, not merely for more than the last one: the
+  // three revived targets are written concurrently, so a wait that ends at the
+  // first new row can read four or five while the rest are still landing.
+  await waitFor(async () => (await runCount(prompt.id)) >= 6, 120000, "revival runs");
   const revived = await runCount(prompt.id);
   assert(revived === 6, `resubscribe: maintenance revives the chain and due targets run (got ${revived})`);
 } else {

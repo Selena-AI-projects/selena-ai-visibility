@@ -1,0 +1,83 @@
+name: Oxylabs Perplexity probe
+
+# One live Oxylabs job against the Perplexity source, run by
+# packages/lib/scripts/selena-oxylabs-perplexity-probe.ts. It answers a single
+# question — does this collector return a visitor answer where the Bright Data
+# one returns a sign-up wall — and it needs a credential, which belongs in a
+# secret rather than in anyone's shell.
+#
+# It contacts exactly one provider once and creates no order, permit, run or
+# cost event: nothing here touches the measurement path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "The question to ask. Default is one the Bright Data collector failed on 2026-09-04"
+        required: false
+        default: "What are the best food halls in Ubud, Bali?"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+
+    env:
+      OXYLABS_USERNAME: ${{ secrets.OXYLABS_USERNAME }}
+      OXYLABS_PASSWORD: ${{ secrets.OXYLABS_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Refuse without a credential
+        run: |
+          if [ -z "$OXYLABS_USERNAME" ] || [ -z "$OXYLABS_PASSWORD" ]; then
+            {
+              echo "### Ключей нет"
+              echo ""
+              echo "Добавьте секреты \`OXYLABS_USERNAME\` и \`OXYLABS_PASSWORD\` в Settings → Secrets and variables → Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The prompt reaches the shell as an environment variable, not through
+      # expression interpolation: it is text someone typed.
+      - name: Run the one probe
+        env:
+          SELENA_OXYLABS_PROBE: "yes"
+          OXYLABS_PROBE_PROMPT: ${{ inputs.prompt }}
+        run: |
+          set -o pipefail
+          echo "## Oxylabs · Perplexity" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          pnpm -C packages/lib exec tsx scripts/selena-oxylabs-perplexity-probe.ts 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # The raw payload is the evidence an adapter would be built on; it stays
+      # out of the log and travels as an artifact instead.
+      - name: Keep the raw payload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: oxylabs-perplexity-live-probe
+          path: packages/lib/src/adapters/__fixtures__/oxylabs-perplexity-live-probe.json
+          if-no-files-found: ignore
+          retention-days: 14

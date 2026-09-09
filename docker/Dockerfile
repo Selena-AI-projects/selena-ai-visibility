@@ -1,8 +1,10 @@
 # Elmo 
 # Supports: web app (Nitro server) and worker
 
-# Build-time selector used by the final runtime stage.
+# Build-time selector used by the final runtime stage. Both live in the global
+# scope because that is the only scope a FROM instruction can read an ARG from.
 ARG RAILWAY_SERVICE_NAME=web
+ARG SELENA_RUNTIME_TARGET=${RAILWAY_SERVICE_NAME}
 
 # Base stage with Node.js
 FROM node:24-alpine AS base
@@ -154,5 +156,21 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
-# The service name selects the final runtime stage: web or worker.
-FROM ${RAILWAY_SERVICE_NAME} AS final
+# Owner stage — one database step that needs owner rights, then exits: minting
+# pilot seats, reading or setting a spend ceiling. It takes the migration
+# runner's connection, not the product runtime's, because the runtime role is
+# deliberately unable to mint a seat or raise its own limit. Which step, and
+# with what inputs, is named by variables on the service, and the log carries
+# counts and ceilings only.
+FROM base AS owner
+WORKDIR /app
+
+COPY --from=builder /deploy/worker ./
+
+CMD ["./node_modules/.bin/tsx", "src/scripts/owner-task-entrypoint.ts"]
+
+# The service name selects the final runtime stage: web or worker. A service
+# named for what it proves rather than for what it runs — a gate or a rehearsal
+# rig — cannot borrow a stage name another service already holds, so it names
+# its stage directly instead.
+FROM ${SELENA_RUNTIME_TARGET} AS final

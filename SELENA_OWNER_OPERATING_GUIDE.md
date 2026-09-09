@@ -48,12 +48,17 @@ adapter on that list is the deliberate code change; naming one that is not there
 is refused with `SELENA_LIVE_ADAPTER_REQUIRES_OWNER_GO`, so real spend can never
 be the side effect of a typo in a variable.
 
-The list currently holds the inert adapters, `openrouter`, and the three Visitor
+The list currently holds the inert adapters, `openrouter`, the three Visitor
 View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
-`brightdata-perplexity` — so `brightdata` as a family name does select a live
-paid path, and the credentials are the remaining requirement. While `noop` is
-selected every run is recorded as `INVALID`, so an accidental run cannot produce
-something that reads like a real measurement.
+`brightdata-perplexity`, and the two stand-alone Perplexity transports
+`oxylabs-perplexity` and `olostep-perplexity` — so `brightdata` as a family
+name does select a live paid path, and the credentials are the remaining
+requirement. Neither Perplexity transport belongs to a family: `oxylabs-perplexity`
+was approved on 2026-09-06 for a canary, `olostep-perplexity` was built on
+2026-09-08 for the same purpose, and each runs only when named outright, which
+is a one-surface scope by construction. While `noop` is selected every run is
+recorded as `INVALID`, so an accidental run cannot produce something that
+reads like a real measurement.
 
 Spending is metered separately. Each permit holds a reservation in the `measure`
 scope before it is claimed and settles when the run reaches a terminal state, so
@@ -139,6 +144,19 @@ does not parse falls back to the default rather than to no limit, and `0` means
 never. A request that hits a cap, or whose measurement fails to start, stays in
 the operator inbox as `AUTO_FAILED` or unchanged with the reason in the audit
 log — the lead is written before any of this runs and is never lost to it.
+
+The caps are counted in the database, not in the application: they span every
+account, and the runtime role cannot count other tenants' rows, so one claim
+function (`sv_claim_free_auto_dispatch`, migration `0066`) counts and decides
+under a lock, and a request refused by a cap is recorded as
+`ORDER_REQUEST_AUTO_DISPATCH_REFUSED` with the cap's name. A slot is given
+back only when the failure came before any order existed — a profile with no
+questions — so a corrected profile can try again the same day. On a
+deployment whose migrations stop before `0066`, the flag refuses every free
+request with `CLAIM_UNAVAILABLE` and the request waits in the inbox as
+before: switching the flag on is the second step, raising
+`SELENA_MIGRATION_MAX_INDEX` to `66` on the `migrate` service and deploying
+it is the first.
 
 Measurement jobs are never scheduled. A run starts from an explicit action on a
 specific permit, and a claimed permit is spent: it cannot be retried into a
@@ -248,6 +266,19 @@ Visitor View is what the local plan sells: what a person actually sees on
 ChatGPT, Gemini and Perplexity. One adapter instance measures one surface, and
 the account supplies one collector per surface, so the worker holds three of
 them — `brightdata-chatgpt`, `brightdata-gemini`, `brightdata-perplexity`.
+A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
+surface through Oxylabs' `perplexity` source and takes `OXYLABS_USERNAME` and
+`OXYLABS_PASSWORD` on the worker. A fifth, `olostep-perplexity`, measures it
+through Olostep's browsers and takes `OLOSTEP_API_KEY` on the worker — the
+copy of that key in GitHub Actions secrets serves the probe workflow only and
+never reaches a container, so a canary needs the variable set on the service
+that runs it. Neither is part of the `brightdata` family and no family routes
+to them: name one directly for a canary, and only for a scope that sells
+Perplexity alone. Olostep answers slowly — one answer took 944 seconds — and
+the adapter waits up to 25 minutes for it, inside the worker's lease. A short,
+sourceless answer carrying a sign-up phrase is recorded `PROVIDER_AUTH_WALL`
+rather than counted as an answer, so a run that met a wall reads as a failed
+run and not as a brand that is invisible.
 
 `BRIGHTDATA_API_TOKEN` on the worker is the only account-specific value. The
 collector ids are defaults in the code because a dataset id names a public
@@ -298,8 +329,35 @@ first request:
 | `SELENA_JOURNAL_MAX_COST_USD` | Refuses to run if the plan would exceed it |
 
 It also needs what any live measurement needs: `DATABASE_URL`,
-`BRIGHTDATA_API_TOKEN`, `SELENA_MEASUREMENT_ENABLED=true` and a
-`SELENA_MEASUREMENT_ADAPTER` that reaches a Visitor View collector.
+`SELENA_MEASUREMENT_ENABLED=true`, a `SELENA_MEASUREMENT_ADAPTER` that reaches
+a Visitor View collector, and that adapter's own credential —
+`BRIGHTDATA_API_TOKEN` for a Bright Data adapter, `OXYLABS_USERNAME` and
+`OXYLABS_PASSWORD` for `oxylabs-perplexity`, `OLOSTEP_API_KEY` for
+`olostep-perplexity`. Each is demanded only by a run that would spend it.
+
+Two more are the deployment gate, and they are the pair a runbook forgets:
+
+| Variable | What it does |
+|---|---|
+| `SELENA_MEASUREMENT_APPROVED_COMMIT_SHA` | The 40-character SHA of the commit being deployed |
+| `SELENA_MEASUREMENT_APPROVED_ENVIRONMENT` | The name of the environment it runs in |
+
+Railway supplies the deployed values as `RAILWAY_GIT_COMMIT_SHA` and
+`RAILWAY_ENVIRONMENT_NAME`, and the script refuses to start unless each pair
+matches exactly. That is the point of it: an approval covers one commit in one
+environment, so the next commit does not inherit the last one's permission to
+spend. Set the SHA to the commit you are about to deploy, in the same staged
+change as the rest.
+
+The three refusals are ordered, which turns the log line into a diagnosis.
+`PROVIDER_CALLS_STOPPED` means the emergency stop is engaged.
+`JOURNAL_MEASUREMENT_DISABLED` means the stop is not engaged but
+`SELENA_MEASUREMENT_ENABLED` is not exactly `true`.
+`JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED` means both of those already
+passed and only the commit or the environment did not match — so reading it on
+a service that is supposed to be stopped is how you learn the stop is not
+engaged. The stop is engaged by `1`, `true` or `yes`, surrounding whitespace
+aside, and by nothing else: `TRUE` is not one of them.
 
 On Railway it runs as its own service. The Dockerfile picks its stage from the
 service name — `web`, `worker`, `migrate` and now `measure` — so a service named
@@ -314,6 +372,15 @@ If a process disappears and the heartbeat remains unchanged for 45 minutes, the
 next invocation records the old attempt as `ABANDONED`, audits its recorded runs
 and cost, and allocates a new attempt. `HOLD` is different: it means spend is
 still ambiguous after an observed failure and remains blocked for owner review.
+An attempt that failed in the open — every run closed by the executor, the
+cycle stopped, the claim still `EXECUTING` — is held the same way and is not
+abandoned by time either. Two owner-only PostgreSQL functions are the only
+releases, both taking a decision reference and an explicit acknowledgement of
+the ambiguous spend: `sv_reconcile_journal_hold` for an attempt whose runs
+were still open when it vanished, `sv_reconcile_journal_executor_settled` for
+one whose runs the executor closed. Neither is wrapped by a script; the
+application role cannot call them. A held claim blocks its project on every
+day until one of them has run.
 
 The question sets live in `packages/lib/src/selena-journal-scenarios.ts` and are
 versioned: the version is the prompt family's identity, so changing a question
@@ -329,6 +396,32 @@ cannot measure twice. A third-party set
 may be measured — the answers are public and the cost is ours — but its result
 does not reach a public page without that owner's recorded yes, and the script
 says so as it runs.
+
+### Owner database steps on Railway
+
+Minting pilot seats and reading or setting a spend ceiling need a connection
+with owner rights, which the product runtime deliberately does not hold and
+which should not live on anyone's laptop either. The `owner` service is where
+those steps run: a one-shot job built from the worker image (the Dockerfile's
+`owner` stage), whose `DATABASE_URL` and `SELENA_RUNTIME_DATABASE_CA_PEM` are
+references to the `migrate` service's own, so no connection string is ever
+copied. It runs the task its variables name, prints counts and ceilings, and
+exits; nothing here spends on a provider. Keep its restart policy at never.
+
+| Variable | What it does |
+|---|---|
+| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget` or `set-spend-budget` |
+| `SELENA_PILOT_SEATS_CSV` | The seats file's contents, one `CODE,planId[,label]` per line |
+| `SELENA_PILOT_SEAT_DAYS` | How many days the seats stay redeemable; default 30 |
+| `SELENA_SPEND_SCOPE` | The scope to read or set; default `measure` |
+| `SELENA_SPEND_CAP_USD` | The ceiling to set, for `set-spend-budget` only |
+
+A run is: set the task and its inputs, deploy, read the log. The seat task
+logs how many seats were new and how many already existed and never a code,
+so delete `SELENA_PILOT_SEATS_CSV` once the seats are issued — until then the
+codes sit in a variable anyone with the dashboard can read. A second deploy
+of the seat task with the same contents issues nothing and says so, so a
+restart cannot double-mint.
 
 ### Applying Railway variable changes
 

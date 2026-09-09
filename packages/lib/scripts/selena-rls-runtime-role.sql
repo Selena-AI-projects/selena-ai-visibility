@@ -211,6 +211,10 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060';
 	END IF;
 
+	IF to_regprocedure('public.sv_reconcile_journal_executor_settled(uuid,text,text,boolean,boolean)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0065';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -272,6 +276,8 @@ FROM selena_app;
 -- 0060's ambiguous-spend reconciliation is also owner-only. The application
 -- role can observe allowlisted claim metadata but cannot invoke the owner write.
 REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app;
+-- 0065's executor-settled release is the same boundary for the other shape.
+REVOKE ALL ON FUNCTION sv_reconcile_journal_executor_settled(uuid, text, text, boolean, boolean) FROM selena_app;
 
 -- pg-boss schema lifecycle remains owner-managed. This is the fixed v37
 -- runtime allowlist: schema state is read-only, queue data is mutable, and only
@@ -326,7 +332,9 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON
 	sv_measurement_cycles, sv_measurement_attempts, sv_measurement_datasets,
 	sv_local_keywords, sv_grid_definitions, sv_grid_points, sv_local_scan_cycles,
 	sv_measurement_attempt_results, sv_local_rank_observations,
-	sv_local_competitor_observations, sv_local_visibility_metrics
+	sv_local_competitor_observations, sv_local_visibility_metrics,
+	sv_simulation_subscriptions, sv_simulation_connect_tokens,
+	sv_simulation_recipients, sv_simulation_reports, sv_simulation_deliveries
 TO selena_app;
 
 -- Append-only evidence and audit objects expose only the operations used by
@@ -336,6 +344,12 @@ GRANT SELECT, INSERT ON
 	sv_provider_canary_executions, sv_evidence_index
 TO selena_app;
 GRANT SELECT, INSERT ON sv_journal_provider_boundaries TO selena_app;
+-- The simulation's attempt log is append-only for the same reason the audit
+-- trail is: a delivery attempt that could be edited afterwards proves nothing.
+GRANT SELECT, INSERT ON sv_simulation_delivery_attempts TO selena_app;
+
+-- The bootstrap nonce ledger holds no tenant data; it is swept rather than kept.
+GRANT SELECT, INSERT, DELETE ON sv_simulation_bootstrap_nonces TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_journal_claim_recovery_state(uuid) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text) TO selena_app;
 SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'

@@ -24,11 +24,21 @@
  *   SELENA_JOURNAL_TENANT=<organization id> \
  *   SELENA_JOURNAL_PROJECTS=korafoodhall SELENA_JOURNAL_MAX_COST_USD=0.5 \
  *   pnpm -C apps/worker measure:journal
+ *
+ * The same command with SELENA_MEASUREMENT_ADAPTER=oxylabs-perplexity and
+ * OXYLABS_USERNAME / OXYLABS_PASSWORD in place of the Bright Data token
+ * measures the Perplexity surface alone, through the Oxylabs source — which is
+ * how that adapter's canary runs before any route changes. With
+ * SELENA_MEASUREMENT_ADAPTER=olostep-perplexity and OLOSTEP_API_KEY it does the
+ * same through Olostep's browsers; one answer there took 944 seconds, so a
+ * 25-question set at this script's concurrency is over an hour of waiting.
  */
 
 import { brightDataVisitorSurface, createBrightDataAdapter } from "@workspace/lib/adapters/brightdata";
 import { createDataForSeoPerplexityAdapter } from "@workspace/lib/adapters/dataforseo-perplexity";
+import { createOlostepAdapter, olostepVisitorSurface, resolveOlostepCost } from "@workspace/lib/adapters/olostep";
 import { apiModelIds, createOpenRouterFamilyAdapter } from "@workspace/lib/adapters/openrouter";
+import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from "@workspace/lib/adapters/oxylabs";
 import { db } from "@workspace/lib/db/db";
 import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
 import * as schema from "@workspace/lib/db/schema";
@@ -49,6 +59,22 @@ assertMeasurementDeploymentApproved(process.env);
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
+
+/**
+ * Oxylabs has not yet been invoiced for a Perplexity answer, so its per-answer
+ * price is the cost table's estimate rather than an observed figure. It is the
+ * higher of the two visitor rates, which is the direction a ceiling should err
+ * in: refuse a run before it spends rather than after. Replace it with the
+ * invoice's figure once one exists.
+ */
+const OXYLABS_PRICE_PER_ANSWER_USD = resolveOxylabsCost(undefined).costUsd ?? 0.01;
+
+/**
+ * Olostep bills three credits per Perplexity answer, and the cost table prices
+ * a credit at the smallest paid plan's rate; on the free tier the credits are
+ * prepaid, so the ceiling meters them as if bought rather than as nothing.
+ */
+const OLOSTEP_PRICE_PER_ANSWER_USD = resolveOlostepCost(undefined).costUsd ?? 0.0054;
 
 /**
  * An API View answer is bought by the token and costs more than a scraped one,
@@ -85,6 +111,21 @@ function required(name: string): string {
 	return value;
 }
 
+/**
+ * A credential reaches the provider as configured. Trimming it here would send
+ * a different password than the deployment holds whenever a paste carried a
+ * trailing newline — and the provider answers that with the same 401 as a
+ * wrong one.
+ */
+function requiredCredential(name: string): string {
+	const value = process.env[name];
+	if (!value || value.trim() === "") {
+		console.error(`${name} is required`);
+		process.exit(2);
+	}
+	return value;
+}
+
 const DATABASE_URL = required("DATABASE_URL");
 const tenantId = required("SELENA_JOURNAL_TENANT");
 const maxCostUsd = Number(required("SELENA_JOURNAL_MAX_COST_USD"));
@@ -96,15 +137,18 @@ void DATABASE_URL;
 
 const config = measurementConfigFromEnv(process.env);
 if (!config.enabled) {
-	console.error("SELENA_MEASUREMENT_ENABLED must be true — this spends money on the Bright Data account");
+	console.error("SELENA_MEASUREMENT_ENABLED must be true — this spends money on the provider account");
 	process.exit(2);
 }
 
+/** Only the surfaces the configured name can actually route to are built. */
 const selected = new Set(measurementAdapterNamesFor(config.adapter));
-const apiKey =
-	selected.has("brightdata-chatgpt") || selected.has("brightdata-gemini") || selected.has("brightdata-perplexity")
-		? required("BRIGHTDATA_API_TOKEN")
-		: "";
+const brightDataSelected = BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`));
+const oxylabsSelected = selected.has("oxylabs-perplexity");
+const olostepSelected = selected.has("olostep-perplexity");
+// Each credential is demanded only by the run that would spend it: a canary
+// through Oxylabs must not stop on a Bright Data token it never uses.
+const apiKey = brightDataSelected.length > 0 ? required("BRIGHTDATA_API_TOKEN") : "";
 
 const requested = (process.env.SELENA_JOURNAL_PROJECTS ?? "").trim();
 const slugs =
@@ -131,7 +175,7 @@ const resolvers = createSelenaMeasurementResolvers(db);
 
 /** Only the surfaces the configured name can actually route to are built. */
 const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
-	BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`)).map((surface) => [
+	brightDataSelected.map((surface) => [
 		`brightdata-${surface}`,
 		createBrightDataAdapter({
 			apiKey,
@@ -155,6 +199,25 @@ const adapters: Record<string, SelenaMeasurementAdapter> = Object.fromEntries(
 );
 if (selected.has("dataforseo-perplexity")) {
 	adapters["dataforseo-perplexity"] = createDataForSeoPerplexityAdapter({
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
+}
+if (oxylabsSelected) {
+	adapters["oxylabs-perplexity"] = createOxylabsAdapter({
+		username: requiredCredential("OXYLABS_USERNAME"),
+		password: requiredCredential("OXYLABS_PASSWORD"),
+		system: "perplexity",
+		fetchImpl: fetch,
+		resolveScenarioText: resolvers.resolveScenarioText,
+		resolveExtractionContext: resolvers.resolveExtractionContext,
+	});
+}
+if (olostepSelected) {
+	adapters["olostep-perplexity"] = createOlostepAdapter({
+		apiKey: requiredCredential("OLOSTEP_API_KEY"),
+		system: "perplexity",
+		fetchImpl: fetch,
 		resolveScenarioText: resolvers.resolveScenarioText,
 		resolveExtractionContext: resolvers.resolveExtractionContext,
 	});
@@ -455,28 +518,50 @@ async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDO
 async function measure(slug: string): Promise<void> {
 	const { project, scenario } = await projectFor(slug);
 	const rows = await scenarioRowsFor(project.id, slug);
-	// The surfaces the collectors are pointed at, under the names the catalog
-	// sells them as — the adapter's own map, so the two cannot drift apart.
-	const systems = [
-		...BRIGHTDATA_SURFACES.map((surface) => ({
+	// One system per adapter that was actually built, under the name the
+	// catalog sells it as — each adapter's own map, so the two cannot drift
+	// apart. A surface no registered adapter measures gets no permit: a permit
+	// the plain-named adapter cannot honour would be paid for and then refused
+	// as evidence for a system it did not authorize.
+	const priced = [
+		...brightDataSelected.map((surface) => ({
 			systemId: brightDataVisitorSurface[surface],
 			channel: "VISITOR" as const,
+			priceUsd: PRICE_PER_ANSWER_USD,
 		})),
+		...(oxylabsSelected
+			? [
+					{
+						systemId: oxylabsVisitorSurface.perplexity,
+						channel: "VISITOR" as const,
+						priceUsd: OXYLABS_PRICE_PER_ANSWER_USD,
+					},
+				]
+			: []),
+		...(olostepSelected
+			? [
+					{
+						systemId: olostepVisitorSurface.perplexity,
+						channel: "VISITOR" as const,
+						priceUsd: OLOSTEP_PRICE_PER_ANSWER_USD,
+					},
+				]
+			: []),
 		...(selected.has("openrouter")
-			? apiModelIds.map((model: string) => ({ systemId: model, channel: "API" as const }))
+			? apiModelIds.map((model: string) => ({
+					systemId: model,
+					channel: "API" as const,
+					priceUsd: API_PRICE_PER_ANSWER_USD,
+				}))
 			: []),
 	];
+	const systems = priced.map(({ systemId, channel }) => ({ systemId, channel }));
 	const expectedRuns = rows.length * systems.length;
-	// Priced per channel: an API answer is bought by the token and a scraped one
-	// by the request, and one rate over both would under-price whichever is
-	// dearer — which is the direction that matters for a ceiling.
-	const cost = systems.reduce((total, system) => {
-		const visitorCost =
-			system.systemId === brightDataVisitorSurface.perplexity && selected.has("dataforseo-perplexity")
-				? DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD
-				: PRICE_PER_ANSWER_USD;
-		return total + rows.length * (system.channel === "API" ? API_PRICE_PER_ANSWER_USD : visitorCost);
-	}, 0);
+	// Priced per adapter: an API answer is bought by the token, a scraped one
+	// by the request, and the two scrapers charge differently; one rate over
+	// all of them would under-price whichever is dearer — which is the
+	// direction that matters for a ceiling.
+	const cost = priced.reduce((total, system) => total + rows.length * system.priceUsd, 0);
 	if (cost > maxCostUsd) {
 		console.error(
 			`${slug}: ${expectedRuns} answers cost about $${cost.toFixed(4)}, ceiling is $${maxCostUsd.toFixed(4)}`,
@@ -583,6 +668,17 @@ async function measure(slug: string): Promise<void> {
 		const failed = outcomes.filter(
 			(outcome) => outcome.status !== "completed" || outcome.outcome.status !== "SUCCEEDED",
 		).length;
+		// Why they did not complete, counted off the results already in hand. A
+		// cycle that reports only how many failed sends its reader to the
+		// database or to guessing from which guard tripped, and the canary of
+		// 2026-09-07 was spent learning that.
+		const reasons = new Map<string, number>();
+		for (const result of outcomes) {
+			if (result.status === "completed" && result.outcome.status === "SUCCEEDED") continue;
+			const reason =
+				result.status === "completed" ? (result.outcome.invalidReason ?? result.outcome.status) : result.reason;
+			reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
+		}
 		const { rows: ledger, mentions } = await repositories.runs.ledgerForCycle(ctx, dispatch.cycleId);
 		const [terminalCycle] = await db
 			.select({
@@ -598,6 +694,13 @@ async function measure(slug: string): Promise<void> {
 			`  cycle ${dispatch.cycleId}: ${valid} valid of ${dispatch.permits.length} asked, ${mentions.length} mention rows` +
 				(failed > 0 ? `, ${failed} did not complete` : ""),
 		);
+		if (reasons.size > 0)
+			console.log(
+				`  did not complete: ${[...reasons]
+					.sort(([, a], [, b]) => b - a)
+					.map(([reason, count]) => `${reason} ×${count}`)
+					.join(", ")}`,
+			);
 		// Coverage before conclusions: a rate over a fraction of the sample is a
 		// different number wearing the same sign.
 		if (valid / dispatch.permits.length < 0.8) {

@@ -49,6 +49,9 @@
 		"./usage": "./src/usage/cost.ts",
 		"./selena-provider-spend": "./src/selena-provider-spend.ts",
 		"./selena-pilot-invites": "./src/selena-pilot-invites.ts",
+		"./selena-free-auto-dispatch-claims": "./src/selena-free-auto-dispatch-claims.ts",
+		"./selena-pilot-seat-issuance": "./src/selena-pilot-seat-issuance.ts",
+		"./selena-provider-spend-budget": "./src/selena-provider-spend-budget.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
 		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",
 		"./selena-export": "./src/selena-export.ts",
@@ -85,10 +88,14 @@
 		"./adapters/openrouter": "./src/adapters/openrouter-measurement-adapter.ts",
 		"./adapters/brightdata": "./src/adapters/brightdata-measurement-adapter.ts",
 		"./adapters/dataforseo-perplexity": "./src/adapters/dataforseo-perplexity-measurement-adapter.ts",
+		"./adapters/oxylabs": "./src/adapters/oxylabs-measurement-adapter.ts",
+		"./adapters/olostep": "./src/adapters/olostep-measurement-adapter.ts",
 		"./adapters/brightdata-snapshot-journal": "./src/adapters/brightdata-snapshot-journal.ts",
 		"./adapters/google-datasets": "./src/adapters/google-dataset-adapters.ts",
 		"./adapters/local-maps-rank": "./src/adapters/local-maps-rank-adapter.ts",
-		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts"
+		"./selena-local-maps-attempt-store": "./src/selena-local-maps-attempt-store.ts",
+		"./selena-simulation-repositories": "./src/selena-simulation-repositories.ts",
+		"./selena-telegram-adapter": "./src/selena-telegram-adapter.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^4.0.27",

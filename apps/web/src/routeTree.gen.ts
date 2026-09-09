@@ -89,6 +89,9 @@ import { Route as ApiV1SelenaProjectsIndexRouteImport } from './routes/api/v1/se
 import { Route as ApiV1SelenaQuotesIndexRouteImport } from './routes/api/v1/selena/quotes/index'
 import { Route as ApiV1SelenaReadinessVerifyRouteImport } from './routes/api/v1/selena/readiness/verify'
 import { Route as ApiV1SelenaScenariosIndexRouteImport } from './routes/api/v1/selena/scenarios/index'
+import { Route as ApiV1SelenaStagingBootstrapRouteImport } from './routes/api/v1/selena/staging/bootstrap'
+import { Route as ApiV1SelenaStagingPaymentEventRouteImport } from './routes/api/v1/selena/staging/payment-event'
+import { Route as ApiV1SelenaStagingSimulationRouteImport } from './routes/api/v1/selena/staging/simulation'
 import { Route as ApiV1SelenaCyclesCycleIdRunsRouteImport } from './routes/api/v1/selena/cycles/$cycleId/runs'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdAiResultsRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdEvidenceRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/evidence'
@@ -101,6 +104,7 @@ import { Route as ApiV1SelenaPilotCyclesIndexRouteImport } from './routes/api/v1
 import { Route as ApiV1SelenaPilotObservationsIndexRouteImport } from './routes/api/v1/selena/pilot/observations/index'
 import { Route as ApiV1SelenaProjectsProjectIdLocationsRouteImport } from './routes/api/v1/selena/projects/$projectId/locations'
 import { Route as ApiV1SelenaReadinessScansScanIdRouteImport } from './routes/api/v1/selena/readiness/scans/$scanId'
+import { Route as ApiV1SelenaStagingTelegramWebhookRouteImport } from './routes/api/v1/selena/staging/telegram/webhook'
 import { Route as ApiV1SelenaAdminLocalAiRunsRunIdRetryRouteImport } from './routes/api/v1/selena/admin/local-ai-runs/$runId/retry'
 import { Route as ApiV1SelenaAdminLocalMapRunsRunIdRetryRouteImport } from './routes/api/v1/selena/admin/local-map-runs/$runId/retry'
 import { Route as ApiV1SelenaAdminLocalScanCyclesCycleIdApproveRouteImport } from './routes/api/v1/selena/admin/local-scan-cycles/$cycleId/approve'
@@ -541,6 +545,24 @@ const ApiV1SelenaScenariosIndexRoute =
     path: '/api/v1/selena/scenarios/',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaStagingBootstrapRoute =
+  ApiV1SelenaStagingBootstrapRouteImport.update({
+    id: '/api/v1/selena/staging/bootstrap',
+    path: '/api/v1/selena/staging/bootstrap',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaStagingPaymentEventRoute =
+  ApiV1SelenaStagingPaymentEventRouteImport.update({
+    id: '/api/v1/selena/staging/payment-event',
+    path: '/api/v1/selena/staging/payment-event',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaStagingSimulationRoute =
+  ApiV1SelenaStagingSimulationRouteImport.update({
+    id: '/api/v1/selena/staging/simulation',
+    path: '/api/v1/selena/staging/simulation',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaCyclesCycleIdRunsRoute =
   ApiV1SelenaCyclesCycleIdRunsRouteImport.update({
     id: '/api/v1/selena/cycles/$cycleId/runs',
@@ -611,6 +633,12 @@ const ApiV1SelenaReadinessScansScanIdRoute =
   ApiV1SelenaReadinessScansScanIdRouteImport.update({
     id: '/api/v1/selena/readiness/scans/$scanId',
     path: '/api/v1/selena/readiness/scans/$scanId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiV1SelenaStagingTelegramWebhookRoute =
+  ApiV1SelenaStagingTelegramWebhookRouteImport.update({
+    id: '/api/v1/selena/staging/telegram/webhook',
+    path: '/api/v1/selena/staging/telegram/webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute =
@@ -780,6 +808,9 @@ export interface FileRoutesByFullPath {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
+  '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
+  '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
   '/app/$brand/settings/': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script/': typeof ApiPlausibleJsScriptIndexRoute
@@ -800,6 +831,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/locations/$locationId/place-entity': typeof ApiV1SelenaLocationsLocationIdPlaceEntityRoute
   '/api/v1/selena/projects/$projectId/locations': typeof ApiV1SelenaProjectsProjectIdLocationsRoute
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
+  '/api/v1/selena/staging/telegram/webhook': typeof ApiV1SelenaStagingTelegramWebhookRoute
   '/api/v1/selena/pilot/cycles/': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations/': typeof ApiV1SelenaPilotObservationsIndexRoute
   '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
@@ -885,6 +917,9 @@ export interface FileRoutesByTo {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
+  '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
+  '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/app/$brand/prompts': typeof AuthedAppBrandPromptsIndexRoute
   '/app/$brand/settings': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script': typeof ApiPlausibleJsScriptIndexRoute
@@ -905,6 +940,7 @@ export interface FileRoutesByTo {
   '/api/v1/selena/locations/$locationId/place-entity': typeof ApiV1SelenaLocationsLocationIdPlaceEntityRoute
   '/api/v1/selena/projects/$projectId/locations': typeof ApiV1SelenaProjectsProjectIdLocationsRoute
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
+  '/api/v1/selena/staging/telegram/webhook': typeof ApiV1SelenaStagingTelegramWebhookRoute
   '/api/v1/selena/pilot/cycles': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations': typeof ApiV1SelenaPilotObservationsIndexRoute
   '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
@@ -996,6 +1032,9 @@ export interface FileRoutesById {
   '/api/v1/prompts/$promptId/snapshot': typeof ApiV1PromptsPromptIdSnapshotRoute
   '/api/v1/selena/payments/test': typeof ApiV1SelenaPaymentsTestRoute
   '/api/v1/selena/readiness/verify': typeof ApiV1SelenaReadinessVerifyRoute
+  '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
+  '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
+  '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
   '/_authed/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
   '/_authed/app/$brand/settings/': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script/': typeof ApiPlausibleJsScriptIndexRoute
@@ -1016,6 +1055,7 @@ export interface FileRoutesById {
   '/api/v1/selena/locations/$locationId/place-entity': typeof ApiV1SelenaLocationsLocationIdPlaceEntityRoute
   '/api/v1/selena/projects/$projectId/locations': typeof ApiV1SelenaProjectsProjectIdLocationsRoute
   '/api/v1/selena/readiness/scans/$scanId': typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
+  '/api/v1/selena/staging/telegram/webhook': typeof ApiV1SelenaStagingTelegramWebhookRoute
   '/api/v1/selena/pilot/cycles/': typeof ApiV1SelenaPilotCyclesIndexRoute
   '/api/v1/selena/pilot/observations/': typeof ApiV1SelenaPilotObservationsIndexRoute
   '/api/v1/selena/admin/local-ai-runs/$runId/retry': typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
@@ -1107,6 +1147,9 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
+    | '/api/v1/selena/staging/payment-event'
+    | '/api/v1/selena/staging/simulation'
     | '/app/$brand/prompts/'
     | '/app/$brand/settings/'
     | '/api/plausible/js/script/'
@@ -1127,6 +1170,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/locations/$locationId/place-entity'
     | '/api/v1/selena/projects/$projectId/locations'
     | '/api/v1/selena/readiness/scans/$scanId'
+    | '/api/v1/selena/staging/telegram/webhook'
     | '/api/v1/selena/pilot/cycles/'
     | '/api/v1/selena/pilot/observations/'
     | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
@@ -1212,6 +1256,9 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
+    | '/api/v1/selena/staging/payment-event'
+    | '/api/v1/selena/staging/simulation'
     | '/app/$brand/prompts'
     | '/app/$brand/settings'
     | '/api/plausible/js/script'
@@ -1232,6 +1279,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/locations/$locationId/place-entity'
     | '/api/v1/selena/projects/$projectId/locations'
     | '/api/v1/selena/readiness/scans/$scanId'
+    | '/api/v1/selena/staging/telegram/webhook'
     | '/api/v1/selena/pilot/cycles'
     | '/api/v1/selena/pilot/observations'
     | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
@@ -1322,6 +1370,9 @@ export interface FileRouteTypes {
     | '/api/v1/prompts/$promptId/snapshot'
     | '/api/v1/selena/payments/test'
     | '/api/v1/selena/readiness/verify'
+    | '/api/v1/selena/staging/bootstrap'
+    | '/api/v1/selena/staging/payment-event'
+    | '/api/v1/selena/staging/simulation'
     | '/_authed/app/$brand/prompts/'
     | '/_authed/app/$brand/settings/'
     | '/api/plausible/js/script/'
@@ -1342,6 +1393,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/locations/$locationId/place-entity'
     | '/api/v1/selena/projects/$projectId/locations'
     | '/api/v1/selena/readiness/scans/$scanId'
+    | '/api/v1/selena/staging/telegram/webhook'
     | '/api/v1/selena/pilot/cycles/'
     | '/api/v1/selena/pilot/observations/'
     | '/api/v1/selena/admin/local-ai-runs/$runId/retry'
@@ -1396,6 +1448,9 @@ export interface RootRouteChildren {
   ApiV1ReportsIndexRoute: typeof ApiV1ReportsIndexRoute
   ApiV1SelenaPaymentsTestRoute: typeof ApiV1SelenaPaymentsTestRoute
   ApiV1SelenaReadinessVerifyRoute: typeof ApiV1SelenaReadinessVerifyRoute
+  ApiV1SelenaStagingBootstrapRoute: typeof ApiV1SelenaStagingBootstrapRoute
+  ApiV1SelenaStagingPaymentEventRoute: typeof ApiV1SelenaStagingPaymentEventRoute
+  ApiV1SelenaStagingSimulationRoute: typeof ApiV1SelenaStagingSimulationRoute
   ApiPlausibleJsScriptIndexRoute: typeof ApiPlausibleJsScriptIndexRoute
   ApiV1SelenaCyclesIndexRoute: typeof ApiV1SelenaCyclesIndexRoute
   ApiV1SelenaFindingsIndexRoute: typeof ApiV1SelenaFindingsIndexRoute
@@ -1414,6 +1469,7 @@ export interface RootRouteChildren {
   ApiV1SelenaLocationsLocationIdPlaceEntityRoute: typeof ApiV1SelenaLocationsLocationIdPlaceEntityRoute
   ApiV1SelenaProjectsProjectIdLocationsRoute: typeof ApiV1SelenaProjectsProjectIdLocationsRoute
   ApiV1SelenaReadinessScansScanIdRoute: typeof ApiV1SelenaReadinessScansScanIdRouteWithChildren
+  ApiV1SelenaStagingTelegramWebhookRoute: typeof ApiV1SelenaStagingTelegramWebhookRoute
   ApiV1SelenaPilotCyclesIndexRoute: typeof ApiV1SelenaPilotCyclesIndexRoute
   ApiV1SelenaPilotObservationsIndexRoute: typeof ApiV1SelenaPilotObservationsIndexRoute
   ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute: typeof ApiV1SelenaAdminLocalAiRunsRunIdRetryRoute
@@ -1994,6 +2050,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaScenariosIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/staging/bootstrap': {
+      id: '/api/v1/selena/staging/bootstrap'
+      path: '/api/v1/selena/staging/bootstrap'
+      fullPath: '/api/v1/selena/staging/bootstrap'
+      preLoaderRoute: typeof ApiV1SelenaStagingBootstrapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/staging/payment-event': {
+      id: '/api/v1/selena/staging/payment-event'
+      path: '/api/v1/selena/staging/payment-event'
+      fullPath: '/api/v1/selena/staging/payment-event'
+      preLoaderRoute: typeof ApiV1SelenaStagingPaymentEventRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/staging/simulation': {
+      id: '/api/v1/selena/staging/simulation'
+      path: '/api/v1/selena/staging/simulation'
+      fullPath: '/api/v1/selena/staging/simulation'
+      preLoaderRoute: typeof ApiV1SelenaStagingSimulationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/cycles/$cycleId/runs': {
       id: '/api/v1/selena/cycles/$cycleId/runs'
       path: '/api/v1/selena/cycles/$cycleId/runs'
@@ -2076,6 +2153,13 @@ declare module '@tanstack/react-router' {
       path: '/api/v1/selena/readiness/scans/$scanId'
       fullPath: '/api/v1/selena/readiness/scans/$scanId'
       preLoaderRoute: typeof ApiV1SelenaReadinessScansScanIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/selena/staging/telegram/webhook': {
+      id: '/api/v1/selena/staging/telegram/webhook'
+      path: '/api/v1/selena/staging/telegram/webhook'
+      fullPath: '/api/v1/selena/staging/telegram/webhook'
+      preLoaderRoute: typeof ApiV1SelenaStagingTelegramWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/v1/selena/admin/local-ai-runs/$runId/retry': {
@@ -2395,6 +2479,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1ReportsIndexRoute: ApiV1ReportsIndexRoute,
   ApiV1SelenaPaymentsTestRoute: ApiV1SelenaPaymentsTestRoute,
   ApiV1SelenaReadinessVerifyRoute: ApiV1SelenaReadinessVerifyRoute,
+  ApiV1SelenaStagingBootstrapRoute: ApiV1SelenaStagingBootstrapRoute,
+  ApiV1SelenaStagingPaymentEventRoute: ApiV1SelenaStagingPaymentEventRoute,
+  ApiV1SelenaStagingSimulationRoute: ApiV1SelenaStagingSimulationRoute,
   ApiPlausibleJsScriptIndexRoute: ApiPlausibleJsScriptIndexRoute,
   ApiV1SelenaCyclesIndexRoute: ApiV1SelenaCyclesIndexRoute,
   ApiV1SelenaFindingsIndexRoute: ApiV1SelenaFindingsIndexRoute,
@@ -2422,6 +2509,8 @@ const rootRouteChildren: RootRouteChildren = {
     ApiV1SelenaProjectsProjectIdLocationsRoute,
   ApiV1SelenaReadinessScansScanIdRoute:
     ApiV1SelenaReadinessScansScanIdRouteWithChildren,
+  ApiV1SelenaStagingTelegramWebhookRoute:
+    ApiV1SelenaStagingTelegramWebhookRoute,
   ApiV1SelenaPilotCyclesIndexRoute: ApiV1SelenaPilotCyclesIndexRoute,
   ApiV1SelenaPilotObservationsIndexRoute:
     ApiV1SelenaPilotObservationsIndexRoute,

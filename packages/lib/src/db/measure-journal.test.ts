@@ -1,7 +1,11 @@
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
-import { reconcileJournalHold, recoverJournalDailyClaim } from "./measure-journal";
+import {
+	reconcileJournalExecutorSettledClaim,
+	reconcileJournalHold,
+	recoverJournalDailyClaim,
+} from "./measure-journal";
 
 describe("journal claim recovery client", () => {
 	it.each(["COMPLETED", "ABANDONED", "HOLD", "BUSY"] as const)(
@@ -110,6 +114,60 @@ describe("journal HOLD owner reconciliation client", () => {
 					},
 				),
 			).rejects.toThrow("SELENA_JOURNAL_HOLD_RECONCILIATION_RECEIPT_INVALID");
+		}
+	});
+});
+
+describe("journal executor-settled owner reconciliation client", () => {
+	const receipt = {
+		decision: "RECONCILED" as const,
+		settlementShape: "EXECUTOR_SETTLED" as const,
+		claimId: "33333333-3333-4333-8333-333333333333",
+		cycleId: "63e3103d-4d41-4716-ba86-9dd786ef0b1c",
+		revokedPermitCount: 0,
+		settledRunCount: 25,
+		costEventCount: 6,
+		unmatchedCostEventCount: 0,
+		providerCallUpperBound: 25,
+		observedCostUsd: "0.060000",
+		historicalExposureCapUsd: "0.500000",
+		providerCalls: null,
+		providerCallsStatus: "UNKNOWN_WITHIN_UPPER_BOUND" as const,
+		recurring: false as const,
+	};
+	const input = {
+		claimId: receipt.claimId,
+		actorId: "selena-owner-reconciler",
+		ownerDecisionRef: "owner-decision-2026-09-07-korafoodhall-oxylabs-canary-attempt-1",
+		runtimeQuiesced: true as const,
+		ambiguousSpendAcknowledged: true as const,
+	};
+
+	it("calls the executor-settled function with the exact owner decision and returns its receipt", async () => {
+		const execute = vi.fn(async (statement: SQL) => {
+			const query = new PgDialect().sqlToQuery(statement);
+			expect(query.sql).toContain("sv_reconcile_journal_executor_settled");
+			expect(query.params).toEqual([input.claimId, input.actorId, input.ownerDecisionRef, true, true]);
+			return { rows: [{ receipt }] };
+		});
+		await expect(reconcileJournalExecutorSettledClaim({ execute }, input)).resolves.toEqual(receipt);
+		expect(execute).toHaveBeenCalledOnce();
+	});
+
+	it("refuses a receipt of the other shape, so the wrong function cannot answer this call", async () => {
+		const { settlementShape: _shape, ...holdShaped } = receipt;
+		for (const badReceipt of [
+			undefined,
+			holdShaped,
+			{ ...receipt, settlementShape: "INTERRUPTED" },
+			{ ...receipt, providerCalls: 0 },
+		]) {
+			await expect(
+				reconcileJournalExecutorSettledClaim(
+					{ execute: vi.fn(async () => ({ rows: [{ receipt: badReceipt }] })) },
+					input,
+				),
+			).rejects.toThrow("SELENA_JOURNAL_EXECUTOR_SETTLED_RECEIPT_INVALID");
 		}
 	});
 });

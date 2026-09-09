@@ -10,6 +10,9 @@
  *
  * Everything here is a pure decision. The caller supplies today's counts and
  * performs the dispatch; nothing in this module reaches a database or provider.
+ * In the application the two caps are counted and decided by one database
+ * claim (sv_claim_free_auto_dispatch), because they span every tenant; the
+ * counts here let the same rule be read and tested without one.
  */
 
 export type FreeAutoDispatchConfig = {

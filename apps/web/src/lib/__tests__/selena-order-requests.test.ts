@@ -35,8 +35,12 @@ describe("plan request layer zero invariant", () => {
 		expect(updating).toContain("requireAdmin()");
 	});
 
-	it("fails closed before the cross-tenant promo cap until an atomic claim exists", () => {
-		expect(source).toContain("RLS_GLOBAL_CAP_ATOMIC_CLAIM_REQUIRED");
+	// The two daily caps span every tenant, and the runtime role cannot count
+	// other tenants' rows, so the count and the decision belong to one database
+	// claim; an application-side count would be both blind and racy.
+	it("decides the cross-tenant promo caps in the database, never by counting here", () => {
+		expect(source).toContain("claimFreeAutoDispatch(tx");
+		expect(source).toContain("releaseFreeAutoDispatchClaim(tx");
 		expect(source).not.toContain("await db\n");
 		expect(source).not.toContain("count()");
 	});

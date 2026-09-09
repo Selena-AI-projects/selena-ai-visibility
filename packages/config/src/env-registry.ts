@@ -553,15 +553,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		name: "SELENA_MEASUREMENT_APPROVED_COMMIT_SHA",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Commit the owner approved measurement for. The deployment gate refuses to execute any other one.",
+		description: "Commit the owner approved measurement for. The deployment gate refuses to execute any other one.",
 	},
 	{
 		name: "SELENA_MEASUREMENT_APPROVED_ENVIRONMENT",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Environment name that measurement approval covers.",
+		description: "Environment name that measurement approval covers.",
 	},
 	{
 		name: "SELENA_RECURRING_JOBS_ENABLED",
@@ -581,15 +579,54 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		name: "SELENA_PAYMENTS_ENABLED",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Set to 'true' to accept payment writes. Off by design while there is no live checkout.",
+		description: "Set to 'true' to accept payment writes. Off by design while there is no live checkout.",
 	},
 	{
 		name: "SELENA_PAYMENT_MODE",
 		scope: "server",
 		requiredBy: "optional",
+		description: "Which payment path is in effect. Fixture mode while live payments are off.",
+	},
+	{
+		name: "SELENA_STAGING_SIMULATION_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
 		description:
-			"Which payment path is in effect. Fixture mode while live payments are off.",
+			"Set to 'true' to accept the staging verification simulation. Refused outright in a production environment regardless of this value; production Telegram delivery stays on HOLD either way.",
+	},
+	{
+		name: "SELENA_SIMULATION_SIGNING_SECRET",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"HMAC secret for simulated payment events and Telegram connect tokens. Without it the simulation cannot accept an event or mint a link.",
+	},
+	{
+		name: "SELENA_SIMULATION_CONNECT_TTL_MINUTES",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"How long a staging connect link stays valid, in minutes. Left unset the product default applies; a rehearsal may lengthen it so the exercise does not fail on a round trip.",
+	},
+	{
+		name: "SELENA_TELEGRAM_BOT_TOKEN",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Staging Telegram bot credential. Never stored in the database and redacted from any error this code reports.",
+	},
+	{
+		name: "SELENA_TELEGRAM_BOT_USERNAME",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Staging Telegram bot username, used to build the connect deep link.",
+	},
+	{
+		name: "SELENA_TELEGRAM_WEBHOOK_SECRET",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Value Telegram echoes in X-Telegram-Bot-Api-Secret-Token, so an update that did not come from Telegram is refused.",
 	},
 	{
 		name: "SELENA_PROVIDER_BUDGET_USD",
@@ -616,36 +653,31 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		name: "SELENA_FREE_AUTO_DISPATCH_MAX_PER_PROJECT_PER_DAY",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Daily ceiling on free auto-dispatch for one project. Default 1.",
+		description: "Daily ceiling on free auto-dispatch for one project. Default 1.",
 	},
 	{
 		name: "SELENA_ANONYMOUS_SUGGEST_ENABLED",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Set to 'true' to let a visitor with no account request a profile suggestion.",
+		description: "Set to 'true' to let a visitor with no account request a profile suggestion.",
 	},
 	{
 		name: "SELENA_ANONYMOUS_SUGGEST_MAX_PER_DAY",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Daily ceiling on anonymous suggestions across every visitor.",
+		description: "Daily ceiling on anonymous suggestions across every visitor.",
 	},
 	{
 		name: "SELENA_ANONYMOUS_SUGGEST_MAX_PER_VISITOR_PER_DAY",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Daily ceiling on anonymous suggestions for one visitor.",
+		description: "Daily ceiling on anonymous suggestions for one visitor.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_ENDPOINT",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Overrides the Bright Data dataset endpoint. Unset uses the vendor default.",
+		description: "Overrides the Bright Data dataset endpoint. Unset uses the vendor default.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_CHATGPT",
@@ -658,148 +690,127 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		name: "SELENA_BRIGHTDATA_DATASET_GEMINI",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Gemini surface.",
+		description: "Collector id for the Gemini surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_PERPLEXITY",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Perplexity surface.",
+		description: "Collector id for the Perplexity surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_AI",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Google AI Mode surface.",
+		description: "Collector id for the Google AI Mode surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_SERP",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Google search results surface.",
+		description: "Collector id for the Google search results surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_MAPS_PLACE",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Google Maps place surface.",
+		description: "Collector id for the Google Maps place surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_MAPS_REVIEWS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Google Maps reviews surface.",
+		description: "Collector id for the Google Maps reviews surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_GOOGLE_HOTELS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Google Hotels surface.",
+		description: "Collector id for the Google Hotels surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_PROFILES",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Instagram profile surface.",
+		description: "Collector id for the Instagram profile surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_POSTS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Instagram post surface.",
+		description: "Collector id for the Instagram post surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_REELS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Instagram reel surface.",
+		description: "Collector id for the Instagram reel surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_INSTAGRAM_COMMENTS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Instagram comment surface.",
+		description: "Collector id for the Instagram comment surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_TIKTOK_PROFILES",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the TikTok profile surface.",
+		description: "Collector id for the TikTok profile surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_TIKTOK_POSTS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the TikTok post surface.",
+		description: "Collector id for the TikTok post surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_REDDIT_POSTS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the Reddit post surface.",
+		description: "Collector id for the Reddit post surface.",
 	},
 	{
 		name: "SELENA_BRIGHTDATA_DATASET_YOUTUBE_VIDEOS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Collector id for the YouTube video surface.",
+		description: "Collector id for the YouTube video surface.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_OWNER_APPROVED",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Owner approval for one Google AI Mode canary execution. Unset refuses the run.",
+		description: "Owner approval for one Google AI Mode canary execution. Unset refuses the run.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_ORGANIZATION_ID",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Organization the approved canary is attributed to.",
+		description: "Organization the approved canary is attributed to.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_PROJECT_ID",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Project the approved canary is attributed to.",
+		description: "Project the approved canary is attributed to.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_INPUT_JSON",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Exact input the approved canary sends, as JSON. Nothing is inferred when it is absent.",
+		description: "Exact input the approved canary sends, as JSON. Nothing is inferred when it is absent.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_COST_PREFLIGHT_JSON",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Cost preflight the owner approved for the canary, as JSON.",
+		description: "Cost preflight the owner approved for the canary, as JSON.",
 	},
 	{
 		name: "SELENA_GOOGLE_AI_MODE_CANARY_REDACTION_APPROVED",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Owner approval for the redaction applied to the canary's stored payload.",
+		description: "Owner approval for the redaction applied to the canary's stored payload.",
 	},
 	{
 		name: "SELENA_JOURNAL_PUBLISH_ENABLED",
@@ -812,29 +823,25 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		name: "SELENA_JOURNAL_PROJECTS",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Projects the journal publisher covers.",
+		description: "Projects the journal publisher covers.",
 	},
 	{
 		name: "SELENA_JOURNAL_SITE_REPO",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Repository the published journal is written to.",
+		description: "Repository the published journal is written to.",
 	},
 	{
 		name: "SELENA_JOURNAL_SITE_BASE",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Base path the published journal is served under.",
+		description: "Base path the published journal is served under.",
 	},
 	{
 		name: "SELENA_JOURNAL_FORCE",
 		scope: "server",
 		requiredBy: "optional",
-		description:
-			"Set to 'true' to republish a journal entry that is already present.",
+		description: "Set to 'true' to republish a journal entry that is already present.",
 	},
 	{
 		name: "SELENA_SUGGEST_LLM",
