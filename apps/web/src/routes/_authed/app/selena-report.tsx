@@ -278,7 +278,7 @@ function AIAnswersTable({
 																	? tr(locale, "brand named", "бренд назван")
 																	: tr(locale, "brand not named", "бренд не назван")}
 														</p>
-														<p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#3d362e]">
+														<p className="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm leading-6 text-[#3d362e]">
 															{answer.loading ? tr(locale, "Loading…", "Загружаем…") : answer.text}
 														</p>
 													</div>

@@ -1966,7 +1966,7 @@ function RunEvidence({ detail, locale }: { detail: RunDetail; locale: WorkspaceL
 				</p>
 			)}
 			{detail.answer.state === "present" ? (
-				<blockquote className="whitespace-pre-wrap rounded bg-[#faf6ee] p-2 text-[#3d362e]">
+				<blockquote className="whitespace-pre-wrap [overflow-wrap:anywhere] rounded bg-[#faf6ee] p-2 text-[#3d362e]">
 					{detail.answer.text}
 				</blockquote>
 			) : detail.answer.state === "deleted" ? (
