@@ -520,7 +520,7 @@ function SelenaWorkspace() {
 			</header>
 
 			<main className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:py-12">
-				<aside className="space-y-5">
+				<aside className="min-w-0 space-y-5">
 					<div>
 						<h1 className="selena-heading text-3xl text-[#181614]">{tr(locale, "Your projects", "Ваши проекты")}</h1>
 						<p className="mt-2 text-sm leading-6 text-[#574d45]">

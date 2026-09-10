@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svResponseMentions, svRuns, svScenarios } from "@workspace/lib/db/schema";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 import {
@@ -62,7 +62,7 @@ export const listSelenaRunsFn = createServerFn({ method: "GET" })
 				.from(svRuns)
 				.leftJoin(
 					svScenarios,
-					and(eq(svRuns.scenarioId, svScenarios.id), eq(svScenarios.organizationId, context.tenantId)),
+					and(sql`${svRuns.scenarioId} = ${svScenarios.id}::text`, eq(svScenarios.organizationId, context.tenantId)),
 				)
 				.where(and(eq(svRuns.cycleId, data.cycleId), eq(svRuns.organizationId, context.tenantId)))
 				.orderBy(desc(svRuns.finishedAt))
