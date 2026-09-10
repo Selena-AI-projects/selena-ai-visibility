@@ -22,6 +22,11 @@ if (runMode === undefined || runMode === "" || runMode === "journal") {
 		console.error("DATAFORSEO_PERPLEXITY_CANARY_COMMAND_FAILED");
 		process.exitCode = 1;
 	});
+} else if (runMode === "brightdata-response-canary") {
+	import("./brightdata-response-canary.js").catch(() => {
+		console.error("BRIGHTDATA_RESPONSE_CANARY_COMMAND_FAILED");
+		process.exitCode = 1;
+	});
 } else {
 	console.log("JOURNAL_MEASUREMENT_RUN_MODE_INVALID");
 	process.exit(0);

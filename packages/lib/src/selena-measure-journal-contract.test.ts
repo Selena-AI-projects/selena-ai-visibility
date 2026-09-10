@@ -13,6 +13,10 @@ const canarySource = readFileSync(
 	new URL("../../../apps/worker/src/scripts/dataforseo-perplexity-canary.ts", import.meta.url),
 	"utf8",
 );
+const brightDataCanarySource = readFileSync(
+	new URL("../../../apps/worker/src/scripts/brightdata-response-canary.ts", import.meta.url),
+	"utf8",
+);
 const workerPackage = JSON.parse(
 	readFileSync(new URL("../../../apps/worker/package.json", import.meta.url), "utf8"),
 ) as { scripts: Record<string, string> };
@@ -97,6 +101,26 @@ describe("journal measurement run modes", () => {
 		expectNoProviderCapabilityError(output);
 	}, 15_000);
 
+	it("keeps the Bright Data response canary disabled before credential access without exact opt-in", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				...approvedDeploymentEnv,
+				SELENA_MEASUREMENT_RUN_MODE: "brightdata-response-canary",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(output).toContain("BRIGHTDATA_RESPONSE_CANARY_DISABLED");
+		expect(output).not.toContain("BRIGHTDATA_API_TOKEN_REQUIRED");
+		expect(output).not.toContain("DATABASE_URL is required");
+	}, 15_000);
+
 	it.each([undefined, "4"])(
 		"rejects canary count %s before credential or database access",
 		(count) => {
@@ -148,6 +172,14 @@ describe("journal measurement run modes", () => {
 		expect(workerPackage.scripts["canary:dataforseo-perplexity"]).toBe(
 			"tsx src/scripts/dataforseo-perplexity-canary.ts",
 		);
+	});
+
+	it("wires the bounded Bright Data response canary through the approved wrapper", () => {
+		expect(entrypointSource).toContain('import("./brightdata-response-canary.js")');
+		expect(brightDataCanarySource).toContain("assertMeasurementDeploymentApproved(process.env)");
+		expect(brightDataCanarySource).toContain('const CANARY_SYSTEMS = ["chatgpt", "gemini"]');
+		expect(brightDataCanarySource).toContain("createBrightDataAdapter({");
+		expect(workerPackage.scripts["canary:brightdata-response"]).toBe("tsx src/scripts/brightdata-response-canary.ts");
 	});
 });
 
