@@ -64,7 +64,7 @@ function providerFailureReason(error: unknown): string {
 	const status = /(?:HTTP[_ ]|status(?: code)?[:= ]|\b)(4\d\d|5\d\d)\b/i.exec(message)?.[1];
 	if (status) return `PROVIDER_HTTP_${status}`;
 	if (message === "DataForSEO API Error: No response or tasks.") return "PROVIDER_RESPONSE_MISSING";
-	const taskCode = /^DataForSEO API Error:.*?\b(\d{5})\b/s.exec(message)?.[1];
+	const taskCode = /^DataForSEO API Error:[\s\S]*?\b(\d{5})\b/.exec(message)?.[1];
 	return taskCode ? `PROVIDER_TASK_${taskCode}` : "TRANSPORT_ERROR";
 }
 
