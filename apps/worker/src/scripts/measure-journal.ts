@@ -42,7 +42,11 @@ import { createOxylabsAdapter, oxylabsVisitorSurface, resolveOxylabsCost } from 
 import { db } from "@workspace/lib/db/db";
 import { recoverJournalDailyClaim } from "@workspace/lib/db/measure-journal";
 import * as schema from "@workspace/lib/db/schema";
-import { createSelenaMeasurementResolvers, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
+import {
+	analysisSubjectsFromProfile,
+	createSelenaMeasurementResolvers,
+	lockedProfileBlock,
+} from "@workspace/lib/selena-extraction-context";
 import { journalScenario, journalScenarioSlugs } from "@workspace/lib/selena-journal-scenarios";
 import type { SelenaMeasurementAdapter } from "@workspace/lib/selena-measurement";
 import {
@@ -608,13 +612,15 @@ async function measure(slug: string): Promise<void> {
 	try {
 		const profile = await repositories.profiles.get(ctx, project.id);
 		if (!profile) throw new Error(`SELENA_PROFILE_MISSING: ${slug}`);
+		const frozenProfile = lockedProfileBlock(profile);
 		const lock = await repositories.locks.allocate(ctx, {
 			projectId: project.id,
 			snapshot: {
 				measurementScope: { scenarios: rows.map((row) => row.id), systems, repeats: 1 },
 				// Frozen with the scope so a later profile edit cannot change what
 				// this measurement is read against.
-				profile: lockedProfileBlock(profile),
+				profile: frozenProfile,
+				analysisSubjects: analysisSubjectsFromProfile(frozenProfile),
 				questionSetVersion: scenario.version,
 				journalClaim: { id: claim.id, utcDay: claim.utcDay, attempt: claim.attempt },
 			},

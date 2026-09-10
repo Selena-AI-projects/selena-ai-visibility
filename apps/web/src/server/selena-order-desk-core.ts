@@ -12,14 +12,13 @@ import {
 	svQuotes,
 	svScenarios,
 } from "@workspace/lib/db/schema";
-import { lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
+import { analysisSubjectsFromProfile, lockedProfileBlock } from "@workspace/lib/selena-extraction-context";
 import {
 	allocateConfigurationLockInTransaction,
 	createSelenaRepositories,
 	type SelenaRepositoryContext,
 } from "@workspace/lib/selena-visibility-repositories";
 import {
-	analysisSubjectsSchema,
 	apiModelIds,
 	assertPaymentAllowed,
 	expectedRunsFromScope,
@@ -75,19 +74,6 @@ function readProfileQuestions(snapshot: unknown): ProfileQuestion[] {
 				intentType: typeof record.intentType === "string" ? record.intentType : "discovery",
 			},
 		];
-	});
-}
-
-function readProfileCompetitors(snapshot: unknown): { name: string; domain?: string }[] {
-	if (!Array.isArray(snapshot)) return [];
-	return snapshot.flatMap((entry) => {
-		if (typeof entry !== "object" || entry === null) return [];
-		const record = entry as Record<string, unknown>;
-		const name = typeof record.name === "string" ? record.name.trim() : "";
-		if (name === "") return [];
-		const domains = Array.isArray(record.domains) ? record.domains : [];
-		const domain = domains.find((value): value is string => typeof value === "string" && value.trim() !== "");
-		return [domain ? { name, domain } : { name }];
 	});
 }
 
@@ -406,13 +392,7 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			)
 			.limit(1);
 		if (!profile) throw new Error("SELENA_PROFILE_MISSING");
-		const subjects = analysisSubjectsSchema.parse({
-			brand: {
-				name: profile.brandName,
-				domain: profile.primaryDomain,
-			},
-			competitors: readProfileCompetitors(profile.competitorSnapshot),
-		});
+		const subjects = analysisSubjectsFromProfile(profile);
 
 		const lock = await allocateConfigurationLockInTransaction(tx, context, {
 			projectId: data.projectId,

@@ -10,6 +10,7 @@ import {
 	svWebsiteSnapshots,
 } from "@workspace/lib/db/schema";
 import { analyzeAnswer } from "@workspace/lib/selena-answer-analysis";
+import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import {
 	buildGraderReport,
 	type GraderChannel,
@@ -22,7 +23,6 @@ import {
 	actionPlanSchema,
 	measurementScopeSchema,
 	monthlyAnswerAllowance,
-	parseAnalysisSubjects,
 	planIds,
 	type SelenaPlanId,
 } from "@workspace/selena-visibility-contracts";
@@ -234,7 +234,7 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 				.limit(1),
 		);
 		const snapshot = (lock?.snapshot ?? null) as Record<string, unknown> | null;
-		const subjects = parseAnalysisSubjects(lock?.snapshot);
+		const subjects = parseLockedAnalysisSubjects(lock?.snapshot);
 		const scope = measurementScopeSchema.safeParse(snapshot?.measurementScope);
 		view.planId = readString(snapshot?.planId);
 		const planForAllowance = (planIds as readonly string[]).includes(view.planId ?? "")

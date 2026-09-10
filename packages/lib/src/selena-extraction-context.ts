@@ -1,3 +1,8 @@
+import {
+	type AnalysisSubjects,
+	analysisSubjectsSchema,
+	parseAnalysisSubjects,
+} from "@workspace/selena-visibility-contracts";
 import { and, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { z } from "zod";
@@ -96,6 +101,28 @@ export function lockedProfileBlock(profile: ExtractionProfile): {
 		return [{ name, domains }];
 	});
 	return { brandName: profile.brandName, primaryDomain: profile.primaryDomain, competitorSnapshot };
+}
+
+export function analysisSubjectsFromProfile(profile: ExtractionProfile): AnalysisSubjects {
+	const frozen = lockedProfileBlock(profile);
+	return analysisSubjectsSchema.parse({
+		brand: {
+			name: frozen.brandName,
+			...(frozen.primaryDomain.trim() === "" ? {} : { domain: frozen.primaryDomain }),
+		},
+		competitors: frozen.competitorSnapshot.map((competitor) => ({
+			name: competitor.name,
+			...(competitor.domains[0] ? { domain: competitor.domains[0] } : {}),
+		})),
+	});
+}
+
+/** Reads either canonical subjects or the frozen profile used by journal locks. */
+export function parseLockedAnalysisSubjects(snapshot: unknown): AnalysisSubjects | null {
+	const subjects = parseAnalysisSubjects(snapshot);
+	if (subjects) return subjects;
+	const profile = parseLockedProfile(snapshot);
+	return profile ? analysisSubjectsFromProfile(profile) : null;
 }
 
 /**

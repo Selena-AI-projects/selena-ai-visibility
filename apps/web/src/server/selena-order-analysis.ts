@@ -3,8 +3,8 @@ import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svConfigurationLocks, svOrders } from "@workspace/lib/db/schema";
 import { type AnswerAnalysis, analyzeAnswer, summarizeScenarioSet } from "@workspace/lib/selena-answer-analysis";
+import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
-import { parseAnalysisSubjects } from "@workspace/selena-visibility-contracts";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth/helpers";
@@ -65,7 +65,7 @@ export async function computeOrderAnalysis(context: SelenaRepositoryContext, ord
 		});
 		// Subjects come from the lock, never from the live profile: the report
 		// answers for the configuration the customer paid against.
-		const subjects = parseAnalysisSubjects(lock?.snapshot);
+		const subjects = parseLockedAnalysisSubjects(lock?.snapshot);
 		if (!subjects) throw new Error("SELENA_LOCK_SUBJECTS_MISSING");
 
 		const runs = await repositories.runs.listForOrder(context, data.orderId);

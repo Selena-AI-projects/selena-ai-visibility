@@ -1,7 +1,14 @@
 import { runMeasurementSchema } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it } from "vitest";
 import { extractMeasurement } from "./selena-answer-extraction";
-import { buildExtractionContext, hostOf, lockedProfileBlock, parseLockedProfile } from "./selena-extraction-context";
+import {
+	analysisSubjectsFromProfile,
+	buildExtractionContext,
+	hostOf,
+	lockedProfileBlock,
+	parseLockedAnalysisSubjects,
+	parseLockedProfile,
+} from "./selena-extraction-context";
 
 const profile = {
 	brandName: "KORA Food Hall",
@@ -137,10 +144,62 @@ describe("lockedProfileBlock", () => {
 	});
 
 	it("drops nameless entries and non-arrays instead of freezing garbage", () => {
-		expect(lockedProfileBlock({ brandName: "K", primaryDomain: "k.com", competitorSnapshot: "oops" }).competitorSnapshot).toEqual([]);
+		expect(
+			lockedProfileBlock({ brandName: "K", primaryDomain: "k.com", competitorSnapshot: "oops" }).competitorSnapshot,
+		).toEqual([]);
 		expect(
 			lockedProfileBlock({ brandName: "K", primaryDomain: "k.com", competitorSnapshot: [{ domains: ["x.com"] }, null] })
 				.competitorSnapshot,
 		).toEqual([]);
+	});
+});
+
+describe("parseLockedAnalysisSubjects", () => {
+	it("uses canonical subjects when the lock carries both representations", () => {
+		const canonical = {
+			brand: { name: "Canonical KORA", domain: "canonical.example" },
+			competitors: [{ name: "Canonical Rival" }],
+		};
+		expect(
+			parseLockedAnalysisSubjects({
+				analysisSubjects: canonical,
+				profile: lockedProfileBlock(profile),
+			}),
+		).toEqual(canonical);
+	});
+
+	it("derives subjects from a frozen profile-only journal lock", () => {
+		expect(parseLockedAnalysisSubjects({ profile: lockedProfileBlock(profile) })).toEqual({
+			brand: { name: "KORA Food Hall", domain: "https://www.korafoodhall.com/menu" },
+			competitors: [{ name: "Rival Cafe", domain: "rivalcafe.id" }, { name: "Other Place" }],
+		});
+	});
+
+	it("does not replace corrupt canonical subjects with the profile fallback", () => {
+		expect(() =>
+			parseLockedAnalysisSubjects({
+				analysisSubjects: { brand: { name: "" } },
+				profile: lockedProfileBlock(profile),
+			}),
+		).toThrow();
+	});
+
+	it("keeps a true legacy lock unknown", () => {
+		expect(parseLockedAnalysisSubjects({ measurementScope: {} })).toBeNull();
+	});
+});
+
+describe("analysisSubjectsFromProfile", () => {
+	it("uses the first frozen competitor domain like the order desk", () => {
+		expect(
+			analysisSubjectsFromProfile({
+				brandName: "KORA",
+				primaryDomain: "korafoodhall.com",
+				competitorSnapshot: [{ name: "Rival", domains: ["first.example", "second.example"] }],
+			}),
+		).toEqual({
+			brand: { name: "KORA", domain: "korafoodhall.com" },
+			competitors: [{ name: "Rival", domain: "first.example" }],
+		});
 	});
 });
