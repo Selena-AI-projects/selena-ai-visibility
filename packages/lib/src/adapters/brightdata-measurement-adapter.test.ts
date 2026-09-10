@@ -17,17 +17,15 @@ import {
 	createBrightDataAdapter,
 	describeUnreadablePayload,
 	extractBrightDataSources,
-	SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS,
-	SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	parseBrightDataAnswer,
 	resolveBrightDataCost,
+	SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS,
+	SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 } from "./brightdata-measurement-adapter";
 
 const API_KEY = "brd-secret-owner-token";
 const ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const DATASET_ID = "gd_m7aof0k82r803d5bjm";
-/** The URL the adapter actually calls: the collector is chosen in the query. */
-const CALLED_URL = `${ENDPOINT}?dataset_id=${DATASET_ID}&notify=false`;
 const SCENARIO_TEXT = "Which spa in Canggu is best for a deep tissue massage?";
 
 function permitFor(overrides: Partial<SelenaExecutablePermit> = {}): SelenaExecutablePermit {
@@ -162,6 +160,11 @@ describe("Bright Data measurement adapter", () => {
 		expect(triggerUrl.pathname).toBe("/datasets/v3/trigger");
 		expect(triggerUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
 		expect(triggerUrl.searchParams.get("include_errors")).toBe("true");
+		const outputFields = triggerUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
+		expect(outputFields).toContain("answer_text_markdown");
+		expect(outputFields).toContain("answer_html");
+		expect(outputFields).toContain("answer_section_html");
+		expect(outputFields).not.toContain("response_raw");
 		expect(JSON.parse(String(seen[0]?.init?.body))).toEqual([
 			{
 				url: "https://www.perplexity.ai",
@@ -340,8 +343,7 @@ describe("Bright Data measurement adapter", () => {
 			const url = String(input);
 			if (url.includes("/scrape")) return jsonResponse({ snapshot_id: "s_slow_gemini" });
 			if (url.includes("/progress/")) return jsonResponse({ status: Date.now() >= readyAt ? "ready" : "running" });
-			if (url.includes("/snapshot/"))
-				return jsonResponse([{ answer_html: "<p>KORA Food Hall is one of them.</p>" }]);
+			if (url.includes("/snapshot/")) return jsonResponse([{ answer_html: "<p>KORA Food Hall is one of them.</p>" }]);
 			throw new Error(`UNEXPECTED_TEST_URL:${url}`);
 		});
 		const fetchImpl = fetchSpy as unknown as typeof fetch;
@@ -365,9 +367,9 @@ describe("Bright Data measurement adapter", () => {
 	it("says what an unreadable payload carried, without quoting it or the key", () => {
 		const scrub = (value: string) => value.split("secret-key").join("[redacted-credential]");
 
-		expect(describeUnreadablePayload([{ status: "running", message: "Snapshot is not ready yet, try again in 30s" }], scrub)).toBe(
-			"keys=status,message status=running message=Snapshot is not ready yet, try again in 30s",
-		);
+		expect(
+			describeUnreadablePayload([{ status: "running", message: "Snapshot is not ready yet, try again in 30s" }], scrub),
+		).toBe("keys=status,message status=running message=Snapshot is not ready yet, try again in 30s");
 		expect(describeUnreadablePayload({ warning: "used secret-key" }, scrub)).toBe(
 			"keys=warning warning=used [redacted-credential]",
 		);
@@ -457,7 +459,16 @@ describe("Bright Data measurement adapter", () => {
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		expect(globalFetch).not.toHaveBeenCalled();
 		const [url, init] = fetchImpl.mock.calls[0];
-		expect(url).toBe(CALLED_URL);
+		const calledUrl = new URL(String(url));
+		expect(`${calledUrl.origin}${calledUrl.pathname}`).toBe(ENDPOINT);
+		expect(calledUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
+		expect(calledUrl.searchParams.get("notify")).toBe("false");
+		const outputFields = calledUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
+		expect(outputFields).toEqual(
+			expect.arrayContaining(["answer_text_markdown", "citations", "search_sources", "snapshot_id", "cost", "error"]),
+		);
+		for (const heavyField of ["answer_html", "answer_section_html", "response_raw", "source_html"])
+			expect(outputFields).not.toContain(heavyField);
 		expect(init?.method).toBe("POST");
 		const headers = init?.headers as Record<string, string>;
 		expect(headers.Authorization).toBe(`Bearer ${API_KEY}`);
@@ -490,6 +501,20 @@ describe("Bright Data measurement adapter", () => {
 		// A scraped surface reports no token accounting, so none is claimed.
 		expect(outcome.tokenUsage).toBeUndefined();
 		expect(() => runOutcomeSchema.parse(outcome)).not.toThrow();
+	});
+
+	it("projects Gemini responses to answer and evidence fields without rendered pages", async () => {
+		const fetchImpl = respondWith(jsonResponse(successPayload()));
+
+		await adapterWith(fetchImpl, { system: "gemini" }).execute(permitFor({ systemId: "Gemini" }));
+
+		const calledUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
+		const outputFields = calledUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
+		expect(outputFields).toEqual(
+			expect.arrayContaining(["answer_text_markdown", "citations", "search_sources", "snapshot_id", "cost", "error"]),
+		);
+		for (const heavyField of ["answer_html", "answer_section_html", "response_raw", "source_html"])
+			expect(outputFields).not.toContain(heavyField);
 	});
 
 	it("prefers a provider-reported cost and falls back to the local estimate", async () => {
@@ -641,7 +666,9 @@ describe("Bright Data measurement adapter", () => {
 		}).execute(permitFor());
 
 		const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body));
+		const calledUrl = new URL(String(fetchImpl.mock.calls[0][0]));
 		expect(body).toEqual({ collector: "chatgpt", query: SCENARIO_TEXT });
+		expect(calledUrl.searchParams.has("custom_output_fields")).toBe(false);
 		expect(outcome).toMatchObject({ status: "SUCCEEDED", rawResponseReference: "brightdata:req-42" });
 
 		// A parser that throws on an unfamiliar payload is a refusal, not a crash.
@@ -983,7 +1010,9 @@ describe("Bright Data measurement adapter", () => {
 		// A reply that itself carries the error fields (no snapshot handle) is
 		// the same provider row, never an unrecognized shape.
 		const replyPath = respondWith(jsonResponse(errorRow));
-		const direct = await adapterWith(replyPath, { system: "perplexity" }).execute(permitFor({ systemId: "Perplexity" }));
+		const direct = await adapterWith(replyPath, { system: "perplexity" }).execute(
+			permitFor({ systemId: "Perplexity" }),
+		);
 		expect(direct).toMatchObject({ status: "INVALID", validity: "INVALID", invalidReason: "PROVIDER_ERROR_ROW" });
 		expect(replyPath).toHaveBeenCalledTimes(1);
 		expectCostUsd(direct, expectedBrightDataCost(1));

@@ -36,9 +36,9 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 // Measured on the account's own collectors: a ChatGPT answer arrived at 0.97 MB
 // and a Perplexity one at 2.6 MB, because the payload carries the rendered
 // answer alongside the text. A cap below those turns real answers into
-// RESPONSE_TOO_LARGE. Two Gemini answers in the KORA cycle of 2026-09-04
-// exceeded even this ceiling; how far past it they ran was never measured, so
-// any larger number here would be a guess rather than a fix.
+// RESPONSE_TOO_LARGE. Gemini answers in the KORA cycles exceeded even this
+// ceiling; the request projection below removes rendered page fields before
+// transfer instead of guessing at a larger memory allowance.
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 export const brightDataVisitorSystems = ["chatgpt", "gemini", "perplexity"] as const;
@@ -198,6 +198,27 @@ const ANSWER_TEXT_FIELDS = [
 // the list is read through rather than stopped at the first field present.
 const SOURCE_FIELDS = ["citations", "search_sources", "references", "links_attached", "sources"] as const;
 const REQUEST_ID_FIELDS = ["snapshot_id", "request_id", "response_id", "id"] as const;
+const LIGHTWEIGHT_OUTPUT_FIELDS = [
+	...ANSWER_TEXT_FIELDS,
+	...SOURCE_FIELDS,
+	...REQUEST_ID_FIELDS,
+	"cost",
+	"status",
+	"message",
+	"error",
+	"error_code",
+	"warning",
+] as const;
+
+function customOutputFields(system: BrightDataVisitorSystem): string {
+	// Filtering at collection time prevents rendered page payloads from reaching
+	// the worker. Perplexity keeps its two answer-only HTML fallbacks; the other
+	// surfaces have confirmed markdown answer fields and do not need them.
+	return [
+		...LIGHTWEIGHT_OUTPUT_FIELDS,
+		...(system === "perplexity" ? (["answer_html", "answer_section_html"] as const) : []),
+	].join("|");
+}
 
 /**
  * The scrape call waits for the answer and, when the collector runs past its
@@ -213,9 +234,9 @@ const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 // minutes, and the KORA cycle of 2026-09-04 lost four Gemini answers to
 // SNAPSHOT_NOT_READY at the twelve-minute default — every one of them produced
 // and billed. The larger budget stays scoped to the surfaces observed to need
-// it so the faster collector keeps its existing ceiling. It does nothing for
-// the two answers the same cycle lost to RESPONSE_TOO_LARGE: a size ceiling is
-// not a wait, and that surface still has no fix.
+// it so the faster collector keeps its existing ceiling.
+// RESPONSE_TOO_LARGE is handled separately by projecting the collector output;
+// a larger deadline cannot make an oversized response safe to buffer.
 export const SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
 // The worker lease includes room after the provider deadline for snapshot
 // cancellation and the transaction that makes the run and cycle terminal.
@@ -492,6 +513,9 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 		}
 		url.searchParams.set("dataset_id", deps.datasetId.trim());
 		url.searchParams.set("notify", "false");
+		// A custom parser defines its own response contract, so projecting it to
+		// the default parser's fields would silently remove data it may require.
+		if (!deps.parseAnswer) url.searchParams.set("custom_output_fields", customOutputFields(deps.system));
 		if (collectionMode === "trigger") url.searchParams.set("include_errors", "true");
 		return url.toString();
 	})();
@@ -692,7 +716,11 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 				const snapshotId = snapshotIdFrom(payload);
 				if (snapshotId === null) {
 					console.warn(`[brightdata] ${deps.system} reply carried no answer and no handle — ${describe(payload)}`);
-					return invalidOutcome(permit, providerErrorRowReason(deps.system, payload) ?? "MALFORMED_RESPONSE", costFields());
+					return invalidOutcome(
+						permit,
+						providerErrorRowReason(deps.system, payload) ?? "MALFORMED_RESPONSE",
+						costFields(),
+					);
 				}
 				const collected = await awaitSnapshot(
 					snapshotId,
@@ -711,8 +739,14 @@ export function createBrightDataAdapter(deps: BrightDataAdapterDeps): SelenaMeas
 					answer = null;
 				}
 				if (!answer) {
-					console.warn(`[brightdata] ${deps.system} snapshot ${snapshotId} held no readable answer — ${describe(collected)}`);
-					return invalidOutcome(permit, providerErrorRowReason(deps.system, collected) ?? "MALFORMED_RESPONSE", costFields());
+					console.warn(
+						`[brightdata] ${deps.system} snapshot ${snapshotId} held no readable answer — ${describe(collected)}`,
+					);
+					return invalidOutcome(
+						permit,
+						providerErrorRowReason(deps.system, collected) ?? "MALFORMED_RESPONSE",
+						costFields(),
+					);
 				}
 				answer = { ...answer, providerRequestId: answer.providerRequestId ?? snapshotId };
 			}
