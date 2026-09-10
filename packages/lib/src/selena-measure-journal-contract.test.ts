@@ -121,6 +121,61 @@ describe("journal measurement run modes", () => {
 		expect(output).not.toContain("DATABASE_URL is required");
 	}, 15_000);
 
+	it("keeps the Bright Data persisted canary disabled before credential or database access without exact opt-in", () => {
+		const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+			cwd: repositoryRoot,
+			encoding: "utf8",
+			env: {
+				PATH: process.env.PATH,
+				...approvedDeploymentEnv,
+				SELENA_MEASUREMENT_RUN_MODE: "brightdata-persisted-canary",
+			},
+			timeout: 10_000,
+		});
+		const output = `${result.stdout}\n${result.stderr}`;
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(output).toContain("BRIGHTDATA_PERSISTED_CANARY_DISABLED");
+		expect(output).not.toContain("BRIGHTDATA_API_TOKEN is required");
+		expect(output).not.toContain("DATABASE_URL is required");
+	}, 15_000);
+
+	it.each([
+		[
+			"BRIGHTDATA_PERSISTED_CANARY_ADAPTER_INVALID",
+			{ SELENA_MEASUREMENT_ADAPTER: "branch-c", SELENA_JOURNAL_PROJECTS: "korafoodhall" },
+		],
+		[
+			"BRIGHTDATA_PERSISTED_CANARY_PROJECTS_INVALID",
+			{ SELENA_MEASUREMENT_ADAPTER: "brightdata", SELENA_JOURNAL_PROJECTS: "all" },
+		],
+	])(
+		"fails the persisted canary closed on %s before credentials or database access",
+		(guard, scopedEnv) => {
+			const result = spawnSync(process.execPath, ["--import", "tsx", scriptPath], {
+				cwd: repositoryRoot,
+				encoding: "utf8",
+				env: {
+					PATH: process.env.PATH,
+					...approvedDeploymentEnv,
+					SELENA_MEASUREMENT_RUN_MODE: "brightdata-persisted-canary",
+					SELENA_BRIGHTDATA_PERSISTED_CANARY_ENABLED: "true",
+					...scopedEnv,
+				},
+				timeout: 10_000,
+			});
+			const output = `${result.stdout}\n${result.stderr}`;
+
+			expect(result.error).toBeUndefined();
+			expect(result.status).not.toBe(0);
+			expect(output).toContain(guard);
+			expect(output).not.toContain("BRIGHTDATA_API_TOKEN is required");
+			expect(output).not.toContain("DATABASE_URL is required");
+		},
+		15_000,
+	);
+
 	it.each([undefined, "4"])(
 		"rejects canary count %s before credential or database access",
 		(count) => {
@@ -180,6 +235,15 @@ describe("journal measurement run modes", () => {
 		expect(brightDataCanarySource).toContain('const CANARY_SYSTEMS = ["chatgpt", "gemini"]');
 		expect(brightDataCanarySource).toContain("createBrightDataAdapter({");
 		expect(workerPackage.scripts["canary:brightdata-response"]).toBe("tsx src/scripts/brightdata-response-canary.ts");
+	});
+
+	it("wires the persisted Bright Data canary through the guarded journal entrypoint", () => {
+		expect(entrypointSource).toContain('runMode === "brightdata-persisted-canary"');
+		expect(entrypointSource).toContain("SELENA_BRIGHTDATA_PERSISTED_CANARY_ENABLED");
+		expect(workerPackage.scripts["canary:brightdata-persisted"]).toContain(
+			"tsx src/scripts/measure-journal-entrypoint.ts",
+		);
+		expect(workerPackage.scripts["canary:brightdata-persisted"]).not.toContain("tsx src/scripts/measure-journal.ts");
 	});
 });
 
@@ -276,6 +340,8 @@ describe("journal durable daily claim", () => {
 		expect(allocator).toContain('["CLAIMED", "EXECUTING", "HOLD"]');
 		expect(allocator).toContain('kind: "HOLD"');
 		expect(allocator).toContain('eq(schema.svJournalDailyClaims.status, "COMPLETED")');
+		expect(allocator).toContain("BRIGHTDATA_PERSISTED_CANARY_QUESTION_SET_SUFFIX");
+		expect(allocator).toContain("unresolvedQuestionSet");
 		expect(allocator).toContain("if (completed && !FORCE)");
 		expect(allocator.indexOf("if (completed && !FORCE)")).toBeLessThan(allocator.indexOf("const [prior]"));
 		expect(allocator).toContain('event: "JOURNAL_DAILY_CLAIM_CLAIMED"');

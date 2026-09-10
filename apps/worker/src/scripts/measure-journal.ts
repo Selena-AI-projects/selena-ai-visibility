@@ -57,9 +57,27 @@ import {
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+	assertBrightDataPersistedCanaryEnvironment,
+	assertBrightDataPersistedCanaryExecutionScope,
+	BRIGHTDATA_PERSISTED_CANARY_ADAPTERS,
+	BRIGHTDATA_PERSISTED_CANARY_PROJECT,
+	BRIGHTDATA_PERSISTED_CANARY_QUESTION_SET_SUFFIX,
+	BRIGHTDATA_PERSISTED_CANARY_RUN_MODE,
+	BRIGHTDATA_PERSISTED_CANARY_SURFACES,
+	journalQuestionSetVersion,
+	journalQuestionsForRun,
+	validateBrightDataPersistedCanaryEvidence,
+} from "./brightdata-persisted-canary-contract.js";
 import { assertMeasurementDeploymentApproved } from "./measurement-deployment-gate.js";
 
 assertMeasurementDeploymentApproved(process.env);
+
+const persistedCanary = process.env.SELENA_MEASUREMENT_RUN_MODE === BRIGHTDATA_PERSISTED_CANARY_RUN_MODE;
+if (persistedCanary) {
+	assertBrightDataPersistedCanaryEnvironment(process.env);
+	journalQuestionsForRun(journalScenario(BRIGHTDATA_PERSISTED_CANARY_PROJECT).questions, true);
+}
 
 /** What Bright Data's pricing page showed per answer; the ceiling is checked against it. */
 const PRICE_PER_ANSWER_USD = 0.0015;
@@ -146,8 +164,12 @@ if (!config.enabled) {
 }
 
 /** Only the surfaces the configured name can actually route to are built. */
-const selected = new Set(measurementAdapterNamesFor(config.adapter));
-const brightDataSelected = BRIGHTDATA_SURFACES.filter((surface) => selected.has(`brightdata-${surface}`));
+const selected = new Set(
+	persistedCanary ? BRIGHTDATA_PERSISTED_CANARY_ADAPTERS : measurementAdapterNamesFor(config.adapter),
+);
+const brightDataSelected = (persistedCanary ? BRIGHTDATA_PERSISTED_CANARY_SURFACES : BRIGHTDATA_SURFACES).filter(
+	(surface) => selected.has(`brightdata-${surface}`),
+);
 const dataForSeoSelected = selected.has("dataforseo-perplexity");
 const oxylabsSelected = selected.has("oxylabs-perplexity");
 const olostepSelected = selected.has("olostep-perplexity");
@@ -156,8 +178,11 @@ const olostepSelected = selected.has("olostep-perplexity");
 const apiKey = brightDataSelected.length > 0 ? required("BRIGHTDATA_API_TOKEN") : "";
 
 const requested = (process.env.SELENA_JOURNAL_PROJECTS ?? "").trim();
-const slugs =
-	requested === "" || requested === "all" ? journalScenarioSlugs : requested.split(",").map((s) => s.trim());
+const slugs = persistedCanary
+	? [BRIGHTDATA_PERSISTED_CANARY_PROJECT]
+	: requested === "" || requested === "all"
+		? journalScenarioSlugs
+		: requested.split(",").map((s) => s.trim());
 const unknown = slugs.filter((slug) => !journalScenarioSlugs.includes(slug));
 if (unknown.length > 0) {
 	console.error(`Unknown project(s): ${unknown.join(", ")}. Known: ${journalScenarioSlugs.join(", ")}`);
@@ -267,7 +292,11 @@ async function projectFor(slug: string) {
 }
 
 /** The question rows, approved. Idempotent by text, so a re-run adds only what is new. */
-async function scenarioRowsFor(projectId: string, slug: string) {
+async function scenarioRowsFor(
+	projectId: string,
+	slug: string,
+	questions: readonly string[] = journalScenario(slug).questions,
+) {
 	const scenario = journalScenario(slug);
 	const [existingFamily] = await db
 		.select({ id: schema.svPromptFamilies.id })
@@ -294,7 +323,7 @@ async function scenarioRowsFor(projectId: string, slug: string) {
 	const existing = await repositories.scenarios.list(ctx, family.id);
 	const known = new Map(existing.map((row) => [row.text, row]));
 	const rows = [];
-	for (const text of scenario.questions) {
+	for (const text of questions) {
 		const row =
 			known.get(text) ??
 			(await repositories.scenarios.create(ctx, {
@@ -351,6 +380,11 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 		await tx.execute(
 			sql`select pg_advisory_xact_lock(hashtextextended('selena-journal:' || ${tenantId} || ':' || ${projectId}::text, 0))`,
 		);
+		// A canary's ambiguous spend blocks only that canary identity; ordinary
+		// journal versions keep their existing project-wide unresolved fence.
+		const unresolvedQuestionSet = version.endsWith(BRIGHTDATA_PERSISTED_CANARY_QUESTION_SET_SUFFIX)
+			? eq(schema.svJournalDailyClaims.questionSetVersion, version)
+			: sql`${schema.svJournalDailyClaims.questionSetVersion} NOT LIKE ${`%${BRIGHTDATA_PERSISTED_CANARY_QUESTION_SET_SUFFIX}`}`;
 		const [unresolved] = await tx
 			.select({
 				id: schema.svJournalDailyClaims.id,
@@ -364,6 +398,7 @@ async function acquireDailyClaim(projectId: string, version: string): Promise<Da
 				and(
 					eq(schema.svJournalDailyClaims.organizationId, tenantId),
 					eq(schema.svJournalDailyClaims.projectId, projectId),
+					unresolvedQuestionSet,
 					inArray(schema.svJournalDailyClaims.status, ["CLAIMED", "EXECUTING", "HOLD"]),
 				),
 			)
@@ -522,7 +557,9 @@ async function recoverDailyClaim(claimId: string): Promise<"COMPLETED" | "ABANDO
 
 async function measure(slug: string): Promise<void> {
 	const { project, scenario } = await projectFor(slug);
-	const rows = await scenarioRowsFor(project.id, slug);
+	const questions = journalQuestionsForRun(scenario.questions, persistedCanary);
+	const rows = await scenarioRowsFor(project.id, slug, questions);
+	const questionSetVersion = journalQuestionSetVersion(scenario.version, persistedCanary);
 	// One system per adapter that was actually built, under the name the
 	// catalog sells it as — each adapter's own map, so the two cannot drift
 	// apart. A surface no registered adapter measures gets no permit: a permit
@@ -583,7 +620,7 @@ async function measure(slug: string): Promise<void> {
 		process.exitCode = 1;
 		return;
 	}
-	const claim = await acquireDailyClaim(project.id, scenario.version);
+	const claim = await acquireDailyClaim(project.id, questionSetVersion);
 	if (claim.kind === "ALREADY_COMPLETED") {
 		console.log(
 			`${scenario.brand}: already measured on ${claim.utcDay} attempt ${claim.attempt} — set SELENA_JOURNAL_FORCE=1 to repeat`,
@@ -621,7 +658,7 @@ async function measure(slug: string): Promise<void> {
 				// this measurement is read against.
 				profile: frozenProfile,
 				analysisSubjects: analysisSubjectsFromProfile(frozenProfile),
-				questionSetVersion: scenario.version,
+				questionSetVersion,
 				journalClaim: { id: claim.id, utcDay: claim.utcDay, attempt: claim.attempt },
 			},
 			engineSha: scenario.version,
@@ -655,11 +692,20 @@ async function measure(slug: string): Promise<void> {
 				auditDetails: {
 					source: "selena-measure-journal",
 					slug,
-					questionSetVersion: scenario.version,
+					questionSetVersion,
 					journalClaim: { id: claim.id, utcDay: claim.utcDay, attempt: claim.attempt },
 				},
 			},
 		});
+		if (persistedCanary) {
+			assertBrightDataPersistedCanaryExecutionScope({
+				rowTexts: rows.map((row) => row.text),
+				systems: systems.map((system) => system.systemId),
+				expectedRuns,
+				estimatedCostUsd: cost,
+				permitSystems: dispatch.permits.map((permit) => permit.systemId),
+			});
+		}
 
 		providerBoundaryCrossed = true;
 		await transitionDailyClaim(claim.id, "CLAIMED", "EXECUTING");
@@ -671,7 +717,12 @@ async function measure(slug: string): Promise<void> {
 				ctx,
 				store: repositories.runs,
 				adapters,
-				config,
+				config:
+					persistedCanary && permit.systemId === brightDataVisitorSurface.chatgpt
+						? { ...config, adapter: "brightdata-chatgpt" }
+						: persistedCanary && permit.systemId === brightDataVisitorSurface.gemini
+							? { ...config, adapter: "brightdata-gemini" }
+							: config,
 			});
 			await heartbeatDailyClaim(claim.id);
 			done += 1;
@@ -733,6 +784,24 @@ async function measure(slug: string): Promise<void> {
 			throw new Error(
 				`SELENA_JOURNAL_INCOMPLETE_CYCLE: outcomes=${dispatch.permits.length - failed}/${dispatch.permits.length}, ledger=${ledger.length}, cycle=${terminalCycle?.completedRuns ?? "missing"}/${terminalCycle?.expectedRuns ?? "missing"} ${terminalCycle?.status ?? "missing"}`,
 			);
+		}
+		if (persistedCanary) {
+			const storedRuns = await db
+				.select({
+					system: schema.svRuns.system,
+					status: schema.svRuns.status,
+					validity: schema.svRuns.validity,
+					canonicalPayload: schema.svRuns.canonicalPayload,
+					citations: schema.svRuns.citations,
+				})
+				.from(schema.svRuns)
+				.where(and(eq(schema.svRuns.cycleId, dispatch.cycleId), eq(schema.svRuns.organizationId, tenantId)));
+			const evidence = validateBrightDataPersistedCanaryEvidence(storedRuns);
+			for (const row of evidence) {
+				console.log(
+					`BRIGHTDATA_PERSISTED_CANARY_EVIDENCE cycle_id=${dispatch.cycleId} project_id=${project.id} system=${row.system} status=${row.status} validity=${row.validity} answer_characters=${row.answerCharacters} displayed_source_count=${row.displayedSourceCount} extracted_citation_count=${row.extractedCitationCount}`,
+				);
+			}
 		}
 		await transitionDailyClaim(claim.id, "EXECUTING", "COMPLETED");
 	} catch (error) {
