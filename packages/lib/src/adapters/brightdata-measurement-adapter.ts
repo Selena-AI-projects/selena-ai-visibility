@@ -198,26 +198,16 @@ const ANSWER_TEXT_FIELDS = [
 // the list is read through rather than stopped at the first field present.
 const SOURCE_FIELDS = ["citations", "search_sources", "references", "links_attached", "sources"] as const;
 const REQUEST_ID_FIELDS = ["snapshot_id", "request_id", "response_id", "id"] as const;
-const LIGHTWEIGHT_OUTPUT_FIELDS = [
-	...ANSWER_TEXT_FIELDS,
-	...SOURCE_FIELDS,
-	...REQUEST_ID_FIELDS,
-	"cost",
-	"status",
-	"message",
-	"error",
-	"error_code",
-	"warning",
-] as const;
+const OUTPUT_FIELDS_BY_SYSTEM = {
+	chatgpt: ["answer_text_markdown", "answer_text", "citations", "search_sources", "links_attached", "references"],
+	gemini: ["answer_text", "citations", "links_attached"],
+	perplexity: ["answer_text_markdown", "answer_text", "answer_html", "citations", "sources"],
+} as const satisfies Record<BrightDataVisitorSystem, readonly string[]>;
 
 function customOutputFields(system: BrightDataVisitorSystem): string {
-	// Filtering at collection time prevents rendered page payloads from reaching
-	// the worker. Perplexity keeps its two answer-only HTML fallbacks; the other
-	// surfaces have confirmed markdown answer fields and do not need them.
-	return [
-		...LIGHTWEIGHT_OUTPUT_FIELDS,
-		...(system === "perplexity" ? (["answer_html", "answer_section_html"] as const) : []),
-	].join("|");
+	// Bright Data validates this list against each collector's output schema.
+	// Keep it provider-specific so unsupported generic fields cannot reject the request.
+	return OUTPUT_FIELDS_BY_SYSTEM[system].join("|");
 }
 
 /**

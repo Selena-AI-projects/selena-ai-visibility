@@ -161,9 +161,7 @@ describe("Bright Data measurement adapter", () => {
 		expect(triggerUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
 		expect(triggerUrl.searchParams.get("include_errors")).toBe("true");
 		const outputFields = triggerUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
-		expect(outputFields).toContain("answer_text_markdown");
-		expect(outputFields).toContain("answer_html");
-		expect(outputFields).toContain("answer_section_html");
+		expect(outputFields).toEqual(["answer_text_markdown", "answer_text", "answer_html", "citations", "sources"]);
 		expect(outputFields).not.toContain("response_raw");
 		expect(JSON.parse(String(seen[0]?.init?.body))).toEqual([
 			{
@@ -464,9 +462,14 @@ describe("Bright Data measurement adapter", () => {
 		expect(calledUrl.searchParams.get("dataset_id")).toBe(DATASET_ID);
 		expect(calledUrl.searchParams.get("notify")).toBe("false");
 		const outputFields = calledUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
-		expect(outputFields).toEqual(
-			expect.arrayContaining(["answer_text_markdown", "citations", "search_sources", "snapshot_id", "cost", "error"]),
-		);
+		expect(outputFields).toEqual([
+			"answer_text_markdown",
+			"answer_text",
+			"citations",
+			"search_sources",
+			"links_attached",
+			"references",
+		]);
 		for (const heavyField of ["answer_html", "answer_section_html", "response_raw", "source_html"])
 			expect(outputFields).not.toContain(heavyField);
 		expect(init?.method).toBe("POST");
@@ -510,9 +513,7 @@ describe("Bright Data measurement adapter", () => {
 
 		const calledUrl = new URL(String(fetchImpl.mock.calls[0]?.[0]));
 		const outputFields = calledUrl.searchParams.get("custom_output_fields")?.split("|") ?? [];
-		expect(outputFields).toEqual(
-			expect.arrayContaining(["answer_text_markdown", "citations", "search_sources", "snapshot_id", "cost", "error"]),
-		);
+		expect(outputFields).toEqual(["answer_text", "citations", "links_attached"]);
 		for (const heavyField of ["answer_html", "answer_section_html", "response_raw", "source_html"])
 			expect(outputFields).not.toContain(heavyField);
 	});
