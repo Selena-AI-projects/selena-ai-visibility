@@ -22,7 +22,7 @@ const canaryEnvironment = {
 
 function storedRun(overrides: Partial<PersistedCanaryRunRow> = {}): PersistedCanaryRunRow {
 	return {
-		system: "ChatGPT",
+		systemId: "ChatGPT",
 		status: "SUCCEEDED",
 		validity: "VALID",
 		canonicalPayload: {
@@ -104,7 +104,7 @@ test("persisted evidence is derived from two valid stored rows without exposing 
 	const evidence = validateBrightDataPersistedCanaryEvidence([
 		storedRun(),
 		storedRun({
-			system: "Gemini",
+			systemId: "Gemini",
 			canonicalPayload: { answer: { text: "Gemini retained answer" } },
 			citations: [{ url: "https://example.test/citation", domain: "example.test" }],
 		}),
@@ -132,7 +132,7 @@ test("persisted evidence is derived from two valid stored rows without exposing 
 });
 
 test("persisted evidence fails closed on missing rows, retained answers, validity, or source evidence", () => {
-	const validRows = [storedRun(), storedRun({ system: "Gemini" })];
+	const validRows = [storedRun(), storedRun({ systemId: "Gemini" })];
 	assert.throws(() => validateBrightDataPersistedCanaryEvidence(validRows.slice(0, 1)), /EVIDENCE_INVALID/);
 	assert.throws(
 		() => validateBrightDataPersistedCanaryEvidence([storedRun({ validity: "INVALID" }), validRows[1]]),
@@ -153,5 +153,17 @@ test("persisted evidence fails closed on missing rows, retained answers, validit
 				validRows[1],
 			]),
 		/EVIDENCE_INVALID/,
+	);
+});
+
+test("persisted evidence uses the permit system when extraction enrichment is unavailable", () => {
+	const evidence = validateBrightDataPersistedCanaryEvidence([
+		storedRun(),
+		storedRun({ systemId: "Gemini", citations: [{ url: "https://example.test/citation" }] }),
+	]);
+
+	assert.deepEqual(
+		evidence.map((row) => row.system),
+		["ChatGPT", "Gemini"],
 	);
 });

@@ -788,7 +788,7 @@ async function measure(slug: string): Promise<void> {
 		if (persistedCanary) {
 			const storedRuns = await db
 				.select({
-					system: schema.svRuns.system,
+					systemId: schema.svRuns.systemId,
 					status: schema.svRuns.status,
 					validity: schema.svRuns.validity,
 					canonicalPayload: schema.svRuns.canonicalPayload,

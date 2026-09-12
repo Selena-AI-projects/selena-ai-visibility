@@ -20,7 +20,7 @@ export type PersistedCanaryEvidence = {
 };
 
 export type PersistedCanaryRunRow = {
-	system: string | null;
+	systemId: string | null;
 	status: string;
 	validity: string | null;
 	canonicalPayload: unknown;
@@ -87,7 +87,7 @@ export function assertBrightDataPersistedCanaryExecutionScope(input: {
 export function validateBrightDataPersistedCanaryEvidence(
 	rows: readonly PersistedCanaryRunRow[],
 ): PersistedCanaryEvidence[] {
-	if (rows.length !== 2 || !hasExactSystems(rows.map((row) => row.system))) {
+	if (rows.length !== 2 || !hasExactSystems(rows.map((row) => row.systemId))) {
 		throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_INVALID");
 	}
 
@@ -107,7 +107,7 @@ export function validateBrightDataPersistedCanaryEvidence(
 			throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_INVALID");
 		}
 		return {
-			system: row.system as PersistedCanarySystem,
+			system: row.systemId as PersistedCanarySystem,
 			status: row.status,
 			validity: row.validity,
 			answerCharacters: text.length,
