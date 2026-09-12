@@ -67,11 +67,11 @@ const APPLIED_MIGRATION_HASH_ALIASES = new Map([
 // source counterpart, so permit only this exact immutable history while still
 // rejecting every other row absent from the shipped journal.
 const STAGING_HISTORICAL_JOURNAL_ROWS = Object.freeze([
-	Object.freeze({ createdAt: "1787940028001", hash: "21ebc5b9378ec8a3b640b27583ca086862c0647a051da43c7ae08490e6d2a108" }),
-	Object.freeze({ createdAt: "1787940028002", hash: "da5c58f680bc0d46a44ea1f79859c4b2067643e1bc81759a95a9000b37686a56" }),
-	Object.freeze({ createdAt: "1787940028003", hash: "c48499cffb9c042b86a30291c07d9cffb90cb45fdcc6631adf2c2b2d28a36c65" }),
-	Object.freeze({ createdAt: "1787940028004", hash: "ecbf60eed7516ecfaac08ebd15f34e8aed6f287ec4bb9b8cba9a90e03ba3108d" }),
-	Object.freeze({ createdAt: "1787940028005", hash: "87329271f070b81522e468a7f383f3ac2fc7d1abfc97f6c0f5e2545945be1c37" }),
+	Object.freeze({ createdAt: "1787940028001", hash: "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45" }),
+	Object.freeze({ createdAt: "1787940028002", hash: "da5c58f680bc96e5825a8811b352d83d9106e818c6a57435448d4f2553573b2f" }),
+	Object.freeze({ createdAt: "1787940028003", hash: "c48499cffb9c82e5ad368805fa4930ebfd812ebe8f273d18cfd55cf30da21276" }),
+	Object.freeze({ createdAt: "1787940028004", hash: "ecbf60eed751289e08468ba5770b5e89cd4432c7abcfd6526d9abf00c561663a" }),
+	Object.freeze({ createdAt: "1787940028005", hash: "87329271f070fb3fee42abe7f7b4cfbd9acd2c3bd74829efd7ceebd685a1c7a4" }),
 ]);
 
 export async function expectedJournalRows(migrationsFolder) {
@@ -238,9 +238,6 @@ export async function runMigrationCycleWithLock({
 		log(
 			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
 		);
-		if (env.SELENA_MIGRATION_LOG_JOURNAL === "true" && before) {
-			log(`journal entries: ${before.map((row) => `${row.createdAt}:${row.hash}`).join(",")}`);
-		}
 		// Integrity first. Approval decides whether new DDL may be applied; a
 		// journal that already disagrees with the shipped migrations is a
 		// different failure, and asking for a SHA would hide it behind a

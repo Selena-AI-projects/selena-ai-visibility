@@ -48,7 +48,7 @@ describe("bounded migration journal acceptance", () => {
 	it("accepts only the recovered staging history beside the shipped journal", () => {
 		const historical = {
 			createdAt: "1787940028001",
-			hash: "21ebc5b9378ec8a3b640b27583ca086862c0647a051da43c7ae08490e6d2a108",
+			hash: "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45",
 		};
 		expect(() => assertJournalPostcondition([...expected, historical], expected)).not.toThrow();
 		expect(() =>
