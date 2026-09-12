@@ -41,6 +41,7 @@ import { Route as AuthedAppSelenaReportRouteImport } from './routes/_authed/app/
 import { Route as AuthedAppSelenaSourcesRouteImport } from './routes/_authed/app/selena-sources'
 import { Route as AuthedReportsIndexRouteImport } from './routes/_authed/reports/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiLocalReadyIndexRouteImport } from './routes/api/local-ready/index'
 import { Route as ApiManifestIndexRouteImport } from './routes/api/manifest/index'
 import { Route as ApiOgIndexRouteImport } from './routes/api/og/index'
 import { Route as ApiSetupStatusIndexRouteImport } from './routes/api/setup-status/index'
@@ -281,6 +282,11 @@ const AuthedReportsIndexRoute = AuthedReportsIndexRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLocalReadyIndexRoute = ApiLocalReadyIndexRouteImport.update({
+  id: '/api/local-ready/',
+  path: '/api/local-ready/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiManifestIndexRoute = ApiManifestIndexRouteImport.update({
@@ -776,6 +782,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AuthedAdminIndexRoute
   '/app/': typeof AuthedAppIndexRoute
   '/reports/': typeof AuthedReportsIndexRoute
+  '/api/local-ready/': typeof ApiLocalReadyIndexRoute
   '/api/manifest/': typeof ApiManifestIndexRoute
   '/api/og/': typeof ApiOgIndexRoute
   '/api/setup-status/': typeof ApiSetupStatusIndexRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthedAdminIndexRoute
   '/app': typeof AuthedAppIndexRoute
   '/reports': typeof AuthedReportsIndexRoute
+  '/api/local-ready': typeof ApiLocalReadyIndexRoute
   '/api/manifest': typeof ApiManifestIndexRoute
   '/api/og': typeof ApiOgIndexRoute
   '/api/setup-status': typeof ApiSetupStatusIndexRoute
@@ -1002,6 +1010,7 @@ export interface FileRoutesById {
   '/_authed/admin/': typeof AuthedAdminIndexRoute
   '/_authed/app/': typeof AuthedAppIndexRoute
   '/_authed/reports/': typeof AuthedReportsIndexRoute
+  '/api/local-ready/': typeof ApiLocalReadyIndexRoute
   '/api/manifest/': typeof ApiManifestIndexRoute
   '/api/og/': typeof ApiOgIndexRoute
   '/api/setup-status/': typeof ApiSetupStatusIndexRoute
@@ -1118,6 +1127,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/app/'
     | '/reports/'
+    | '/api/local-ready/'
     | '/api/manifest/'
     | '/api/og/'
     | '/api/setup-status/'
@@ -1228,6 +1238,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/app'
     | '/reports'
+    | '/api/local-ready'
     | '/api/manifest'
     | '/api/og'
     | '/api/setup-status'
@@ -1343,6 +1354,7 @@ export interface FileRouteTypes {
     | '/_authed/admin/'
     | '/_authed/app/'
     | '/_authed/reports/'
+    | '/api/local-ready/'
     | '/api/manifest/'
     | '/api/og/'
     | '/api/setup-status/'
@@ -1438,6 +1450,7 @@ export interface RootRouteChildren {
   AuthRegisterRoute: typeof AuthRegisterRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiLocalReadyIndexRoute: typeof ApiLocalReadyIndexRoute
   ApiManifestIndexRoute: typeof ApiManifestIndexRoute
   ApiOgIndexRoute: typeof ApiOgIndexRoute
   ApiSetupStatusIndexRoute: typeof ApiSetupStatusIndexRoute
@@ -1724,6 +1737,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/local-ready/': {
+      id: '/api/local-ready/'
+      path: '/api/local-ready'
+      fullPath: '/api/local-ready/'
+      preLoaderRoute: typeof ApiLocalReadyIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/manifest/': {
@@ -2478,6 +2498,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRegisterRoute: AuthRegisterRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiLocalReadyIndexRoute: ApiLocalReadyIndexRoute,
   ApiManifestIndexRoute: ApiManifestIndexRoute,
   ApiOgIndexRoute: ApiOgIndexRoute,
   ApiSetupStatusIndexRoute: ApiSetupStatusIndexRoute,
