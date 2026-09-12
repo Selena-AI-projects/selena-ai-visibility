@@ -88,7 +88,7 @@ export function validateBrightDataPersistedCanaryEvidence(
 	rows: readonly PersistedCanaryRunRow[],
 ): PersistedCanaryEvidence[] {
 	if (rows.length !== 2 || !hasExactSystems(rows.map((row) => row.systemId))) {
-		throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_INVALID");
+		throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_SYSTEMS_INVALID");
 	}
 
 	const evidence = rows.map((row) => {
@@ -97,15 +97,12 @@ export function validateBrightDataPersistedCanaryEvidence(
 		const text = answer?.text;
 		const displayedSourceCount = Array.isArray(payload?.sources) ? payload.sources.length : 0;
 		const extractedCitationCount = Array.isArray(row.citations) ? row.citations.length : 0;
-		if (
-			row.status !== "SUCCEEDED" ||
-			row.validity !== "VALID" ||
-			typeof text !== "string" ||
-			text.trim() === "" ||
-			displayedSourceCount + extractedCitationCount === 0
-		) {
-			throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_INVALID");
-		}
+		if (row.status !== "SUCCEEDED" || row.validity !== "VALID")
+			throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_RUN_INVALID");
+		if (typeof text !== "string" || text.trim() === "")
+			throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_ANSWER_INVALID");
+		if (displayedSourceCount + extractedCitationCount === 0)
+			throw new Error("BRIGHTDATA_PERSISTED_CANARY_EVIDENCE_SOURCES_MISSING");
 		return {
 			system: row.systemId as PersistedCanarySystem,
 			status: row.status,

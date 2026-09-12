@@ -133,10 +133,13 @@ test("persisted evidence is derived from two valid stored rows without exposing 
 
 test("persisted evidence fails closed on missing rows, retained answers, validity, or source evidence", () => {
 	const validRows = [storedRun(), storedRun({ systemId: "Gemini" })];
-	assert.throws(() => validateBrightDataPersistedCanaryEvidence(validRows.slice(0, 1)), /EVIDENCE_INVALID/);
+	assert.throws(
+		() => validateBrightDataPersistedCanaryEvidence(validRows.slice(0, 1)),
+		/EVIDENCE_SYSTEMS_INVALID/,
+	);
 	assert.throws(
 		() => validateBrightDataPersistedCanaryEvidence([storedRun({ validity: "INVALID" }), validRows[1]]),
-		/EVIDENCE_INVALID/,
+		/EVIDENCE_RUN_INVALID/,
 	);
 	assert.throws(
 		() =>
@@ -144,7 +147,7 @@ test("persisted evidence fails closed on missing rows, retained answers, validit
 				storedRun({ canonicalPayload: { answer: { text: " " }, sources: [{}] } }),
 				validRows[1],
 			]),
-		/EVIDENCE_INVALID/,
+		/EVIDENCE_ANSWER_INVALID/,
 	);
 	assert.throws(
 		() =>
@@ -152,7 +155,7 @@ test("persisted evidence fails closed on missing rows, retained answers, validit
 				storedRun({ canonicalPayload: { answer: { text: "Answer without sources" } }, citations: [] }),
 				validRows[1],
 			]),
-		/EVIDENCE_INVALID/,
+		/EVIDENCE_SOURCES_MISSING/,
 	);
 });
 
