@@ -226,6 +226,9 @@ export async function runMigrationCycleWithLock({
 		log(
 			`journal before: ${before ? `${before.length}/${before.at(-1)?.createdAt ?? "empty"}` : "no journal table yet"}`,
 		);
+		if (env.SELENA_MIGRATION_LOG_JOURNAL === "true" && before) {
+			log(`journal entries: ${before.map((row) => `${row.createdAt}:${row.hash.slice(0, 12)}`).join(",")}`);
+		}
 		// Integrity first. Approval decides whether new DDL may be applied; a
 		// journal that already disagrees with the shipped migrations is a
 		// different failure, and asking for a SHA would hide it behind a
