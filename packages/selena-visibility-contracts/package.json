@@ -13,7 +13,7 @@
 		"render:local-cycle-matrix": "pnpm -C ../lib exec tsx ../selena-visibility-contracts/scripts/render-local-cycle-matrix.ts"
 	},
 	"dependencies": {
-		"zod": "^4.4.3"
+		"zod": "^4.5.4"
 	},
 	"devDependencies": {
 		"typescript": "^7.0.2",
