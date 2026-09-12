@@ -48,6 +48,8 @@
 		"./run-policy/controlled-cycle": "./src/run-policy/controlled-cycle.ts",
 		"./usage": "./src/usage/cost.ts",
 		"./selena-provider-spend": "./src/selena-provider-spend.ts",
+		"./selena-free-ai-visibility": "./src/selena-free-ai-visibility.ts",
+		"./selena-registrable-domain": "./src/selena-registrable-domain.ts",
 		"./selena-pilot-invites": "./src/selena-pilot-invites.ts",
 		"./selena-free-auto-dispatch-claims": "./src/selena-free-auto-dispatch-claims.ts",
 		"./selena-pilot-seat-issuance": "./src/selena-pilot-seat-issuance.ts",
@@ -116,6 +118,7 @@
 		"linkedom": "^0.18.13",
 		"olostep": "^1.2.2",
 		"pg": "^8.22.0",
+		"tldts": "7.4.9",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {

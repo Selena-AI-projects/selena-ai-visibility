@@ -7,6 +7,7 @@ import { type GenerateReportData, generateReportJob } from "./jobs/generate-repo
 import { type ProcessPromptData, processPromptJob } from "./jobs/process-prompt";
 import { type ScheduleMaintenanceData, scheduleMaintenanceJob } from "./jobs/schedule-maintenance";
 import { type SelenaAnswerRetentionData, selenaAnswerRetentionJob } from "./jobs/selena-answer-retention";
+import { type FreeAiVisibilityJobData, freeAiVisibilityJob } from "./jobs/selena-free-ai-visibility";
 import { type SelenaMeasureData, selenaMeasureJob } from "./jobs/selena-measure";
 import { type SyncAuth0MembershipsData, syncAuth0MembershipsJob } from "./jobs/sync-auth0-memberships";
 
@@ -79,6 +80,13 @@ export async function registerHandlers(boss: PgBoss): Promise<void> {
 		withSentry("selena-measure", selenaMeasureJob),
 	);
 	console.log("Registered handler: selena-measure");
+
+	await boss.work<FreeAiVisibilityJobData>(
+		"selena-free-ai-visibility",
+		{ batchSize: 1, localConcurrency: 1 },
+		withSentry("selena-free-ai-visibility", freeAiVisibilityJob),
+	);
+	console.log("Registered handler: selena-free-ai-visibility");
 
 	if (process.env.DEPLOYMENT_MODE === "whitelabel") {
 		await boss.work<SyncAuth0MembershipsData>(

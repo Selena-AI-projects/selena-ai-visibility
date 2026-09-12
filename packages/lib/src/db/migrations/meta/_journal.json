@@ -470,6 +470,13 @@
       "when": 1787940028000,
       "tag": "0066_free_auto_dispatch_claim",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1787940029000,
+      "tag": "0067_free_ai_visibility_check",
+      "breakpoints": true
     }
   ]
 }

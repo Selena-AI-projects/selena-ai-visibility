@@ -1,5 +1,6 @@
 import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
+import { FREE_AI_VISIBILITY_QUEUE } from "@workspace/lib/selena-free-ai-visibility";
 import type { PgBoss } from "pg-boss";
 
 let bossInstance: PgBoss | null = null;
@@ -68,6 +69,14 @@ export async function getBoss(): Promise<PgBoss> {
 		// measurement deadline so a web-first startup cannot leave the legacy
 		// 15-minute expiry in place.
 		await boss.updateQueue("selena-measure", {
+			retryLimit: 0,
+			expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
+		});
+		await boss.createQueue(FREE_AI_VISIBILITY_QUEUE, {
+			retryLimit: 0,
+			expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
+		});
+		await boss.updateQueue(FREE_AI_VISIBILITY_QUEUE, {
 			retryLimit: 0,
 			expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 		});

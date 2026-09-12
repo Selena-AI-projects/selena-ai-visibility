@@ -6,6 +6,7 @@ import { runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config"
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
 import { isLegacyProviderExecutionEnabled, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
+import { FREE_AI_VISIBILITY_QUEUE } from "@workspace/lib/selena-free-ai-visibility";
 import type { PgBoss } from "pg-boss";
 import boss, { createRecurringSchedulerBoss } from "./boss";
 import { registerHandlers } from "./handlers";
@@ -98,6 +99,14 @@ async function main() {
 	// pg-boss queue. Keep deployed upgrades from retaining the old 15-minute
 	// expiry after the Perplexity snapshot allowance changes.
 	await boss.updateQueue("selena-measure", {
+		retryLimit: 0,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
+	});
+	await boss.createQueue(FREE_AI_VISIBILITY_QUEUE, {
+		retryLimit: 0,
+		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
+	});
+	await boss.updateQueue(FREE_AI_VISIBILITY_QUEUE, {
 		retryLimit: 0,
 		expireInSeconds: SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 	});

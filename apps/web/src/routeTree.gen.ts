@@ -16,6 +16,7 @@ import { Route as SelenaRouteImport } from './routes/selena'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedAppRouteImport } from './routes/_authed/app'
 import { Route as AuthedChoosePlanRouteImport } from './routes/_authed/choose-plan'
+import { Route as AuthedFreeAiVisibilityRouteImport } from './routes/_authed/free-ai-visibility'
 import { Route as AuthedReportsRouteImport } from './routes/_authed/reports'
 import { Route as AppLearnRouteImport } from './routes/app/learn'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
@@ -154,6 +155,11 @@ const AuthedAppRoute = AuthedAppRouteImport.update({
 const AuthedChoosePlanRoute = AuthedChoosePlanRouteImport.update({
   id: '/choose-plan',
   path: '/choose-plan',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedFreeAiVisibilityRoute = AuthedFreeAiVisibilityRouteImport.update({
+  id: '/free-ai-visibility',
+  path: '/free-ai-visibility',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedReportsRoute = AuthedReportsRouteImport.update({
@@ -745,6 +751,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthedAdminRouteWithChildren
   '/app': typeof AuthedAppRouteWithChildren
   '/choose-plan': typeof AuthedChoosePlanRoute
+  '/free-ai-visibility': typeof AuthedFreeAiVisibilityRoute
   '/reports': typeof AuthedReportsRouteWithChildren
   '/app/learn': typeof AppLearnRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -856,6 +863,7 @@ export interface FileRoutesByTo {
   '/check': typeof CheckRoute
   '/selena': typeof SelenaRoute
   '/choose-plan': typeof AuthedChoosePlanRoute
+  '/free-ai-visibility': typeof AuthedFreeAiVisibilityRoute
   '/app/learn': typeof AppLearnRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
@@ -969,6 +977,7 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteWithChildren
   '/_authed/app': typeof AuthedAppRouteWithChildren
   '/_authed/choose-plan': typeof AuthedChoosePlanRoute
+  '/_authed/free-ai-visibility': typeof AuthedFreeAiVisibilityRoute
   '/_authed/reports': typeof AuthedReportsRouteWithChildren
   '/app/learn': typeof AppLearnRoute
   '/auth/forgot-password': typeof AuthForgotPasswordRoute
@@ -1084,6 +1093,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/app'
     | '/choose-plan'
+    | '/free-ai-visibility'
     | '/reports'
     | '/app/learn'
     | '/auth/forgot-password'
@@ -1195,6 +1205,7 @@ export interface FileRouteTypes {
     | '/check'
     | '/selena'
     | '/choose-plan'
+    | '/free-ai-visibility'
     | '/app/learn'
     | '/auth/forgot-password'
     | '/auth/login'
@@ -1307,6 +1318,7 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/app'
     | '/_authed/choose-plan'
+    | '/_authed/free-ai-visibility'
     | '/_authed/reports'
     | '/app/learn'
     | '/auth/forgot-password'
@@ -1537,6 +1549,13 @@ declare module '@tanstack/react-router' {
       path: '/choose-plan'
       fullPath: '/choose-plan'
       preLoaderRoute: typeof AuthedChoosePlanRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/free-ai-visibility': {
+      id: '/_authed/free-ai-visibility'
+      path: '/free-ai-visibility'
+      fullPath: '/free-ai-visibility'
+      preLoaderRoute: typeof AuthedFreeAiVisibilityRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/reports': {
@@ -2388,6 +2407,7 @@ interface AuthedRouteChildren {
   AuthedAdminRoute: typeof AuthedAdminRouteWithChildren
   AuthedAppRoute: typeof AuthedAppRouteWithChildren
   AuthedChoosePlanRoute: typeof AuthedChoosePlanRoute
+  AuthedFreeAiVisibilityRoute: typeof AuthedFreeAiVisibilityRoute
   AuthedReportsRoute: typeof AuthedReportsRouteWithChildren
   AuthedAcceptInvitationInvitationIdRoute: typeof AuthedAcceptInvitationInvitationIdRoute
 }
@@ -2396,6 +2416,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRoute: AuthedAdminRouteWithChildren,
   AuthedAppRoute: AuthedAppRouteWithChildren,
   AuthedChoosePlanRoute: AuthedChoosePlanRoute,
+  AuthedFreeAiVisibilityRoute: AuthedFreeAiVisibilityRoute,
   AuthedReportsRoute: AuthedReportsRouteWithChildren,
   AuthedAcceptInvitationInvitationIdRoute:
     AuthedAcceptInvitationInvitationIdRoute,

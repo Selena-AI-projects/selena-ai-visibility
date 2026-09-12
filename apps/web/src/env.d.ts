@@ -105,6 +105,7 @@ declare global {
 			readonly SELENA_TELEGRAM_BOT_USERNAME?: string;
 			readonly SELENA_TELEGRAM_WEBHOOK_SECRET?: string;
 			readonly SELENA_PROVIDER_BUDGET_USD?: string;
+			readonly SELENA_FREE_AI_VISIBILITY_ENABLED?: string;
 			readonly SELENA_FREE_AUTO_DISPATCH_ENABLED?: string;
 			readonly SELENA_FREE_AUTO_DISPATCH_MAX_PER_DAY?: string;
 			readonly SELENA_FREE_AUTO_DISPATCH_MAX_PER_PROJECT_PER_DAY?: string;

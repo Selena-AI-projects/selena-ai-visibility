@@ -636,6 +636,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Ceiling for one order's worst-case provider cost, checked at preflight. Not a running total — cumulative spending is metered in sv_provider_spend_budgets, where the runtime cannot raise it.",
 	},
 	{
+		name: "SELENA_FREE_AI_VISIBILITY_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to allow one verified-email user claim per registrable domain for the isolated free AI Visibility check. Defaults off.",
+	},
+	{
 		name: "SELENA_FREE_AUTO_DISPATCH_ENABLED",
 		scope: "server",
 		requiredBy: "optional",
