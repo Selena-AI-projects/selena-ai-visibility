@@ -12,12 +12,13 @@ import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { useState } from "react";
 import FullPageCard from "@/components/full-page-card";
+import { canResetPassword } from "@/lib/auth/password-reset";
 
 export const Route = createFileRoute("/auth/forgot-password")({
 	// A render-time window.location redirect has no window during SSR: the
 	// server render throws and the client recovers with a flash of the page.
 	beforeLoad: ({ context }) => {
-		if (context.clientConfig?.mode !== "cloud") throw redirect({ to: "/auth/login" });
+		if (!canResetPassword(context.clientConfig)) throw redirect({ to: "/auth/login" });
 	},
 	component: ForgotPasswordPage,
 });

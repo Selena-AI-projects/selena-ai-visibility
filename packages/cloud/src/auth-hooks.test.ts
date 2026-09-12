@@ -35,6 +35,7 @@ describe("getCloudAuthOptions", () => {
 		expect(options.requireEmailVerification).toBe(true);
 		expect(options.emailVerification?.sendOnSignUp).toBe(true);
 		expect(options.emailVerification?.sendOnSignIn).toBe(true);
+		expect(options.sendResetPassword).toBeTypeOf("function");
 	});
 
 	it("configures Google OAuth from env", () => {

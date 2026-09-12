@@ -54,9 +54,7 @@ export function getCloudAuthOptions(): CreateAuthOptions {
 	return {
 		requireEmailVerification: true,
 		emailVerification: transactionalEmailVerification(),
-		sendResetPassword: async ({ user, url }) => {
-			await sendEmail(user.email, passwordResetEmail({ url }));
-		},
+		sendResetPassword: transactionalPasswordReset(),
 		socialProviders: {
 			google: {
 				clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -115,5 +113,12 @@ export function transactionalEmailVerification(): NonNullable<CreateAuthOptions[
 		sendVerificationEmail: async ({ user, url }) => {
 			await sendEmail(user.email, verificationEmail({ url }));
 		},
+	};
+}
+
+/** Reused by the staged self-serve pilot without enabling cloud billing. */
+export function transactionalPasswordReset(): NonNullable<CreateAuthOptions["sendResetPassword"]> {
+	return async ({ user, url }) => {
+		await sendEmail(user.email, passwordResetEmail({ url }));
 	};
 }

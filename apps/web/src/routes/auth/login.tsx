@@ -17,6 +17,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import FullPageCard from "@/components/full-page-card";
+import { canResetPassword } from "@/lib/auth/password-reset";
 import { safeReturnTo } from "@/lib/return-to";
 
 export const Route = createFileRoute("/auth/login")({
@@ -31,6 +32,7 @@ function LoginPage() {
 	const context = useRouteContext({ strict: false }) as { clientConfig?: ClientConfig };
 	const mode = context.clientConfig?.mode;
 	const canRegister = context.clientConfig?.canRegister ?? false;
+	const supportsPasswordReset = canResetPassword(context.clientConfig);
 
 	if (mode === "whitelabel") {
 		return <SSOLogin returnTo={returnTo} />;
@@ -41,6 +43,7 @@ function LoginPage() {
 			returnTo={returnTo}
 			isDemo={mode === "demo"}
 			isCloud={mode === "cloud"}
+			supportsPasswordReset={supportsPasswordReset}
 			canRegister={canRegister}
 		/>
 	);
@@ -91,11 +94,13 @@ export function EmailPasswordLogin({
 	returnTo,
 	isDemo,
 	isCloud,
+	supportsPasswordReset,
 	canRegister,
 }: {
 	returnTo?: string;
 	isDemo?: boolean;
 	isCloud?: boolean;
+	supportsPasswordReset?: boolean;
 	canRegister?: boolean;
 }) {
 	const navigate = useNavigate();
@@ -116,7 +121,7 @@ export function EmailPasswordLogin({
 			});
 
 			if (result.error) {
-				if (isCloud && result.error.status === 403) {
+				if (supportsPasswordReset && result.error.status === 403) {
 					setError("Please verify your email first — we just sent you a new verification link.");
 				} else {
 					setError(result.error.message ?? "Invalid email or password");
@@ -181,7 +186,7 @@ export function EmailPasswordLogin({
 						<div className="space-y-2">
 							<div className="flex items-center justify-between">
 								<Label htmlFor="password">Password</Label>
-								{isCloud && (
+								{supportsPasswordReset && (
 									<Link to="/auth/forgot-password" className="text-xs text-primary hover:underline">
 										Forgot password?
 									</Link>
