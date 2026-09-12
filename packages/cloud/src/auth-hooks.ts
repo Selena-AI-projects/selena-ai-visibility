@@ -53,14 +53,7 @@ export function getCloudAuthOptions(): CreateAuthOptions {
 	const appUrl = process.env.APP_URL!;
 	return {
 		requireEmailVerification: true,
-		emailVerification: {
-			sendOnSignUp: true,
-			sendOnSignIn: true,
-			autoSignInAfterVerification: true,
-			sendVerificationEmail: async ({ user, url }) => {
-				await sendEmail(user.email, verificationEmail({ url }));
-			},
-		},
+		emailVerification: transactionalEmailVerification(),
 		sendResetPassword: async ({ user, url }) => {
 			await sendEmail(user.email, passwordResetEmail({ url }));
 		},
@@ -109,6 +102,18 @@ export function getCloudAuthOptions(): CreateAuthOptions {
 					}),
 				);
 			},
+		},
+	};
+}
+
+/** Reused by the staged self-serve pilot without enabling cloud billing. */
+export function transactionalEmailVerification(): NonNullable<CreateAuthOptions["emailVerification"]> {
+	return {
+		sendOnSignUp: true,
+		sendOnSignIn: true,
+		autoSignInAfterVerification: true,
+		sendVerificationEmail: async ({ user, url }) => {
+			await sendEmail(user.email, verificationEmail({ url }));
 		},
 	};
 }

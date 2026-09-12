@@ -7,7 +7,7 @@
  * This is the single source of truth for the server-side auth object.
  * All server functions, middleware, and route handlers import from here.
  */
-import { getCloudAuthOptions } from "@workspace/cloud/auth-hooks";
+import { getCloudAuthOptions, transactionalEmailVerification } from "@workspace/cloud/auth-hooks";
 import { type CreateAuthOptions, createAuth, refuseSignup } from "@workspace/lib/auth/server";
 import { countUsers, provisionLocalOrg, provisionUmbrellaOrg } from "@workspace/lib/db/provisioning";
 import {
@@ -42,6 +42,10 @@ function getLocalAuthOptions(): CreateAuthOptions {
 	const selfServeSignup = getDeployment().features.selfServeSignup;
 
 	return {
+		...(selfServeSignup && {
+			requireEmailVerification: true,
+			emailVerification: transactionalEmailVerification(),
+		}),
 		databaseHooks: {
 			user: {
 				create: {
