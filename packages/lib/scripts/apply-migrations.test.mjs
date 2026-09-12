@@ -45,6 +45,17 @@ describe("bounded migration journal acceptance", () => {
 		);
 	});
 
+	it("accepts only the recovered staging history beside the shipped journal", () => {
+		const historical = {
+			createdAt: "1787940028001",
+			hash: "21ebc5b9378ec8a3b640b27583ca086862c0647a051da43c7ae08490e6d2a108",
+		};
+		expect(() => assertJournalPostcondition([...expected, historical], expected)).not.toThrow();
+		expect(() =>
+			assertJournalPostcondition([...expected, { ...historical, hash: "unreviewed" }], expected),
+		).toThrow("SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED");
+	});
+
 	it("accepts a reviewed historical hash only at its exact migration timestamp", () => {
 		const canonical = {
 			createdAt: "1787940007000",
