@@ -77,6 +77,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "PostgreSQL connection string for the worker's non-owner role.",
 	},
 	{
+		name: "SELENA_INTERNAL_DATABASE_URL",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"PostgreSQL connection string the web uses only after a platform-admin or ADMIN_API_KEYS check, for operator views that span every tenant. Required on hosted web; locally it falls back to DATABASE_URL.",
+	},
+	{
 		name: "SELENA_HOSTED",
 		scope: "server",
 		requiredBy: "optional",

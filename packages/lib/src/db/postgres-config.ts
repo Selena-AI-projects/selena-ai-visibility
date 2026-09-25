@@ -3,6 +3,7 @@ export interface RuntimeDatabaseEnvironment {
 	SELENA_DATABASE_SURFACE?: string;
 	SELENA_WEB_DATABASE_URL?: string;
 	SELENA_WORKER_DATABASE_URL?: string;
+	SELENA_INTERNAL_DATABASE_URL?: string;
 	SELENA_HOSTED?: string;
 	SELENA_RUNTIME_DATABASE_CA_PEM?: string;
 	SELENA_PGBOSS_OWNER_MANAGED_SCHEMA?: string;
@@ -92,7 +93,30 @@ export function runtimeDatabaseUrl(env: RuntimeDatabaseEnvironment = process.env
 }
 
 export function runtimeDatabaseConnection(env: RuntimeDatabaseEnvironment = process.env): RuntimeDatabaseConnection {
-	const connectionString = runtimeDatabaseUrl(env);
+	return databaseConnection(runtimeDatabaseUrl(env), env);
+}
+
+/**
+ * The connection for operator work that spans every tenant, used only after a
+ * platform-admin or ADMIN_API_KEYS check. The web's own role is confined to
+ * one tenant, so operators reach the rest through a separate role; the worker
+ * and migrations already run with the owner and share their own URL.
+ */
+export function internalDatabaseUrl(env: RuntimeDatabaseEnvironment = process.env): string | undefined {
+	if (env.SELENA_DATABASE_SURFACE !== "web") return runtimeDatabaseUrl(env);
+	if (env.SELENA_INTERNAL_DATABASE_URL) return env.SELENA_INTERNAL_DATABASE_URL;
+	if (env.SELENA_HOSTED === "true") throw new Error("SELENA_INTERNAL_DATABASE_URL_REQUIRED");
+	return env.DATABASE_URL;
+}
+
+export function internalDatabaseConnection(env: RuntimeDatabaseEnvironment = process.env): RuntimeDatabaseConnection {
+	return databaseConnection(internalDatabaseUrl(env), env);
+}
+
+function databaseConnection(
+	connectionString: string | undefined,
+	env: RuntimeDatabaseEnvironment,
+): RuntimeDatabaseConnection {
 	if (!connectionString) throw new Error("DATABASE_URL_REQUIRED");
 
 	if (env.SELENA_RUNTIME_DATABASE_CA_PEM === undefined) return { connectionString };
