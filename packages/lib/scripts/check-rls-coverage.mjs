@@ -1,6 +1,6 @@
 // Fails when a tenant table in `public` can be read across tenants by a
 // non-owner runtime role: a tenant-keyed table with RLS off, a table with RLS on
-// but no policy, or a runtime role that owns tables or bypasses RLS. Intentional
+// but no policy or not forced, or a runtime role that owns tables or bypasses RLS. Intentional
 // exceptions are table comments from a fixed vocabulary, so none can be added
 // without a migration that states it.
 //
@@ -27,6 +27,7 @@ export function findCoverageProblems(tables, roles) {
 		}
 		if (table.policies === 0 && marker !== DENY_BY_DESIGN)
 			problems.push(`${table.name}: RLS is on but no policy grants access (mark it ${DENY_BY_DESIGN} if intended)`);
+		if (!table.force) problems.push(`${table.name}: RLS is on but not forced`);
 	}
 	for (const role of roles) {
 		if (role.superuser || role.bypassRls) problems.push(`role ${role.name}: bypasses row-level security`);
@@ -65,10 +66,7 @@ async function main() {
 	try {
 		const { tables, roles } = await readCatalog(client);
 		const problems = findCoverageProblems(tables, roles);
-		const unforced = tables.filter((table) => table.rls && !table.force).map((table) => table.name);
 		console.log(`checked ${tables.length} tables and ${roles.length} runtime role(s)`);
-		// FORCE is reported, not enforced, until the web no longer connects as owner.
-		console.log(`RLS without FORCE (${unforced.length}): ${unforced.join(", ")}`);
 		if (problems.length > 0) {
 			for (const problem of problems) console.error(`RLS coverage: ${problem}`);
 			process.exitCode = 1;
