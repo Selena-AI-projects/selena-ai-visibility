@@ -12,7 +12,7 @@ import {
 } from "@workspace/lib/db/session-membership-bootstrap";
 import { eq } from "drizzle-orm";
 import { getDeployment } from "@/lib/config/server";
-import { enterOrganizationScope } from "@/lib/tenant-scope";
+import { enterInternalScope, enterOrganizationScope } from "@/lib/tenant-scope";
 import { auth } from "./server";
 
 type SessionLike = { user: { id: string; [key: string]: unknown }; session?: unknown };
@@ -32,9 +32,11 @@ export function isAdmin(session: SessionLike): boolean {
 	return session.user.role === "admin";
 }
 
+/** Passing switches the request to the operator connection; see `enterInternalScope`. */
 export async function requireAdmin() {
 	const session = await requireAuthSession();
 	if (!isAdmin(session)) throw new Error("Unauthorized: Admin access required");
+	await enterInternalScope();
 	return session;
 }
 

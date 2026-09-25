@@ -14,6 +14,7 @@
 import { EntitlementError } from "@workspace/lib/entitlements";
 import type { z } from "zod";
 import { validateApiKeyFromRequest } from "@/lib/auth/policies";
+import { enterInternalScope, runWithRequestTenantScope } from "@/lib/tenant-scope";
 
 export class ApiError extends Error {
 	constructor(
@@ -53,10 +54,16 @@ export function createApiHandler<P = Record<string, string>, B = undefined>(opts
 	mapError?: (err: unknown) => ApiError | undefined;
 	handle: (ctx: ApiHandlerContext<P, B>) => Promise<Response | object>;
 }) {
-	return async ({ request, params }: { request: Request; params: Record<string, string> }): Promise<Response> => {
+	return ({ request, params }: { request: Request; params: Record<string, string> }): Promise<Response> =>
+		runWithRequestTenantScope(() => handleRequest(request, params));
+
+	async function handleRequest(request: Request, params: Record<string, string>): Promise<Response> {
 		if (!validateApiKeyFromRequest(request)) {
 			return errorResponse(401, "Unauthorized", "Valid API key required");
 		}
+		// ADMIN_API_KEYS is deployment-wide, so these routes act for every tenant
+		// through the operator connection.
+		await enterInternalScope();
 
 		let parsedParams = params as P;
 		if (opts.params) {
@@ -104,5 +111,5 @@ export function createApiHandler<P = Record<string, string>, B = undefined>(opts
 			console.error(`[api] ${request.method} ${new URL(request.url).pathname} failed:`, err);
 			return errorResponse(500, "Internal Server Error", "An unexpected error occurred");
 		}
-	};
+	}
 }

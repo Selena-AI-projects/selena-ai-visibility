@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EncryptionKeyError, encryptSecret } from "./crypto";
 
-// refreshCredentialOverlay reads rows through drizzle; mock the db module so the
+// refreshCredentialOverlay reads rows through drizzle; mock the operator db so the
 // store is testable with no database. `db.select().from()` resolves to
 // `dbState.rows`, or rejects with `dbState.error` when one is set.
 const dbState = vi.hoisted(() => ({
@@ -11,8 +11,8 @@ const dbState = vi.hoisted(() => ({
 	inserts: 0,
 	failRefreshAfterInsert: false,
 }));
-vi.mock("../db/db", () => ({
-	db: {
+vi.mock("../db/internal-db", () => ({
+	internalDatabase: () => ({
 		select: () => ({
 			from: () => {
 				dbState.queries++;
@@ -28,7 +28,7 @@ vi.mock("../db/db", () => ({
 				},
 			}),
 		}),
-	},
+	}),
 }));
 
 import {

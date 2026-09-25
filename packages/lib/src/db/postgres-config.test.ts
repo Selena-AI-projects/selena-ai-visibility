@@ -1,6 +1,11 @@
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import { runtimeDatabaseConnection, runtimeDatabaseUrl, runtimePgBossSchemaLifecycle } from "./postgres-config";
+import {
+	internalDatabaseUrl,
+	runtimeDatabaseConnection,
+	runtimeDatabaseUrl,
+	runtimePgBossSchemaLifecycle,
+} from "./postgres-config";
 
 const CERTIFICATE = ["-----BEGIN CERTIFICATE-----", "QUJDREVGRw==", "-----END CERTIFICATE-----"].join("\n");
 const PRIVATE_KEY = ["-----BEGIN ", "PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----"].join("");
@@ -129,5 +134,38 @@ describe("runtimeDatabaseUrl", () => {
 			"SELENA_DATABASE_SURFACE_INVALID",
 		);
 		expect(() => runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_HOSTED: "yes" })).toThrow("SELENA_HOSTED_INVALID");
+	});
+});
+
+describe("internalDatabaseUrl", () => {
+	const owner = "postgres://owner@db/elmo";
+	const web = "postgres://selena_app@db/elmo";
+	const internal = "postgres://selena_internal@db/elmo";
+
+	it("gives web operator views their own connection rather than the tenant role", () => {
+		expect(
+			internalDatabaseUrl({
+				DATABASE_URL: owner,
+				SELENA_DATABASE_SURFACE: "web",
+				SELENA_WEB_DATABASE_URL: web,
+				SELENA_INTERNAL_DATABASE_URL: internal,
+			}),
+		).toBe(internal);
+	});
+
+	it("refuses to fall back to the owner for hosted web operator views", () => {
+		expect(() =>
+			internalDatabaseUrl({
+				DATABASE_URL: owner,
+				SELENA_DATABASE_SURFACE: "web",
+				SELENA_WEB_DATABASE_URL: web,
+				SELENA_HOSTED: "true",
+			}),
+		).toThrow("SELENA_INTERNAL_DATABASE_URL_REQUIRED");
+	});
+
+	it("uses the process's own connection outside the web", () => {
+		expect(internalDatabaseUrl({ DATABASE_URL: owner })).toBe(owner);
+		expect(internalDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "web" })).toBe(owner);
 	});
 });
