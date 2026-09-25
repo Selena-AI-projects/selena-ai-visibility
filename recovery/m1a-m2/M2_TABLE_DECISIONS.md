@@ -41,12 +41,14 @@ Roles in the target model are `selena_app` (web), `selena_worker` (jobs), and `s
 | `user`, `session`, `account`, `verification` | Better Auth reads these across users to sign people in (lookup by email, token). They stay without RLS, grants to `selena_app` are limited to the columns Better Auth needs, and app code outside Better Auth must not query them (checked by a lint rule in M2-c). Documented exception. |
 | `organization`, `member`, `invitation` | Enable RLS. Policy: a row is visible when `app.user_id` is a member of that organization. Better Auth's own membership lookups run with `app.user_id` set, or through a `SECURITY DEFINER` helper where they cannot. |
 | `sso_provider` | Enable RLS with an organization policy, or drop grants if SSO stays unused in cloud mode. |
-| `subscription` | Enable RLS once billing exists. Today it is unused (payments are on HOLD), so the only grant is to `selena_internal`. |
+| `subscription` | **Decided (0069):** RLS enabled with no policy, marked `rls:deny-by-design`. It is unused while payments are on HOLD. Add an organization policy when billing exists. |
 | `sv_simulation_bootstrap_nonces` | Staging only. No grant to any role in production. |
 
 ## RLS + policy but no FORCE (68)
 
-Add `FORCE ROW LEVEL SECURITY` to all of them in the M2-b migration. It changes nothing for `selena_app`. It closes the gap for any path that still connects as the owner, so an owner connection left in the code by mistake gets the same isolation.
+Add `FORCE ROW LEVEL SECURITY` to all of them. It changes nothing for `selena_app`. It closes the gap for any path that still connects as the owner, so an owner connection left in the code by mistake gets the same isolation.
+
+**Deferred to the last M2 step (decided in 0069).** FORCE cannot ship yet for two reasons. First, the web still connects as the owner through plain `db` (60 server functions and 19 API handlers, see `ACCESS_REGISTRY.md`), and with FORCE those queries would silently return 0 rows. Second, the SECURITY DEFINER functions from 0059, 0061, 0062 and 0066 are owned by the table owner and read deny-by-design tables. FORCE goes in after the web runs as `selena_app` inside organization transactions and those functions have a dedicated owner. Until then, `check-rls-coverage.mjs` reports tables without FORCE but does not fail on them.
 
 ## Guard against regressions
 
