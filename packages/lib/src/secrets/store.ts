@@ -52,8 +52,10 @@ export async function refreshCredentialOverlay(): Promise<void> {
 	// Imported here rather than at module scope: this module is reachable from
 	// client code through the provider registry, and a static edge to the
 	// database handle drags the Postgres driver into the browser bundle.
-	const { db } = await import("@workspace/lib/db/db");
-	const rows = await db.select({ name: secrets.name, encryptedValue: secrets.encryptedValue }).from(secrets);
+	// `secrets` is global and closed to the web's tenant role, so it is read
+	// through the operator connection (the process's own one outside the web).
+	const { internalDatabase } = await import("@workspace/lib/db/internal-db");
+	const rows = await internalDatabase().select({ name: secrets.name, encryptedValue: secrets.encryptedValue }).from(secrets);
 
 	const next = new Map<string, string>();
 	for (const row of rows) {
@@ -90,8 +92,8 @@ export async function encryptCredential(name: string, value: string): Promise<En
  * providers in this process. The plaintext is never returned or persisted. */
 export async function storeCredential(name: string, value: string): Promise<{ runtimeRefreshed: boolean }> {
 	const encryptedValue = await encryptCredential(name, value);
-	const { db } = await import("@workspace/lib/db/db");
-	await db
+	const { internalDatabase } = await import("@workspace/lib/db/internal-db");
+	await internalDatabase()
 		.insert(secrets)
 		.values({ name, encryptedValue })
 		.onConflictDoUpdate({

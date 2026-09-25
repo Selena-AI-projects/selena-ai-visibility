@@ -6,6 +6,7 @@ import {
 import { EncryptionKeyError, getKeyring, refreshCredentialOverlay, storeCredential } from "@workspace/lib/secrets";
 import { z } from "zod";
 import { isAdmin, requireAuthSession } from "@/lib/auth/helpers";
+import { enterInternalScope } from "@/lib/tenant-scope";
 
 export const MANAGED_PUBLIC_PROVIDERS = ["BRIGHT_DATA_SERP"] as const;
 export type ManagedPublicProvider = (typeof MANAGED_PUBLIC_PROVIDERS)[number];
@@ -19,6 +20,9 @@ const credentialByProvider = {
 async function requireAdmin(): Promise<void> {
 	const session = await requireAuthSession();
 	if (!isAdmin(session)) throw new Error("Unauthorized: Admin access required");
+	// Provider credentials live in the global `secrets` table, which only the
+	// operator connection reads.
+	await enterInternalScope();
 }
 
 function getStorageStatus(): CredentialStorageStatus {

@@ -10,6 +10,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "@workspace/lib/db/db";
+import { internalDatabase } from "@workspace/lib/db/internal-db";
 import type { OrganizationDatabase } from "@workspace/lib/db/organization-transaction";
 import * as schema from "@workspace/lib/db/schema";
 import { installScopedDatabaseResolver } from "@workspace/lib/db/tenant-scope";
@@ -19,7 +20,8 @@ import type { Pool, PoolClient } from "pg";
 type TenantScope = {
 	organizationId: string;
 	userId: string;
-	client: PoolClient;
+	/** Absent for the operator scope, which uses its own pool rather than a pinned connection. */
+	client?: PoolClient;
 	database: OrganizationDatabase;
 };
 
@@ -35,10 +37,10 @@ const CLEAR_TENANT_SETTINGS =
 async function openTenantScope(organizationId: string, userId: string): Promise<TenantScope> {
 	const client = await (db.$client as Pool).connect();
 	try {
-		await client.query(
-			"select set_config('app.organization_id', $1, false), set_config('app.user_id', $2, false)",
-			[organizationId, userId],
-		);
+		await client.query("select set_config('app.organization_id', $1, false), set_config('app.user_id', $2, false)", [
+			organizationId,
+			userId,
+		]);
 	} catch (error) {
 		client.release(error instanceof Error ? error : true);
 		throw error;
@@ -54,13 +56,15 @@ async function closeTenantScope(scope: RequestScope): Promise<void> {
 	} catch {
 		return;
 	}
+	const { client } = tenant;
+	if (!client) return;
 	try {
-		await tenant.client.query(CLEAR_TENANT_SETTINGS);
-		tenant.client.release();
+		await client.query(CLEAR_TENANT_SETTINGS);
+		client.release();
 	} catch (error) {
 		// A connection that could not be cleared is destroyed rather than
 		// returned, so one tenant's settings can never reach another request.
-		tenant.client.release(error instanceof Error ? error : true);
+		client.release(error instanceof Error ? error : true);
 	}
 }
 
@@ -110,3 +114,32 @@ export async function withOrganizationScope<Result>(
 		return work();
 	});
 }
+
+/**
+ * Switches the request to the operator connection after a platform-admin or
+ * ADMIN_API_KEYS check passed, so operator views that span every tenant keep
+ * working once the web's own role is confined to one. A request already pinned
+ * to a tenant cannot become an operator request, and vice versa.
+ */
+export async function enterInternalScope(): Promise<void> {
+	const scope = storage.getStore();
+	if (!scope) return;
+	if (!scope.opening) {
+		// The operator pool opens on the first query, not here, so an operator
+		// request that never reaches the database cannot fail on its config.
+		const tenant: TenantScope = {
+			organizationId: "",
+			userId: "",
+			get database() {
+				return internalDatabase();
+			},
+		};
+		internalScopes.add(tenant);
+		scope.active = tenant;
+		scope.opening = Promise.resolve(tenant);
+	}
+	const tenant = await scope.opening;
+	if (!internalScopes.has(tenant)) throw new Error("Forbidden: request is already scoped to an organization");
+}
+
+const internalScopes = new WeakSet<TenantScope>();
