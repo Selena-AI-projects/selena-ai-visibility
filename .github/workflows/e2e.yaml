@@ -256,7 +256,7 @@ jobs:
           # Replay the complete source frontier after drizzle-kit has applied
           # it. This is a disposable CI database only.
           # Shared staging is bounded at the same index.
-          SELENA_MIGRATION_MAX_INDEX: "70"
+          SELENA_MIGRATION_MAX_INDEX: "71"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
 
       - name: Check row-level security coverage

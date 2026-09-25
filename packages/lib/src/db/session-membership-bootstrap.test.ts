@@ -28,8 +28,8 @@ describe("resolveSessionMemberships", () => {
 			async execute(query: { queryChunks: unknown[] }) {
 				const text = JSON.stringify(query.queryChunks);
 				queries.push(text);
-				if (text.includes("sv_resolve_session_memberships"))
-					throw Object.assign(new Error("Failed query"), { cause: { code: "42883" } });
+				if (text.includes("to_regprocedure")) return { rows: [{ present: false }] };
+				if (text.includes("sv_resolve_session_memberships")) throw new Error("function does not exist");
 				return { rows: [{ organization_id: "org-oldest", role: "owner" }] };
 			},
 		} as unknown as OrganizationDatabase;
