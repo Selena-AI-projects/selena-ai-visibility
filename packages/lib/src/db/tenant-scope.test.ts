@@ -3,12 +3,12 @@ import type { OrganizationDatabase } from "./organization-transaction";
 import { installScopedDatabaseResolver, tenantAwareDatabase } from "./tenant-scope";
 
 function fakeDatabase(name: string) {
-	return {
-		name,
+	const database = {
 		execute(query: string) {
-			return `${this.name}:${query}`;
+			return `${name}:${query}`;
 		},
-	} as unknown as OrganizationDatabase & { name: string };
+	};
+	return database as unknown as OrganizationDatabase;
 }
 
 afterEach(() => installScopedDatabaseResolver(() => undefined));
