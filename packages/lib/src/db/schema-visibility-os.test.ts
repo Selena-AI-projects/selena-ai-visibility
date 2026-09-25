@@ -377,6 +377,7 @@ describe("Visibility OS provider evidence provenance", () => {
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0060");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0065");
 		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0069");
+		expect(roleBootstrap).toContain("SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0070");
 		expect(roleBootstrap).toContain(
 			"REVOKE ALL ON FUNCTION sv_reconcile_journal_hold(uuid, text, text, boolean, boolean) FROM selena_app",
 		);
@@ -1752,7 +1753,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-30)).toEqual([
+		expect(journal.entries.slice(-31)).toEqual([
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1855,6 +1856,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 			{ idx: 67, version: "7", when: 1787940029000, tag: "0067_free_ai_visibility_check", breakpoints: true },
 			{ idx: 68, version: "7", when: 1790320000000, tag: "0068_session_membership_bootstrap", breakpoints: true },
 			{ idx: 69, version: "7", when: 1790320001000, tag: "0069_tenant_policies", breakpoints: true },
+			{ idx: 70, version: "7", when: 1790320002000, tag: "0070_brand_membership_bootstrap", breakpoints: true },
 		]);
 	});
 

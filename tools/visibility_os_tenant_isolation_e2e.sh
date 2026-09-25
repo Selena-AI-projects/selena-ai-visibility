@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 69)); then
+	if ((10#$migration_number > 70)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -47,6 +47,8 @@ CREATE ROLE selena_app LOGIN PASSWORD '$runtime_password' NOSUPERUSER NOBYPASSRL
 GRANT USAGE ON SCHEMA public TO selena_app;
 GRANT SELECT ON brands, prompt_runs, citations, organization, member TO selena_app;
 GRANT SELECT, INSERT ON prompts TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_resolve_brand_membership(text, text), sv_resolve_prompt_membership(text, uuid),
+	sv_resolve_user_organizations(text) TO selena_app;
 GRANT SELECT ON organization_settings, usage_events, competitors, brand_opportunities,
 	prompt_run_hourly_aggregates, invitation, sso_provider TO selena_app;
 SQL
@@ -122,6 +124,19 @@ expect 'user A sees only own memberships' 'tenant-org-a' \
 	"$(as_tenant '' tenant-user-a "SELECT string_agg(organization_id, ',') FROM member")"
 expect 'user A sees only own organizations' 'tenant-org-a' \
 	"$(as_tenant '' tenant-user-a "SELECT string_agg(id, ',') FROM organization")"
+
+# Access checks run before the organization is known, so the bootstrap
+# functions must answer for members and stay silent for everyone else.
+expect 'member resolves own brand' 'tenant-org-a' \
+	"$(as_tenant '' '' "SELECT organization_id FROM sv_resolve_brand_membership('tenant-user-a', 'tenant-brand-a')")"
+expect 'non-member cannot resolve a foreign brand' 0 \
+	"$(as_tenant '' '' "SELECT count(*) FROM sv_resolve_brand_membership('tenant-user-b', 'tenant-brand-a')")"
+expect 'member resolves own prompt' 'tenant-brand-a|tenant-org-a' \
+	"$(as_tenant '' '' "SELECT brand_id || '|' || organization_id FROM sv_resolve_prompt_membership('tenant-user-a', '00000000-0000-4000-8000-00000000000a')")"
+expect 'non-member cannot resolve a foreign prompt' 0 \
+	"$(as_tenant '' '' "SELECT count(*) FROM sv_resolve_prompt_membership('tenant-user-b', '00000000-0000-4000-8000-00000000000a')")"
+expect 'user lists only own organizations' 'tenant-org-a:Tenant A' \
+	"$(as_tenant '' '' "SELECT string_agg(organization_id || ':' || organization_name, ',') FROM sv_resolve_user_organizations('tenant-user-a')")"
 
 # Policies apply to selena_app only while FORCE stays off, so the table owner
 # (today's production connection) keeps full visibility.

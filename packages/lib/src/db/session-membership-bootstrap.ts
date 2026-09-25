@@ -67,3 +67,84 @@ export function pickSessionMembership(
 	if (activeOrganizationId) return memberships.find((row) => row.organizationId === activeOrganizationId);
 	return memberships[0];
 }
+
+export type BrandMembership = { organizationId: string; organizationName: string; role: string };
+export type PromptMembership = { brandId: string; organizationId: string; role: string };
+export type UserOrganization = { id: string; name: string; role: string };
+
+/**
+ * The organization owning a brand, only when the user belongs to it. A missing
+ * brand and someone else's brand both resolve to undefined.
+ */
+export async function resolveBrandMembership(
+	db: OrganizationDatabase,
+	userId: string,
+	brandId: string,
+): Promise<BrandMembership | undefined> {
+	const result = await withBootstrapFallback(
+		() =>
+			db.execute(sql`
+				SELECT organization_id, organization_name, role FROM public.sv_resolve_brand_membership(${userId}, ${brandId})
+			`),
+		() =>
+			db.execute(sql`
+				SELECT o.id AS organization_id, o.name AS organization_name, m.role
+				FROM public.brands AS b
+				JOIN public.member AS m ON m.organization_id = b.organization_id AND m.user_id = ${userId}
+				JOIN public.organization AS o ON o.id = b.organization_id
+				WHERE b.id = ${brandId}
+				LIMIT 1
+			`),
+	);
+	const [row] = result.rows as { organization_id: string; organization_name: string; role: string }[];
+	return row && { organizationId: row.organization_id, organizationName: row.organization_name, role: row.role };
+}
+
+/** As resolveBrandMembership, from a prompt id; a malformed id resolves to undefined like a foreign one. */
+export async function resolvePromptMembership(
+	db: OrganizationDatabase,
+	userId: string,
+	promptId: string,
+): Promise<PromptMembership | undefined> {
+	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(promptId)) return undefined;
+	const result = await withBootstrapFallback(
+		() =>
+			db.execute(sql`
+				SELECT brand_id, organization_id, role FROM public.sv_resolve_prompt_membership(${userId}, ${promptId}::uuid)
+			`),
+		() =>
+			db.execute(sql`
+				SELECT b.id AS brand_id, b.organization_id, m.role
+				FROM public.prompts AS p
+				JOIN public.brands AS b ON b.id = p.brand_id
+				JOIN public.member AS m ON m.organization_id = b.organization_id AND m.user_id = ${userId}
+				WHERE p.id = ${promptId}::uuid
+				LIMIT 1
+			`),
+	);
+	const [row] = result.rows as { brand_id: string; organization_id: string; role: string }[];
+	return row && { brandId: row.brand_id, organizationId: row.organization_id, role: row.role };
+}
+
+/** The user's organizations with names, oldest membership first. */
+export async function resolveUserOrganizations(db: OrganizationDatabase, userId: string): Promise<UserOrganization[]> {
+	const result = await withBootstrapFallback(
+		() =>
+			db.execute(sql`
+				SELECT organization_id, organization_name, role FROM public.sv_resolve_user_organizations(${userId})
+			`),
+		() =>
+			db.execute(sql`
+				SELECT o.id AS organization_id, o.name AS organization_name, m.role
+				FROM public.member AS m
+				JOIN public.organization AS o ON o.id = m.organization_id
+				WHERE m.user_id = ${userId}
+				ORDER BY m.created_at, o.id
+			`),
+	);
+	return (result.rows as { organization_id: string; organization_name: string; role: string }[]).map((row) => ({
+		id: row.organization_id,
+		name: row.organization_name,
+		role: row.role,
+	}));
+}
