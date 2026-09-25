@@ -58,6 +58,32 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"PEM-encoded CA certificate bundle for runtime PostgreSQL clients. When set, certificate verification is mandatory.",
 	},
 	{
+		name: "SELENA_DATABASE_SURFACE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Which database role this process uses: `web` (SELENA_WEB_DATABASE_URL), `worker` (SELENA_WORKER_DATABASE_URL) or `migrate` (DATABASE_URL). Unset means DATABASE_URL.",
+	},
+	{
+		name: "SELENA_WEB_DATABASE_URL",
+		scope: "server",
+		requiredBy: "optional",
+		description: "PostgreSQL connection string for the web process's non-owner role, so row-level security applies.",
+	},
+	{
+		name: "SELENA_WORKER_DATABASE_URL",
+		scope: "server",
+		requiredBy: "optional",
+		description: "PostgreSQL connection string for the worker's non-owner role.",
+	},
+	{
+		name: "SELENA_HOSTED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"`true` on hosted runtimes: web and worker then refuse to start without their role connection instead of falling back to the table owner.",
+	},
+	{
 		name: "APP_URL",
 		scope: "server",
 		requiredBy: ["cloud"],
