@@ -1,7 +1,7 @@
 /**
  * Server-side auth helpers backed by better-auth.
  */
-import { getRequestHeaders } from "@tanstack/react-start/server";
+import { getRequest, getRequestHeaders } from "@tanstack/react-start/server";
 import { db } from "@workspace/lib/db/db";
 import { prompts } from "@workspace/lib/db/schema";
 import {
@@ -36,7 +36,7 @@ export function isAdmin(session: SessionLike): boolean {
 export async function requireAdmin() {
 	const session = await requireAuthSession();
 	if (!isAdmin(session)) throw new Error("Unauthorized: Admin access required");
-	await enterInternalScope();
+	await enterInternalScope({ id: session.user.id, kind: "platform_admin" }, getRequest());
 	return session;
 }
 

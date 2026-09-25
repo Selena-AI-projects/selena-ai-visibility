@@ -11,6 +11,7 @@
  * A plain-object return value is wrapped in `Response.json()` with `status`
  * (default 200); returning a `Response` passes through untouched.
  */
+import { createHash } from "node:crypto";
 import { EntitlementError } from "@workspace/lib/entitlements";
 import type { z } from "zod";
 import { validateApiKeyFromRequest } from "@/lib/auth/policies";
@@ -25,6 +26,12 @@ export class ApiError extends Error {
 		super(message);
 		this.name = "ApiError";
 	}
+}
+
+/** Names which deployment key acted without recording the key itself. */
+function adminApiKeyActorId(request: Request): string {
+	const presented = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+	return `admin-api-key:${createHash("sha256").update(presented).digest("hex").slice(0, 12)}`;
 }
 
 function errorResponse(status: number, error: string, message: string): Response {
@@ -63,7 +70,7 @@ export function createApiHandler<P = Record<string, string>, B = undefined>(opts
 		}
 		// ADMIN_API_KEYS is deployment-wide, so these routes act for every tenant
 		// through the operator connection.
-		await enterInternalScope();
+		await enterInternalScope({ id: adminApiKeyActorId(request), kind: "admin_api_key" }, request);
 
 		let parsedParams = params as P;
 		if (opts.params) {

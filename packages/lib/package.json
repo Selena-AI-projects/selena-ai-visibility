@@ -23,6 +23,7 @@
 		"./db/session-membership-bootstrap": "./src/db/session-membership-bootstrap.ts",
 		"./db/tenant-scope": "./src/db/tenant-scope.ts",
 		"./db/internal-db": "./src/db/internal-db.ts",
+		"./db/operator-access-audit": "./src/db/operator-access-audit.ts",
 		"./db/provider-canary-execution": "./src/db/provider-canary-execution.ts",
 		"./db/provider-evidence-acceptance": "./src/db/provider-evidence-acceptance.ts",
 		"./db/measure-journal": "./src/db/measure-journal.ts",
