@@ -97,16 +97,21 @@ export function runtimeDatabaseConnection(env: RuntimeDatabaseEnvironment = proc
 }
 
 /**
- * The connection for operator work that spans every tenant, used only after a
- * platform-admin or ADMIN_API_KEYS check. The web's own role is confined to
- * one tenant, so operators reach the rest through a separate role; the worker
- * and migrations already run with the owner and share their own URL.
+ * The connection for operator work that spans every tenant: the web uses it
+ * only after a platform-admin or ADMIN_API_KEYS check, the worker for the
+ * platform credential store. Both runtime roles are confined to one tenant, so
+ * that work goes through a separate role. A worker without one keeps its own
+ * URL, which is the owner wherever the worker still runs as the owner.
  */
 export function internalDatabaseUrl(env: RuntimeDatabaseEnvironment = process.env): string | undefined {
-	if (env.SELENA_DATABASE_SURFACE !== "web") return runtimeDatabaseUrl(env);
-	if (env.SELENA_INTERNAL_DATABASE_URL) return env.SELENA_INTERNAL_DATABASE_URL;
-	if (env.SELENA_HOSTED === "true") throw new Error("SELENA_INTERNAL_DATABASE_URL_REQUIRED");
-	return env.DATABASE_URL;
+	if (env.SELENA_DATABASE_SURFACE === "web") {
+		if (env.SELENA_INTERNAL_DATABASE_URL) return env.SELENA_INTERNAL_DATABASE_URL;
+		if (env.SELENA_HOSTED === "true") throw new Error("SELENA_INTERNAL_DATABASE_URL_REQUIRED");
+		return env.DATABASE_URL;
+	}
+	if (env.SELENA_DATABASE_SURFACE !== "migrate" && env.SELENA_INTERNAL_DATABASE_URL)
+		return env.SELENA_INTERNAL_DATABASE_URL;
+	return runtimeDatabaseUrl(env);
 }
 
 export function internalDatabaseConnection(env: RuntimeDatabaseEnvironment = process.env): RuntimeDatabaseConnection {

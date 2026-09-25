@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 71)); then
+	if ((10#$migration_number > 72)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -48,7 +48,8 @@ GRANT USAGE ON SCHEMA public TO selena_app;
 GRANT SELECT ON brands, prompt_runs, citations, organization, member TO selena_app;
 GRANT SELECT, INSERT ON prompts TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_resolve_brand_membership(text, text), sv_resolve_prompt_membership(text, uuid),
-	sv_resolve_user_organizations(text), sv_brand_id_taken(text), sv_organization_slug_taken(text) TO selena_app;
+	sv_resolve_user_organizations(text), sv_brand_id_taken(text), sv_organization_slug_taken(text),
+	sv_expire_answer_texts(timestamptz) TO selena_app;
 GRANT SELECT ON organization_settings, usage_events, competitors, brand_opportunities,
 	prompt_run_hourly_aggregates, invitation, sso_provider TO selena_app;
 SQL
@@ -145,6 +146,15 @@ expect 'free brand id is reported available' 'f' \
 	"$(as_tenant tenant-org-b '' "SELECT sv_brand_id_taken('unused-brand')")"
 expect 'foreign organization slug is reported taken' 't' \
 	"$(as_tenant tenant-org-b '' "SELECT sv_organization_slug_taken('tenant-org-a')")"
+
+# The retention sweep spans every tenant, so a non-owner reaches it only
+# through the definer; direct access to the runs stays closed.
+expect 'runtime role runs the retention sweep' 0 \
+	"$(as_tenant '' '' "SELECT sv_expire_answer_texts(now())")"
+if as_tenant '' '' "UPDATE sv_runs SET canonical_payload = canonical_payload" >/dev/null 2>&1; then
+	printf 'TENANT_ISOLATION_FAILED runtime role updated sv_runs directly\n' >&2
+	exit 1
+fi
 
 # Policies apply to selena_app only while FORCE stays off, so the table owner
 # (today's production connection) keeps full visibility.

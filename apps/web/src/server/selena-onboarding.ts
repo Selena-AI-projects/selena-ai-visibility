@@ -126,6 +126,7 @@ export const startSelenaProfileSuggestionFn = createServerFn({ method: "POST" })
 		await enqueueAnalyzeBrand({
 			product: "selena",
 			requestKey: data.projectId,
+			organizationId: project.organizationId,
 			website: data.website,
 			brandName: project.name,
 			locationHint,

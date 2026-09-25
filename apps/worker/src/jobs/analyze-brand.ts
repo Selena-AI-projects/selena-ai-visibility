@@ -1,4 +1,5 @@
 import { db } from "@workspace/lib/db/db";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svProjects } from "@workspace/lib/db/schema";
 import { analyzeBrand, type OnboardingSuggestion, type QuestionStyle } from "@workspace/lib/onboarding";
 import { assertSuggestSpendAllowed } from "@workspace/lib/run-policy";
@@ -8,7 +9,7 @@ import {
 	reserveSuggestSpend,
 	settleSuggestSpend,
 } from "@workspace/lib/selena-suggest-metering";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Job } from "pg-boss";
 
 export interface AnalyzeBrandData {
@@ -22,6 +23,26 @@ export interface AnalyzeBrandData {
 	maxPrompts?: number;
 	/** How suggested questions are phrased; the analyzer's default when unset. */
 	questionStyle?: QuestionStyle;
+	/** Tenant of a metered request. A non-owner worker can only read the project inside it. */
+	organizationId?: string;
+}
+
+async function findMeteredProject(projectId: string, organizationId: string | undefined) {
+	if (!organizationId) {
+		// Jobs queued before the tenant rode along; only an owner connection finds these.
+		return db
+			.select({ organizationId: svProjects.organizationId })
+			.from(svProjects)
+			.where(eq(svProjects.id, projectId))
+			.limit(1);
+	}
+	return withOrganizationTransaction(db, organizationId, (tx) =>
+		tx
+			.select({ organizationId: svProjects.organizationId })
+			.from(svProjects)
+			.where(and(eq(svProjects.id, projectId), eq(svProjects.organizationId, organizationId)))
+			.limit(1),
+	);
 }
 
 /**
@@ -42,7 +63,8 @@ export async function analyzeBrandJob(jobs: Job<AnalyzeBrandData>[]): Promise<On
 		throw new Error("analyze-brand handler received an empty batch");
 	}
 
-	const { requestKey, website, brandName, locationHint, maxCompetitors, maxPrompts, questionStyle } = job.data;
+	const { requestKey, website, brandName, locationHint, maxCompetitors, maxPrompts, questionStyle, organizationId } =
+		job.data;
 	// A job already on the queue when the gate closed must not spend either:
 	// the request key carries which product asked, and the Selena suggestion is
 	// the one whose spending is budget-classed.
@@ -50,13 +72,7 @@ export async function analyzeBrandJob(jobs: Job<AnalyzeBrandData>[]): Promise<On
 	// Attribution follows the project the request key names, and it has to be
 	// known before the call: budget is held against an organization, and a
 	// suggestion whose project has gone is one nobody can be charged for.
-	const [meteredProject] = selenaProjectId
-		? await db
-				.select({ organizationId: svProjects.organizationId })
-				.from(svProjects)
-				.where(eq(svProjects.id, selenaProjectId))
-				.limit(1)
-		: [];
+	const [meteredProject] = selenaProjectId ? await findMeteredProject(selenaProjectId, organizationId) : [];
 
 	if (selenaProjectId) {
 		assertSuggestSpendAllowed();
@@ -95,10 +111,12 @@ export async function analyzeBrandJob(jobs: Job<AnalyzeBrandData>[]): Promise<On
 		// The ledger row the cost reports read. Settling already moved the
 		// meter, so a bookkeeping failure here never voids the suggestion.
 		try {
-			await bookSuggestCostEvent(db, {
-				organizationId: meteredProject.organizationId,
-				provider: "onboarding-llm",
-			});
+			await withOrganizationTransaction(db, meteredProject.organizationId, (tx) =>
+				bookSuggestCostEvent(tx, {
+					organizationId: meteredProject.organizationId,
+					provider: "onboarding-llm",
+				}),
+			);
 		} catch (error) {
 			console.error("[analyze-brand] suggest cost row not written:", error);
 		}
