@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 73)); then
+	if ((10#$migration_number > 74)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -162,9 +162,9 @@ if as_tenant '' '' "SELECT count(*) FROM sv_operator_access_events" >/dev/null 2
 	exit 1
 fi
 
-# Policies apply to selena_app only while FORCE stays off, so the table owner
-# (today's production connection) keeps full visibility.
-expect 'owner still sees every brand' 2 "$("${psql[@]}" -Atc 'SELECT count(*) FROM brands')"
-expect 'no tenant table forces RLS yet' 0 "$("${psql[@]}" -Atc "SELECT count(*) FROM pg_class WHERE relname IN ('brands', 'prompts', 'prompt_runs', 'citations', 'member', 'organization') AND relforcerowsecurity")"
+# RLS is forced on every table that has it, so only a superuser (the migration
+# and operator connection) reads past the policies.
+expect 'superuser owner still sees every brand' 2 "$("${psql[@]}" -Atc 'SELECT count(*) FROM brands')"
+expect 'no RLS table is left unforced' 0 "$("${psql[@]}" -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relrowsecurity AND NOT c.relforcerowsecurity")"
 
 printf 'TENANT_ISOLATION_OK\n'
