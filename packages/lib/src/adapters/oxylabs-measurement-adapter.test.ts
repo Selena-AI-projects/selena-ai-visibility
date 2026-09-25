@@ -248,7 +248,10 @@ describe("Oxylabs measurement adapter", () => {
 			submit: jsonResponse({ id: JOB_ID, status: "pending" }, 201),
 			status: Array.from({ length: 50 }, () => jsonResponse({ id: JOB_ID, status: "pending" })),
 		});
-		const outcome = await adapterWith(pendingForever, { jobTimeoutMs: 5 }).execute(permitFor());
+		// The budget must outlast the submission on a slow runner, or the run
+		// ends as TIMEOUT before a job exists; polling sleeps so it runs out
+		// while the job is still pending.
+		const outcome = await adapterWith(pendingForever, { jobTimeoutMs: 250, pollMs: 10 }).execute(permitFor());
 		expect(outcome).toMatchObject({
 			status: "INVALID",
 			validity: "INVALID",
