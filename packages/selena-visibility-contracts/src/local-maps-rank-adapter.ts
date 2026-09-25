@@ -72,6 +72,8 @@ export type LocalMapsRankNormalizedObservation = {
 	evidenceEligible: boolean;
 	provenance: LocalMapsLiveProviderResult["provenance"];
 	cost: LocalMapsLiveProviderResult["cost"];
+	/** Exact provider response body, retained only in the private raw-evidence store. */
+	rawResponseBody?: string;
 };
 export type LocalMapsRankRunnerObservation = Omit<LocalMapsRankNormalizedObservation, "coordinateProof">;
 

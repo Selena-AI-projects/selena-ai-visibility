@@ -66,6 +66,16 @@ export const mapsLockV1Schema = z
 	.strictObject({
 		schemaVersion: z.literal(1),
 		domainId: z.literal("LOCAL_MAPS"),
+		pilot: z
+			.strictObject({
+				providerContractDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+				billingUnit: z.string().trim().min(1),
+				perAttemptWorstCaseUsd: usdAmountSchema,
+				leaseDurationMs: z.number().int().positive(),
+				commercialPriceUsd: z.literal("0.00"),
+				commercialReason: z.literal("PILOT_NO_CHARGE"),
+			})
+			.optional(),
 		lockVersion: z.number().int().positive(),
 		locationId: z.string().uuid(),
 		targetIdentity: mapsTargetIdentitySchema,
@@ -74,6 +84,17 @@ export const mapsLockV1Schema = z
 			id: z.string().uuid(),
 			version: z.number().int().positive(),
 			keywordIds: z.array(z.string().uuid()).min(1),
+			// Older locks remain readable; executable locks must supply KEYWORD-A snapshots.
+			keywords: z
+				.array(
+					z.strictObject({
+						id: z.string().uuid(),
+						text: z.string().trim().min(1),
+						language: z.string().trim().min(2).max(35),
+					}),
+				)
+				.min(1)
+				.optional(),
 		}),
 		provider: mapsProviderLockSchema,
 		request: mapsRequestLockSchema,
@@ -101,6 +122,17 @@ export const mapsLockV1Schema = z
 			issues.addIssue({ code: "custom", message: "MAPS_LOCK_GRID_LOCATION_MISMATCH" });
 		if (lock.grid.points.length !== lock.grid.size ** 2)
 			issues.addIssue({ code: "custom", message: "MAPS_LOCK_GRID_CARDINALITY_MISMATCH" });
+		if (lock.keywordSet.keywords !== undefined) {
+			const snapshots = lock.keywordSet.keywords;
+			if (
+				snapshots.length !== lock.keywordSet.keywordIds.length ||
+				new Set(snapshots.map((item) => item.id)).size !== snapshots.length ||
+				snapshots.some(
+					(item) => !lock.keywordSet.keywordIds.includes(item.id) || item.language !== lock.request.language,
+				)
+			)
+				issues.addIssue({ code: "custom", message: "MAPS_LOCK_KEYWORD_SNAPSHOT_MISMATCH" });
+		}
 		const expectedSlots = lock.grid.points.length * lock.keywordSet.keywordIds.length * lock.repeats;
 		if (lock.expectedSlots !== expectedSlots)
 			issues.addIssue({ code: "custom", message: "MAPS_LOCK_SLOT_CARDINALITY_MISMATCH" });

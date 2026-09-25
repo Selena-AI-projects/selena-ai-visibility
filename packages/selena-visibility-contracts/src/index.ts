@@ -135,6 +135,7 @@ export * from "./local-maps-export.js";
 export * from "./local-maps-live.js";
 export * from "./local-maps-rank-adapter.js";
 export * from "./local-maps-rehearsal.js";
+export * from "./local-report.js";
 export * from "./local-setup.js";
 export * from "./local-write.js";
 export * from "./measurement-execution.js";
