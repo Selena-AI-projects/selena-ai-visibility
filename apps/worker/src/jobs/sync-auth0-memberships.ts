@@ -10,6 +10,7 @@
  */
 
 import { listAuth0Accounts } from "@workspace/lib/db/auth-sync";
+import { runOnInternalDatabase } from "@workspace/lib/db/internal-job-scope";
 import { syncAuth0User } from "@workspace/whitelabel/auth-hooks";
 import type { Job } from "pg-boss";
 import { isRecurringJobsEnabled } from "../recurring-schedules";
@@ -26,7 +27,7 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function syncAuth0MembershipsJob(jobs: Job<SyncAuth0MembershipsData>[]): Promise<void> {
+async function runSyncAuth0Memberships(jobs: Job<SyncAuth0MembershipsData>[]): Promise<void> {
 	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
 		console.log("[sync-auth0-memberships] Skipped: recurring execution is disabled");
 		return;
@@ -62,4 +63,9 @@ export async function syncAuth0MembershipsJob(jobs: Job<SyncAuth0MembershipsData
 
 		console.log(`[sync-auth0-memberships] Done: ${synced} synced, ${failed} failed`);
 	}
+}
+
+/** Creates organizations and memberships for tenants not known in advance, so it runs on the operator connection. */
+export function syncAuth0MembershipsJob(jobs: Job<SyncAuth0MembershipsData>[]): Promise<void> {
+	return runOnInternalDatabase(() => runSyncAuth0Memberships(jobs));
 }

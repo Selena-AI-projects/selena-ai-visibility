@@ -14,10 +14,14 @@ function resolveScopedDatabase(): OrganizationDatabase | undefined {
 /**
  * The web server installs a resolver that returns the request's
  * tenant-scoped connection once an access check has named the organization.
- * The worker installs none, so its queries always use the pool.
+ * The worker installs one only for jobs that run on the operator connection.
  */
 export function installScopedDatabaseResolver(resolver: ScopedDatabaseResolver): void {
 	registry[RESOLVER_KEY] = resolver;
+}
+
+export function scopedDatabaseResolverInstalled(): boolean {
+	return registry[RESOLVER_KEY] !== undefined;
 }
 
 /**
