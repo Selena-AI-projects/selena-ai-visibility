@@ -526,6 +526,13 @@
       "when": 1790320006000,
       "tag": "0074_force_row_level_security",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1790320007000,
+      "tag": "0075_local_maps_pilot_runtime",
+      "breakpoints": true
     }
   ]
 }

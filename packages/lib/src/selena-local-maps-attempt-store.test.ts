@@ -98,6 +98,7 @@ function candidateSource(): LocalMapsAttemptSourceSnapshot {
 		measurementCycleId: candidateIds.measurementCycleId,
 		domainId: "LOCAL_MAPS",
 		observationRef: "observation-candidate-1",
+		localObservationId: null,
 		pointId: slot.pointId,
 		itemId: candidateIds.keywordId,
 		executorId: candidateLock.provider.id,
