@@ -11,6 +11,7 @@ export const GENERIC_QUEUE_RETRY_LIMIT = 0 as const;
 
 export const measurementAttemptStatuses = [
 	"CLAIMED",
+	"CANCELLED_NO_CALL",
 	"SUBMITTED",
 	"SUCCEEDED",
 	"RETRYABLE_FAILURE",
@@ -269,7 +270,8 @@ export function attemptDisposition(attemptIndex: 1 | 2 | 3, event: AttemptEvent)
 }
 
 const allowedAttemptTransitions: Record<MeasurementAttemptStatus, readonly MeasurementAttemptStatus[]> = {
-	CLAIMED: ["SUBMITTED"],
+	CLAIMED: ["SUBMITTED", "CANCELLED_NO_CALL"],
+	CANCELLED_NO_CALL: [],
 	SUBMITTED: ["SUCCEEDED", "RETRYABLE_FAILURE", "TERMINAL_FAILURE", "UNKNOWN_RECONCILIATION"],
 	SUCCEEDED: [],
 	RETRYABLE_FAILURE: [],

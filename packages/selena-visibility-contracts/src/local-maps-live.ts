@@ -36,12 +36,12 @@ function micros(amount: string): bigint {
 	return BigInt(whole) * BigInt(1_000_000) + BigInt(fraction.padEnd(6, "0"));
 }
 
-function canonicalJson(value: unknown): string {
-	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+export function canonicalLocalMapsJson(value: unknown): string {
+	if (Array.isArray(value)) return `[${value.map(canonicalLocalMapsJson).join(",")}]`;
 	if (value !== null && typeof value === "object") {
 		const entries = Object.entries(value as Record<string, unknown>)
 			.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
-			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`);
+			.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalLocalMapsJson(entry)}`);
 		return `{${entries.join(",")}}`;
 	}
 	return JSON.stringify(value);
@@ -79,6 +79,12 @@ export function materializeLocalMapsProviderRequest(
 	const lock = mapsLockV1Schema.parse(lockInput);
 	const slot = mapsLockSlotPlanSchema.parse(slotInput);
 	const keyword = localMapsLiveKeywordSchema.parse(keywordInput);
+	const frozen = lock.keywordSet.keywords?.find((item) => item.id === keyword.id);
+	if (
+		lock.keywordSet.keywords !== undefined &&
+		(!frozen || frozen.text !== keyword.text || frozen.language !== lock.request.language)
+	)
+		throw new Error("LOCAL_MAPS_FROZEN_KEYWORD_MISMATCH");
 	return localMapsMaterializedProviderRequestSchema.parse({
 		schemaVersion: 1,
 		provider: lock.provider,
@@ -96,11 +102,11 @@ export function materializeLocalMapsProviderRequest(
 }
 
 export function canonicalLocalMapsLockSnapshot(lock: MapsLockV1): string {
-	return canonicalJson(mapsLockV1Schema.parse(lock));
+	return canonicalLocalMapsJson(mapsLockV1Schema.parse(lock));
 }
 
 export function canonicalLocalMapsProviderRequest(request: LocalMapsMaterializedProviderRequest): string {
-	return canonicalJson(localMapsMaterializedProviderRequestSchema.parse(request));
+	return canonicalLocalMapsJson(localMapsMaterializedProviderRequestSchema.parse(request));
 }
 
 /**
@@ -148,10 +154,16 @@ export const localMapsLiveSubmittedCandidateSchema = z
 		}),
 	})
 	.superRefine((input, issues) => {
+		const frozen = input.lock.keywordSet.keywords?.find((item) => item.id === input.keyword.id);
+		if (
+			input.lock.keywordSet.keywords !== undefined &&
+			(!frozen || frozen.text !== input.keyword.text || frozen.language !== input.lock.request.language)
+		)
+			issues.addIssue({ code: "custom", message: "LOCAL_MAPS_FROZEN_KEYWORD_MISMATCH" });
 		const expectedSlot = planMapsLockSlots(input.scope.measurementCycleId, input.lock).find(
 			(slot) => slot.executionKey === input.slot.executionKey,
 		);
-		if (expectedSlot === undefined || canonicalJson(expectedSlot) !== canonicalJson(input.slot))
+		if (expectedSlot === undefined || canonicalLocalMapsJson(expectedSlot) !== canonicalLocalMapsJson(input.slot))
 			issues.addIssue({ code: "custom", message: "LOCAL_MAPS_LIVE_SLOT_LOCK_MISMATCH", path: ["slot"] });
 		if (
 			input.slot.measurementCycleId !== input.scope.measurementCycleId ||
@@ -209,7 +221,10 @@ export const localMapsLiveSubmittedCandidateSchema = z
 			params: input.lock.request,
 			repeatIndex: input.slot.repeatIndex,
 		});
-		if (!expectedRequest.success || canonicalJson(expectedRequest.data) !== canonicalJson(input.providerRequest))
+		if (
+			!expectedRequest.success ||
+			canonicalLocalMapsJson(expectedRequest.data) !== canonicalLocalMapsJson(input.providerRequest)
+		)
 			issues.addIssue({
 				code: "custom",
 				message: "LOCAL_MAPS_LIVE_PROVIDER_REQUEST_MISMATCH",
@@ -234,7 +249,7 @@ export const localMapsLiveSubmittedCandidateSchema = z
 export type LocalMapsLiveSubmittedCandidate = z.infer<typeof localMapsLiveSubmittedCandidateSchema>;
 
 export function canonicalLocalMapsSubmittedCandidate(candidate: LocalMapsLiveSubmittedCandidate): string {
-	return canonicalJson(localMapsLiveSubmittedCandidateSchema.parse(candidate));
+	return canonicalLocalMapsJson(localMapsLiveSubmittedCandidateSchema.parse(candidate));
 }
 
 export const localMapsLiveKnownCostSchema = z.strictObject({
@@ -342,7 +357,7 @@ export const localMapsLiveProviderResultSchema = z.union([
 export type LocalMapsLiveProviderResult = z.infer<typeof localMapsLiveProviderResultSchema>;
 
 export function canonicalLocalMapsProviderResult(result: LocalMapsLiveProviderResult): string {
-	return canonicalJson(localMapsLiveProviderResultSchema.parse(result));
+	return canonicalLocalMapsJson(localMapsLiveProviderResultSchema.parse(result));
 }
 
 export function assertLocalMapsLiveResultMatchesCandidate(

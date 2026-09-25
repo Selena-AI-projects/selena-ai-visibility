@@ -145,7 +145,15 @@ export const localApiProgressResponseSchema = z.strictObject({
 });
 export type LocalApiProgressResponse = z.infer<typeof localApiProgressResponseSchema>;
 
-export const localApiMapResultStatuses = ["FOUND", "ABSENT_WITHIN_DEPTH", "INVALID", "UNKNOWN", "BLOCKED"] as const;
+export const localApiMapResultStatuses = [
+	"FOUND",
+	"ABSENT_WITHIN_DEPTH",
+	"INVALID",
+	"UNKNOWN",
+	"BLOCKED",
+	"PENDING",
+	"CANCELLED",
+] as const;
 
 export const localApiMapResultSchema = z
 	.strictObject({
@@ -165,6 +173,16 @@ export const localApiMapResultSchema = z
 		evidenceIds: z.array(z.string().trim().min(1)),
 	})
 	.superRefine((result, context) => {
+		if (
+			result.status === "PENDING" &&
+			(result.reasonCode !== null || result.capturedAt !== null || result.evidenceIds.length !== 0)
+		)
+			context.addIssue({ code: "custom", message: "LOCAL_API_PENDING_EVIDENCE_FORBIDDEN" });
+		if (
+			result.status === "CANCELLED" &&
+			(result.reasonCode !== "LOCAL_STOPPED" || result.capturedAt !== null || result.evidenceIds.length !== 0)
+		)
+			context.addIssue({ code: "custom", message: "LOCAL_API_CANCELLED_STATE_INVALID" });
 		const measured = result.status === "FOUND" || result.status === "ABSENT_WITHIN_DEPTH";
 		if (result.status === "FOUND" && result.targetRank === null) {
 			context.addIssue({ code: "custom", message: "LOCAL_API_FOUND_RANK_REQUIRED", path: ["targetRank"] });
@@ -181,7 +199,7 @@ export const localApiMapResultSchema = z
 		if (measured && result.reasonCode !== null) {
 			context.addIssue({ code: "custom", message: "LOCAL_API_MEASUREMENT_REASON_FORBIDDEN", path: ["reasonCode"] });
 		}
-		if (!measured && result.reasonCode === null) {
+		if (!measured && result.status !== "PENDING" && result.reasonCode === null) {
 			context.addIssue({ code: "custom", message: "LOCAL_API_UNRESOLVED_REASON_REQUIRED", path: ["reasonCode"] });
 		}
 	});
