@@ -347,6 +347,15 @@ jobs:
       - name: Run Bruno API tests
         run: pnpm test:api
 
+      # A green run proves nothing if the web silently fell back to the owner,
+      # so check the connections the tests actually used.
+      - name: Confirm the web ran as the tenant role
+        run: |
+          roles=$(docker compose exec -T postgres psql -U postgres -d elmo -Atc \
+            "SELECT string_agg(DISTINCT usename, ',') FROM pg_stat_activity WHERE application_name <> 'psql' AND usename IS NOT NULL AND datname = 'elmo'")
+          echo "Database roles connected: $roles"
+          case ",$roles," in *,selena_app,*) ;; *) echo "The web is not connected as selena_app." >&2; exit 1 ;; esac
+
       - name: Dump service logs
         if: failure()
         run: docker compose logs db-migrate postgres web
