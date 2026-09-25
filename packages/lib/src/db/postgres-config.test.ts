@@ -168,4 +168,26 @@ describe("internalDatabaseUrl", () => {
 		expect(internalDatabaseUrl({ DATABASE_URL: owner })).toBe(owner);
 		expect(internalDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "web" })).toBe(owner);
 	});
+
+	it("gives a non-owner worker the operator connection for platform-wide reads", () => {
+		expect(internalDatabaseUrl({ DATABASE_URL: web, SELENA_INTERNAL_DATABASE_URL: internal })).toBe(internal);
+		expect(
+			internalDatabaseUrl({
+				DATABASE_URL: owner,
+				SELENA_DATABASE_SURFACE: "worker",
+				SELENA_WORKER_DATABASE_URL: web,
+				SELENA_INTERNAL_DATABASE_URL: internal,
+			}),
+		).toBe(internal);
+	});
+
+	it("keeps migrations on their own connection even when an operator URL is set", () => {
+		expect(
+			internalDatabaseUrl({
+				DATABASE_URL: owner,
+				SELENA_DATABASE_SURFACE: "migrate",
+				SELENA_INTERNAL_DATABASE_URL: internal,
+			}),
+		).toBe(owner);
+	});
 });

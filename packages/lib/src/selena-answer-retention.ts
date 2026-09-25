@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { db as defaultDb } from "./db/db";
+import { withBootstrapFallback } from "./db/session-membership-bootstrap";
 
 type Executor = Pick<typeof defaultDb, "execute">;
 
@@ -13,12 +14,23 @@ type Executor = Pick<typeof defaultDb, "execute">;
  * The deletion works on the payload's own `answer.retainUntil`, written by the
  * adapter that stored the text — the job never invents a window of its own.
  */
-export async function expireAnswerTexts(
-	dbc: Executor,
-	opts?: { now?: Date },
-): Promise<{ expired: number }> {
+export async function expireAnswerTexts(dbc: Executor, opts?: { now?: Date }): Promise<{ expired: number }> {
 	const now = opts?.now ?? new Date();
 	const nowIso = now.toISOString();
+	// The sweep spans every tenant, so a non-owner worker runs it through the
+	// definer function; a database from before 0072 still takes the direct path.
+	return withBootstrapFallback(
+		dbc,
+		"public.sv_expire_answer_texts(timestamptz)",
+		async () => {
+			const result = await dbc.execute(sql`select sv_expire_answer_texts(${nowIso}::timestamptz) as expired`);
+			return { expired: Number((result.rows[0] as { expired?: number } | undefined)?.expired ?? 0) };
+		},
+		() => expireDirectly(dbc, nowIso),
+	);
+}
+
+async function expireDirectly(dbc: Executor, nowIso: string): Promise<{ expired: number }> {
 	const result = await dbc.execute(sql`
 		WITH expired AS (
 			UPDATE sv_runs

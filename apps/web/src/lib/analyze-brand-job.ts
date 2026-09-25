@@ -55,6 +55,8 @@ export interface AnalyzeBrandInput {
 	maxPrompts?: number;
 	/** How suggested questions are phrased; the analyzer's default when unset. */
 	questionStyle?: QuestionStyle;
+	/** The tenant a metered request is charged to; the worker reads the project inside it. */
+	organizationId?: string;
 }
 
 /** The namespaced value actually stored in and queried from the job payload. */

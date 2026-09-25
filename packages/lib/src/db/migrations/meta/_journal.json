@@ -505,6 +505,13 @@
       "when": 1790320003000,
       "tag": "0071_identifier_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1790320004000,
+      "tag": "0072_answer_retention_sweep",
+      "breakpoints": true
     }
   ]
 }
