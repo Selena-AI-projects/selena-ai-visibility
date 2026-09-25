@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
+import { runOnInternalDatabase } from "@workspace/lib/db/internal-job-scope";
 import {
 	type Brand,
 	brands,
@@ -561,7 +562,7 @@ async function processPrompt(
  * After a cycle it schedules the next run: on cadence when anything came back,
  * on a backoff when nothing did.
  */
-export async function processPromptJob(jobs: Job<ProcessPromptData>[]): Promise<void> {
+async function runProcessPrompt(jobs: Job<ProcessPromptData>[]): Promise<void> {
 	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
 		console.log(`[process-prompt] Skipped ${jobs.length} job(s): recurring execution is disabled`);
 		return;
@@ -576,4 +577,9 @@ export async function processPromptJob(jobs: Job<ProcessPromptData>[]): Promise<
 	for (const job of jobs) {
 		await processPrompt(job.data.promptId, scrapeConfigs, job.data.consecutiveFailures ?? 0);
 	}
+}
+
+/** Written for the table owner; runs on the operator connection rather than the tenant-confined runtime role. */
+export function processPromptJob(jobs: Job<ProcessPromptData>[]): Promise<void> {
+	return runOnInternalDatabase(() => runProcessPrompt(jobs));
 }

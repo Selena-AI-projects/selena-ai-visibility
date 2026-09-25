@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { getDefaultDelayHours } from "@workspace/lib/constants";
 import { db } from "@workspace/lib/db/db";
+import { runOnInternalDatabase } from "@workspace/lib/db/internal-job-scope";
 import { brands, promptRuns, prompts } from "@workspace/lib/db/schema";
 import { getOrgEntitlementsMap } from "@workspace/lib/entitlements";
 import { reconcilePromptRunAggregates } from "@workspace/lib/prompt-run-aggregates";
@@ -39,7 +40,7 @@ let lastOverdueAlertMs = 0;
  * picks. The decision logic itself is pure (computeMaintenanceDecisions);
  * this job only gathers state and executes the decisions.
  */
-export async function scheduleMaintenanceJob(jobs: Job<ScheduleMaintenanceData>[]): Promise<void> {
+async function runScheduleMaintenance(jobs: Job<ScheduleMaintenanceData>[]): Promise<void> {
 	if (!isRecurringJobsEnabled(process.env.SELENA_RECURRING_JOBS_ENABLED)) {
 		console.log("[schedule-maintenance] Skipped because recurring execution is disabled");
 		return;
@@ -338,4 +339,9 @@ async function getPendingJobMap(): Promise<Map<string, PendingJobInfo>> {
 	}
 
 	return map;
+}
+
+/** The sweep reads every tenant's brands, prompts and runs, so it runs on the operator connection. */
+export function scheduleMaintenanceJob(jobs: Job<ScheduleMaintenanceData>[]): Promise<void> {
+	return runOnInternalDatabase(() => runScheduleMaintenance(jobs));
 }
