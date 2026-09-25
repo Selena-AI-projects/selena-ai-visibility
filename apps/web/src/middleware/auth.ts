@@ -12,6 +12,7 @@ import { getDeployment } from "@/lib/config/server";
 import { auth } from "@/lib/auth/server";
 import { isAdmin } from "@/lib/auth/helpers";
 import { evaluateRequireAdmin } from "@/lib/auth/policies";
+import { runWithRequestTenantScope } from "@/lib/tenant-scope";
 
 /**
  * Auth middleware - provides deployment context to all server functions.
@@ -64,3 +65,11 @@ export const requireAdminMiddleware = createMiddleware({ type: "function" })
 
 		return next();
 	});
+
+/**
+ * Gives every server function its own tenant scope, which the access checks in
+ * `@/lib/auth/helpers` pin to an organization once they pass.
+ */
+export const tenantScopeMiddleware = createMiddleware({ type: "function" }).server(({ next }) =>
+	runWithRequestTenantScope(() => next()),
+);

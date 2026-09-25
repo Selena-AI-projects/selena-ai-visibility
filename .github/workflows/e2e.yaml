@@ -256,8 +256,14 @@ jobs:
           # Replay the complete source frontier after drizzle-kit has applied
           # it. This is a disposable CI database only.
           # Shared staging is bounded at the same index.
-          SELENA_MIGRATION_MAX_INDEX: "68"
+          SELENA_MIGRATION_MAX_INDEX: "70"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
+
+      - name: Check row-level security coverage
+        run: node packages/lib/scripts/check-rls-coverage.mjs
+
+      - name: Verify tenant isolation policies
+        run: bash tools/visibility_os_disposable_rehearsal.sh --run tenant_isolation
 
       - name: Verify owner-only journal no-spend reconciliation
         run: bash tools/visibility_os_disposable_rehearsal.sh --run 0059
