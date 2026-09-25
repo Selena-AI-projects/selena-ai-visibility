@@ -26,6 +26,7 @@
 		"./selena-local-competitors": "./src/selena-local-competitors.ts",
 		"./selena-local-customer-location": "./src/selena-local-customer-location.ts",
 		"./selena-local-external-audit": "./src/selena-local-external-audit.ts",
+		"./selena-local-external-audit-store": "./src/selena-local-external-audit-store.ts",
 		"./selena-local-report-print": "./src/selena-local-report-print.ts",
 		"./selena-local-report-publication": "./src/selena-local-report-publication.ts",
 		"./db/internal-job-scope": "./src/db/internal-job-scope.ts",

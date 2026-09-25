@@ -384,7 +384,14 @@ FROM (VALUES
 	('sv_local_canary_reviews', 'SELECT, INSERT, UPDATE'),
 	('sv_local_raw_evidence', 'SELECT, INSERT, UPDATE'),
 	('sv_local_raw_retention_health', 'SELECT, INSERT, UPDATE'),
-	('sv_local_evidence_acceptances', 'SELECT, INSERT')
+	('sv_local_evidence_acceptances', 'SELECT, INSERT'),
+	('sv_local_external_audits', 'SELECT, INSERT'),
+	('sv_local_external_tasks', 'SELECT, INSERT'),
+	('sv_local_external_publications', 'SELECT, INSERT'),
+	('sv_local_external_raw_evidence', 'INSERT'),
+	('sv_local_external_raw_evidence', 'UPDATE (raw_body, raw_deleted_at)'),
+	-- The retained body is written and later cleared, never read back at runtime.
+	('sv_local_external_raw_evidence', 'SELECT (provider_task_id, organization_id, audit_id, raw_sha256, captured_at, retention_expires_at, raw_deleted_at)')
 ) AS pilot(name, privileges)
 WHERE to_regclass('public.' || name) IS NOT NULL
 \gexec
