@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { ownerTaskUsage, resolveOwnerTask } from "./owner-task.js";
 
-const csv = "# two seats\nSELENA-ONE,full-ai-landscape,doki.help\nSELENA-TWO,full-ai-landscape,petid.care\n";
+const csv =
+	"# two seats\nSELENA-ONE,full-discovery-landscape,doki.help\nSELENA-TWO,full-discovery-landscape,petid.care\n";
 
 test("refuses to run without a named task, and names the tasks it knows", () => {
 	assert.deepEqual(resolveOwnerTask({}), { kind: "refused", reason: "OWNER_TASK_REQUIRED" });

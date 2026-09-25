@@ -23,8 +23,7 @@ import {
 	actionPlanSchema,
 	measurementScopeSchema,
 	monthlyAnswerAllowance,
-	planIds,
-	type SelenaPlanId,
+	resolvePlanId,
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -236,10 +235,10 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		const snapshot = (lock?.snapshot ?? null) as Record<string, unknown> | null;
 		const subjects = parseLockedAnalysisSubjects(lock?.snapshot);
 		const scope = measurementScopeSchema.safeParse(snapshot?.measurementScope);
-		view.planId = readString(snapshot?.planId);
-		const planForAllowance = (planIds as readonly string[]).includes(view.planId ?? "")
-			? monthlyAnswerAllowance(view.planId as SelenaPlanId)
-			: null;
+		const storedPlanId = readString(snapshot?.planId);
+		const resolvedPlanId = storedPlanId ? resolvePlanId(storedPlanId) : null;
+		view.planId = resolvedPlanId ?? storedPlanId;
+		const planForAllowance = resolvedPlanId ? monthlyAnswerAllowance(resolvedPlanId) : null;
 		if (planForAllowance !== null) {
 			const monthStart = new Date();
 			monthStart.setUTCDate(1);

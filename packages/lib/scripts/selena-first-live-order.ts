@@ -33,7 +33,7 @@
 
 import { readFileSync } from "node:fs";
 
-/** The three Visitor View surfaces a `visitor-local` measurement buys. */
+/** The three Visitor View surfaces a `visibility-snapshot` measurement buys. */
 const VISITOR_SURFACES = ["ChatGPT", "Gemini", "Perplexity"] as const;
 
 /**

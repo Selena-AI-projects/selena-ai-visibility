@@ -3,6 +3,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table";
 import { useCallback, useEffect, useState } from "react";
+import { resolvePlanId } from "@workspace/selena-visibility-contracts";
 import {
 	listSelenaOrderRequestsFn,
 	type OrderRequestRow,
@@ -20,9 +21,14 @@ function tr(locale: InboxLocale, english: string, russian: string): string {
 }
 
 const PLAN_LABELS: Record<string, string> = {
-	"visitor-local": "Snapshot · $49",
-	"full-ai-landscape": "Landscape · $79",
+	"visibility-snapshot": "Snapshot · $49",
+	"full-discovery-landscape": "Landscape · $79",
 };
+
+function planLabel(planId: string): string {
+	const resolved = resolvePlanId(planId);
+	return (resolved && PLAN_LABELS[resolved]) ?? planId;
+}
 
 export function SelenaRequestInbox({ locale }: { locale: InboxLocale }) {
 	const [requests, setRequests] = useState<OrderRequestRow[] | null>(null);
@@ -96,7 +102,7 @@ export function SelenaRequestInbox({ locale }: { locale: InboxLocale }) {
 												<span className="mt-1 block text-xs text-muted-foreground">{request.comment}</span>
 											)}
 										</TableCell>
-										<TableCell>{PLAN_LABELS[request.planId] ?? request.planId}</TableCell>
+										<TableCell>{planLabel(request.planId)}</TableCell>
 										<TableCell>
 											{request.contactName}
 											<span className="block text-xs text-muted-foreground">{request.contactChannel}</span>
