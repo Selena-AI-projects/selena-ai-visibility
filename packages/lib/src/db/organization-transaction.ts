@@ -15,10 +15,15 @@ export async function withOrganizationTransaction<Result>(
 	db: OrganizationDatabase,
 	organizationId: string,
 	work: (tx: OrganizationTransaction) => Promise<Result>,
+	options: { userId?: string } = {},
 ): Promise<Result> {
 	if (organizationId.trim().length === 0) throw new Error("ORGANIZATION_TRANSACTION_ID_REQUIRED");
+	if (options.userId !== undefined && options.userId.trim().length === 0)
+		throw new Error("ORGANIZATION_TRANSACTION_USER_ID_REQUIRED");
 	return db.transaction(async (tx) => {
 		await tx.execute(sql`select set_config('app.organization_id', ${organizationId}, true)`);
+		// Policies on membership-scoped tables (member, invitation) read the acting user.
+		if (options.userId !== undefined) await tx.execute(sql`select set_config('app.user_id', ${options.userId}, true)`);
 		return work(tx);
 	});
 }

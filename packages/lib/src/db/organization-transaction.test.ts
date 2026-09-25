@@ -38,3 +38,37 @@ describe("withOrganizationTransaction", () => {
 		expect(transaction).not.toHaveBeenCalled();
 	});
 });
+
+describe("withOrganizationTransaction acting user", () => {
+	it("also sets a transaction-local acting user when one is given", async () => {
+		const statements: SQL[] = [];
+		const tx = { execute: vi.fn(async (statement: SQL) => void statements.push(statement)) };
+		const db = { transaction: vi.fn(async (work: (runner: typeof tx) => Promise<unknown>) => work(tx)) };
+
+		await withOrganizationTransaction(
+			db as unknown as NodePgDatabase<typeof schema>,
+			"tenant-1",
+			async () => undefined,
+			{
+				userId: "user-1",
+			},
+		);
+
+		const queries = statements.map((statement) => new PgDialect().sqlToQuery(statement));
+		expect(queries.map((query) => query.sql)).toEqual([
+			"select set_config('app.organization_id', $1, true)",
+			"select set_config('app.user_id', $1, true)",
+		]);
+		expect(queries.map((query) => query.params)).toEqual([["tenant-1"], ["user-1"]]);
+	});
+
+	it("rejects an empty acting user before opening a transaction", async () => {
+		const transaction = vi.fn();
+		const db = { transaction } as unknown as NodePgDatabase<typeof schema>;
+
+		await expect(withOrganizationTransaction(db, "tenant-1", async () => undefined, { userId: " " })).rejects.toThrow(
+			"ORGANIZATION_TRANSACTION_USER_ID_REQUIRED",
+		);
+		expect(transaction).not.toHaveBeenCalled();
+	});
+});
