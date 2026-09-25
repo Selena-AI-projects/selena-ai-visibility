@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+
+const recordOperatorAccess = vi.fn();
+vi.mock("@workspace/lib/db/operator-access-audit", () => ({
+	recordOperatorAccess: (...args: unknown[]) => recordOperatorAccess(...args),
+}));
+
 import { ApiError, createApiHandler } from "../handler";
 
 const API_KEY = "test-api-key";
@@ -25,6 +31,7 @@ describe("createApiHandler", () => {
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.restoreAllMocks();
+		recordOperatorAccess.mockReset();
 	});
 
 	it("returns 401 when the API key is missing", async () => {
@@ -32,6 +39,22 @@ describe("createApiHandler", () => {
 		const response = await handler({ request: makeRequest({ apiKey: null }), params: {} });
 		expect(response.status).toBe(401);
 		expect(await response.json()).toEqual({ error: "Unauthorized", message: "Valid API key required" });
+	});
+
+	it("records each admin-key request as operator access without storing the key", async () => {
+		const handler = createApiHandler({ handle: async () => ({ ok: true }) });
+		await handler({ request: makeRequest({ method: "POST" }), params: {} });
+		expect(recordOperatorAccess).toHaveBeenCalledTimes(1);
+		const [access] = recordOperatorAccess.mock.calls[0] as [Record<string, string>];
+		expect(access).toMatchObject({ actorKind: "admin_api_key", method: "POST", path: "/api/v1/test" });
+		expect(access.actorId).toMatch(/^admin-api-key:[0-9a-f]{12}$/);
+		expect(access.actorId).not.toContain(API_KEY);
+	});
+
+	it("records nothing for a request whose key is refused", async () => {
+		const handler = createApiHandler({ handle: async () => ({ ok: true }) });
+		await handler({ request: makeRequest({ apiKey: "wrong-key" }), params: {} });
+		expect(recordOperatorAccess).not.toHaveBeenCalled();
 	});
 
 	it("returns 401 when the API key is wrong", async () => {

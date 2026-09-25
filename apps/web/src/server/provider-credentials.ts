@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import {
 	getPublicProviderCredentialStatus,
 	type PublicProviderCredentialStatus,
@@ -22,7 +23,7 @@ async function requireAdmin(): Promise<void> {
 	if (!isAdmin(session)) throw new Error("Unauthorized: Admin access required");
 	// Provider credentials live in the global `secrets` table, which only the
 	// operator connection reads.
-	await enterInternalScope();
+	await enterInternalScope({ id: session.user.id, kind: "platform_admin" }, getRequest());
 }
 
 function getStorageStatus(): CredentialStorageStatus {

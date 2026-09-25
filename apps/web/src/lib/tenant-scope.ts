@@ -11,6 +11,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { db } from "@workspace/lib/db/db";
 import { internalDatabase } from "@workspace/lib/db/internal-db";
+import { type OperatorActorKind, recordOperatorAccess } from "@workspace/lib/db/operator-access-audit";
 import type { OrganizationDatabase } from "@workspace/lib/db/organization-transaction";
 import * as schema from "@workspace/lib/db/schema";
 import { installScopedDatabaseResolver } from "@workspace/lib/db/tenant-scope";
@@ -25,7 +26,9 @@ type TenantScope = {
 	database: OrganizationDatabase;
 };
 
-type RequestScope = { opening?: Promise<TenantScope>; active?: TenantScope };
+type RequestScope = { opening?: Promise<TenantScope>; active?: TenantScope; operatorRecorded?: boolean };
+
+export type OperatorActor = { id: string; kind: OperatorActorKind };
 
 const storage = new AsyncLocalStorage<RequestScope>();
 
@@ -119,10 +122,16 @@ export async function withOrganizationScope<Result>(
  * Switches the request to the operator connection after a platform-admin or
  * ADMIN_API_KEYS check passed, so operator views that span every tenant keep
  * working once the web's own role is confined to one. A request already pinned
- * to a tenant cannot become an operator request, and vice versa.
+ * to a tenant cannot become an operator request, and vice versa. Each request
+ * that enters is recorded once, with who entered and through which request.
  */
-export async function enterInternalScope(): Promise<void> {
+export async function enterInternalScope(actor: OperatorActor, request: Request): Promise<void> {
 	const scope = storage.getStore();
+	if (!scope?.operatorRecorded) {
+		const { pathname } = new URL(request.url);
+		await recordOperatorAccess({ actorId: actor.id, actorKind: actor.kind, method: request.method, path: pathname });
+		if (scope) scope.operatorRecorded = true;
+	}
 	if (!scope) return;
 	if (!scope.opening) {
 		// The operator pool opens on the first query, not here, so an operator
