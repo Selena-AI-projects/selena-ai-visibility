@@ -228,6 +228,11 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0070';
 	END IF;
 
+	IF to_regprocedure('public.sv_brand_id_taken(text)') IS NULL
+		OR to_regprocedure('public.sv_organization_slug_taken(text)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0071';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -417,5 +422,9 @@ GRANT EXECUTE ON FUNCTION sv_resolve_session_memberships(text) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_resolve_brand_membership(text, text) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_resolve_prompt_membership(text, uuid) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_resolve_user_organizations(text) TO selena_app;
+
+-- Brand ids and organization slugs are unique across tenants.
+GRANT EXECUTE ON FUNCTION sv_brand_id_taken(text) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_organization_slug_taken(text) TO selena_app;
 
 COMMIT;

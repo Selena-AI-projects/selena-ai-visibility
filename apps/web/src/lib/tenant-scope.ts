@@ -93,3 +93,20 @@ export async function enterOrganizationScope(organizationId: string, userId: str
 	if (tenant.organizationId !== organizationId || tenant.userId !== userId)
 		throw new Error("Forbidden: request is already scoped to another organization");
 }
+
+/**
+ * Runs work that belongs to one of several organizations the caller reaches in
+ * a single request (a brand list across every workspace), each in a scope of
+ * its own so the request's single-tenant rule still holds per unit of work.
+ * The caller must already have established membership in `organizationId`.
+ */
+export async function withOrganizationScope<Result>(
+	organizationId: string,
+	userId: string,
+	work: () => Promise<Result>,
+): Promise<Result> {
+	return runWithRequestTenantScope(async () => {
+		await enterOrganizationScope(organizationId, userId);
+		return work();
+	});
+}

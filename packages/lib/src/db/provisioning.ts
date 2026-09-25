@@ -14,9 +14,11 @@
  * call is a bug and should fail at the database layer rather than
  * silently rewriting rows.
  */
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { db } from "./db";
-import { brands, member, organization, user } from "./schema";
+import { withOrganizationTransaction } from "./organization-transaction";
+import { member, organization, user } from "./schema";
+import { withBootstrapFallback } from "./session-membership-bootstrap";
 
 /**
  * The db handle or an open transaction — lets a provisioning step join a
@@ -57,20 +59,29 @@ const LOCAL_ORG = {
  * rights.
  */
 export async function provisionLocalOrg(input: { userId: string }): Promise<{ orgId: string }> {
-	await db.insert(organization).values({
-		id: LOCAL_ORG.id,
-		name: LOCAL_ORG.name,
-		slug: LOCAL_ORG.slug,
-		createdAt: new Date(),
-	});
+	// The new org's own tenant scope lets a non-owner role pass the
+	// organization and member insert policies.
+	await withOrganizationTransaction(
+		db,
+		LOCAL_ORG.id,
+		async (tx) => {
+			await tx.insert(organization).values({
+				id: LOCAL_ORG.id,
+				name: LOCAL_ORG.name,
+				slug: LOCAL_ORG.slug,
+				createdAt: new Date(),
+			});
 
-	await db.insert(member).values({
-		id: crypto.randomUUID(),
-		organizationId: LOCAL_ORG.id,
-		userId: input.userId,
-		role: "admin",
-		createdAt: new Date(),
-	});
+			await tx.insert(member).values({
+				id: crypto.randomUUID(),
+				organizationId: LOCAL_ORG.id,
+				userId: input.userId,
+				role: "admin",
+				createdAt: new Date(),
+			});
+		},
+		{ userId: input.userId },
+	);
 
 	return { orgId: LOCAL_ORG.id };
 }
@@ -111,14 +122,29 @@ export async function findUniqueBrandId(baseSlug: string): Promise<string> {
 	let candidate = baseSlug;
 	let suffix = 2;
 	for (;;) {
-		const isReserved = RESERVED_ORG_SLUGS.has(candidate);
-		const conflict = isReserved
-			? [{ id: candidate }]
-			: await db.select({ id: brands.id }).from(brands).where(eq(brands.id, candidate)).limit(1);
-		if (conflict.length === 0) return candidate;
+		if (!RESERVED_ORG_SLUGS.has(candidate) && !(await isTaken("brand", candidate))) return candidate;
 		candidate = `${baseSlug}-${suffix}`;
 		suffix++;
 	}
+}
+
+/**
+ * Whether an identifier that must be unique across every tenant is in use.
+ * A non-owner role cannot see other tenants' rows, so the check goes through a
+ * SECURITY DEFINER function, with the direct read for databases that predate it.
+ */
+async function isTaken(kind: "brand" | "organization-slug", candidate: string, conn: DbConnection = db): Promise<boolean> {
+	const result = await withBootstrapFallback(
+		() =>
+			kind === "brand"
+				? conn.execute(sql`SELECT public.sv_brand_id_taken(${candidate}) AS taken`)
+				: conn.execute(sql`SELECT public.sv_organization_slug_taken(${candidate}) AS taken`),
+		() =>
+			kind === "brand"
+				? conn.execute(sql`SELECT EXISTS (SELECT 1 FROM public.brands WHERE id = ${candidate}) AS taken`)
+				: conn.execute(sql`SELECT EXISTS (SELECT 1 FROM public.organization WHERE slug = ${candidate}) AS taken`),
+	);
+	return (result.rows[0] as { taken: boolean } | undefined)?.taken === true;
 }
 
 /**
@@ -131,12 +157,7 @@ async function findUniqueOrgSlug(baseSlug: string, conn: DbConnection = db): Pro
 	let candidate = baseSlug;
 	let suffix = 2;
 	for (;;) {
-		const [conflict] = await conn
-			.select({ id: organization.id })
-			.from(organization)
-			.where(eq(organization.slug, candidate))
-			.limit(1);
-		if (!conflict) return candidate;
+		if (!(await isTaken("organization-slug", candidate, conn))) return candidate;
 		candidate = `${baseSlug}-${suffix}`;
 		suffix++;
 	}
@@ -183,21 +204,28 @@ export async function ensureOrganization(input: { id: string; name: string }, co
 export async function provisionUmbrellaOrg(input: { userId: string; name: string }): Promise<{ orgId: string }> {
 	const orgId = crypto.randomUUID();
 
-	await db.transaction(async (tx) => {
-		// Resolve the slug inside the transaction so the uniqueness check and the
-		// insert it guards see the same snapshot. Two same-named signups can still
-		// collide on the slug unique index; that surfaces as a failed signup
-		// rather than a duplicate org.
-		const slug = await findUniqueOrgSlug(slugify(input.name), tx);
-		await tx.insert(organization).values({ id: orgId, name: input.name, slug, createdAt: new Date() });
-		await tx.insert(member).values({
-			id: crypto.randomUUID(),
-			organizationId: orgId,
-			userId: input.userId,
-			role: "admin",
-			createdAt: new Date(),
-		});
-	});
+	// The new org's own tenant scope lets a non-owner role pass the
+	// organization and member insert policies.
+	await withOrganizationTransaction(
+		db,
+		orgId,
+		async (tx) => {
+			// Resolve the slug inside the transaction so the uniqueness check and the
+			// insert it guards see the same snapshot. Two same-named signups can still
+			// collide on the slug unique index; that surfaces as a failed signup
+			// rather than a duplicate org.
+			const slug = await findUniqueOrgSlug(slugify(input.name), tx);
+			await tx.insert(organization).values({ id: orgId, name: input.name, slug, createdAt: new Date() });
+			await tx.insert(member).values({
+				id: crypto.randomUUID(),
+				organizationId: orgId,
+				userId: input.userId,
+				role: "admin",
+				createdAt: new Date(),
+			});
+		},
+		{ userId: input.userId },
+	);
 
 	return { orgId };
 }

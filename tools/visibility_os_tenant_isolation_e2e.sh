@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 70)); then
+	if ((10#$migration_number > 71)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -48,7 +48,7 @@ GRANT USAGE ON SCHEMA public TO selena_app;
 GRANT SELECT ON brands, prompt_runs, citations, organization, member TO selena_app;
 GRANT SELECT, INSERT ON prompts TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_resolve_brand_membership(text, text), sv_resolve_prompt_membership(text, uuid),
-	sv_resolve_user_organizations(text) TO selena_app;
+	sv_resolve_user_organizations(text), sv_brand_id_taken(text), sv_organization_slug_taken(text) TO selena_app;
 GRANT SELECT ON organization_settings, usage_events, competitors, brand_opportunities,
 	prompt_run_hourly_aggregates, invitation, sso_provider TO selena_app;
 SQL
@@ -137,6 +137,14 @@ expect 'non-member cannot resolve a foreign prompt' 0 \
 	"$(as_tenant '' '' "SELECT count(*) FROM sv_resolve_prompt_membership('tenant-user-b', '00000000-0000-4000-8000-00000000000a')")"
 expect 'user lists only own organizations' 'tenant-org-a:Tenant A' \
 	"$(as_tenant '' '' "SELECT string_agg(organization_id || ':' || organization_name, ',') FROM sv_resolve_user_organizations('tenant-user-a')")"
+
+# Identifiers unique across tenants stay checkable without exposing the rows.
+expect 'foreign brand id is reported taken' 't' \
+	"$(as_tenant tenant-org-b '' "SELECT sv_brand_id_taken('tenant-brand-a')")"
+expect 'free brand id is reported available' 'f' \
+	"$(as_tenant tenant-org-b '' "SELECT sv_brand_id_taken('unused-brand')")"
+expect 'foreign organization slug is reported taken' 't' \
+	"$(as_tenant tenant-org-b '' "SELECT sv_organization_slug_taken('tenant-org-a')")"
 
 # Policies apply to selena_app only while FORCE stays off, so the table owner
 # (today's production connection) keeps full visibility.

@@ -47,7 +47,7 @@ function isUndefinedFunction(error: unknown): boolean {
  * answers the same question; under a non-owner role that read sees no rows,
  * so the fallback can only fail closed.
  */
-async function withBootstrapFallback<Result>(
+export async function withBootstrapFallback<Result>(
 	viaFunction: () => Promise<Result>,
 	direct: () => Promise<Result>,
 ): Promise<Result> {

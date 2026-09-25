@@ -22,15 +22,23 @@ import {
 	selectTargetsForBrand,
 } from "@workspace/lib/providers";
 import { defaultPlatformPicks, resolvePromptRunPlan } from "@workspace/lib/run-policy";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { BRAND_WRITER_ROLES, listUserOrganizations, requireAuthSession, requireBrandAccess, requireBrandRole, requireOrgAccess } from "@/lib/auth/helpers";
+import {
+	BRAND_WRITER_ROLES,
+	listUserOrganizations,
+	requireAuthSession,
+	requireBrandAccess,
+	requireBrandRole,
+	requireOrgAccess,
+} from "@/lib/auth/helpers";
 import { evaluateRequireCanCreateBrands, resolveBrandOrganization } from "@/lib/auth/policies";
 import { normalizeBrandUpdate } from "@/lib/brand-settings";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import { getDeployment } from "@/lib/config/server";
 import { cleanAndValidateDomain } from "@/lib/domain-categories";
 import { type TrackedTarget, targetFilterValue } from "@/lib/model-filter";
+import { withOrganizationScope } from "@/lib/tenant-scope";
 
 const BRAND_ORG_ERRORS = {
 	"no-organization": "No organization for the current user",
@@ -200,20 +208,22 @@ export const getBrands = createServerFn({ method: "GET" }).handler(async () => {
 		return [];
 	}
 
-	const scopedBrands = await db.query.brands.findMany({
-		where: inArray(brands.organizationId, orgIds),
-	});
-
 	// Every brand needs its org's entitlements to say what it tracks; resolve
 	// them for all the orgs at once rather than per brand.
 	const entitlementsByOrg = await getOrgEntitlementsMap(orgIds);
-	const brandsData = await Promise.all(
-		scopedBrands.map((brand) => getBrandWithPromptsFromDb(brand.id, entitlementsByOrg.get(brand.organizationId))),
+	// Each workspace's brands are read in that workspace's own tenant scope.
+	const brandsByOrg = await Promise.all(
+		orgIds.map((orgId) =>
+			withOrganizationScope(orgId, session.user.id, async () => {
+				const orgBrands = await db.query.brands.findMany({ where: eq(brands.organizationId, orgId) });
+				return Promise.all(orgBrands.map((brand) => getBrandWithPromptsFromDb(brand.id, entitlementsByOrg.get(orgId))));
+			}),
+		),
 	);
 
-	return brandsData.filter(
-		(brand): brand is BrandWithPrompts & { trackedTargets: TrackedTarget[] } => brand !== undefined,
-	);
+	return brandsByOrg
+		.flat()
+		.filter((brand): brand is BrandWithPrompts & { trackedTargets: TrackedTarget[] } => brand !== undefined);
 });
 
 /**

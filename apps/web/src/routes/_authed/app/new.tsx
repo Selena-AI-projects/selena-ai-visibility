@@ -24,7 +24,7 @@ import { Button } from "@workspace/ui/components/button";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select";
-import { inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { useState } from "react";
 import FullPageCard from "@/components/full-page-card";
 import { PlatformSelectionStep } from "@/components/platform-selection-step";
@@ -32,6 +32,7 @@ import { listUserOrganizations, requireAuthSession } from "@/lib/auth/helpers";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import { getDeployment } from "@/lib/config/server";
 import { trackEvent } from "@/lib/posthog";
+import { withOrganizationScope } from "@/lib/tenant-scope";
 import { createBrandInOrgFn } from "@/server/brands";
 import { getOnboardingPlatformStateFn, type OnboardingPlatformState } from "@/server/platform-picks";
 
@@ -45,15 +46,23 @@ type NewBrandOrganization = {
 };
 
 /** The oldest brand of each org, which is as good a billing entry point as any. */
-async function billingBrandByOrg(orgIds: string[]): Promise<Map<string, string>> {
-	if (orgIds.length === 0) return new Map();
-	const rows = await db
-		.select({ id: brands.id, organizationId: brands.organizationId })
-		.from(brands)
-		.where(inArray(brands.organizationId, orgIds))
-		.orderBy(brands.createdAt);
+async function billingBrandByOrg(userId: string, orgIds: string[]): Promise<Map<string, string>> {
+	// Each workspace is read in its own tenant scope; the caller already holds
+	// membership in every org passed in.
 	const byOrg = new Map<string, string>();
-	for (const row of rows) if (!byOrg.has(row.organizationId)) byOrg.set(row.organizationId, row.id);
+	await Promise.all(
+		orgIds.map((orgId) =>
+			withOrganizationScope(orgId, userId, async () => {
+				const [row] = await db
+					.select({ id: brands.id })
+					.from(brands)
+					.where(eq(brands.organizationId, orgId))
+					.orderBy(brands.createdAt)
+					.limit(1);
+				if (row) byOrg.set(orgId, row.id);
+			}),
+		),
+	);
 	return byOrg;
 }
 
@@ -66,7 +75,10 @@ const getNewBrandOptions = createServerFn({ method: "GET" }).handler(
 		const orgs = await listUserOrganizations(session.user.id);
 		const decisions = await checkBrandCreate(orgs.map((org) => org.id));
 		const blocked = orgs.filter((org) => decisions.get(org.id)?.allowed === false);
-		const billingBrands = await billingBrandByOrg(blocked.map((org) => org.id));
+		const billingBrands = await billingBrandByOrg(
+			session.user.id,
+			blocked.map((org) => org.id),
+		);
 
 		return {
 			canCreateBrands: true,
