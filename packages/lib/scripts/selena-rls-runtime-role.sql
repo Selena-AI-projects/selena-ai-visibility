@@ -373,6 +373,21 @@ GRANT EXECUTE ON FUNCTION sv_recover_journal_daily_claim(uuid, text) TO selena_a
 SELECT 'GRANT SELECT, INSERT ON sv_provider_dataset_snapshot_events TO selena_app'
 WHERE to_regclass('public.sv_provider_dataset_snapshot_events') IS NOT NULL
 \gexec
+-- Local Maps pilot runtime (migration 0075). Acceptances are append-only; the
+-- other rows move through states their trigger guards check.
+SELECT format('GRANT %s ON %I TO selena_app', privileges, name)
+FROM (VALUES
+	('sv_local_dispatch_outbox', 'SELECT, INSERT, UPDATE'),
+	('sv_local_report_versions', 'SELECT, INSERT, UPDATE'),
+	('sv_local_qc_decisions', 'SELECT, INSERT, UPDATE'),
+	('sv_local_report_deliveries', 'SELECT, INSERT, UPDATE'),
+	('sv_local_canary_reviews', 'SELECT, INSERT, UPDATE'),
+	('sv_local_raw_evidence', 'SELECT, INSERT, UPDATE'),
+	('sv_local_raw_retention_health', 'SELECT, INSERT, UPDATE'),
+	('sv_local_evidence_acceptances', 'SELECT, INSERT')
+) AS pilot(name, privileges)
+WHERE to_regclass('public.' || name) IS NOT NULL
+\gexec
 GRANT INSERT ON sv_source_snapshots TO selena_app;
 REVOKE SELECT (
 	source_ref, content_sha256, snapshot, provider_dataset_ref, environment, raw_reference

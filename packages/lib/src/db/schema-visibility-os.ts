@@ -1,3 +1,4 @@
+import { localPilotCycleStatuses } from "@workspace/selena-visibility-contracts";
 import { sql } from "drizzle-orm";
 import {
 	bigint,
@@ -78,6 +79,7 @@ export const svMeasurementAttempts = pgTable(
 		measurementCycleId: uuid("measurement_cycle_id").notNull(),
 		domainId: text("domain_id").notNull(),
 		observationRef: text("observation_ref").notNull(),
+		localObservationId: uuid("local_observation_id"),
 		pointId: uuid("point_id").notNull(),
 		itemId: uuid("item_id").notNull(),
 		executorId: text("executor_id").notNull(),
@@ -115,6 +117,12 @@ export const svMeasurementAttempts = pgTable(
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
+		pilotOrgIdUnique: uniqueIndex("sv_measurement_attempts_pilot_org_id_unique").on(table.organizationId, table.id),
+		localObservationReference: foreignKey({
+			columns: [table.organizationId, table.localObservationId],
+			foreignColumns: [svLocalRankObservations.organizationId, svLocalRankObservations.id],
+			name: "sv_attempt_local_observation_org_fk",
+		}),
 		reservationUnique: uniqueIndex("sv_measurement_attempts_reservation_unique").on(table.reservationId),
 		executionUnique: uniqueIndex("sv_measurement_attempts_execution_unique").on(
 			table.organizationId,
@@ -170,11 +178,11 @@ export const svMeasurementAttempts = pgTable(
 		rowVersionCheck: check("sv_measurement_attempts_row_version_check", sql`${table.rowVersion} > 0`),
 		submissionTokenCheck: check(
 			"sv_measurement_attempts_submission_token_check",
-			sql`((${table.status} = 'CLAIMED' AND ${table.submissionTokenHash} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submissionTokenHash} IS NOT NULL AND ${table.submissionTokenHash} ~ '^sha256:[a-f0-9]{64}$')) IS TRUE`,
+			sql`((((${table.status} = 'CLAIMED' AND ${table.submissionTokenHash} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submissionTokenHash} IS NOT NULL AND ${table.submissionTokenHash} ~ '^sha256:[a-f0-9]{64}$')) IS TRUE) OR (${table.status}='CANCELLED_NO_CALL' AND ${table.domainId}='LOCAL_MAPS' AND ${table.budgetState}='RELEASED' AND ${table.spentCostUsd}=0 AND ${table.releasedCostUsd}=${table.reservedCostUsd} AND ${table.submittedAt} IS NULL AND ${table.submissionTokenHash} IS NULL AND ${table.submittedCandidate} IS NULL AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL AND ${table.completedAt} IS NOT NULL AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL AND ${table.unknownReason} IS NULL)) IS TRUE`,
 		),
 		submittedCandidateCheck: check(
 			"sv_measurement_attempts_submitted_candidate_check",
-			sql`((${table.status} = 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.submittedCandidate} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NOT NULL AND ${table.submittedCandidateCanonical} IS NOT NULL AND ${table.submittedCandidate} IS NOT NULL AND ${table.submittedCandidateFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.submittedCandidateCanonical}, 'UTF8')), 'hex') AND ${table.submittedCandidate} = ${table.submittedCandidateCanonical}::jsonb AND jsonb_typeof(${table.submittedCandidate}) = 'object' AND ${table.submittedCandidate} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'scope', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'lock', 'slot', 'keyword', 'providerRequest', 'attempt', 'budgetReservation'] AND ${table.submittedCandidate} - 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text - 'scope'::text - 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text - 'lock'::text - 'slot'::text - 'keyword'::text - 'providerRequest'::text - 'attempt'::text - 'budgetReservation'::text = '{}'::jsonb AND ${table.submittedCandidate}->>'schemaVersion' = '1' AND ${table.submittedCandidate}->>'kind' = 'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE' AND ${table.submittedCandidate}->>'mode' = 'LIVE_PROVIDER' AND ${table.submittedCandidate}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.submittedCandidate}#>>'{scope,organizationId}' = ${table.organizationId} AND ${table.submittedCandidate}#>>'{scope,measurementCycleId}' = ${table.measurementCycleId}::text AND ${table.submittedCandidate}#>>'{scope,domainId}' = 'LOCAL_MAPS' AND ${table.domainId} = 'LOCAL_MAPS' AND ${table.submittedCandidate}#>>'{attempt,attemptId}' = ${table.id}::text AND ${table.submittedCandidate}#>>'{attempt,reservationId}' = ${table.reservationId}::text AND ${table.submittedCandidate}#>>'{attempt,observationRef}' = ${table.observationRef} AND ${table.submittedCandidate}#>>'{attempt,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{attempt,executionKey}' = ${table.executionKey} AND ${table.submittedCandidate}#>>'{attempt,attemptIndex}' = ${table.attemptIndex}::text AND ${table.submittedCandidate}#>>'{attempt,statusSnapshot}' = 'SUBMITTED' AND (${table.submittedCandidate}#>>'{attempt,claimedAt}')::timestamptz = ${table.claimedAt} AND (${table.submittedCandidate}#>>'{attempt,submittedAt}')::timestamptz = ${table.submittedAt} AND (${table.submittedCandidate}#>>'{attempt,leaseExpiresAt}')::timestamptz = ${table.leaseExpiresAt} AND ${table.submittedCandidate}#>>'{slot,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{slot,pointId}' = ${table.pointId}::text AND ${table.submittedCandidate}#>>'{slot,keywordId}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{keyword,id}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{slot,repeatIndex}' = ${table.repeatIndex}::text AND ${table.submittedCandidate}#>>'{providerRequest,repeatIndex}' = ${table.repeatIndex}::text AND ${table.executorId} !~* '^(stub|noop)(-|$)' AND ${table.submittedCandidate}#>>'{providerRequest,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{lock,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{budgetReservation,currency}' = ${table.currency} AND (${table.submittedCandidate}#>>'{budgetReservation,reservedCostUsd}')::numeric(12, 6) = ${table.reservedCostUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,surfaceCapUsd}')::numeric(12, 6) = ${table.surfaceCapUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,monthlyCapUsd}')::numeric(12, 6) = ${table.monthlyCapUsd} AND ${table.submittedCandidate}#>>'{budgetReservation,priceSnapshotVersion}' = ${table.priceSnapshotVersion})) IS TRUE`,
+			sql`((((${table.status} = 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.submittedCandidate} IS NULL) OR (${table.status} <> 'CLAIMED' AND ${table.submittedCandidateFingerprint} IS NOT NULL AND ${table.submittedCandidateCanonical} IS NOT NULL AND ${table.submittedCandidate} IS NOT NULL AND ${table.submittedCandidateFingerprint} = 'sha256:' || encode(sha256(convert_to(${table.submittedCandidateCanonical}, 'UTF8')), 'hex') AND ${table.submittedCandidate} = ${table.submittedCandidateCanonical}::jsonb AND jsonb_typeof(${table.submittedCandidate}) = 'object' AND ${table.submittedCandidate} ?& array['schemaVersion', 'kind', 'mode', 'canonicalizationVersion', 'scope', 'lockSnapshotCanonical', 'requestSnapshotCanonical', 'lock', 'slot', 'keyword', 'providerRequest', 'attempt', 'budgetReservation'] AND ${table.submittedCandidate} - 'schemaVersion'::text - 'kind'::text - 'mode'::text - 'canonicalizationVersion'::text - 'scope'::text - 'lockSnapshotCanonical'::text - 'requestSnapshotCanonical'::text - 'lock'::text - 'slot'::text - 'keyword'::text - 'providerRequest'::text - 'attempt'::text - 'budgetReservation'::text = '{}'::jsonb AND ${table.submittedCandidate}->>'schemaVersion' = '1' AND ${table.submittedCandidate}->>'kind' = 'LOCAL_MAPS_LIVE_SUBMITTED_CANDIDATE' AND ${table.submittedCandidate}->>'mode' = 'LIVE_PROVIDER' AND ${table.submittedCandidate}->>'canonicalizationVersion' = 'canonical-json-code-unit-v1' AND ${table.submittedCandidate}#>>'{scope,organizationId}' = ${table.organizationId} AND ${table.submittedCandidate}#>>'{scope,measurementCycleId}' = ${table.measurementCycleId}::text AND ${table.submittedCandidate}#>>'{scope,domainId}' = 'LOCAL_MAPS' AND ${table.domainId} = 'LOCAL_MAPS' AND ${table.submittedCandidate}#>>'{attempt,attemptId}' = ${table.id}::text AND ${table.submittedCandidate}#>>'{attempt,reservationId}' = ${table.reservationId}::text AND ${table.submittedCandidate}#>>'{attempt,observationRef}' = ${table.observationRef} AND ${table.submittedCandidate}#>>'{attempt,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{attempt,executionKey}' = ${table.executionKey} AND ${table.submittedCandidate}#>>'{attempt,attemptIndex}' = ${table.attemptIndex}::text AND ${table.submittedCandidate}#>>'{attempt,statusSnapshot}' = 'SUBMITTED' AND (${table.submittedCandidate}#>>'{attempt,claimedAt}')::timestamptz = ${table.claimedAt} AND (${table.submittedCandidate}#>>'{attempt,submittedAt}')::timestamptz = ${table.submittedAt} AND (${table.submittedCandidate}#>>'{attempt,leaseExpiresAt}')::timestamptz = ${table.leaseExpiresAt} AND ${table.submittedCandidate}#>>'{slot,baseSlotKey}' = ${table.baseSlotKey} AND ${table.submittedCandidate}#>>'{slot,pointId}' = ${table.pointId}::text AND ${table.submittedCandidate}#>>'{slot,keywordId}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{keyword,id}' = ${table.itemId}::text AND ${table.submittedCandidate}#>>'{slot,repeatIndex}' = ${table.repeatIndex}::text AND ${table.submittedCandidate}#>>'{providerRequest,repeatIndex}' = ${table.repeatIndex}::text AND ${table.executorId} !~* '^(stub|noop)(-|$)' AND ${table.submittedCandidate}#>>'{providerRequest,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{lock,provider,id}' = ${table.executorId} AND ${table.submittedCandidate}#>>'{budgetReservation,currency}' = ${table.currency} AND (${table.submittedCandidate}#>>'{budgetReservation,reservedCostUsd}')::numeric(12, 6) = ${table.reservedCostUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,surfaceCapUsd}')::numeric(12, 6) = ${table.surfaceCapUsd} AND (${table.submittedCandidate}#>>'{budgetReservation,monthlyCapUsd}')::numeric(12, 6) = ${table.monthlyCapUsd} AND ${table.submittedCandidate}#>>'{budgetReservation,priceSnapshotVersion}' = ${table.priceSnapshotVersion})) IS TRUE) OR (${table.status}='CANCELLED_NO_CALL' AND ${table.domainId}='LOCAL_MAPS' AND ${table.budgetState}='RELEASED' AND ${table.spentCostUsd}=0 AND ${table.releasedCostUsd}=${table.reservedCostUsd} AND ${table.submittedAt} IS NULL AND ${table.submissionTokenHash} IS NULL AND ${table.submittedCandidate} IS NULL AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL AND ${table.completedAt} IS NOT NULL AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL AND ${table.unknownReason} IS NULL)) IS TRUE`,
 		),
 		unknownReasonCheck: check(
 			"sv_measurement_attempts_unknown_reason_check",
@@ -190,15 +198,15 @@ export const svMeasurementAttempts = pgTable(
 		),
 		statusCheck: check(
 			"sv_measurement_attempts_status_check",
-			sql`${table.status} IN ('CLAIMED', 'SUBMITTED', 'SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION')`,
+			sql`((${table.status} IN ('CLAIMED', 'SUBMITTED', 'SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION')) OR (${table.status}='CANCELLED_NO_CALL' AND ${table.domainId}='LOCAL_MAPS' AND ${table.budgetState}='RELEASED' AND ${table.spentCostUsd}=0 AND ${table.releasedCostUsd}=${table.reservedCostUsd} AND ${table.submittedAt} IS NULL AND ${table.submissionTokenHash} IS NULL AND ${table.submittedCandidate} IS NULL AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL AND ${table.completedAt} IS NOT NULL AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL AND ${table.unknownReason} IS NULL)) IS TRUE`,
 		),
 		stateShapeCheck: check(
 			"sv_measurement_attempts_state_shape_check",
-			sql`(${table.status} = 'CLAIMED' AND ${table.submittedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} = 'SUBMITTED' AND ${table.submittedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION') AND ${table.submittedAt} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} >= ${table.submittedAt})`,
+			sql`(((${table.status} = 'CLAIMED' AND ${table.submittedAt} IS NULL AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} = 'SUBMITTED' AND ${table.submittedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL) OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE', 'UNKNOWN_RECONCILIATION') AND ${table.submittedAt} IS NOT NULL AND ${table.completedAt} IS NOT NULL AND ${table.submittedAt} >= ${table.claimedAt} AND ${table.completedAt} >= ${table.submittedAt})) OR (${table.status}='CANCELLED_NO_CALL' AND ${table.domainId}='LOCAL_MAPS' AND ${table.budgetState}='RELEASED' AND ${table.spentCostUsd}=0 AND ${table.releasedCostUsd}=${table.reservedCostUsd} AND ${table.submittedAt} IS NULL AND ${table.submissionTokenHash} IS NULL AND ${table.submittedCandidate} IS NULL AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL AND ${table.completedAt} IS NOT NULL AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL AND ${table.unknownReason} IS NULL)) IS TRUE`,
 		),
 		reasonShapeCheck: check(
 			"sv_measurement_attempts_reason_shape_check",
-			sql`(${table.retryReason} IS NULL OR ${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT', 'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE')) AND (${table.finalInvalidReason} IS NULL OR ${table.finalInvalidReason} IN ('EMPTY_AFTER_3_ATTEMPTS', 'PROVIDER_UNAVAILABLE', 'RATE_LIMIT_EXHAUSTED', 'MALFORMED_AFTER_3_ATTEMPTS')) AND ((${table.status} = 'RETRYABLE_FAILURE' AND ${table.attemptIndex} < 3 AND ${table.retryReason} IS NOT NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.attemptIndex} = 3 AND ((${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE') AND ${table.finalInvalidReason} = 'EMPTY_AFTER_3_ATTEMPTS') OR (${table.retryReason} IN ('TIMEOUT', 'PROVIDER_5XX') AND ${table.finalInvalidReason} = 'PROVIDER_UNAVAILABLE') OR (${table.retryReason} = 'RATE_LIMITED' AND ${table.finalInvalidReason} = 'RATE_LIMIT_EXHAUSTED') OR (${table.retryReason} = 'MALFORMED_RESPONSE' AND ${table.finalInvalidReason} = 'MALFORMED_AFTER_3_ATTEMPTS'))) OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} NOT IN ('RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL))`,
+			sql`(${table.retryReason} IS NULL OR ${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE', 'TIMEOUT', 'PROVIDER_5XX', 'RATE_LIMITED', 'MALFORMED_RESPONSE')) AND (${table.finalInvalidReason} IS NULL OR ${table.finalInvalidReason} IN ('EMPTY_AFTER_3_ATTEMPTS', 'PROVIDER_UNAVAILABLE', 'RATE_LIMIT_EXHAUSTED', 'MALFORMED_AFTER_3_ATTEMPTS')) AND ((${table.status} = 'RETRYABLE_FAILURE' AND ${table.attemptIndex} < 3 AND ${table.retryReason} IS NOT NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.attemptIndex} = 3 AND ((${table.retryReason} IN ('EMPTY_RESPONSE', 'TRUNCATED_RESPONSE') AND ${table.finalInvalidReason} = 'EMPTY_AFTER_3_ATTEMPTS') OR (${table.retryReason} IN ('TIMEOUT', 'PROVIDER_5XX') AND ${table.finalInvalidReason} = 'PROVIDER_UNAVAILABLE') OR (${table.retryReason} = 'RATE_LIMITED' AND ${table.finalInvalidReason} = 'RATE_LIMIT_EXHAUSTED') OR (${table.retryReason} = 'MALFORMED_RESPONSE' AND ${table.finalInvalidReason} = 'MALFORMED_AFTER_3_ATTEMPTS'))) OR (${table.status}='TERMINAL_FAILURE' AND ${table.domainId}='LOCAL_MAPS' AND ${table.attemptIndex}=1 AND ${table.retryReason} IS NOT NULL AND ${table.finalInvalidReason}='PROVIDER_UNAVAILABLE') OR (${table.status} = 'TERMINAL_FAILURE' AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL) OR (${table.status} NOT IN ('RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL))`,
 		),
 		reconciliationCheck: check(
 			"sv_measurement_attempts_reconciliation_check",
@@ -206,7 +214,7 @@ export const svMeasurementAttempts = pgTable(
 		),
 		budgetCheck: check(
 			"sv_measurement_attempts_budget_check",
-			sql`${table.currency} = 'USD' AND ${table.reservedCostUsd} >= 0 AND ${table.reservedCostUsd} <= ${table.surfaceCapUsd} AND ${table.reservedCostUsd} <= ${table.monthlyCapUsd} AND ${table.surfaceCapUsd} >= 0 AND ${table.monthlyCapUsd} >= 0 AND ${table.spentCostUsd} >= 0 AND ${table.releasedCostUsd} >= 0 AND (((${table.status} IN ('CLAIMED', 'SUBMITTED') OR ${table.status} = 'UNKNOWN_RECONCILIATION') AND ${table.budgetState} = 'RESERVED') OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.budgetState} IN ('SPENT', 'RELEASED')) OR (${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.budgetState} IN ('SPENT', 'RELEASED') AND ${table.reconciledAt} IS NOT NULL)) AND ((${table.budgetState} = 'RESERVED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = 0 AND ${table.costEventId} IS NULL) OR (${table.budgetState} = 'SPENT' AND ${table.releasedCostUsd} = greatest(${table.reservedCostUsd} - ${table.spentCostUsd}, 0) AND ${table.costEventId} IS NOT NULL) OR (${table.budgetState} = 'RELEASED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = ${table.reservedCostUsd} AND ${table.costEventId} IS NULL))`,
+			sql`((${table.currency} = 'USD' AND ${table.reservedCostUsd} >= 0 AND ${table.reservedCostUsd} <= ${table.surfaceCapUsd} AND ${table.reservedCostUsd} <= ${table.monthlyCapUsd} AND ${table.surfaceCapUsd} >= 0 AND ${table.monthlyCapUsd} >= 0 AND ${table.spentCostUsd} >= 0 AND ${table.releasedCostUsd} >= 0 AND (((${table.status} IN ('CLAIMED', 'SUBMITTED') OR ${table.status} = 'UNKNOWN_RECONCILIATION') AND ${table.budgetState} = 'RESERVED') OR (${table.status} IN ('SUCCEEDED', 'RETRYABLE_FAILURE', 'TERMINAL_FAILURE') AND ${table.budgetState} IN ('SPENT', 'RELEASED')) OR (${table.status} = 'UNKNOWN_RECONCILIATION' AND ${table.budgetState} IN ('SPENT', 'RELEASED') AND ${table.reconciledAt} IS NOT NULL)) AND ((${table.budgetState} = 'RESERVED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = 0 AND ${table.costEventId} IS NULL) OR (${table.budgetState} = 'SPENT' AND ${table.releasedCostUsd} = greatest(${table.reservedCostUsd} - ${table.spentCostUsd}, 0) AND ${table.costEventId} IS NOT NULL) OR (${table.budgetState} = 'RELEASED' AND ${table.spentCostUsd} = 0 AND ${table.releasedCostUsd} = ${table.reservedCostUsd} AND ${table.costEventId} IS NULL))) OR (${table.status}='CANCELLED_NO_CALL' AND ${table.domainId}='LOCAL_MAPS' AND ${table.budgetState}='RELEASED' AND ${table.spentCostUsd}=0 AND ${table.releasedCostUsd}=${table.reservedCostUsd} AND ${table.submittedAt} IS NULL AND ${table.submissionTokenHash} IS NULL AND ${table.submittedCandidate} IS NULL AND ${table.submittedCandidateFingerprint} IS NULL AND ${table.submittedCandidateCanonical} IS NULL AND ${table.providerTaskId} IS NULL AND ${table.rawRef} IS NULL AND ${table.costEventId} IS NULL AND ${table.completedAt} IS NOT NULL AND ${table.retryReason} IS NULL AND ${table.finalInvalidReason} IS NULL AND ${table.unknownReason} IS NULL)) IS TRUE`,
 		),
 	}),
 ).enableRLS();
@@ -425,10 +433,17 @@ export const svSourceSnapshots = pgTable(
 	(table) => ({
 		projectContentHashUnique: uniqueIndex("sv_source_snapshots_project_content_sha256_unique")
 			.on(table.organizationId, table.projectId, table.contentSha256)
-			.where(sql`${table.projectId} IS NOT NULL`),
+			.where(sql`${table.projectId} IS NOT NULL AND ${table.sourceType} <> 'LOCAL_MAPS_CANARY_ONLY'`),
 		legacyOrgContentHashUnique: uniqueIndex("sv_source_snapshots_legacy_org_content_sha256_unique")
 			.on(table.organizationId, table.contentSha256)
-			.where(sql`${table.projectId} IS NULL`),
+			.where(sql`${table.projectId} IS NULL AND ${table.sourceType} <> 'LOCAL_MAPS_CANARY_ONLY'`),
+		canaryHashUnique: uniqueIndex("sv_source_snapshots_canary_hash_unique")
+			.on(
+				table.organizationId,
+				sql`coalesce(${table.projectId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+				table.contentSha256,
+			)
+			.where(sql`${table.sourceType} = 'LOCAL_MAPS_CANARY_ONLY'`),
 		orgCapturedIdx: index("sv_source_snapshots_org_captured_idx").on(table.organizationId, table.capturedAt),
 		idOrganizationUnique: uniqueIndex("sv_source_snapshots_id_organization_unique").on(table.id, table.organizationId),
 		idProjectOrganizationUnique: uniqueIndex("sv_source_snapshots_id_project_org_unique").on(
@@ -727,13 +742,24 @@ export const svLocalScanCycles = pgTable(
 		createdObservations: integer("created_observations").notNull().default(0),
 		worstCaseCostUsd: numeric("worst_case_cost_usd", { precision: 12, scale: 6 }).notNull(),
 		costSnapshot: jsonb("cost_snapshot").notNull(),
-		status: text("status").notNull().default("CREATED"),
+		status: text("status", { enum: localPilotCycleStatuses }).notNull().default("CREATED"),
+		executionMode: text("execution_mode").notNull().default("LEGACY_SOURCE_ONLY"),
+		approvedCanaryReviewId: uuid("approved_canary_review_id"),
+		providerContractDigest: text("provider_contract_digest"),
 		emergencyStoppedAt: timestamp("emergency_stopped_at", { withTimezone: true }),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
+		statusCheck: check(
+			"sv_local_scan_cycles_status_check",
+			sql`${table.status} IN ('CREATED', 'PREFLIGHT_BLOCKED', 'BUDGET_BLOCKED', 'APPROVED', 'CANARY_RUNNING', 'CANARY_REVIEW', 'QUEUED', 'RUNNING', 'PARTIAL_FAILURE', 'PROVIDER_BLOCKED', 'UNKNOWN_RECONCILIATION', 'STOPPED', 'CARDINALITY_INCIDENT', 'QC_REQUIRED', 'READY', 'COMPLETED', 'FAILED')`,
+		),
+		pilotOrgIdUnique: uniqueIndex("sv_local_scan_cycles_pilot_org_id_unique").on(table.organizationId, table.id),
 		measurementCycleUnique: uniqueIndex("sv_local_scan_cycles_measurement_cycle_unique").on(table.measurementCycleId),
+		acceptedCanaryReviewUnique: uniqueIndex("sv_local_scan_cycles_accepted_canary_review_unique")
+			.on(table.organizationId, table.approvedCanaryReviewId)
+			.where(sql`${table.approvedCanaryReviewId} IS NOT NULL AND ${table.status} <> 'STOPPED'`),
 		resultIdentityUnique: uniqueIndex("sv_local_scan_cycles_result_identity_unique").on(
 			table.id,
 			table.organizationId,
@@ -892,18 +918,29 @@ export const svLocalRankObservations = pgTable(
 			.references(() => svGridPoints.id),
 		provider: text("provider").notNull(),
 		repeatIndex: integer("repeat_index").notNull(),
-		validity: svLocalRankValidityEnum("validity").notNull(),
+		validity: svLocalRankValidityEnum("validity"),
 		invalidReason: text("invalid_reason"),
 		captureDepth: integer("capture_depth").notNull(),
 		captureMode: text("capture_mode").notNull(),
 		targetRank: integer("target_rank"),
 		attemptCount: integer("attempt_count").notNull().default(1),
 		rawReference: text("raw_reference"),
-		capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+		capturedAt: timestamp("captured_at", { withTimezone: true }),
+		outcome: text("outcome").notNull().default("PENDING"),
+		evidenceEnvelope: jsonb("evidence_envelope"),
+		evidenceCanonical: text("evidence_canonical"),
+		evidenceSha256: text("evidence_sha256"),
+		evidenceId: uuid("evidence_id"),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 	},
 	(table) => ({
+		pilotOrgIdUnique: uniqueIndex("sv_local_rank_observations_pilot_org_id_unique").on(table.organizationId, table.id),
+		evidenceReference: foreignKey({
+			columns: [table.evidenceId, table.organizationId],
+			foreignColumns: [svEvidenceIndex.id, svEvidenceIndex.organizationId],
+			name: "sv_local_observation_evidence_org_fk",
+		}),
 		matrixUnique: uniqueIndex("sv_local_rank_observations_matrix_unique").on(
 			table.cycleId,
 			table.locationId,
@@ -934,10 +971,6 @@ export const svLocalRankObservations = pgTable(
 		rankCheck: check(
 			"sv_local_rank_observations_target_rank_check",
 			sql`${table.targetRank} IS NULL OR (${table.targetRank} > 0 AND ${table.targetRank} <= ${table.captureDepth})`,
-		),
-		invalidReasonCheck: check(
-			"sv_local_rank_observations_invalid_reason_check",
-			sql`(${table.validity} = 'VALID' AND ${table.invalidReason} IS NULL) OR (${table.validity} <> 'VALID' AND ${table.invalidReason} IS NOT NULL)`,
 		),
 	}),
 ).enableRLS();
@@ -1882,5 +1915,246 @@ export const svAttributionAssessments = pgTable(
 			"sv_attribution_assessments_confidence_check",
 			sql`((${table.verdict} IN ('POSITIVE_CORRELATION', 'NEGATIVE_CORRELATION', 'NO_OBSERVED_CHANGE', 'MIXED_RESULT')) AND ${table.confidence} IN ('HIGH', 'MEDIUM', 'LOW')) OR ((${table.verdict} IN ('INSUFFICIENT_EVIDENCE', 'CONFOUNDED', 'NOT_MEASURED')) AND ${table.confidence} = 'UNKNOWN')`,
 		),
+	}),
+).enableRLS();
+
+export const svLocalDispatchOutbox = pgTable(
+	"sv_local_dispatch_outbox",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		measurementCycleId: uuid("measurement_cycle_id").notNull(),
+		observationId: uuid("observation_id").notNull(),
+		attemptId: uuid("attempt_id").notNull().unique(),
+		status: text("status").notNull().default("PENDING"),
+		claimToken: uuid("claim_token"),
+		leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+		enqueuedAt: timestamp("enqueued_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		cycleReference: foreignKey({
+			columns: [table.organizationId, table.localCycleId, table.measurementCycleId],
+			foreignColumns: [svLocalScanCycles.organizationId, svLocalScanCycles.id, svLocalScanCycles.measurementCycleId],
+		}),
+		observationReference: foreignKey({
+			columns: [table.organizationId, table.observationId],
+			foreignColumns: [svLocalRankObservations.organizationId, svLocalRankObservations.id],
+		}),
+		attemptReference: foreignKey({
+			columns: [table.organizationId, table.attemptId],
+			foreignColumns: [svMeasurementAttempts.organizationId, svMeasurementAttempts.id],
+		}),
+		pendingIdx: index("sv_local_dispatch_pending_idx").on(table.organizationId, table.status, table.createdAt),
+		statusCheck: check(
+			"sv_local_dispatch_outbox_status_check",
+			sql`${table.status} IN ('PENDING','CLAIMED','ENQUEUED','CANCELLED')`,
+		),
+	}),
+).enableRLS();
+
+export const svLocalReportVersions = pgTable(
+	"sv_local_report_versions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		version: integer("version").notNull(),
+		contentJson: jsonb("content_json").notNull(),
+		contentCanonical: text("content_canonical").notNull(),
+		contentSha256: text("content_sha256").notNull(),
+		status: text("status").notNull().default("DRAFT"),
+		actor: text("actor").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		publishedAt: timestamp("published_at", { withTimezone: true }),
+		revokedAt: timestamp("revoked_at", { withTimezone: true }),
+	},
+	(table) => ({
+		cycleReference: foreignKey({
+			columns: [table.organizationId, table.localCycleId],
+			foreignColumns: [svLocalScanCycles.organizationId, svLocalScanCycles.id],
+		}),
+		versionUnique: unique().on(table.organizationId, table.localCycleId, table.version),
+		cycleIdentityUnique: unique().on(table.organizationId, table.localCycleId, table.id),
+		organizationIdentityUnique: unique().on(table.organizationId, table.id),
+		onePublished: uniqueIndex("sv_local_report_one_published")
+			.on(table.organizationId, table.localCycleId)
+			.where(sql`${table.status} = 'PUBLISHED'`),
+		versionCheck: check("sv_local_report_versions_version_check", sql`${table.version}>0`),
+	}),
+).enableRLS();
+
+export const svLocalQcDecisions = pgTable(
+	"sv_local_qc_decisions",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		reportVersionId: uuid("report_version_id").notNull(),
+		decision: text("decision").notNull(),
+		actor: text("actor").notNull(),
+		note: text("note").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		reportReference: foreignKey({
+			columns: [table.organizationId, table.localCycleId, table.reportVersionId],
+			foreignColumns: [
+				svLocalReportVersions.organizationId,
+				svLocalReportVersions.localCycleId,
+				svLocalReportVersions.id,
+			],
+		}),
+		decisionCheck: check(
+			"sv_local_qc_decisions_decision_check",
+			sql`${table.decision} IN ('ACCEPT_PARTIAL','APPROVED','REJECTED')`,
+		),
+	}),
+).enableRLS();
+
+export const svLocalReportDeliveries = pgTable(
+	"sv_local_report_deliveries",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		reportVersionId: uuid("report_version_id").notNull(),
+		recipientIdentity: text("recipient_identity").notNull(),
+		channel: text("channel").notNull(),
+		actor: text("actor").notNull(),
+		status: text("status").notNull(),
+		sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+		acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+	},
+	(table) => ({
+		reportReference: foreignKey({
+			columns: [table.organizationId, table.reportVersionId],
+			foreignColumns: [svLocalReportVersions.organizationId, svLocalReportVersions.id],
+		}),
+		channelCheck: check("sv_local_report_deliveries_channel_check", sql`${table.channel} = 'MANUAL_SECURE_LINK'`),
+		statusCheck: check(
+			"sv_local_report_deliveries_status_check",
+			sql`${table.status} IN ('SENT','ACKNOWLEDGED','FAILED')`,
+		),
+	}),
+).enableRLS();
+
+export const svLocalCanaryReviews = pgTable(
+	"sv_local_canary_reviews",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		localCycleId: uuid("local_cycle_id").notNull(),
+		attemptId: uuid("attempt_id").notNull(),
+		evidenceId: uuid("evidence_id").notNull(),
+		actualCostUsd: numeric("actual_cost_usd", { precision: 12, scale: 6 }).notNull(),
+		providerContractDigest: text("provider_contract_digest").notNull(),
+		status: text("status").notNull(),
+		actor: text("actor").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		organizationIdentityUnique: unique().on(table.organizationId, table.id),
+		cycleReference: foreignKey({
+			columns: [table.organizationId, table.localCycleId],
+			foreignColumns: [svLocalScanCycles.organizationId, svLocalScanCycles.id],
+		}),
+		attemptReference: foreignKey({
+			columns: [table.organizationId, table.attemptId],
+			foreignColumns: [svMeasurementAttempts.organizationId, svMeasurementAttempts.id],
+		}),
+		evidenceReference: foreignKey({
+			columns: [table.evidenceId, table.organizationId],
+			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.organizationId],
+		}),
+		acceptedAttemptUnique: uniqueIndex("sv_local_canary_reviews_accepted_attempt_unique")
+			.on(table.organizationId, table.localCycleId, table.attemptId)
+			.where(sql`${table.status} = 'ACCEPTED'`),
+		statusCheck: check(
+			"sv_local_canary_reviews_status_check",
+			sql`${table.status} IN ('PENDING','ACCEPTED','REJECTED')`,
+		),
+	}),
+).enableRLS();
+
+/** Tenant-scoped raw payload custody; body is nulled after retention while provenance remains. */
+export const svLocalRawEvidence = pgTable(
+	"sv_local_raw_evidence",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		sourceSnapshotId: uuid("source_snapshot_id").notNull(),
+		rawResponseBody: text("raw_response_body"),
+		rawResponseSha256: text("raw_response_sha256").notNull(),
+		providerTaskId: text("provider_task_id"),
+		retentionExpiresAt: timestamp("retention_expires_at", { withTimezone: true }).notNull(),
+		rawDeletedAt: timestamp("raw_deleted_at", { withTimezone: true }),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		sourceReference: foreignKey({
+			columns: [table.sourceSnapshotId, table.organizationId],
+			foreignColumns: [svSourceSnapshots.id, svSourceSnapshots.organizationId],
+		}),
+		identityUnique: unique().on(table.organizationId, table.sourceSnapshotId),
+		stateCheck: check(
+			"sv_local_raw_evidence_state_check",
+			sql`(${table.rawDeletedAt} IS NULL AND ${table.rawResponseBody} IS NOT NULL) OR (${table.rawDeletedAt} IS NOT NULL AND ${table.rawResponseBody} IS NULL)`,
+		),
+	}),
+).enableRLS();
+
+/** Local contract acceptance is distinct from Bright Data formal acceptance and human report QC. */
+export const svLocalEvidenceAcceptances = pgTable(
+	"sv_local_evidence_acceptances",
+	{
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		observationId: uuid("observation_id")
+			.primaryKey()
+			.references(() => svLocalRankObservations.id),
+		evidenceId: uuid("evidence_id").notNull(),
+		evidenceSha256: text("evidence_sha256").notNull(),
+		contractVersion: text("contract_version").notNull().default("LOCAL_MAPS_V1"),
+		acceptedAt: timestamp("accepted_at", { withTimezone: true }).notNull().defaultNow(),
+	},
+	(table) => ({
+		evidenceReference: foreignKey({
+			columns: [table.evidenceId, table.organizationId],
+			foreignColumns: [svEvidenceIndex.id, svEvidenceIndex.organizationId],
+		}),
+		contractCheck: check(
+			"sv_local_evidence_acceptances_contract_version_check",
+			sql`${table.contractVersion} = 'LOCAL_MAPS_V1'`,
+		),
+	}),
+).enableRLS();
+
+export const svLocalRawRetentionHealth = pgTable(
+	"sv_local_raw_retention_health",
+	{
+		organizationId: text("organization_id")
+			.primaryKey()
+			.references(() => organization.id),
+		checkedAt: timestamp("checked_at", { withTimezone: true }).notNull(),
+		deletedCount: integer("deleted_count").notNull(),
+		overdueCount: integer("overdue_count").notNull(),
+	},
+	(table) => ({
+		deletedCountCheck: check("sv_local_raw_retention_health_deleted_count_check", sql`${table.deletedCount} >= 0`),
+		overdueCountCheck: check("sv_local_raw_retention_health_overdue_count_check", sql`${table.overdueCount} >= 0`),
 	}),
 ).enableRLS();
