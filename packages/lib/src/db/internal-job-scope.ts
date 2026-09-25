@@ -3,7 +3,7 @@ import { internalDatabase } from "./internal-db";
 import type { OrganizationDatabase } from "./organization-transaction";
 import { installScopedDatabaseResolver, scopedDatabaseResolverInstalled } from "./tenant-scope";
 
-const storage = new AsyncLocalStorage<OrganizationDatabase>();
+const storage = new AsyncLocalStorage<true>();
 let resolverClaimed = false;
 
 function claimResolver(): void {
@@ -11,7 +11,11 @@ function claimResolver(): void {
 	// The web owns the resolver for request scopes; sharing it would let one
 	// process's operator scope leak into another's tenant requests.
 	if (scopedDatabaseResolverInstalled()) throw new Error("SCOPED_DATABASE_RESOLVER_TAKEN");
-	installScopedDatabaseResolver(() => storage.getStore());
+	// Resolved per use, so a job that exits before touching the database never
+	// opens (or needs configuration for) the operator connection.
+	installScopedDatabaseResolver((): OrganizationDatabase | undefined =>
+		storage.getStore() ? internalDatabase() : undefined,
+	);
 	resolverClaimed = true;
 }
 
@@ -23,5 +27,5 @@ function claimResolver(): void {
  */
 export function runOnInternalDatabase<Result>(work: () => Promise<Result>): Promise<Result> {
 	claimResolver();
-	return storage.run(internalDatabase(), work);
+	return storage.run(true, work);
 }
