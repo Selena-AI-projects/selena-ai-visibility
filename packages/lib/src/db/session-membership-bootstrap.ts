@@ -14,6 +14,8 @@ export async function resolveSessionMemberships(
 	userId: string,
 ): Promise<SessionMembership[]> {
 	const result = await withBootstrapFallback(
+		db,
+		"public.sv_resolve_session_memberships(text)",
 		() =>
 			db.execute(sql`
 				SELECT organization_id, role FROM public.sv_resolve_session_memberships(${userId})
@@ -33,12 +35,7 @@ export async function resolveSessionMemberships(
 	}));
 }
 
-const UNDEFINED_FUNCTION = "42883";
-
-function isUndefinedFunction(error: unknown): boolean {
-	const candidate = error as { code?: unknown; cause?: { code?: unknown } } | null;
-	return candidate?.code === UNDEFINED_FUNCTION || candidate?.cause?.code === UNDEFINED_FUNCTION;
-}
+const presentFunctions = new Set<string>();
 
 /**
  * Deployments pin the migration frontier independently of the web image, so
@@ -46,17 +43,23 @@ function isUndefinedFunction(error: unknown): boolean {
  * There it still connects as the table owner, and the equivalent direct read
  * answers the same question; under a non-owner role that read sees no rows,
  * so the fallback can only fail closed.
+ *
+ * The function is looked up rather than called and caught: a failed call
+ * inside a caller's transaction would abort it, and the fallback with it.
+ * Only presence is cached, since a migration can add the function at any time.
  */
 export async function withBootstrapFallback<Result>(
+	db: Pick<OrganizationDatabase, "execute">,
+	functionSignature: string,
 	viaFunction: () => Promise<Result>,
 	direct: () => Promise<Result>,
 ): Promise<Result> {
-	try {
-		return await viaFunction();
-	} catch (error) {
-		if (!isUndefinedFunction(error)) throw error;
-		return direct();
+	if (!presentFunctions.has(functionSignature)) {
+		const probe = await db.execute(sql`SELECT to_regprocedure(${functionSignature}) IS NOT NULL AS present`);
+		if ((probe.rows[0] as { present?: boolean } | undefined)?.present !== true) return direct();
+		presentFunctions.add(functionSignature);
 	}
+	return viaFunction();
 }
 
 /** The active organization when the user still belongs to it, otherwise the oldest membership. */
@@ -82,6 +85,8 @@ export async function resolveBrandMembership(
 	brandId: string,
 ): Promise<BrandMembership | undefined> {
 	const result = await withBootstrapFallback(
+		db,
+		"public.sv_resolve_brand_membership(text, text)",
 		() =>
 			db.execute(sql`
 				SELECT organization_id, organization_name, role FROM public.sv_resolve_brand_membership(${userId}, ${brandId})
@@ -108,6 +113,8 @@ export async function resolvePromptMembership(
 ): Promise<PromptMembership | undefined> {
 	if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(promptId)) return undefined;
 	const result = await withBootstrapFallback(
+		db,
+		"public.sv_resolve_prompt_membership(text, uuid)",
 		() =>
 			db.execute(sql`
 				SELECT brand_id, organization_id, role FROM public.sv_resolve_prompt_membership(${userId}, ${promptId}::uuid)
@@ -129,6 +136,8 @@ export async function resolvePromptMembership(
 /** The user's organizations with names, oldest membership first. */
 export async function resolveUserOrganizations(db: OrganizationDatabase, userId: string): Promise<UserOrganization[]> {
 	const result = await withBootstrapFallback(
+		db,
+		"public.sv_resolve_user_organizations(text)",
 		() =>
 			db.execute(sql`
 				SELECT organization_id, organization_name, role FROM public.sv_resolve_user_organizations(${userId})

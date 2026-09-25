@@ -135,6 +135,8 @@ export async function findUniqueBrandId(baseSlug: string): Promise<string> {
  */
 async function isTaken(kind: "brand" | "organization-slug", candidate: string, conn: DbConnection = db): Promise<boolean> {
 	const result = await withBootstrapFallback(
+		conn,
+		kind === "brand" ? "public.sv_brand_id_taken(text)" : "public.sv_organization_slug_taken(text)",
 		() =>
 			kind === "brand"
 				? conn.execute(sql`SELECT public.sv_brand_id_taken(${candidate}) AS taken`)
