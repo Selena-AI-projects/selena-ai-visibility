@@ -18,6 +18,7 @@ import {
 	listUserOrganizations,
 } from "@/lib/auth/helpers";
 import { db } from "@workspace/lib/db/db";
+import { resolveBrandMembership } from "@workspace/lib/db/session-membership-bootstrap";
 import { brands, prompts, competitors } from "@workspace/lib/db/schema";
 import { eq } from "drizzle-orm";
 import type { BrandWithPrompts } from "@workspace/lib/db/schema";
@@ -54,11 +55,14 @@ const getBrandData = createServerFn({ method: "GET" })
 	.handler(async ({ data }): Promise<BrandRouteData> => {
 		const session = await requireAuthSession();
 
-		const brand = await db.query.brands.findFirst({ where: eq(brands.id, data.brandId) });
+		// Membership is resolved before the brand is read: the brand row is only
+		// visible inside its organization's tenant scope.
+		const membership = await resolveBrandMembership(db, session.user.id, data.brandId);
 
-		// No brand row: legacy onboarding path where the URL param is an org id
-		// (brand.id === org.id). Whitelabel empty-org onboarding depends on this.
-		if (!brand) {
+		// No brand the user can reach: legacy onboarding path where the URL param
+		// is an org id (brand.id === org.id). Whitelabel empty-org onboarding
+		// depends on this.
+		if (!membership) {
 			if (!(await checkOrgAccess(session.user.id, data.brandId))) return DENIED;
 			const orgs = await listUserOrganizations(session.user.id);
 			return {
@@ -71,7 +75,9 @@ const getBrandData = createServerFn({ method: "GET" })
 			};
 		}
 
-		if (!(await checkOrgAccess(session.user.id, brand.organizationId))) return DENIED;
+		if (!(await checkOrgAccess(session.user.id, membership.organizationId))) return DENIED;
+		const brand = await db.query.brands.findFirst({ where: eq(brands.id, data.brandId) });
+		if (!brand) return DENIED;
 
 		const [brandPrompts, brandCompetitors, { entitlements }] = await Promise.all([
 			db.query.prompts.findMany({ where: eq(prompts.brandId, data.brandId) }),

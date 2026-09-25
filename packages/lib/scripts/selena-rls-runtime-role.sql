@@ -222,6 +222,12 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0069';
 	END IF;
 
+	IF to_regprocedure('public.sv_resolve_brand_membership(text, text)') IS NULL
+		OR to_regprocedure('public.sv_resolve_prompt_membership(text, uuid)') IS NULL
+		OR to_regprocedure('public.sv_resolve_user_organizations(text)') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0070';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -406,5 +412,10 @@ GRANT EXECUTE ON FUNCTION sv_resolve_api_key_context(text) TO selena_app;
 
 -- Session sign-in likewise resolves memberships before any tenant exists.
 GRANT EXECUTE ON FUNCTION sv_resolve_session_memberships(text) TO selena_app;
+
+-- Brand, prompt and organization access checks run before the organization is known.
+GRANT EXECUTE ON FUNCTION sv_resolve_brand_membership(text, text) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_resolve_prompt_membership(text, uuid) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_resolve_user_organizations(text) TO selena_app;
 
 COMMIT;

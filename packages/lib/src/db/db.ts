@@ -1,6 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { runtimeDatabaseConnection } from "./postgres-config";
 import * as schema from "./schema";
+import { tenantAwareDatabase } from "./tenant-scope";
 
 const legacyDatabaseUrl = process.env.DATABASE_URL as string;
 
@@ -9,7 +10,9 @@ const legacyDatabaseUrl = process.env.DATABASE_URL as string;
 // at module scope, and the browser build keeps that module: without this the
 // driver shipped to the browser, where `Buffer` does not exist, and the bundle
 // threw before React could hydrate.
-export const db =
+const poolDatabase =
 	process.env.SELENA_RUNTIME_DATABASE_CA_PEM === undefined
 		? /* @__PURE__ */ drizzle(legacyDatabaseUrl, { schema })
 		: /* @__PURE__ */ drizzle({ connection: runtimeDatabaseConnection(), schema });
+
+export const db = /* @__PURE__ */ tenantAwareDatabase(poolDatabase);
