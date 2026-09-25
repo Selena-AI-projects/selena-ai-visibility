@@ -47,6 +47,10 @@ declare global {
 			readonly SELENA_PILOT_SIGNUP_ALLOWLIST?: string;
 			readonly SELENA_PILOT_SEAT_CAP?: string;
 			readonly SELENA_RUNTIME_DATABASE_CA_PEM?: string;
+			readonly SELENA_DATABASE_SURFACE?: string;
+			readonly SELENA_WEB_DATABASE_URL?: string;
+			readonly SELENA_WORKER_DATABASE_URL?: string;
+			readonly SELENA_HOSTED?: string;
 			readonly DATABASE_URL: string;
 			readonly APP_URL?: string;
 			readonly AUTH_TRUSTED_ORIGINS?: string;
