@@ -1,0 +1,15 @@
+# Compose override for the tenant-role E2E job: the web connects as the
+# non-owner selena_app role, so every page and API call runs under the tenant
+# policies, while operator views use the owner through the internal
+# connection. The migrate service runs the full source frontier the role
+# bootstrap requires.
+services:
+  db-migrate:
+    environment:
+      SELENA_MIGRATION_MAX_INDEX: "${SELENA_MIGRATION_MAX_INDEX:?set by the workflow}"
+  web:
+    environment:
+      SELENA_DATABASE_SURFACE: web
+      SELENA_WEB_DATABASE_URL: postgres://selena_app:e2e_tenant_role_only@postgres:5432/elmo
+      SELENA_INTERNAL_DATABASE_URL: postgres://postgres:postgres@postgres:5432/elmo
+      SELENA_PGBOSS_OWNER_MANAGED_SCHEMA: "true"
