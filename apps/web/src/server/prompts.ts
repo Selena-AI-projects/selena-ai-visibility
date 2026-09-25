@@ -31,6 +31,7 @@ import {
 	getPromptWebQueryCounts,
 } from "@/lib/postgres-read";
 import { promptsGainingPremium } from "@/lib/run-config-changes";
+import { requirePromptInBrand } from "./prompt-access";
 // Server Functions
 // ============================================================================
 
@@ -791,6 +792,7 @@ export const getPromptWebQueryFn = createServerFn({ method: "GET" })
 	.handler(async ({ data }) => {
 		const session = await requireAuthSession();
 		await requireBrandAccess(session.user.id, data.brandId);
+		await requirePromptInBrand(session.user.id, data.brandId, data.promptId);
 
 		const timezone = data.timezone || "UTC";
 		const now = new Date();

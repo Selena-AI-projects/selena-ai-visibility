@@ -1,9 +1,9 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { runtimeDatabaseConnection } from "./postgres-config";
+import { runtimeDatabaseConnection, runtimeDatabaseUrl } from "./postgres-config";
 import * as schema from "./schema";
 import { tenantAwareDatabase } from "./tenant-scope";
 
-const legacyDatabaseUrl = process.env.DATABASE_URL as string;
+const legacyDatabaseUrl = /* @__PURE__ */ runtimeDatabaseUrl() as string;
 
 // Annotated pure so a bundle that never reaches the handle can drop it, and
 // with it the Postgres driver. Server-function modules build their repositories
