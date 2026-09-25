@@ -1,0 +1,58 @@
+===ALL_SQL_SHA_ALL_COPIES===
+81
+===HIT_8c53ec71===
+NOT_FOUND
+===HIT_5b5f2123===
+NOT_FOUND
+===DISTINCT_0072===
+6121106ec15f78cf307913602ad91522e4b782fdcda3df74b937f95b94931856  /app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations/0072_free_ai_visibility_check.sql
+6f09e2ec9c0072aff11860e4c1a525b7d0a36617e0672c75ed622336a3043b56  /app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations/0028_selena_response_mentions.sql
+===DISTINCT_0060===
+aa7525006029a64bcdf2558df8155de95d1a1930bfc00ba6f277230b2aedfbd1  /app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations/0062_provider_spend_reservation.sql
+b3f720b1e03cb163e2ac379efddb1593c80e3e222097a8f72b7c9ff8d82a72d6  /app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations/0060_journal_hold_owner_reconciliation.sql
+===JOURNAL_TAIL===
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations/meta/_journal.json
+7",
+      "when": 1787940028005,
+      "tag": "0071_local_observation_guard_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1787940029000,
+      "tag": "0072_free_ai_visibility_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1787940030000,
+      "tag": "0073_local_external_audits",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1787940031000,
+      "tag": "0074_local_customer_test_execution",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1787940032000,
+      "tag": "0075_local_external_legacy_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1787940033000,
+      "tag": "0076_local_order_publications",
+      "breakpoints": true
+    }
+  ]
+}
+
+===END===

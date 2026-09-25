@@ -1,0 +1,367 @@
+LIB=/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib
+===LIB_SRC_TREE===
+src/adapters/brightdata-measurement-adapter.ts
+src/adapters/brightdata-snapshot-journal.ts
+src/adapters/dataforseo-local-maps-rank-adapter.ts
+src/adapters/dataforseo-perplexity-measurement-adapter.ts
+src/adapters/google-dataset-adapters.ts
+src/adapters/http-local-maps-rank-adapter.ts
+src/adapters/local-maps-rank-adapter.ts
+src/adapters/olostep-measurement-adapter.ts
+src/adapters/openrouter-measurement-adapter.ts
+src/adapters/oxylabs-measurement-adapter.ts
+src/adapters/stub-local-maps-adapter.ts
+src/adapters/stub-measurement-adapter.ts
+src/ai-crawler-access.ts
+src/auth/client.ts
+src/auth/permissions.ts
+src/auth/server.ts
+src/auth/trusted-origins.ts
+src/brightdata-social/index.ts
+src/brightdata-social/normalizers.ts
+src/brightdata-social/registry.ts
+src/brightdata-social/transport.ts
+src/brightdata-social/types.ts
+src/bulk-prompts.ts
+src/constants.ts
+src/db/api-key-bootstrap.ts
+src/db/auth-sync.ts
+src/db/bounded-migration-process.ts
+src/db/brightdata-snapshot-journal.ts
+src/db/db.ts
+src/db/measure-journal.ts
+src/db/migrations/0000_hot_excalibur.sql
+src/db/migrations/0001_sturdy_ares.sql
+src/db/migrations/0002_legal_ultimatum.sql
+src/db/migrations/0003_phase3-constraints-and-indices.sql
+src/db/migrations/0004_nebulous_gunslinger.sql
+src/db/migrations/0005_known_warhawk.sql
+src/db/migrations/0006_multi_domain_aliases.sql
+src/db/migrations/0007_report_progress.sql
+src/db/migrations/0008_provider_engines.sql
+src/db/migrations/0009_brand_opportunities.sql
+src/db/migrations/0010_scope_brands_to_orgs.sql
+src/db/migrations/0011_secrets.sql
+src/db/migrations/0012_billing_foundations.sql
+src/db/migrations/0013_usage_events.sql
+src/db/migrations/0014_membership_uniqueness.sql
+src/db/migrations/0015_selena_visibility_client.sql
+src/db/migrations/0016_selena_scan_findings_payments.sql
+src/db/migrations/0017_selena_project_profiles.sql
+src/db/migrations/0018_selena_measurement_runs.sql
+src/db/migrations/0019_recommendation_engine.sql
+src/db/migrations/0020_selena_website_snapshots.sql
+src/db/migrations/0021_selena_local_discovery_entities.sql
+src/db/migrations/0022_selena_manual_pilot.sql
+src/db/migrations/0023_selena_dispatch_qc.sql
+src/db/migrations/0024_selena_run_outcomes.sql
+src/db/migrations/0025_selena_run_measurement.sql
+src/db/migrations/0026_selena_incidents_cost_ledger.sql
+src/db/migrations/0027_selena_permit_system_id.sql
+src/db/migrations/0028_selena_response_mentions.sql
+src/db/migrations/0029_selena_citation_gap_snapshots.sql
+src/db/migrations/0030_selena_capture_mode.sql
+src/db/migrations/0031_prompt_run_hourly_aggregates.sql
+src/db/migrations/0032_suggest_cost_metering.sql
+src/db/migrations/0033_reports_organization.sql
+src/db/migrations/0034_tenant_rls_policies.sql
+src/db/migrations/0035_selena_profile_maps_location.sql
+src/db/migrations/0036_selena_order_requests.sql
+src/db/migrations/0037_visibility_os_measurement_registry.sql
+src/db/migrations/0038_visibility_os_local_visibility.sql
+src/db/migrations/0039_visibility_os_search_reputation.sql
+src/db/migrations/0040_visibility_os_action_evidence_loop.sql
+src/db/migrations/0041_visibility_os_visibility_map.sql
+src/db/migrations/0042_visibility_os_outcome_layer.sql
+src/db/migrations/0043_visibility_os_local_domain_attempts_expand.sql
+src/db/migrations/0044_visibility_os_local_live_persistence.sql
+src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql
+src/db/migrations/0046_selena_journal_daily_claims.sql
+src/db/migrations/0047_visibility_os_local_attempt_count_cap.sql
+src/db/migrations/0048_selena_api_idempotency_records.sql
+src/db/migrations/0049_visibility_os_claimed_submit_lease.sql
+src/db/migrations/0050_visibility_os_jsonb_text_operator_casts.sql
+src/db/migrations/0051_visibility_os_provider_evidence_provenance.sql
+src/db/migrations/0052_provider_dataset_snapshot_journal.sql
+src/db/migrations/0053_configuration_lock_legacy_collision_ordinal.sql
+src/db/migrations/0054_journal_daily_claim_execution_lease.sql
+src/db/migrations/0055_provider_snapshot_resume_reconciliation.sql
+src/db/migrations/0056_formal_evidence_acceptance_hardening.sql
+src/db/migrations/0057_evidence_project_identity_hardening.sql
+src/db/migrations/0058_journal_provider_boundary_recovery.sql
+src/db/migrations/0059_journal_no_spend_reconciliation.sql
+src/db/migrations/0060_journal_hold_owner_reconciliation.sql
+src/db/migrations/0061_pilot_invite_control.sql
+src/db/migrations/0062_provider_spend_reservation.sql
+src/db/migrations/0063_staging_verification_simulation.sql
+src/db/migrations/0064_simulation_delivery_claim.sql
+src/db/migrations/0065_journal_executor_settled_reconciliation.sql
+src/db/migrations/0066_free_auto_dispatch_claim.sql
+src/db/migrations/0067_local_maps_pilot_runtime.sql
+src/db/migrations/0068_local_maps_runtime_guards.sql
+src/db/migrations/0069_local_report_acceptance.sql
+src/db/migrations/0070_local_pilot_reschedule.sql
+src/db/migrations/0071_local_observation_guard_privileges.sql
+src/db/migrations/0072_free_ai_visibility_check.sql
+src/db/migrations/0073_local_external_audits.sql
+src/db/migrations/0074_local_customer_test_execution.sql
+src/db/migrations/0075_local_external_legacy_identity.sql
+src/db/migrations/0076_local_order_publications.sql
+src/db/migrations/_pending-os/M4_action_evidence_loop_down.sql
+src/db/migrations/_pending-os/M5_visibility_map_down.sql
+src/db/migrations/_pending-os/M6_outcome_layer_down.sql
+src/db/migrations/compat/0051_release_short_to_feature_superset.sql
+src/db/migrations/meta/0000_snapshot.json
+src/db/migrations/meta/0001_snapshot.json
+src/db/migrations/meta/0002_snapshot.json
+src/db/migrations/meta/0003_snapshot.json
+src/db/migrations/meta/0004_snapshot.json
+src/db/migrations/meta/0005_snapshot.json
+src/db/migrations/meta/0006_snapshot.json
+src/db/migrations/meta/0007_snapshot.json
+src/db/migrations/meta/0008_snapshot.json
+src/db/migrations/meta/0009_snapshot.json
+src/db/migrations/meta/0010_snapshot.json
+src/db/migrations/meta/0011_snapshot.json
+src/db/migrations/meta/0012_snapshot.json
+src/db/migrations/meta/0013_snapshot.json
+src/db/migrations/meta/0014_snapshot.json
+src/db/migrations/meta/_journal.json
+src/db/organization-transaction.ts
+src/db/owner-scoped-connection.ts
+src/db/postgres-config.ts
+src/db/provider-canary-execution.ts
+src/db/provider-evidence-acceptance.ts
+src/db/provisioning.ts
+src/db/schema-auth.ts
+src/db/schema-visibility-os.ts
+src/db/schema.ts
+src/entitlements/guards.ts
+src/entitlements/index.ts
+src/entitlements/service.ts
+src/expedite.ts
+src/google-maps-location.ts
+src/onboarding/analyze.ts
+src/onboarding/index.ts
+src/onboarding/llm.ts
+src/onboarding/utils.ts
+src/prompt-run-aggregates.ts
+src/providers/brightdata-dataset-client.ts
+src/providers/config.ts
+src/providers/dataset-registry.ts
+src/providers/google-ai-mode-one-shot-canary.ts
+src/providers/index.ts
+src/providers/provider-dataset-authority.ts
+src/providers/registry/anthropic-api.ts
+src/providers/registry/brightdata.ts
+src/providers/registry/cloro.ts
+src/providers/registry/dataforseo-shared.ts
+src/providers/registry/dataforseo.ts
+src/providers/registry/mistral-api.ts
+src/providers/registry/olostep.ts
+src/providers/registry/openai-api.ts
+src/providers/registry/openrouter-api.ts
+src/providers/registry/openrouter.ts
+src/providers/registry/oxylabs.ts
+src/providers/registry/stub.ts
+src/providers/runner.ts
+src/providers/types.ts
+src/public-provider-gates.ts
+src/public-source-adapters.ts
+src/recommendation-engine.ts
+src/recommendation-persistence.ts
+src/report-metrics.ts
+src/run-backoff.ts
+src/run-policy/brand-plans.ts
+src/run-policy/controlled-cycle.ts
+src/run-policy/index.ts
+src/run-policy/maintenance.ts
+src/run-policy/policy.ts
+src/run-policy/spend-gate.ts
+src/secrets/crypto.ts
+src/secrets/index.ts
+src/secrets/refresh.ts
+src/secrets/store.ts
+src/selena-answer-analysis.ts
+src/selena-answer-extraction.ts
+src/selena-answer-retention.ts
+src/selena-api-idempotency.ts
+src/selena-citation-gap.ts
+src/selena-cycle-diff.ts
+src/selena-dataset-gateway.ts
+src/selena-dispatch.ts
+src/selena-entities.ts
+src/selena-evidence-read-models.ts
+src/selena-export.ts
+src/selena-extraction-context.ts
+src/selena-findings.ts
+src/selena-flow.ts
+src/selena-free-ai-visibility.ts
+src/selena-free-auto-dispatch-claims.ts
+src/selena-grader-report.ts
+src/selena-journal-scenarios.ts
+src/selena-ledger-metrics.ts
+src/selena-local-billing-reconciliation.ts
+src/selena-local-competitors.ts
+src/selena-local-customer-execution.ts
+src/selena-local-customer-location.ts
+src/selena-local-customer-order-store.ts
+src/selena-local-customer-order.ts
+src/selena-local-dispatch-store.ts
+src/selena-local-execution.ts
+src/selena-local-external-audit-store.ts
+src/selena-local-external-audit.ts
+src/selena-local-maps-attempt-store.ts
+src/selena-local-maps-live-runner.ts
+src/selena-local-pilot-orchestrator.ts
+src/selena-local-raw-retention.ts
+src/selena-local-report-print.ts
+src/selena-local-report-publication.ts
+src/selena-local-report-store.ts
+src/selena-local-retry-coordinator.ts
+src/selena-manual-pilot.ts
+src/selena-measurement.ts
+src/selena-monitoring.ts
+src/selena-pilot-invites.ts
+src/selena-pilot-seat-issuance.ts
+src/selena-preflight.ts
+src/selena-provider-spend-budget.ts
+src/selena-provider-spend.ts
+src/selena-raw-evidence-storage.ts
+src/selena-registrable-domain.ts
+src/selena-run-executor.ts
+src/selena-simulation-repositories.ts
+src/selena-suggest-metering.ts
+src/selena-telegram-adapter.ts
+src/selena-visibility-repositories.ts
+src/tag-utils.ts
+src/text-extraction.ts
+src/usage/cost.ts
+src/website-collector.ts
+src/website-excerpt.ts
+src/website-security.ts
+===MIGRATIONS_SHA===
+041ee58e46b4646eb9f230447cfc8be7db57593bc7fcd749aa644ef1a886ae59  src/db/migrations/0000_hot_excalibur.sql
+592bf65cb2d585bcd693c35d1963e4e4f28e1e88257fa01721f78534da8ea16c  src/db/migrations/0001_sturdy_ares.sql
+420a6c278d51cd31521fc45a71b82eed99fc410b667d4d7d4f0367be3adfab79  src/db/migrations/0002_legal_ultimatum.sql
+33372c33bfd599485bde1369aba150b529be620587dd549e8d36b9a4bcc3c3af  src/db/migrations/0003_phase3-constraints-and-indices.sql
+7ffce75dc5fe3163c883ecfabbd2bebfba38d7e0e185ffa78694282c1bd3d1de  src/db/migrations/0004_nebulous_gunslinger.sql
+0659babc1857218f4c3cbc89f40eb47f9c28ec0b4875145364d044e0cb9f5cb8  src/db/migrations/0005_known_warhawk.sql
+573abe8fc9711a84f0b7ce1bf533b6494afce5f641144cfe2ec4bd1f5b860d68  src/db/migrations/0006_multi_domain_aliases.sql
+c76cb4a13366a3b9a5470927570463d4baabe5e73526d5e1af9a0138ea9f9a60  src/db/migrations/0007_report_progress.sql
+3f7fb9bc9331d00010a07d785426eff55793df96d618b55c5ae84ee8fb18c4c6  src/db/migrations/0008_provider_engines.sql
+7a5105f1a2c0fd58f06ec795b01d34132e2d65315404dc4ef47f365136a11772  src/db/migrations/0009_brand_opportunities.sql
+3787a076245eee6e357ba3fbf717f7648e403df14b4a3f404ed82cf0fc8220f7  src/db/migrations/0010_scope_brands_to_orgs.sql
+43e1e38d6e98aee7c6303b15b806e87f9b18a1377fd91f8cf792157c45253d54  src/db/migrations/0011_secrets.sql
+805cd9274f5ef82caa7fbc7848d99c2a6cbee753a32687e585cb02b8874f7218  src/db/migrations/0012_billing_foundations.sql
+12a7df86d52b3e89031d9f60bf70d0196e69d29950d03d84c254e345a6005c06  src/db/migrations/0013_usage_events.sql
+8166e8b4258e17dd2afeb981cd99aaf51fb9fa3767bb2800d8c449901c4a91bb  src/db/migrations/0014_membership_uniqueness.sql
+8016a092e4ca574316bbda3df593972879760ec89b01251f6b75cd78dd5296fa  src/db/migrations/0015_selena_visibility_client.sql
+47e5bfb3152ef9effd33471986166419c0d8b4f48e33f72bb18e403147edaaa5  src/db/migrations/0016_selena_scan_findings_payments.sql
+111e2f1925a08eae5f469b984a90e2b049ad5cfa384b94792febd39b08c53a52  src/db/migrations/0017_selena_project_profiles.sql
+b082ba258d04aca5da313983a0e878547d50e2fa171f261b897101edfc446b03  src/db/migrations/0018_selena_measurement_runs.sql
+8c1044333172c647f8cbd8ebb7103d88699a1e36755fae9b708c24c6f78550a4  src/db/migrations/0019_recommendation_engine.sql
+49902bcfaa09c6ab06cd65cc5d4bfe9687017a410d9012dc1c7ba9a934e8d048  src/db/migrations/0020_selena_website_snapshots.sql
+b639a9522b3e1b2b9791c1bd38ba056006b3360edb4b99025cb011f3a6540a9e  src/db/migrations/0021_selena_local_discovery_entities.sql
+da62fff784382e8600656c087c880127dba8394e52c6c22fa276b952569313cf  src/db/migrations/0022_selena_manual_pilot.sql
+0735530f78c8f581aad9ee6078986d360f79151f67045edd9ec642ae03e100a3  src/db/migrations/0023_selena_dispatch_qc.sql
+c661c625cc6e502ba7b0bd4a96fa0ed3e1bf82db0d5f38287ccfb0899231897a  src/db/migrations/0024_selena_run_outcomes.sql
+b8cad92d3620ad1f54f44fb5e2e38a30feae85ea06c137532e6a4f417a7dedcc  src/db/migrations/0025_selena_run_measurement.sql
+734a0c2befcc2b2091b013844b4b1b2312af08434feeb3e22fbc1ef02f5c9300  src/db/migrations/0026_selena_incidents_cost_ledger.sql
+f175f7f7945aeaa717967ea589d55333e77dba05daec9e8bca7cf5b259d239b0  src/db/migrations/0027_selena_permit_system_id.sql
+6f09e2ec9c0072aff11860e4c1a525b7d0a36617e0672c75ed622336a3043b56  src/db/migrations/0028_selena_response_mentions.sql
+d7b5333ac7437524e7ffaa8d3b0b6ca3a6111c66167580ea372ff1f637254d71  src/db/migrations/0029_selena_citation_gap_snapshots.sql
+84da33ada2a58c61ba1f6beedb990c3ce9c5a3ec6e32482ce9738741e3a7c5f4  src/db/migrations/0030_selena_capture_mode.sql
+460c9e90a0f6ca8ea77185c723c95a50d4022a41d39e1d7cb98eeaaa74cc9ea2  src/db/migrations/0031_prompt_run_hourly_aggregates.sql
+c2a0034ca92b457f1f11276e65945e0631b19090f0b9314ed542c6bb8f327d25  src/db/migrations/0032_suggest_cost_metering.sql
+68de3ef7f8c0a5c5aa68ce3e375b59adc6c42cde3a7609250e143d192020253e  src/db/migrations/0033_reports_organization.sql
+d300f78e67c7787289743bbd63d7aa7f31a5f689a1b0af132b8ab22cba794f37  src/db/migrations/0034_tenant_rls_policies.sql
+9321be3d0c9c4ea25f62d04a73a689b4252be2009dafd4a6df0344703ebd9175  src/db/migrations/0035_selena_profile_maps_location.sql
+784e113ace02c7144b2240da1d531a01a7af99a7a2613367f7c149d9a9d096d0  src/db/migrations/0036_selena_order_requests.sql
+358e537c2d7a55911abdd0d5e6a74a473f7d68019df642a82950ae59aac9012c  src/db/migrations/0037_visibility_os_measurement_registry.sql
+e8f5b106bbb89e677c50618e7055617dea346d5ab091fba04818fe4f1d5eaeb9  src/db/migrations/0038_visibility_os_local_visibility.sql
+d5c6b7e74ab4b979eb03719093e91f9984e884d86762b95a6c8f4fc74df502ba  src/db/migrations/0039_visibility_os_search_reputation.sql
+61b7341dc5460b4f634cf1e181be501a44a224bd9a8bc3719210dfd02d883485  src/db/migrations/0040_visibility_os_action_evidence_loop.sql
+679742ce83222bb33a7052e1ffbc2a14f525c3fa20f13f1d7a356295e1e784ce  src/db/migrations/0041_visibility_os_visibility_map.sql
+afb387c846f1eb81a18514960aa64116ef3a2135dc226e679d90fd44bcc22915  src/db/migrations/0042_visibility_os_outcome_layer.sql
+ceb19abb858340384f8241a7fd75b71a8783e70fc5d37db5c223974c2dc399b8  src/db/migrations/0043_visibility_os_local_domain_attempts_expand.sql
+e88a59323270982fdd5b8a87bdfd244a8a1ebaad4aebe5be62dffee83e59deff  src/db/migrations/0044_visibility_os_local_live_persistence.sql
+321e66332583c968a582525470460e000b1788c1a524d24d80d5e4a90c622fec  src/db/migrations/0045_visibility_os_domain_and_lock_hardening.sql
+ed9ca2f670203ae04dfd3d8c221906650823c440f5eda01f603f3298ca5319a7  src/db/migrations/0046_selena_journal_daily_claims.sql
+2a9dadf9981f996a0f459f40f69842e2b3071654dada49b7f3853e56317776da  src/db/migrations/0047_visibility_os_local_attempt_count_cap.sql
+dff15a8e06f8a46386e43dab320706c123b71b8e841a6f302359bffa1e85a05c  src/db/migrations/0048_selena_api_idempotency_records.sql
+bddf094b7e1aa018fcc098800bb55c241312a0761ee690bf95b6386422ed6dc3  src/db/migrations/0049_visibility_os_claimed_submit_lease.sql
+7564ceb48a04b93dc736e586da2cde8c1b2f6acbcb67cd14932a9c745886357f  src/db/migrations/0050_visibility_os_jsonb_text_operator_casts.sql
+c4a6d5b451183908adc3c240023d577d80a9e20d824ada9f89963b05afecb768  src/db/migrations/0051_visibility_os_provider_evidence_provenance.sql
+3123968f0dce8cf6f8ec2054fd20922b5671afbe7ac56c3f082ed0c5016bfcca  src/db/migrations/0052_provider_dataset_snapshot_journal.sql
+8cd84e76292f30e427860fd19fed85222f122b03619d26254f47229401d89c87  src/db/migrations/0053_configuration_lock_legacy_collision_ordinal.sql
+c4f93e53d27f309505cdddf4c046df502d9630dfa80580a93faa7e46edca56bc  src/db/migrations/0054_journal_daily_claim_execution_lease.sql
+81b13d7026b1d3dffa4b70b12f6dc827e00a874f17f9b03bc73a42603d4932ef  src/db/migrations/0055_provider_snapshot_resume_reconciliation.sql
+3a2aed34c67789d41f98374bc291bff1afc12e741ed2091761d5863a6641b49e  src/db/migrations/0056_formal_evidence_acceptance_hardening.sql
+fa08f7235d671449665f5d815606f99309eac97338807565a2ac3d6266a36f8d  src/db/migrations/0057_evidence_project_identity_hardening.sql
+7c7adee1d4f96895d343e572c2934a87bbfa73a50a4ce2488f42f84d894fd009  src/db/migrations/0058_journal_provider_boundary_recovery.sql
+556e1b66e89a81e3736f7e235280b348865204325c1b96d2d1ef0dc79596023f  src/db/migrations/0059_journal_no_spend_reconciliation.sql
+b3f720b1e03cb163e2ac379efddb1593c80e3e222097a8f72b7c9ff8d82a72d6  src/db/migrations/0060_journal_hold_owner_reconciliation.sql
+592b743bbf3abf44fb5872469c5b88a7e6b9dffcaea0e3c684974b649a676557  src/db/migrations/0061_pilot_invite_control.sql
+aa7525006029a64bcdf2558df8155de95d1a1930bfc00ba6f277230b2aedfbd1  src/db/migrations/0062_provider_spend_reservation.sql
+3e203b2e5d06ed933d39dce1bd29330b0d43a11de1725deee89e58f2c761a480  src/db/migrations/0063_staging_verification_simulation.sql
+a3144b77215693ea363fe2c0d7b19b7f3266494c1921fe723209a95eb092a013  src/db/migrations/0064_simulation_delivery_claim.sql
+1c46eb0f58975b2197af4899710c72aa31ab5aa6f71cb312755da8b66c58f365  src/db/migrations/0065_journal_executor_settled_reconciliation.sql
+9106e64dd4b07d435c0f8ec713a23f17b21bd52172a250691c58164a13b11ebd  src/db/migrations/0066_free_auto_dispatch_claim.sql
+21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45  src/db/migrations/0067_local_maps_pilot_runtime.sql
+da5c58f680bc96e5825a8811b352d83d9106e818c6a57435448d4f2553573b2f  src/db/migrations/0068_local_maps_runtime_guards.sql
+c48499cffb9c82e5ad368805fa4930ebfd812ebe8f273d18cfd55cf30da21276  src/db/migrations/0069_local_report_acceptance.sql
+ecbf60eed751289e08468ba5770b5e89cd4432c7abcfd6526d9abf00c561663a  src/db/migrations/0070_local_pilot_reschedule.sql
+87329271f070fb3fee42abe7f7b4cfbd9acd2c3bd74829efd7ceebd685a1c7a4  src/db/migrations/0071_local_observation_guard_privileges.sql
+6121106ec15f78cf307913602ad91522e4b782fdcda3df74b937f95b94931856  src/db/migrations/0072_free_ai_visibility_check.sql
+c3b5ea83f6e758c50b09eedcf5bb77ab385c36c50accb62d65dddaecd90d5d93  src/db/migrations/0073_local_external_audits.sql
+f99aff0ddd87e29d0115c495018ad31e636355cdc5c6974bda724a05bb15ae7f  src/db/migrations/0074_local_customer_test_execution.sql
+43a02100a521c3965d9a1c025a89e360bdf51ce511845e752db04d0c3bfd3082  src/db/migrations/0075_local_external_legacy_identity.sql
+aeb4942ed40ddcbc083d3ca5f4cd6705d7d59bb2b88273c7491f474cfc34bcb0  src/db/migrations/0076_local_order_publications.sql
+5da0727283201fa77551b44e549c99ba8588cca3237e1519420ae361030612e8  src/db/migrations/_pending-os/M4_action_evidence_loop_down.sql
+5215ca8b49b6d58fb3f2edf87410c6ea048852e0da6a1b48aab0802c477d47df  src/db/migrations/_pending-os/M5_visibility_map_down.sql
+8f757a08f1cd0bb84e9fe2e9730339fa552a16471077fda6928a23a1fe46e416  src/db/migrations/_pending-os/M6_outcome_layer_down.sql
+db8931c52f40c18e3a012906376805bcff0aaf0a0968cbd689d11807ab72eb15  src/db/migrations/compat/0051_release_short_to_feature_superset.sql
+===MIGRATIONS_OTHER_FILES===
+total 764
+drwxr-xr-x    5 worker   nodejs        4096 Sep 15 14:44 .
+drwxr-xr-x    3 worker   nodejs        4096 Sep 15 14:44 ..
+-rw-r--r--    1 worker   nodejs        4040 Sep 12 15:06 0000_hot_excalibur.sql
+-rw-r--r--    1 worker   nodejs        4896 Sep 12 15:06 0001_sturdy_ares.sql
+-rw-r--r--    1 worker   nodejs        1653 Sep 12 15:06 0002_legal_ultimatum.sql
+-rw-r--r--    1 worker   nodejs         685 Sep 12 15:06 0003_phase3-constraints-and-indices.sql
+-rw-r--r--    1 worker   nodejs          70 Sep 12 15:06 0004_nebulous_gunslinger.sql
+-rw-r--r--    1 worker   nodejs         422 Sep 12 15:06 0005_known_warhawk.sql
+-rw-r--r--    1 worker   nodejs         730 Sep 12 15:06 0006_multi_domain_aliases.sql
+-rw-r--r--    1 worker   nodejs         121 Sep 12 15:06 0007_report_progress.sql
+-rw-r--r--    1 worker   nodejs        2506 Sep 12 15:06 0008_provider_engines.sql
+-rw-r--r--    1 worker   nodejs         678 Sep 12 15:06 0009_brand_opportunities.sql
+-rw-r--r--    1 worker   nodejs        1858 Sep 12 15:06 0010_scope_brands_to_orgs.sql
+-rw-r--r--    1 worker   nodejs         295 Sep 12 15:06 0011_secrets.sql
+-rw-r--r--    1 worker   nodejs        1871 Sep 12 15:06 0012_billing_foundations.sql
+-rw-r--r--    1 worker   nodejs         635 Sep 12 15:06 0013_usage_events.sql
+-rw-r--r--    1 worker   nodejs        1861 Sep 12 15:06 0014_membership_uniqueness.sql
+-rw-r--r--    1 worker   nodejs        6033 Sep 12 15:06 0015_selena_visibility_client.sql
+-rw-r--r--    1 worker   nodejs        2721 Sep 12 15:06 0016_selena_scan_findings_payments.sql
+===WORKSPACE_PKGS===
+/app/node_modules/.pnpm/@workspace+cloud@file+packages+cloud_@better-auth+core@1.6.26_@better-auth+utils@0.4.2__84f0e9d3654dda808406e4c8757daee4/node_modules/@workspace/cloud
+/app/node_modules/.pnpm/@workspace+cloud@file+packages+cloud_@better-auth+core@1.6.26_@better-auth+utils@0.4.2__84f0e9d3654dda808406e4c8757daee4/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+cloud@file+packages+cloud_@better-auth+core@1.6.26_@better-auth+utils@0.4.2__84f0e9d3654dda808406e4c8757daee4/node_modules/@workspace/lib
+/app/node_modules/.pnpm/@workspace+config@file+packages+config/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+deployment@file+packages+deployment_@better-auth+core@1.6.26_@better-auth+ut_da21d7e1809d022afc9cd618335e4167/node_modules/@workspace/cloud
+/app/node_modules/.pnpm/@workspace+deployment@file+packages+deployment_@better-auth+core@1.6.26_@better-auth+ut_da21d7e1809d022afc9cd618335e4167/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+deployment@file+packages+deployment_@better-auth+core@1.6.26_@better-auth+ut_da21d7e1809d022afc9cd618335e4167/node_modules/@workspace/deployment
+/app/node_modules/.pnpm/@workspace+deployment@file+packages+deployment_@better-auth+core@1.6.26_@better-auth+ut_da21d7e1809d022afc9cd618335e4167/node_modules/@workspace/local
+/app/node_modules/.pnpm/@workspace+deployment@file+packages+deployment_@better-auth+core@1.6.26_@better-auth+ut_da21d7e1809d022afc9cd618335e4167/node_modules/@workspace/whitelabel
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/selena-visibility-contracts
+/app/node_modules/.pnpm/@workspace+local@file+packages+local_react@19.2.8/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+local@file+packages+local_react@19.2.8/node_modules/@workspace/local
+/app/node_modules/.pnpm/@workspace+selena-visibility-contracts@file+packages+selena-visibility-contracts/node_modules/@workspace/selena-visibility-contracts
+/app/node_modules/.pnpm/@workspace+ui@file+packages+ui_react-dom@19.2.8_react@19.2.8__react@19.2.8/node_modules/@workspace/ui
+/app/node_modules/.pnpm/@workspace+whitelabel@file+packages+whitelabel_@better-auth+core@1.6.26_@better-auth+ut_e0aa5b4293fcc142a45ea50d6c20c418/node_modules/@workspace/config
+/app/node_modules/.pnpm/@workspace+whitelabel@file+packages+whitelabel_@better-auth+core@1.6.26_@better-auth+ut_e0aa5b4293fcc142a45ea50d6c20c418/node_modules/@workspace/lib
+/app/node_modules/.pnpm/@workspace+whitelabel@file+packages+whitelabel_@better-auth+core@1.6.26_@better-auth+ut_e0aa5b4293fcc142a45ea50d6c20c418/node_modules/@workspace/ui
+/app/node_modules/.pnpm/@workspace+whitelabel@file+packages+whitelabel_@better-auth+core@1.6.26_@better-auth+ut_e0aa5b4293fcc142a45ea50d6c20c418/node_modules/@workspace/whitelabel
+===END===

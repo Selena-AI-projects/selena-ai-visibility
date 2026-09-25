@@ -1,0 +1,2 @@
+export default {};
+throw new Error(`Could not resolve "pg-native" imported by "pg". Is it installed?`)

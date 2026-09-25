@@ -1,0 +1,26 @@
+Using SSH key from file /Users/msnigmatullaeva/.ssh/artesc_deploy_ed25519.pub: artesc-vps
+===APP_TOP===
+total 28
+drwxr-xr-x    1 root     root          4096 Sep 15 14:44 .
+drwxr-xr-x    1 root     root          4096 Sep 15 14:46 ..
+drwxr-xr-x    9 worker   nodejs        4096 Sep 15 14:45 node_modules
+-rw-r--r--    1 worker   nodejs        1545 Sep 15 14:44 package.json
+drwxr-xr-x    2 worker   nodejs        4096 Sep 15 14:44 scripts
+drwxr-xr-x    4 worker   nodejs        4096 Sep 15 14:44 src
+-rw-r--r--    1 worker   nodejs         499 Sep 15 14:44 tsconfig.json
+===MIGRATION_DIRS===
+/app/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/cjs/migration
+/app/node_modules/.pnpm/kysely@0.28.17/node_modules/kysely/dist/esm/migration
+/app/node_modules/.pnpm/ai@7.0.48_zod@4.4.3/node_modules/ai/docs/08-migration-guides
+/app/node_modules/.pnpm/h3@2.0.1-rc.26/node_modules/h3/dist/docs/3.migration
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/db/migrations
+===SQL_COUNT===
+83
+===MODULE_FILES===
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/selena-local-customer-execution.ts
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/selena-local-customer-order-store.ts
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/selena-local-report-print.ts
+/app/node_modules/.pnpm/@workspace+lib@file+packages+lib_@better-auth+core@1.6.26_@better-auth+utils@0.4.2_@bet_277278054cbdaeaf76d729b830db4572/node_modules/@workspace/lib/src/selena-local-customer-order.ts
+===DB_MASKED===
+postgresql://***@postgres.railway.internal:5432/railway
+===END===

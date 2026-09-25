@@ -1,0 +1,2 @@
+export default {};
+throw new Error(`Could not resolve "canvas" imported by "linkedom". Is it installed?`)
