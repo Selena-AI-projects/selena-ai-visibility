@@ -51,9 +51,28 @@ describe("bounded migration journal acceptance", () => {
 			hash: "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45",
 		};
 		expect(() => assertJournalPostcondition([...expected, historical], expected)).not.toThrow();
-		expect(() =>
-			assertJournalPostcondition([...expected, { ...historical, hash: "unreviewed" }], expected),
-		).toThrow("SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED");
+		expect(() => assertJournalPostcondition([...expected, { ...historical, hash: "unreviewed" }], expected)).toThrow(
+			"SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED",
+		);
+	});
+
+	it("applies shipped migrations on top of staging's own Local history after 0067", async () => {
+		const shipped = await expectedJournalRows(fileURLToPath(new URL("../src/db/migrations", import.meta.url)));
+		const through67 = shipped.slice(0, 68);
+		const stagingLocal = [
+			["1787940030000", "c3b5ea83f6e758c50b09eedcf5bb77ab385c36c50accb62d65dddaecd90d5d93"],
+			["1787940031000", "f99aff0ddd87e29d0115c495018ad31e636355cdc5c6974bda724a05bb15ae7f"],
+			["1787940032000", "43a02100a521c3965d9a1c025a89e360bdf51ce511845e752db04d0c3bfd3082"],
+			["1787940033000", "aeb4942ed40ddcbc083d3ca5f4cd6705d7d59bb2b88273c7491f474cfc34bcb0"],
+			["1787940034000", "8c53ec711a96d452c362aa762f294b83e2637aea6b246e66d92a86a889f3e3c9"],
+		].map(([createdAt, hash]) => ({ createdAt, hash }));
+		const beforeMigration = [...through67, ...stagingLocal];
+
+		expect(() => assertJournalPrefix(beforeMigration, shipped)).not.toThrow();
+		expect(() => assertJournalPostcondition([...beforeMigration, ...shipped.slice(68)], shipped)).not.toThrow();
+		expect(() => assertJournalPrefix([...through67, { ...stagingLocal[0], hash: "unreviewed" }], shipped)).toThrow(
+			"SELENA_MIGRATION_JOURNAL_MISMATCH",
+		);
 	});
 
 	it("accepts a reviewed historical hash only at its exact migration timestamp", () => {
@@ -123,10 +142,7 @@ describe("bounded migration journal acceptance", () => {
 			acceptedAppliedHashes: ["5b5f21235bf75ee1f39f7946fca5a7fd537a9d768396d114e7a6d2f0e570adf1"],
 		});
 		expect(() =>
-			assertJournalPrefix(
-				[{ createdAt: "1787940022000", hash: rows[60].acceptedAppliedHashes[0] }],
-				[rows[60]],
-			),
+			assertJournalPrefix([{ createdAt: "1787940022000", hash: rows[60].acceptedAppliedHashes[0] }], [rows[60]]),
 		).not.toThrow();
 	});
 
@@ -354,13 +370,31 @@ describe("bounded migration journal acceptance", () => {
  * an acceptance document into something the deploy cannot walk past.
  */
 describe("owner approval before applying DDL", () => {
-	const hosted = { RAILWAY_ENVIRONMENT_NAME: "staging", RAILWAY_GIT_COMMIT_SHA: "c71bf0ebb2617411a18b5b0291d53fcf27ae8f09" };
+	const hosted = {
+		RAILWAY_ENVIRONMENT_NAME: "staging",
+		RAILWAY_GIT_COMMIT_SHA: "c71bf0ebb2617411a18b5b0291d53fcf27ae8f09",
+	};
 	const silent = () => {};
 	const applied = expected.slice(0, 2);
 
 	it("refuses pending migrations on a hosted environment with no approval", () => {
 		expect(() =>
 			assertMigrationApproval({ actualRows: applied, expectedRows: expected, env: hosted, log: silent }),
+		).toThrow("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
+	});
+
+	it("still asks for approval when staging's extra history outnumbers the pending migrations", () => {
+		const stagingHistory = [
+			["1787940028001", "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45"],
+			["1787940028002", "da5c58f680bc96e5825a8811b352d83d9106e818c6a57435448d4f2553573b2f"],
+		].map(([createdAt, hash]) => ({ createdAt, hash }));
+		expect(() =>
+			assertMigrationApproval({
+				actualRows: [...applied, ...stagingHistory],
+				expectedRows: expected,
+				env: hosted,
+				log: silent,
+			}),
 		).toThrow("SELENA_MIGRATION_OWNER_APPROVAL_REQUIRED");
 	});
 
@@ -413,10 +447,12 @@ describe("owner approval before applying DDL", () => {
 	});
 
 	it("asks nothing when the deploy carries no new migrations", () => {
-		expect(assertMigrationApproval({ actualRows: expected, expectedRows: expected, env: hosted, log: silent })).toEqual({
-			pending: 0,
-			gated: false,
-		});
+		expect(assertMigrationApproval({ actualRows: expected, expectedRows: expected, env: hosted, log: silent })).toEqual(
+			{
+				pending: 0,
+				gated: false,
+			},
+		);
 	});
 
 	it("asks nothing of a database with no history to protect", () => {

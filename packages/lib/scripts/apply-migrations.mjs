@@ -67,12 +67,54 @@ const APPLIED_MIGRATION_HASH_ALIASES = new Map([
 // source counterpart, so permit only this exact immutable history while still
 // rejecting every other row absent from the shipped journal.
 const STAGING_HISTORICAL_JOURNAL_ROWS = Object.freeze([
-	Object.freeze({ createdAt: "1787940028001", hash: "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45" }),
-	Object.freeze({ createdAt: "1787940028002", hash: "da5c58f680bc96e5825a8811b352d83d9106e818c6a57435448d4f2553573b2f" }),
-	Object.freeze({ createdAt: "1787940028003", hash: "c48499cffb9c82e5ad368805fa4930ebfd812ebe8f273d18cfd55cf30da21276" }),
-	Object.freeze({ createdAt: "1787940028004", hash: "ecbf60eed751289e08468ba5770b5e89cd4432c7abcfd6526d9abf00c561663a" }),
-	Object.freeze({ createdAt: "1787940028005", hash: "87329271f070fb3fee42abe7f7b4cfbd9acd2c3bd74829efd7ceebd685a1c7a4" }),
+	Object.freeze({
+		createdAt: "1787940028001",
+		hash: "21ebc5b9378ef1af64c95cac1870882adf52a4ad3c5d3c9c108d208a0634ee45",
+	}),
+	Object.freeze({
+		createdAt: "1787940028002",
+		hash: "da5c58f680bc96e5825a8811b352d83d9106e818c6a57435448d4f2553573b2f",
+	}),
+	Object.freeze({
+		createdAt: "1787940028003",
+		hash: "c48499cffb9c82e5ad368805fa4930ebfd812ebe8f273d18cfd55cf30da21276",
+	}),
+	Object.freeze({
+		createdAt: "1787940028004",
+		hash: "ecbf60eed751289e08468ba5770b5e89cd4432c7abcfd6526d9abf00c561663a",
+	}),
+	Object.freeze({
+		createdAt: "1787940028005",
+		hash: "87329271f070fb3fee42abe7f7b4cfbd9acd2c3bd74829efd7ceebd685a1c7a4",
+	}),
+	// Staging's own Local migrations (0073–0076 and the reconstructed 0077),
+	// recorded after 0067. They create only sv_local_* objects, which no shipped
+	// migration touches, so 0068 onward can apply on top of them.
+	Object.freeze({
+		createdAt: "1787940030000",
+		hash: "c3b5ea83f6e758c50b09eedcf5bb77ab385c36c50accb62d65dddaecd90d5d93",
+	}),
+	Object.freeze({
+		createdAt: "1787940031000",
+		hash: "f99aff0ddd87e29d0115c495018ad31e636355cdc5c6974bda724a05bb15ae7f",
+	}),
+	Object.freeze({
+		createdAt: "1787940032000",
+		hash: "43a02100a521c3965d9a1c025a89e360bdf51ce511845e752db04d0c3bfd3082",
+	}),
+	Object.freeze({
+		createdAt: "1787940033000",
+		hash: "aeb4942ed40ddcbc083d3ca5f4cd6705d7d59bb2b88273c7491f474cfc34bcb0",
+	}),
+	Object.freeze({
+		createdAt: "1787940034000",
+		hash: "8c53ec711a96d452c362aa762f294b83e2637aea6b246e66d92a86a889f3e3c9",
+	}),
 ]);
+
+function isStagingHistoricalRow(actual) {
+	return STAGING_HISTORICAL_JOURNAL_ROWS.some((row) => row.createdAt === actual.createdAt && row.hash === actual.hash);
+}
 
 export async function expectedJournalRows(migrationsFolder) {
 	const journal = JSON.parse(await readFile(resolve(migrationsFolder, "meta/_journal.json"), "utf8"));
@@ -144,9 +186,7 @@ export async function reconcileHistoricalMigrationVariants({
 		(row) => row.createdAt === RELEASE_SHORT_0051.createdAt && row.hash === RELEASE_SHORT_0051.hash,
 	);
 	const formalAcceptanceApplied = actualRows.some((row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT);
-	const formalAcceptanceRequested = expectedRows.some(
-		(row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT,
-	);
+	const formalAcceptanceRequested = expectedRows.some((row) => row.createdAt === FORMAL_ACCEPTANCE_0056_CREATED_AT);
 	if (!releaseShortApplied || formalAcceptanceApplied || !formalAcceptanceRequested) return false;
 
 	const compatibilityPath = resolve(migrationsFolder, "compat", RELEASE_SHORT_0051_BRIDGE);
@@ -193,7 +233,9 @@ function deployedCommit(env) {
 }
 
 export function assertMigrationApproval({ actualRows, expectedRows, env, log = console.log }) {
-	const applied = actualRows?.length ?? 0;
+	// Staging's historical rows have no shipped counterpart; counting them would
+	// hide pending migrations and let them through without an approval.
+	const applied = actualRows?.filter((actual) => !isStagingHistoricalRow(actual)).length ?? 0;
 	const pending = expectedRows.length - applied;
 	if (pending <= 0) return { pending: 0, gated: false };
 	if (applied === 0) return { pending, gated: false };
@@ -307,24 +349,19 @@ export function assertJournalPrefix(actualRows, expectedRows) {
 			expectedIndex += 1;
 			continue;
 		}
-		if (STAGING_HISTORICAL_JOURNAL_ROWS.some((row) => row.createdAt === actual.createdAt && row.hash === actual.hash))
-			continue;
+		if (isStagingHistoricalRow(actual)) continue;
 		if (!expected && actualRows.length > expectedRows.length)
 			throw new Error(
 				`SELENA_MIGRATION_CEILING_ALREADY_EXCEEDED: ${actualRows.length} applied, ${expectedRows.length} shipped`,
 			);
-		throw new Error(
-			`SELENA_MIGRATION_JOURNAL_MISMATCH: ${describeJournalMismatch(expectedIndex, actual, expected)}`,
-		);
+		throw new Error(`SELENA_MIGRATION_JOURNAL_MISMATCH: ${describeJournalMismatch(expectedIndex, actual, expected)}`);
 	}
 }
 
 export function assertJournalPostcondition(actualRows, expectedRows) {
 	if (!actualRows) throw new Error("SELENA_MIGRATION_POSTCONDITION_FAILED");
 	assertJournalPrefix(actualRows, expectedRows);
-	const expectedCount = actualRows.filter((actual) =>
-		STAGING_HISTORICAL_JOURNAL_ROWS.every((row) => row.createdAt !== actual.createdAt || row.hash !== actual.hash),
-	).length;
+	const expectedCount = actualRows.filter((actual) => !isStagingHistoricalRow(actual)).length;
 	if (expectedCount !== expectedRows.length) throw new Error("SELENA_MIGRATION_POSTCONDITION_FAILED");
 }
 
