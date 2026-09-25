@@ -43,6 +43,21 @@ declare global {
 		interface ProcessEnv {
 			readonly DEPLOYMENT_MODE: string;
 			readonly SELENA_LOCAL_VISIBILITY_ENABLED?: string;
+			readonly SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED?: string;
+			readonly SELENA_LOCAL_EMERGENCY_STOP?: string;
+			readonly SELENA_LOCAL_DISPATCH_ORGANIZATION_ID?: string;
+			readonly SELENA_LOCAL_OUTBOX_LEASE_MS?: string;
+			readonly SELENA_LOCAL_OUTBOX_DISPATCH_INTERVAL_MS?: string;
+			readonly SELENA_LOCAL_PROVIDER_LEASE_DURATION_MS?: string;
+			readonly SELENA_LOCAL_MAPS_PROVIDER_ID?: string;
+			readonly SELENA_LOCAL_MAPS_PROVIDER_ENDPOINT?: string;
+			readonly SELENA_LOCAL_MAPS_PROVIDER_VERSION?: string;
+			readonly SELENA_LOCAL_MAPS_PROVIDER_API_KEY?: string;
+			readonly SELENA_LOCAL_MAPS_PROVIDER_TIMEOUT_MS?: string;
+			readonly SELENA_LOCAL_DATAFORSEO_ENDPOINT?: string;
+			readonly SELENA_LOCAL_DATAFORSEO_VERSION?: string;
+			readonly SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD?: string;
+			readonly SELENA_LOCAL_DATAFORSEO_TIMEOUT_MS?: string;
 			readonly SELENA_SELF_SERVE_SIGNUP_ENABLED?: string;
 			readonly SELENA_PILOT_SIGNUP_ALLOWLIST?: string;
 			readonly SELENA_PILOT_SEAT_CAP?: string;

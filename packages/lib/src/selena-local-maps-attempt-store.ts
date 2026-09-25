@@ -22,12 +22,18 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "./db/schema";
+import { isLocalProviderExecutionEnabled } from "./selena-local-execution";
 import type {
 	LocalMapsAcquireDecision,
 	LocalMapsLiveAttemptStore,
 	LocalMapsLiveDispatchIntent,
 	LocalMapsUnknownReason,
 } from "./selena-local-maps-live-runner";
+import {
+	cancelLocalPendingInTransaction,
+	planNextLocalMapsAttemptInTransaction,
+} from "./selena-local-retry-coordinator";
+import { LOCAL_MAPS_SPEND_SCOPE, settleProviderSpend } from "./selena-provider-spend";
 
 type Db = NodePgDatabase<typeof schema>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -199,7 +205,6 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 	const [keywordRow] = await tx
 		.select({
 			id: schema.svLocalKeywords.id,
-			text: schema.svLocalKeywords.text,
 			locationId: schema.svLocalKeywords.locationId,
 		})
 		.from(schema.svLocalKeywords)
@@ -212,6 +217,9 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 		.limit(1);
 	if (!keywordRow || !lock.keywordSet.keywordIds.includes(keywordRow.id))
 		throw new Error("LOCAL_MAPS_KEYWORD_SCOPE_MISMATCH");
+	const frozenKeyword = lock.keywordSet.keywords?.find((item) => item.id === attempt.itemId);
+	if (!frozenKeyword || frozenKeyword.language !== lock.request.language)
+		throw new Error("LOCAL_MAPS_FROZEN_KEYWORD_REQUIRED");
 	const slot = planMapsLockSlots(attempt.measurementCycleId, lock).find(
 		(candidate) => candidate.baseSlotKey === attempt.baseSlotKey,
 	);
@@ -226,7 +234,7 @@ export async function loadLocalMapsAttemptSourceSnapshot(input: {
 		keywordLocationId: keywordRow.locationId,
 		keyword: {
 			id: keywordRow.id,
-			text: keywordRow.text,
+			text: frozenKeyword.text,
 			keywordSetId: lock.keywordSet.id,
 			keywordSetVersion: lock.keywordSet.version,
 		},
@@ -242,6 +250,7 @@ export async function buildLocalMapsSubmittedCandidateFromDatabase(input: {
 }
 
 export type LocalMapsAttemptStoreDependencies = {
+	executionControls?: () => Record<string, string | undefined>;
 	db: Db;
 	/** Set the transaction-local tenant before any row is read or written. */
 	setTenantContext(tx: Tx, organizationId: string): Promise<void>;
@@ -360,7 +369,7 @@ function identityMatchesCandidate(attempt: CandidateAttemptRow, candidate: Local
 }
 
 function finalStatus(status: string): boolean {
-	return ["SUCCEEDED", "RETRYABLE_FAILURE", "TERMINAL_FAILURE"].includes(status);
+	return ["SUCCEEDED", "RETRYABLE_FAILURE", "TERMINAL_FAILURE", "CANCELLED_NO_CALL"].includes(status);
 }
 
 function parseContinuation(input: Parameters<LocalMapsLiveAttemptStore["finalizeSubmitted"]>[0]) {
@@ -388,7 +397,7 @@ export function createLocalMapsLiveAttemptStore(
 			const acquiredAt = validDate(now);
 			return dependencies.db.transaction(async (tx) => {
 				await dependencies.setTenantContext(tx, intent.organizationId);
-				const [row] = await tx
+				let [row] = await tx
 					.select()
 					.from(schema.svMeasurementAttempts)
 					.where(
@@ -402,17 +411,49 @@ export function createLocalMapsLiveAttemptStore(
 				if (row.status === "UNKNOWN_RECONCILIATION") return { kind: "RECONCILIATION_REQUIRED" };
 				if (finalStatus(row.status)) return { kind: "DONE" };
 				if (row.status !== "CLAIMED") return { kind: "BUSY" };
+				const [cycle] = await tx
+					.select()
+					.from(schema.svLocalScanCycles)
+					.where(
+						and(
+							eq(schema.svLocalScanCycles.measurementCycleId, row.measurementCycleId),
+							eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+						),
+					)
+					.for("update");
+				if (!cycle || cycle.executionMode === "LEGACY_SOURCE_ONLY") throw new Error("LOCAL_LEGACY_EXECUTION_FORBIDDEN");
+				if (
+					!isLocalProviderExecutionEnabled(dependencies.executionControls?.() ?? {}) ||
+					cycle.emergencyStoppedAt ||
+					cycle.status === "STOPPED"
+				) {
+					await cancelLocalPendingInTransaction(tx, row.organizationId, cycle.id);
+					return { kind: "DONE" };
+				}
+				if (!["QUEUED", "RUNNING", "CANARY_RUNNING"].includes(cycle.status))
+					throw new Error("LOCAL_CYCLE_NOT_EXECUTABLE");
 				if (row.submittedAt || row.submittedCandidate || row.submissionTokenHash)
 					throw new Error("LOCAL_MAPS_CLAIMED_ROW_SHAPE_INVALID");
-				// A freshly inserted CLAIMED row is the hand-off point from the
-				// scheduler to this runner, so its active lease is expected. Once
-				// that lease has expired, however, 0044 does not permit renewing it
-				// in the same CLAIMED -> SUBMITTED update; reconciliation must own
-				// that recovery path instead of risking a second dispatch.
-				if (row.leaseExpiresAt <= acquiredAt) return { kind: "RECONCILIATION_REQUIRED" };
+				if (row.leaseExpiresAt <= acquiredAt) {
+					const [renewed] = await tx
+						.update(schema.svMeasurementAttempts)
+						.set({ leaseExpiresAt: new Date(acquiredAt.getTime() + dependencies.leaseDurationMs) })
+						.where(
+							and(
+								eq(schema.svMeasurementAttempts.id, row.id),
+								eq(schema.svMeasurementAttempts.organizationId, row.organizationId),
+								eq(schema.svMeasurementAttempts.rowVersion, row.rowVersion),
+							),
+						)
+						.returning();
+					if (!renewed) throw new Error("LOCAL_CLAIM_RENEWAL_CONFLICT");
+					row = renewed;
+				}
 
 				const submittedAt = acquiredAt;
-				const leaseExpiresAt = new Date(acquiredAt.getTime() + dependencies.leaseDurationMs);
+				const leaseExpiresAt = new Date(
+					Math.max(row.leaseExpiresAt.getTime(), acquiredAt.getTime()) + dependencies.leaseDurationMs,
+				);
 				const candidate = localMapsLiveSubmittedCandidateSchema.parse(
 					await dependencies.buildCandidate({
 						tx,
@@ -500,14 +541,57 @@ export function createLocalMapsLiveAttemptStore(
 				const candidate = localMapsLiveSubmittedCandidateSchema.parse(row.submittedCandidate);
 				identityMatchesCandidate(row as CandidateAttemptRow, candidate);
 				const result = localMapsLiveProviderResultSchema.parse(input.result);
+				const rawResponseBody = input.rawResponseBody;
+				if (rawResponseBody !== undefined && (!rawResponseBody.trim() || rawResponseBody.length > 4_000_000))
+					throw new Error("LOCAL_MAPS_RAW_RESPONSE_INVALID");
+				if (rawResponseBody !== undefined && result.provenance.rawResponseSha256 !== digest(rawResponseBody))
+					throw new Error("LOCAL_MAPS_RAW_RESPONSE_HASH_MISMATCH");
+				const observationId = row.localObservationId;
+				if (!observationId) throw new Error("LOCAL_MAPS_OBSERVATION_LINK_REQUIRED");
+				const [cycleModeRow] = await tx
+					.select({ executionMode: schema.svLocalScanCycles.executionMode })
+					.from(schema.svLocalScanCycles)
+					.where(
+						and(
+							eq(schema.svLocalScanCycles.id, candidate.scope.localCycleId),
+							eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+						),
+					)
+					.limit(1);
+				const isCanary = cycleModeRow?.executionMode === "CANARY";
 				const matched = assertLocalMapsLiveResultMatchesCandidate(candidate, result);
 				if (matched.budgetIncident !== input.budgetIncident) throw new Error("LOCAL_MAPS_BUDGET_INCIDENT_MISMATCH");
 				const settlement = settleLocalMapsBudget(result, row.reservedCostUsd);
 				if (settlement.incident !== input.budgetIncident || settlement.state !== input.requiredBudgetState)
 					throw new Error("LOCAL_MAPS_BUDGET_SETTLEMENT_MISMATCH");
+				if (result.cost.status === "KNOWN" && result.cost.basis === "actual") {
+					const spendReceipt = await settleProviderSpend(tx, {
+						scope: LOCAL_MAPS_SPEND_SCOPE,
+						organizationId: row.organizationId,
+						requestKey: row.executionKey,
+						actualUsd: result.cost.amountUsd,
+					});
+					if (
+						spendReceipt.reservationId !== row.reservationId ||
+						!["SETTLED", "ALREADY_SETTLED"].includes(spendReceipt.decision)
+					)
+						throw new Error("LOCAL_MAPS_PROVIDER_SPEND_SETTLEMENT_REJECTED");
+				}
 				const expectedDisposition = attemptDisposition(result.attemptIndex, result.event);
 				if (JSON.stringify(expectedDisposition) !== JSON.stringify(input.disposition))
 					throw new Error("LOCAL_MAPS_DISPOSITION_MISMATCH");
+				let finalizedDisposition =
+					isCanary && input.disposition.retryAllowed
+						? {
+								...input.disposition,
+								attemptStatus: "TERMINAL_FAILURE" as const,
+								observationValidity: "INVALID" as const,
+								observationOutcome: "PROVIDER_ERROR" as const,
+								retryAllowed: false as const,
+								finalInvalidReason: "PROVIDER_UNAVAILABLE" as const,
+								cycleStatus: "PARTIAL_FAILURE" as const,
+							}
+						: input.disposition;
 
 				let costEventId: string | null = null;
 				if (settlement.state === "SPENT") {
@@ -532,7 +616,7 @@ export function createLocalMapsLiveAttemptStore(
 				const [updated] = await tx
 					.update(schema.svMeasurementAttempts)
 					.set({
-						status: input.disposition.attemptStatus,
+						status: finalizedDisposition.attemptStatus,
 						budgetState: settlement.state,
 						spentCostUsd: settlement.spentCostUsd,
 						releasedCostUsd: settlement.releasedCostUsd,
@@ -541,7 +625,7 @@ export function createLocalMapsLiveAttemptStore(
 						rawRef: result.provenance.rawResponseReference,
 						costEventId,
 						retryReason: result.event.kind === "RETRYABLE_FAILURE" ? result.event.reason : null,
-						finalInvalidReason: input.disposition.finalInvalidReason,
+						finalInvalidReason: finalizedDisposition.finalInvalidReason,
 						unknownReason: result.event.kind === "OUTCOME_UNKNOWN" ? "PROVIDER_OUTCOME_UNKNOWN" : null,
 					})
 					.where(
@@ -554,6 +638,36 @@ export function createLocalMapsLiveAttemptStore(
 					)
 					.returning();
 				if (!updated) throw new Error("LOCAL_MAPS_ATTEMPT_FINALIZE_CONFLICT");
+				if (input.budgetIncident) {
+					await tx
+						.update(schema.svLocalScanCycles)
+						.set({
+							status: "BUDGET_BLOCKED",
+							emergencyStoppedAt: sql`coalesce(${schema.svLocalScanCycles.emergencyStoppedAt}, ${completedAt})`,
+							updatedAt: completedAt,
+						})
+						.where(
+							and(
+								eq(schema.svLocalScanCycles.id, candidate.scope.localCycleId),
+								eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+							),
+						);
+					await cancelLocalPendingInTransaction(tx, row.organizationId, candidate.scope.localCycleId);
+				}
+				// Retry reservation and the predecessor receipt commit atomically.
+				if (finalizedDisposition.retryAllowed) {
+					const retry = await planNextLocalMapsAttemptInTransaction(tx, updated, finalizedDisposition);
+					if (retry !== "CREATED") {
+						finalizedDisposition = {
+							...finalizedDisposition,
+							retryAllowed: false,
+							observationOutcome: "PREFLIGHT_BLOCKED",
+							observationValidity: "UNMEASURED",
+							finalInvalidReason: null,
+							cycleStatus: "PARTIAL_FAILURE",
+						};
+					}
+				}
 				const resultCanonical = canonicalLocalMapsProviderResult(result);
 				await tx.insert(schema.svMeasurementAttemptResults).values({
 					attemptId: updated.id,
@@ -568,13 +682,334 @@ export function createLocalMapsLiveAttemptStore(
 					resultFingerprint: digest(resultCanonical),
 					resultCanonical,
 					validatedResult: result,
-					disposition: input.disposition,
+					disposition: finalizedDisposition,
 					budgetIncident: input.budgetIncident,
 					requiredBudgetState: input.requiredBudgetState,
 					providerTaskId: result.provider.providerTaskId,
 					rawResponseReference: result.provenance.rawResponseReference,
 					rawResponseSha256: result.provenance.rawResponseSha256,
 				});
+				// Preserve malformed/ambiguous payloads for reconciliation without
+				// projecting them into customer evidence.
+				if (
+					rawResponseBody !== undefined &&
+					result.event.kind !== "FOUND" &&
+					result.event.kind !== "ABSENT_WITHIN_DEPTH"
+				) {
+					const rawSha = result.provenance.rawResponseSha256;
+					const rawRef = result.provenance.rawResponseReference;
+					if (!rawSha || !rawRef) throw new Error("LOCAL_MAPS_EVIDENCE_PROVENANCE_REQUIRED");
+					const [lockRow] = await tx
+						.select({ projectId: schema.svConfigurationLocks.projectId })
+						.from(schema.svConfigurationLocks)
+						.where(
+							and(
+								eq(schema.svConfigurationLocks.id, candidate.scope.configurationLockId),
+								eq(schema.svConfigurationLocks.organizationId, row.organizationId),
+							),
+						)
+						.limit(1);
+					if (!lockRow) throw new Error("LOCAL_MAPS_CONFIGURATION_LOCK_NOT_FOUND");
+					const snapshotResult = { ...result } as Record<string, unknown>;
+					delete snapshotResult.rawResponseBody;
+					const [source] = await tx
+						.insert(schema.svSourceSnapshots)
+						.values({
+							organizationId: row.organizationId,
+							projectId: lockRow.projectId,
+							sourceType: isCanary ? "LOCAL_MAPS_CANARY_ONLY" : "LOCAL_MAPS_PROVIDER",
+							sourceRef: rawRef,
+							contentSha256: rawSha,
+							snapshot: snapshotResult,
+							capturedAt: new Date(result.completedAt),
+							immutable: true,
+						})
+						.onConflictDoNothing()
+						.returning({ id: schema.svSourceSnapshots.id });
+					let sourceId = source?.id;
+					if (!sourceId) {
+						const [existingSource] = await tx
+							.select({ id: schema.svSourceSnapshots.id })
+							.from(schema.svSourceSnapshots)
+							.where(
+								and(
+									eq(schema.svSourceSnapshots.organizationId, row.organizationId),
+									eq(schema.svSourceSnapshots.contentSha256, rawSha),
+									eq(schema.svSourceSnapshots.projectId, lockRow.projectId),
+									eq(schema.svSourceSnapshots.sourceType, isCanary ? "LOCAL_MAPS_CANARY_ONLY" : "LOCAL_MAPS_PROVIDER"),
+								),
+							)
+							.limit(1);
+						sourceId = existingSource?.id;
+					}
+					if (!sourceId) throw new Error("LOCAL_MAPS_SOURCE_SNAPSHOT_INSERT_FAILED");
+					if (sourceId)
+						await tx
+							.insert(schema.svLocalRawEvidence)
+							.values({
+								organizationId: row.organizationId,
+								sourceSnapshotId: sourceId,
+								rawResponseBody,
+								rawResponseSha256: rawSha,
+								providerTaskId: result.provider.providerTaskId,
+								retentionExpiresAt: new Date(new Date(result.completedAt).getTime() + 30 * 24 * 60 * 60 * 1000),
+							})
+							.onConflictDoNothing();
+				}
+
+				// Project the validated provider result into the customer-facing map
+				// observation in the same transaction. Successful outcomes receive an
+				// immutable source, dataset and validated attempt result. PostgreSQL checks
+				// their full identity before allowing FOUND/ABSENT_WITHIN_DEPTH. Human
+				// acceptance belongs to the report QC path, never the provider finalizer.
+				if (result.event.kind === "FOUND" || result.event.kind === "ABSENT_WITHIN_DEPTH") {
+					if (!result.provenance.rawResponseReference || !result.provenance.rawResponseSha256)
+						throw new Error("LOCAL_MAPS_EVIDENCE_PROVENANCE_REQUIRED");
+					const [lockRow] = await tx
+						.select({ projectId: schema.svConfigurationLocks.projectId })
+						.from(schema.svConfigurationLocks)
+						.where(
+							and(
+								eq(schema.svConfigurationLocks.id, candidate.scope.configurationLockId),
+								eq(schema.svConfigurationLocks.organizationId, row.organizationId),
+							),
+						)
+						.limit(1);
+					if (!lockRow) throw new Error("LOCAL_MAPS_CONFIGURATION_LOCK_NOT_FOUND");
+					const capturedAt = new Date(result.completedAt);
+					const snapshotResult = { ...result } as Record<string, unknown>;
+					delete snapshotResult.rawResponseBody;
+					const [source] = await tx
+						.insert(schema.svSourceSnapshots)
+						.values({
+							organizationId: row.organizationId,
+							projectId: lockRow.projectId,
+							sourceType: isCanary ? "LOCAL_MAPS_CANARY_ONLY" : "LOCAL_MAPS_PROVIDER",
+							sourceRef: result.provenance.rawResponseReference,
+							contentSha256: result.provenance.rawResponseSha256,
+							snapshot: snapshotResult,
+							capturedAt,
+							immutable: true,
+						})
+						.onConflictDoNothing()
+						.returning({ id: schema.svSourceSnapshots.id });
+					let sourceId = source?.id;
+					if (!sourceId) {
+						const [existingSource] = await tx
+							.select({ id: schema.svSourceSnapshots.id })
+							.from(schema.svSourceSnapshots)
+							.where(
+								and(
+									eq(schema.svSourceSnapshots.organizationId, row.organizationId),
+									eq(schema.svSourceSnapshots.contentSha256, result.provenance.rawResponseSha256),
+									eq(schema.svSourceSnapshots.projectId, lockRow.projectId),
+									eq(schema.svSourceSnapshots.sourceType, isCanary ? "LOCAL_MAPS_CANARY_ONLY" : "LOCAL_MAPS_PROVIDER"),
+								),
+							)
+							.limit(1);
+						sourceId = existingSource?.id;
+					}
+					if (!sourceId) throw new Error("LOCAL_MAPS_SOURCE_SNAPSHOT_INSERT_FAILED");
+					if (rawResponseBody !== undefined) {
+						await tx
+							.insert(schema.svLocalRawEvidence)
+							.values({
+								organizationId: row.organizationId,
+								sourceSnapshotId: sourceId,
+								rawResponseBody,
+								rawResponseSha256: result.provenance.rawResponseSha256,
+								providerTaskId: result.provider.providerTaskId,
+								retentionExpiresAt: new Date(capturedAt.getTime() + 30 * 24 * 60 * 60 * 1000),
+							})
+							.onConflictDoNothing();
+					}
+					if (isCanary) {
+						await tx
+							.update(schema.svLocalRankObservations)
+							.set({
+								outcome: "BLOCKED",
+								validity: "UNMEASURED",
+								targetRank: null,
+								capturedAt: null,
+								invalidReason: "CANARY_REVIEW_REQUIRED",
+								rawReference: null,
+								evidenceEnvelope: null,
+								evidenceCanonical: null,
+								evidenceSha256: null,
+								evidenceId: null,
+								attemptCount: row.attemptIndex,
+								updatedAt: capturedAt,
+							})
+							.where(
+								and(
+									eq(schema.svLocalRankObservations.id, observationId),
+									eq(schema.svLocalRankObservations.organizationId, row.organizationId),
+									eq(schema.svLocalRankObservations.outcome, "PENDING"),
+								),
+							);
+					} else if (!input.budgetIncident) {
+						const [dataset] = await tx
+							.insert(schema.svMeasurementDatasets)
+							.values({
+								organizationId: row.organizationId,
+								cycleId: row.measurementCycleId,
+								datasetKey: `local-maps-live:${result.provider.id}:${row.measurementCycleId}`,
+								version: 1,
+							})
+							.onConflictDoNothing()
+							.returning({ id: schema.svMeasurementDatasets.id });
+						let datasetId = dataset?.id;
+						if (!datasetId) {
+							const [existingDataset] = await tx
+								.select({ id: schema.svMeasurementDatasets.id })
+								.from(schema.svMeasurementDatasets)
+								.where(
+									and(
+										eq(schema.svMeasurementDatasets.organizationId, row.organizationId),
+										eq(schema.svMeasurementDatasets.cycleId, row.measurementCycleId),
+										eq(
+											schema.svMeasurementDatasets.datasetKey,
+											`local-maps-live:${result.provider.id}:${row.measurementCycleId}`,
+										),
+										eq(schema.svMeasurementDatasets.version, 1),
+									),
+								)
+								.limit(1);
+							datasetId = existingDataset?.id;
+						}
+						if (!datasetId) throw new Error("LOCAL_MAPS_DATASET_INSERT_FAILED");
+						const [evidence] = await tx
+							.insert(schema.svEvidenceIndex)
+							.values({
+								organizationId: row.organizationId,
+								projectId: lockRow.projectId,
+								domainId: "LOCAL_MAPS",
+								cycleId: row.measurementCycleId,
+								observationRef: row.observationRef,
+								datasetId,
+								sourceSnapshotId: sourceId,
+								capturedAt,
+							})
+							.onConflictDoNothing()
+							.returning({ id: schema.svEvidenceIndex.id });
+						let evidenceId = evidence?.id;
+						if (!evidenceId) {
+							const [existingEvidence] = await tx
+								.select({ id: schema.svEvidenceIndex.id })
+								.from(schema.svEvidenceIndex)
+								.where(
+									and(
+										eq(schema.svEvidenceIndex.organizationId, row.organizationId),
+										eq(schema.svEvidenceIndex.observationRef, row.observationRef),
+										eq(schema.svEvidenceIndex.cycleId, row.measurementCycleId),
+										eq(schema.svEvidenceIndex.domainId, "LOCAL_MAPS"),
+									),
+								)
+								.limit(1);
+							evidenceId = existingEvidence?.id;
+						}
+						if (!evidenceId) throw new Error("LOCAL_MAPS_EVIDENCE_INSERT_FAILED");
+						await tx
+							.update(schema.svLocalRankObservations)
+							.set({
+								outcome: result.event.kind,
+								validity: "VALID",
+								targetRank: result.targetRank,
+								capturedAt,
+								rawReference: result.provenance.rawResponseReference,
+								evidenceEnvelope: result,
+								evidenceCanonical: resultCanonical,
+								evidenceSha256: digest(resultCanonical),
+								evidenceId,
+								attemptCount: row.attemptIndex,
+								updatedAt: capturedAt,
+							})
+							.where(
+								and(
+									eq(schema.svLocalRankObservations.id, observationId),
+									eq(schema.svLocalRankObservations.organizationId, row.organizationId),
+									eq(schema.svLocalRankObservations.outcome, "PENDING"),
+								),
+							);
+						await tx.insert(schema.svLocalEvidenceAcceptances).values({
+							organizationId: row.organizationId,
+							observationId,
+							evidenceId,
+							evidenceSha256: digest(resultCanonical),
+						});
+					}
+				} else if (finalizedDisposition.observationOutcome !== "RETRY_PENDING") {
+					const outcome =
+						finalizedDisposition.observationOutcome === "PROVIDER_BLOCKED"
+							? "BLOCKED"
+							: finalizedDisposition.observationOutcome === "UNKNOWN_RECONCILIATION"
+								? "UNKNOWN"
+								: "INVALID";
+					const validity = outcome === "INVALID" ? "INVALID" : "UNMEASURED";
+					await tx
+						.update(schema.svLocalRankObservations)
+						.set({
+							outcome,
+							validity,
+							targetRank: null,
+							capturedAt: outcome === "BLOCKED" ? null : new Date(result.completedAt),
+							invalidReason:
+								outcome === "BLOCKED"
+									? "PROVIDER_BLOCKED"
+									: (finalizedDisposition.finalInvalidReason ?? "PROVIDER_OUTCOME_UNKNOWN"),
+							attemptCount: row.attemptIndex,
+							updatedAt: new Date(result.completedAt),
+						})
+						.where(
+							and(
+								eq(schema.svLocalRankObservations.id, observationId),
+								eq(schema.svLocalRankObservations.organizationId, row.organizationId),
+								eq(schema.svLocalRankObservations.outcome, "PENDING"),
+							),
+						);
+				}
+				const [cycleState] = await tx
+					.select({ executionMode: schema.svLocalScanCycles.executionMode, status: schema.svLocalScanCycles.status })
+					.from(schema.svLocalScanCycles)
+					.where(
+						and(
+							eq(schema.svLocalScanCycles.id, candidate.scope.localCycleId),
+							eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+						),
+					)
+					.limit(1);
+				if (
+					cycleState &&
+					!["BUDGET_BLOCKED", "STOPPED"].includes(cycleState.status) &&
+					finalizedDisposition.observationOutcome !== "RETRY_PENDING"
+				) {
+					const counts = await tx.execute(
+						sql`select count(*) filter (where outcome='PENDING')::int as pending, count(*) filter (where outcome='UNKNOWN')::int as unknown, count(*) filter (where outcome in ('INVALID','BLOCKED'))::int as failed from sv_local_rank_observations where organization_id=${row.organizationId} and cycle_id=${candidate.scope.localCycleId}`,
+					);
+					const state = (counts.rows[0] ?? {}) as { pending?: number; unknown?: number; failed?: number };
+					const nextStatus =
+						Number(state.unknown ?? 0) > 0
+							? "UNKNOWN_RECONCILIATION"
+							: Number(state.pending ?? 0) > 0
+								? cycleState.status
+								: cycleState.executionMode === "CANARY"
+									? "CANARY_REVIEW"
+									: Number(state.failed ?? 0) > 0
+										? "PARTIAL_FAILURE"
+										: "QC_REQUIRED";
+					if (nextStatus !== cycleState.status)
+						await tx
+							.update(schema.svLocalScanCycles)
+							.set({ status: nextStatus, updatedAt: new Date(result.completedAt) })
+							.where(
+								and(
+									eq(schema.svLocalScanCycles.id, candidate.scope.localCycleId),
+									eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+								),
+							);
+					if (nextStatus === "UNKNOWN_RECONCILIATION")
+						await cancelLocalPendingInTransaction(tx, row.organizationId, candidate.scope.localCycleId);
+				}
 				return { kind: "FINALIZED" as const, persistedResult: result, persistedBudgetState: settlement.state };
 			});
 		},
@@ -615,6 +1050,48 @@ export function createLocalMapsLiveAttemptStore(
 							eq(schema.svMeasurementAttempts.rowVersion, continuation.rowVersion),
 						),
 					);
+				if (!row.localObservationId) throw new Error("LOCAL_MAPS_OBSERVATION_LINK_REQUIRED");
+				const [localCycle] = await tx
+					.select({ id: schema.svLocalScanCycles.id })
+					.from(schema.svLocalScanCycles)
+					.where(
+						and(
+							eq(schema.svLocalScanCycles.measurementCycleId, row.measurementCycleId),
+							eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+						),
+					)
+					.for("update");
+				if (!localCycle) throw new Error("LOCAL_CYCLE_NOT_FOUND");
+				await tx
+					.update(schema.svLocalRankObservations)
+					.set({
+						outcome: "UNKNOWN",
+						validity: "UNMEASURED",
+						targetRank: null,
+						capturedAt: completedAt,
+						invalidReason: input.reason,
+						attemptCount: row.attemptIndex,
+						updatedAt: completedAt,
+					})
+					.where(
+						and(
+							eq(schema.svLocalRankObservations.id, row.localObservationId),
+							eq(schema.svLocalRankObservations.organizationId, row.organizationId),
+							eq(schema.svLocalRankObservations.outcome, "PENDING"),
+						),
+					);
+				await tx
+					.update(schema.svLocalScanCycles)
+					.set({ status: "UNKNOWN_RECONCILIATION", updatedAt: completedAt })
+					.where(
+						and(
+							eq(schema.svLocalScanCycles.id, localCycle.id),
+							eq(schema.svLocalScanCycles.organizationId, row.organizationId),
+						),
+					);
+				// The provider boundary has been crossed for this attempt, so retain
+				// its reservation for reconciliation but cancel every untouched slot.
+				await cancelLocalPendingInTransaction(tx, row.organizationId, localCycle.id);
 				return { kind: "MARKED_UNKNOWN" as const };
 			});
 		},
