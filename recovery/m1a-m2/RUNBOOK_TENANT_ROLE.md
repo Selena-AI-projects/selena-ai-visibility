@@ -14,7 +14,13 @@ Staging устроен не так, как предполагает эта ин�
 - **Шаг 2 на staging не выполнять.**
   - Скрипт сменит пароль роли, под которой сейчас работают `web` и `worker`.
   - Скрипт начинается с `REVOKE ALL ON ALL TABLES IN SCHEMA public`. Он заберёт права на staging-only таблицы `sv_local_*`, которых нет в его списке.
-- `SELENA_WEB_DATABASE_URL` у `web` указывает на старую базу Supabase, а не на Railway. Шаг 3 возможен только после замены этого значения на `${{DATABASE_URL}}`.
+- Шаг 3 выполнен. У `web` раньше `SELENA_WEB_DATABASE_URL` указывал на старую базу Supabase. Теперь выставлено:
+  - `SELENA_WEB_DATABASE_URL=${{ DATABASE_URL }}` (тот же `selena_app`);
+  - `SELENA_INTERNAL_DATABASE_URL=${{ migrate.DATABASE_URL }}` (владелец, только для операторских действий);
+  - `SELENA_HOSTED=true`;
+  - `SELENA_DATABASE_SURFACE=web`.
+
+  Деплой прошёл healthcheck.
 
 ## 0. До начала
 
