@@ -2,8 +2,7 @@ import { createHash } from "node:crypto";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { resolveSelenaApiKeyBootstrap } from "@workspace/lib/db/api-key-bootstrap";
 import { db } from "@workspace/lib/db/db";
-import { member, organization } from "@workspace/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { pickSessionMembership, resolveSessionMemberships } from "@workspace/lib/db/session-membership-bootstrap";
 
 export type SelenaRole = "owner" | "member" | "viewer";
 export type AuthContext = {
@@ -29,16 +28,12 @@ export async function resolveSessionAuthContext(): Promise<AuthContext> {
 	const session = await auth.api.getSession({ headers: getRequestHeaders() });
 	if (!session) throw new Error("Unauthorized: authenticated session required");
 	const activeOrg = (session.session as { activeOrganizationId?: string | null }).activeOrganizationId;
-	const rows = await db
-		.select({ tenantId: member.organizationId, role: member.role })
-		.from(member)
-		.innerJoin(organization, eq(member.organizationId, organization.id))
-		.where(eq(member.userId, session.user.id));
-	const membership = activeOrg ? rows.find((row) => row.tenantId === activeOrg) : rows[0];
+	const memberships = await resolveSessionMemberships(db, session.user.id);
+	const membership = pickSessionMembership(memberships, activeOrg);
 	if (!membership) throw new Error("Forbidden: no organization membership");
 	return {
 		actorId: session.user.id,
-		tenantId: membership.tenantId,
+		tenantId: membership.organizationId,
 		role: normalizeRole(membership.role),
 		authType: "session",
 		permissions: ["client:read", "client:write"],
