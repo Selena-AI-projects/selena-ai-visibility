@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 72)); then
+	if ((10#$migration_number > 73)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -153,6 +153,12 @@ expect 'runtime role runs the retention sweep' 0 \
 	"$(as_tenant '' '' "SELECT sv_expire_answer_texts(now())")"
 if as_tenant '' '' "UPDATE sv_runs SET canonical_payload = canonical_payload" >/dev/null 2>&1; then
 	printf 'TENANT_ISOLATION_FAILED runtime role updated sv_runs directly\n' >&2
+	exit 1
+fi
+
+# Operator access records belong to no tenant and stay out of the runtime role's reach.
+if as_tenant '' '' "SELECT count(*) FROM sv_operator_access_events" >/dev/null 2>&1; then
+	printf 'TENANT_ISOLATION_FAILED runtime role read operator access records\n' >&2
 	exit 1
 fi
 

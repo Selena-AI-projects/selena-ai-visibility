@@ -512,6 +512,13 @@
       "when": 1790320004000,
       "tag": "0072_answer_retention_sweep",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1790320005000,
+      "tag": "0073_operator_access_audit",
+      "breakpoints": true
     }
   ]
 }
