@@ -484,6 +484,13 @@
       "when": 1790320000000,
       "tag": "0068_session_membership_bootstrap",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1790320001000,
+      "tag": "0069_tenant_policies",
+      "breakpoints": true
     }
   ]
 }

@@ -215,6 +215,13 @@ BEGIN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0065';
 	END IF;
 
+	IF to_regprocedure('public.sv_resolve_session_memberships(text)') IS NULL
+		OR NOT EXISTS (
+			SELECT 1 FROM pg_catalog.pg_policies WHERE schemaname = 'public' AND tablename = 'member'
+		) THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0069';
+	END IF;
+
 	IF (SELECT count(*) FROM pgboss.version) <> 1
 		OR NOT EXISTS (SELECT 1 FROM pgboss.version WHERE version = 37) THEN
 		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_PGBOSS_SCHEMA_VERSION_37';
@@ -396,5 +403,8 @@ GRANT EXECUTE ON FUNCTION sv_resolve_report_context(uuid) TO selena_app;
 -- API-key authentication likewise needs a tenant before the request
 -- transaction can set app.organization_id.
 GRANT EXECUTE ON FUNCTION sv_resolve_api_key_context(text) TO selena_app;
+
+-- Session sign-in likewise resolves memberships before any tenant exists.
+GRANT EXECUTE ON FUNCTION sv_resolve_session_memberships(text) TO selena_app;
 
 COMMIT;
