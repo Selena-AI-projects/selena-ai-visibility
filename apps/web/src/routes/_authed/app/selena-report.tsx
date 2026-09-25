@@ -314,9 +314,10 @@ const SIGNAL_LABELS: Record<string, [string, string]> = {
 };
 
 const PLAN_LABELS: Record<string, string> = {
-	"visitor-local": "Snapshot · $49",
-	"full-ai-landscape": "Landscape · $79",
-	"expert-verified": "Expert Verified · $399",
+	"visibility-snapshot": "Snapshot · $49",
+	"full-discovery-landscape": "Landscape · $79",
+	"competitive-audit": "Competitive Audit · $399",
+	"managed-discovery-90": "Managed Discovery · $2,490",
 };
 
 /** Validated against the light surface (CVD-checked); "others" is a labeled neutral. */
@@ -1544,7 +1545,7 @@ function SelenaReportPage() {
 
 						<section className="relative overflow-hidden rounded-2xl bg-[#221f1b] p-8 text-[#f2e9df] print:hidden">
 							<div className="pointer-events-none absolute -right-20 -bottom-24 h-64 w-64 rounded-full border border-[#b9825b4d]" />
-							{view?.planId === "visitor-local" ? (
+							{view?.planId === "visibility-snapshot" ? (
 								<>
 									<h2 className="selena-heading text-2xl text-[#faf5ec]">{tr(locale, "This report is a starting point", "Этот отчёт — отправная точка")}</h2>
 									<p className="mt-2 max-w-2xl text-sm text-[#cfc4b6]">

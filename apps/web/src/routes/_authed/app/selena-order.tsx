@@ -32,7 +32,7 @@ type OrderLocale = "en" | "ru";
 const PLAN_OPTIONS = [
 	{
 		search: "snapshot" as const,
-		planId: "visitor-local" as const,
+		planId: "visibility-snapshot" as const,
 		title: "Visitor View · Snapshot",
 		price: "$49",
 		systems: "ChatGPT · Gemini · Perplexity",
@@ -41,7 +41,7 @@ const PLAN_OPTIONS = [
 	},
 	{
 		search: "landscape" as const,
-		planId: "full-ai-landscape" as const,
+		planId: "full-discovery-landscape" as const,
 		title: "Visitor + API View · Landscape",
 		price: "$79",
 		systems: "ChatGPT · Gemini · Perplexity · Claude · DeepSeek · Qwen · Mistral · Grok",

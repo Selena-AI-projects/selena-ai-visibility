@@ -29,26 +29,30 @@ function paramsOf(statement: SQL): string[] {
 describe("pilot seat issuance", () => {
 	it("reads one seat per line, skipping comments and blank lines, and keeps a label with commas", () => {
 		const seats = parsePilotSeats(
-			`# test clients\n\n${CODE_ONE},full-ai-landscape,doki.help\n${CODE_TWO} , visitor-local , petid.care, Bali\n`,
+			`# test clients\n\n${CODE_ONE},full-discovery-landscape,doki.help\n${CODE_TWO} , visibility-snapshot , petid.care, Bali\n`,
 		);
 		expect(seats).toEqual([
-			{ codeHash: hashPilotInviteCode(CODE_ONE), planId: "full-ai-landscape", label: "doki.help" },
-			{ codeHash: hashPilotInviteCode(CODE_TWO), planId: "visitor-local", label: "petid.care,Bali" },
+			{ codeHash: hashPilotInviteCode(CODE_ONE), planId: "full-discovery-landscape", label: "doki.help" },
+			{ codeHash: hashPilotInviteCode(CODE_TWO), planId: "visibility-snapshot", label: "petid.care,Bali" },
 		]);
 		// A code is the same seat whatever its case, so the two spellings collide.
-		expect(() => parsePilotSeats(`${CODE_ONE},visitor-local\n${CODE_ONE.toLowerCase()},visitor-local`)).toThrow(
-			"same code twice",
-		);
+		expect(() =>
+			parsePilotSeats(`${CODE_ONE},visibility-snapshot\n${CODE_ONE.toLowerCase()},visibility-snapshot`),
+		).toThrow("same code twice");
 	});
 
 	it("refuses a line it cannot read rather than guessing a plan", () => {
 		expect(() => parsePilotSeats(`${CODE_ONE}`)).toThrow("Line 1: expected CODE,planId[,label]");
-		expect(() => parsePilotSeats(`\n${CODE_ONE},growth-90-days`)).toThrow('Line 2: unknown plan "growth-90-days"');
+		expect(() => parsePilotSeats(`\n${CODE_ONE},managed-discovery-90`)).toThrow(
+			'Line 2: unknown plan "managed-discovery-90"',
+		);
 		expect(() => parsePilotSeats("# nothing here\n")).toThrow("No seats in the file");
 	});
 
 	it("inserts a digest per seat, counts what was new, and never sends the code itself", async () => {
-		const seats = parsePilotSeats(`${CODE_ONE},full-ai-landscape,doki.help\n${CODE_TWO},full-ai-landscape,petid.care`);
+		const seats = parsePilotSeats(
+			`${CODE_ONE},full-discovery-landscape,doki.help\n${CODE_TWO},full-discovery-landscape,petid.care`,
+		);
 		const executor = executorAnswering([[{ id: "seat-1" }], []]);
 
 		const report = await issuePilotSeats(executor, seats, 30);

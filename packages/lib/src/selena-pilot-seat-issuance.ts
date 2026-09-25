@@ -13,7 +13,7 @@ import { hashPilotInviteCode, type SqlExecutor } from "./selena-pilot-invites";
  * reissuing the whole set.
  */
 
-export const pilotSeatPlanIds = ["visitor-local", "full-ai-landscape"] as const;
+export const pilotSeatPlanIds = ["visibility-snapshot", "full-discovery-landscape"] as const;
 
 export interface PilotSeat {
 	codeHash: string;

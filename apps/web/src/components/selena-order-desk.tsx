@@ -24,9 +24,9 @@ type DeskLocale = "en" | "ru";
 
 /** Kept in step with the catalog plans an operator sells from this desk. */
 const PLANS = [
-	{ id: "visitor-local" as const, label: "Snapshot · $49/mo", systems: 3, repeats: 1, budgetCap: 12 },
-	{ id: "full-ai-landscape" as const, label: "Landscape · $79/mo", systems: 8, repeats: 1, budgetCap: 28 },
-	{ id: "expert-verified" as const, label: "Expert Verified · $399", systems: 8, repeats: 5, budgetCap: 140 },
+	{ id: "visibility-snapshot" as const, label: "Snapshot · $49/mo", systems: 3, repeats: 1, budgetCap: 12 },
+	{ id: "full-discovery-landscape" as const, label: "Landscape · $79/mo", systems: 8, repeats: 1, budgetCap: 28 },
+	{ id: "competitive-audit" as const, label: "Expert Verified · $399", systems: 8, repeats: 5, budgetCap: 140 },
 ];
 
 function tr(locale: DeskLocale, english: string, russian: string): string {
@@ -42,7 +42,7 @@ function statusTone(status: string): "default" | "secondary" | "outline" {
 export function SelenaOrderDesk({ locale, onOrderCreated }: { locale: DeskLocale; onOrderCreated: () => void }) {
 	const [projects, setProjects] = useState<DeskProject[] | null>(null);
 	const [projectId, setProjectId] = useState("");
-	const [planId, setPlanId] = useState<(typeof PLANS)[number]["id"]>("visitor-local");
+	const [planId, setPlanId] = useState<(typeof PLANS)[number]["id"]>("visibility-snapshot");
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [pending, setPending] = useState("");
 	const [notice, setNotice] = useState("");
