@@ -1,5 +1,9 @@
 export interface RuntimeDatabaseEnvironment {
 	DATABASE_URL?: string;
+	SELENA_DATABASE_SURFACE?: string;
+	SELENA_WEB_DATABASE_URL?: string;
+	SELENA_WORKER_DATABASE_URL?: string;
+	SELENA_HOSTED?: string;
 	SELENA_RUNTIME_DATABASE_CA_PEM?: string;
 	SELENA_PGBOSS_OWNER_MANAGED_SCHEMA?: string;
 }
@@ -60,8 +64,35 @@ function withoutConnectionStringTlsOptions(connectionString: string): string {
 	return url.toString();
 }
 
+const SURFACE_DATABASE_URL = {
+	web: "SELENA_WEB_DATABASE_URL",
+	worker: "SELENA_WORKER_DATABASE_URL",
+} as const;
+
+/**
+ * The connection string for this process. Web and worker connect with their own
+ * non-owner roles so row-level security applies to them; only migrations use
+ * the table owner in DATABASE_URL. On a hosted runtime a missing role URL is an
+ * error rather than a silent fall back to the owner, which would bypass tenant
+ * isolation. `DEPLOYMENT_MODE` cannot mark "hosted": Selena runs hosted in local mode.
+ */
+export function runtimeDatabaseUrl(env: RuntimeDatabaseEnvironment = process.env): string | undefined {
+	const hosted = env.SELENA_HOSTED;
+	if (hosted !== undefined && hosted !== "true" && hosted !== "false") throw new Error("SELENA_HOSTED_INVALID");
+
+	const surface = env.SELENA_DATABASE_SURFACE;
+	if (surface === undefined || surface === "migrate") return env.DATABASE_URL;
+	if (surface !== "web" && surface !== "worker") throw new Error("SELENA_DATABASE_SURFACE_INVALID");
+
+	const variable = SURFACE_DATABASE_URL[surface];
+	const roleUrl = env[variable];
+	if (roleUrl) return roleUrl;
+	if (hosted === "true") throw new Error(`${variable}_REQUIRED`);
+	return env.DATABASE_URL;
+}
+
 export function runtimeDatabaseConnection(env: RuntimeDatabaseEnvironment = process.env): RuntimeDatabaseConnection {
-	const connectionString = env.DATABASE_URL;
+	const connectionString = runtimeDatabaseUrl(env);
 	if (!connectionString) throw new Error("DATABASE_URL_REQUIRED");
 
 	if (env.SELENA_RUNTIME_DATABASE_CA_PEM === undefined) return { connectionString };
