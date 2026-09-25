@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const SELENA_CATALOG_VERSION = "selena-catalog-rc6-v1" as const;
+export const SELENA_CATALOG_VERSION = "selena-catalog-v2" as const;
 export const SELENA_SELLER_LEGAL_ENTITY = "Selena Systems LLC" as const;
 export const SELENA_CHECKOUT_METADATA = {
 	sellerLegalEntity: SELENA_SELLER_LEGAL_ENTITY,
@@ -21,9 +21,94 @@ export type ApiModelId = (typeof apiModelIds)[number];
 export const channels = ["VISITOR_VIEW", "API_VIEW"] as const;
 export type SelenaChannel = (typeof channels)[number];
 
-export const planIds = ["visitor-local", "full-ai-landscape", "expert-verified", "growth-90-days"] as const;
+export const planIds = [
+	"visibility-snapshot",
+	"full-discovery-landscape",
+	"competitive-audit",
+	"managed-discovery-90",
+] as const;
 export type SelenaPlanId = (typeof planIds)[number];
 export type BillingInterval = "month" | "one_time" | "ninety_days";
+
+/**
+ * Plan ids from earlier catalog versions. Stored orders, quotes and requests
+ * keep the id they were written with, so readers resolve through this map;
+ * new writes must use a current id.
+ */
+export const legacyPlanIdAliases = {
+	"visitor-local": "visibility-snapshot",
+	"full-ai-landscape": "full-discovery-landscape",
+	"expert-verified": "competitive-audit",
+	"growth-90-days": "managed-discovery-90",
+	"ai-visibility-snapshot": "visibility-snapshot",
+	"ai-visibility-landscape": "full-discovery-landscape",
+	"ai-visibility-expert-verified": "competitive-audit",
+	"ai-visibility-implementation-90-days": "managed-discovery-90",
+} as const satisfies Record<string, SelenaPlanId>;
+
+/**
+ * Offers that were sold on staging as separate products and must not come back
+ * as commercial plans. Local Maps is a measurement surface inside the plans.
+ */
+export const retiredCommercialOffers = ["LOCAL_MAPS_ONE_OFF"] as const;
+
+/** Resolves a current or legacy plan id; null for unknown ids and retired offers. */
+export function resolvePlanId(id: string): SelenaPlanId | null {
+	if ((planIds as readonly string[]).includes(id)) return id as SelenaPlanId;
+	return (legacyPlanIdAliases as Record<string, SelenaPlanId>)[id] ?? null;
+}
+
+export const FREE_PUBLIC_READINESS = {
+	planId: "public-readiness",
+	name: "FREE Public Readiness",
+	price: 0,
+	currency: "USD",
+} as const;
+
+export const reportTabs = [
+	"visitor_ai",
+	"expanded_ai",
+	"local_discovery",
+	"competitors",
+	"sources",
+	"recommendations",
+	"history",
+] as const;
+export type ReportTab = (typeof reportTabs)[number];
+
+export type PlanEntitlements = {
+	tabs: readonly ReportTab[];
+	/**
+	 * Automated Local Discovery is part of the plan only where production-capable
+	 * measurement is verified; until then the plan shows it as pending, not as delivered.
+	 */
+	localDiscovery: "not_included" | "pending_verification" | "included";
+	/** Manual Google Ask Maps / Local AI investigation by an analyst. */
+	localManualAudit: boolean;
+};
+
+const localDiscoveryPlans: readonly SelenaPlanId[] = [
+	"full-discovery-landscape",
+	"competitive-audit",
+	"managed-discovery-90",
+];
+const expandedAiPlans: readonly SelenaPlanId[] = localDiscoveryPlans;
+const localManualAuditPlans: readonly SelenaPlanId[] = ["competitive-audit", "managed-discovery-90"];
+
+export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryVerified: boolean }): PlanEntitlements {
+	const hasLocal = localDiscoveryPlans.includes(planId);
+	const localDiscovery = !hasLocal
+		? "not_included"
+		: options.localDiscoveryVerified
+			? "included"
+			: "pending_verification";
+	const tabs = reportTabs.filter((tab) => {
+		if (tab === "expanded_ai") return expandedAiPlans.includes(planId);
+		if (tab === "local_discovery") return hasLocal;
+		return true;
+	});
+	return { tabs, localDiscovery, localManualAudit: localManualAuditPlans.includes(planId) };
+}
 
 export type SelenaPlan = {
 	planId: SelenaPlanId;
@@ -51,9 +136,9 @@ export type SelenaPlan = {
 const commonGates = ["admin_approval", "providers_off", "maintenance_off"] as const;
 
 export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
-	"visitor-local": {
-		planId: "visitor-local",
-		name: "Visitor Local",
+	"visibility-snapshot": {
+		planId: "visibility-snapshot",
+		name: "Visibility Snapshot",
 		billingInterval: "month",
 		price: 49,
 		currency: "USD",
@@ -82,7 +167,7 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		excludedFeatures: [
 			"five API View models",
 			"manual analyst review",
-			"Expert Verified",
+			"Competitive Audit",
 			"Connected Analytics by default",
 		],
 		verificationLevel: "automated",
@@ -92,9 +177,9 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		purchaseMode: "self_service",
 		activationGates: [...commonGates],
 	},
-	"full-ai-landscape": {
-		planId: "full-ai-landscape",
-		name: "Full AI Landscape",
+	"full-discovery-landscape": {
+		planId: "full-discovery-landscape",
+		name: "Full Discovery Landscape",
 		billingInterval: "month",
 		price: 79,
 		currency: "USD",
@@ -113,7 +198,7 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 			"Evidence Ledger",
 			"PDF/XLSX/CSV when available",
 		],
-		excludedFeatures: ["manual analyst review", "Expert Verified"],
+		excludedFeatures: ["manual analyst review", "Competitive Audit"],
 		verificationLevel: "automated",
 		laborHours: 0,
 		providerBudgetCap: 28,
@@ -121,9 +206,9 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		purchaseMode: "self_service",
 		activationGates: [...commonGates],
 	},
-	"expert-verified": {
-		planId: "expert-verified",
-		name: "Expert Verified",
+	"competitive-audit": {
+		planId: "competitive-audit",
+		name: "Verified Discovery & Competitive Audit",
 		billingInterval: "one_time",
 		price: 399,
 		currency: "USD",
@@ -152,9 +237,9 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		purchaseMode: "self_service",
 		activationGates: [...commonGates, "expert_qc_record"],
 	},
-	"growth-90-days": {
-		planId: "growth-90-days",
-		name: "Growth 90 Days",
+	"managed-discovery-90": {
+		planId: "managed-discovery-90",
+		name: "Managed Discovery Growth",
 		billingInterval: "ninety_days",
 		price: 2490,
 		currency: "USD",
@@ -231,14 +316,16 @@ export function getPlan(planId: SelenaPlanId): SelenaPlan {
 
 export function validateCatalogScope(input: CatalogScope): SelenaPlan {
 	const plan = getPlan(input.planId);
-	if (plan.planId !== "growth-90-days" && input.languages.length > plan.languageLimit)
+	if (plan.planId !== "managed-discovery-90" && input.languages.length > plan.languageLimit)
 		throw new Error("LANGUAGE_LIMIT_EXCEEDED");
 	if (plan.scenarioLimit !== null && input.languageScenarios > plan.scenarioLimit)
 		throw new Error("SCENARIO_LIMIT_EXCEEDED");
 	if (plan.repeatCount !== null && input.repeats !== plan.repeatCount) throw new Error("REPEAT_COUNT_MISMATCH");
-	if (input.planId === "growth-90-days" && !input.growthScopeLocked) throw new Error("GROWTH_SCOPE_REQUIRED");
-	if (input.planId === "growth-90-days" && input.providerCostCap <= 0) throw new Error("GROWTH_PROVIDER_CAP_REQUIRED");
-	if (!input.adminApproved && input.planId === "growth-90-days") throw new Error("GROWTH_ADMIN_APPROVAL_REQUIRED");
+	if (input.planId === "managed-discovery-90" && !input.growthScopeLocked) throw new Error("GROWTH_SCOPE_REQUIRED");
+	if (input.planId === "managed-discovery-90" && input.providerCostCap <= 0)
+		throw new Error("GROWTH_PROVIDER_CAP_REQUIRED");
+	if (!input.adminApproved && input.planId === "managed-discovery-90")
+		throw new Error("GROWTH_ADMIN_APPROVAL_REQUIRED");
 	if (input.systems.length !== plan.systems.length || input.systems.some((system) => !plan.systems.includes(system)))
 		throw new Error("SYSTEM_SCOPE_MISMATCH");
 	return plan;

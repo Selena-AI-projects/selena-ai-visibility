@@ -26,7 +26,7 @@ const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 // operator minted, spendable once, bound to one plan and to an expiry — never
 // a string compared against a list of live codes in the environment.
 
-export const orderRequestPlanIds = ["visitor-local", "full-ai-landscape"] as const;
+export const orderRequestPlanIds = ["visibility-snapshot", "full-discovery-landscape"] as const;
 
 const createSchema = z.object({
 	projectId: z.string().uuid(),

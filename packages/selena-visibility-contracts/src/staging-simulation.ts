@@ -158,19 +158,21 @@ export async function telegramWebhookHeaderToken(secret: string): Promise<string
  * carry; the catalog id is what the subscription stores.
  */
 export const SIMULATED_PLAN_IDS = {
-	landscape: "full-ai-landscape",
-	"visitor-local": "visitor-local",
-	local: "visitor-local",
-	"full-ai-landscape": "full-ai-landscape",
-} as const satisfies Record<string, "visitor-local" | "full-ai-landscape">;
+	landscape: "full-discovery-landscape",
+	"visibility-snapshot": "visibility-snapshot",
+	local: "visibility-snapshot",
+	"visitor-local": "visibility-snapshot",
+	"full-ai-landscape": "full-discovery-landscape",
+	"full-discovery-landscape": "full-discovery-landscape",
+} as const satisfies Record<string, "visibility-snapshot" | "full-discovery-landscape">;
 
 export type SimulatedPlanKey = keyof typeof SIMULATED_PLAN_IDS;
 export type SimulatedPlanId = (typeof SIMULATED_PLAN_IDS)[SimulatedPlanKey];
 
 /** The price each plan must present, in whole US dollars. */
 export const SIMULATED_PLAN_PRICES: Record<SimulatedPlanId, number> = Object.freeze({
-	"visitor-local": 49,
-	"full-ai-landscape": 79,
+	"visibility-snapshot": 49,
+	"full-discovery-landscape": 79,
 });
 
 export const simulatedPaymentEventSchema = z.strictObject({

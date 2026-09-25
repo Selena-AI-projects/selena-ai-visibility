@@ -262,7 +262,10 @@ describe("Olostep measurement adapter", () => {
 			submit: jsonResponse({ id: BATCH_ID, status: "in_progress" }),
 			status: Array.from({ length: 200 }, () => jsonResponse({ id: BATCH_ID, status: "in_progress" })),
 		});
-		const outcome = await adapterWith(pendingForever, { jobTimeoutMs: 5 }).execute(permitFor());
+		// The budget must outlast the submission on a slow runner, or the run
+		// ends as TIMEOUT before a batch exists; polling sleeps so it runs out
+		// while the batch is still pending.
+		const outcome = await adapterWith(pendingForever, { jobTimeoutMs: 250, pollMs: 5 }).execute(permitFor());
 		expect(outcome).toMatchObject({
 			status: "INVALID",
 			validity: "INVALID",

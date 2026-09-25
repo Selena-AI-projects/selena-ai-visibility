@@ -105,7 +105,7 @@ describe("simulated payment event", () => {
 	it("accepts the documented event shape", () => {
 		const event = parseSimulatedPaymentEvent(validEvent());
 		expect(event.plan).toBe("landscape");
-		expect(subscriptionActivationFromEvent(event).planId).toBe("full-ai-landscape");
+		expect(subscriptionActivationFromEvent(event).planId).toBe("full-discovery-landscape");
 	});
 
 	it("refuses an event that does not declare itself a staging test", () => {
@@ -136,7 +136,7 @@ describe("event signature", () => {
 		const signature = await signPayload(body, SECRET);
 		expect(await verifyPayloadSignature(body, signature, SECRET)).toBe(true);
 		expect(await verifyPayloadSignature(body, signature, "another-secret")).toBe(false);
-		const tampered = JSON.stringify(validEvent({ amount: 49, plan: "visitor-local" }));
+		const tampered = JSON.stringify(validEvent({ amount: 49, plan: "visibility-snapshot" }));
 		expect(await verifyPayloadSignature(tampered, signature, SECRET)).toBe(false);
 	});
 
@@ -172,7 +172,7 @@ describe("subscription activation", () => {
 		const decision = resolveSubscriptionActivation(intent, {
 			subscriptionId: "sub-1",
 			providerEventId: intent.providerEventId,
-			planId: "visitor-local",
+			planId: "visibility-snapshot",
 			projectRef: intent.projectRef,
 		});
 		expect(decision).toEqual({ kind: "CONFLICT", code: "SELENA_SIMULATION_EVENT_REUSED" });
@@ -581,7 +581,7 @@ describe("audit trail", () => {
 			correlationId: "sim-0123456789abcdef",
 			projectRef: "test_project_001",
 			now: NOW,
-			details: { planId: "full-ai-landscape" },
+			details: { planId: "full-discovery-landscape" },
 		});
 		expect(record).toMatchObject({
 			event: "SIMULATION_SUBSCRIPTION_ACTIVATED",
@@ -595,7 +595,7 @@ describe("audit trail", () => {
 	it("refuses to record a secret", () => {
 		for (const key of ["token", "bot_token", "chatId", "chat_id", "signature", "connect-token"])
 			expect(() => assertAuditDetailsSafe({ [key]: "whatever" })).toThrowError(/SELENA_AUDIT_SECRET_LEAK/);
-		expect(() => assertAuditDetailsSafe({ planId: "full-ai-landscape", attempt: 1 })).not.toThrow();
+		expect(() => assertAuditDetailsSafe({ planId: "full-discovery-landscape", attempt: 1 })).not.toThrow();
 	});
 });
 

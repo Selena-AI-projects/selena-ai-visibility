@@ -30,22 +30,22 @@ describe("pilot invite code hashing", () => {
 
 describe("redeeming a seat", () => {
 	it("returns the plan the seat was issued for", async () => {
-		const executor = recordingExecutor("visitor-local");
+		const executor = recordingExecutor("visibility-snapshot");
 		await expect(
 			redeemPilotInvite(executor, {
 				code: "AVLI-2026",
-				planId: "visitor-local",
+				planId: "visibility-snapshot",
 				organizationId: "org-1",
 				userId: "user-1",
 			}),
-		).resolves.toEqual({ planId: "visitor-local" });
+		).resolves.toEqual({ planId: "visibility-snapshot" });
 	});
 
 	it("sends the digest and never the code the customer typed", async () => {
-		const executor = recordingExecutor("visitor-local");
+		const executor = recordingExecutor("visibility-snapshot");
 		await redeemPilotInvite(executor, {
 			code: "AVLI-2026",
-			planId: "visitor-local",
+			planId: "visibility-snapshot",
 			organizationId: "org-1",
 			userId: "user-1",
 		});
@@ -55,14 +55,14 @@ describe("redeeming a seat", () => {
 	});
 
 	it("carries the requested plan so a seat cannot be spent on another one", async () => {
-		const executor = recordingExecutor("visitor-local");
+		const executor = recordingExecutor("visibility-snapshot");
 		await redeemPilotInvite(executor, {
 			code: "AVLI-2026",
-			planId: "full-ai-landscape",
+			planId: "full-discovery-landscape",
 			organizationId: "org-1",
 			userId: "user-1",
 		});
-		expect(serialized(executor.statements[0])).toContain("full-ai-landscape");
+		expect(serialized(executor.statements[0])).toContain("full-discovery-landscape");
 	});
 
 	it("reports no seat when the database claims none", async () => {
@@ -70,7 +70,7 @@ describe("redeeming a seat", () => {
 		await expect(
 			redeemPilotInvite(executor, {
 				code: "SPENT-CODE",
-				planId: "visitor-local",
+				planId: "visibility-snapshot",
 				organizationId: "org-1",
 				userId: "user-1",
 			}),
@@ -78,9 +78,14 @@ describe("redeeming a seat", () => {
 	});
 
 	it("does not query at all for an empty code", async () => {
-		const executor = recordingExecutor("visitor-local");
+		const executor = recordingExecutor("visibility-snapshot");
 		await expect(
-			redeemPilotInvite(executor, { code: "   ", planId: "visitor-local", organizationId: "org-1", userId: "user-1" }),
+			redeemPilotInvite(executor, {
+				code: "   ",
+				planId: "visibility-snapshot",
+				organizationId: "org-1",
+				userId: "user-1",
+			}),
 		).resolves.toBeNull();
 		expect(executor.statements).toHaveLength(0);
 	});
