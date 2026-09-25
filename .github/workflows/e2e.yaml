@@ -196,6 +196,186 @@ jobs:
             e2e/test-results-worker/
           retention-days: 7
 
+  # The same user journeys with the web connected as the non-owner selena_app
+  # role, so the tenant policies, the request tenant scope and the operator
+  # connection are exercised end to end rather than bypassed by the owner.
+  # The worker keeps the owner connection until it gets its own role.
+  e2e-tenant-role:
+    name: E2E Integration Tests (tenant role)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Docker image builds plus the two fixture/worker phases can exceed the
+    # default 30-minute ceiling even when every test step passes. Keep enough
+    # bounded time for artifact and action cleanup to complete successfully.
+    timeout-minutes: 35
+
+    env:
+      # One file set for every `docker compose` invocation below, so no step
+      # can silently run against a different effective config. The override
+      # scopes the worker to the no-network stub provider.
+      COMPOSE_FILE: e2e/.elmo/elmo.yaml:e2e/worker-override.yaml:e2e/tenant-role-override.yaml
+      # The role bootstrap requires the full source frontier.
+      SELENA_MIGRATION_MAX_INDEX: "71"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The standard GitHub runner has less free disk than the former Blacksmith
+      # runner. Remove only preinstalled SDKs this Node/Docker job never uses;
+      # the VM is disposable and the workflow still uses the default Docker
+      # driver so the built images remain available to `docker compose up`.
+      - name: Free disk space for Docker images
+        run: |
+          echo "Disk before cleanup:"
+          df -h /
+          sudo rm -rf \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/.ghcup \
+            /usr/local/lib/android \
+            /usr/share/dotnet
+          echo "Disk after cleanup:"
+          df -h /
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browsers
+        uses: nick-fields/retry@v4
+        with:
+          # apt/browser downloads regularly exceed one minute on the hosted
+          # runner. Keep the step bounded without forcing retry-action to kill
+          # a still-healthy privileged dependency install.
+          timeout_minutes: 5
+          max_attempts: 2
+          command: pnpm -C apps/web exec playwright install chromium --with-deps
+
+      - name: Build elmo CLI
+        run: pnpm -C apps/cli build
+
+      - name: "Run: elmo init --dev (via cli-driver)"
+        run: |
+          mkdir -p e2e/.elmo
+          cd e2e
+          npx tsx cli-driver.ts "$PWD/.elmo" "$GITHUB_WORKSPACE"
+
+      - name: Patch .env with test overrides
+        run: |
+          cat >> e2e/.elmo/.env <<'PATCH'
+
+          # E2E test overrides
+          ADMIN_API_KEYS=test-api-key-e2e
+          ONBOARDING_LLM_TARGET=stub:stub
+          SELENA_MEASUREMENT_ENABLED=true
+          SELENA_EMERGENCY_STOP=false
+          SELENA_RECURRING_JOBS_ENABLED=true
+          SENTRY_DSN=https://examplePublicKey@o0.ingest.sentry.io/0
+          PATCH
+
+      - name: Show generated config
+        run: |
+          echo "=== .env ==="
+          cat e2e/.elmo/.env
+          echo ""
+          echo "=== elmo.yaml (services) ==="
+          grep -E '^\s{2}\w' e2e/.elmo/elmo.yaml || true
+
+      # Build all images so a broken worker (or db-migrate) Dockerfile fails CI
+      # here. web/worker/migrate share the base/deps/builder stages, so BuildKit
+      # builds those once — building all three costs little more than building
+      # web alone. postgres is an image pull, so `build` skips it.
+      - name: Build images
+        run: docker compose build
+
+      # The owner provisions what the tenant role may not: every migration,
+      # the pg-boss schema, and the runtime role with its grant allowlist.
+      # Only then does the web start, connecting as that role.
+      - name: Migrate and provision the tenant role as owner
+        run: |
+          docker compose up -d --no-build --wait postgres
+          docker compose run --rm --no-deps db-migrate
+          pnpm --dir apps/worker exec tsx -e \
+            'import { getConstructionPlans } from "pg-boss"; process.stdout.write(getConstructionPlans("pgboss"));' \
+            | docker compose exec -T postgres psql -U postgres -d elmo -v ON_ERROR_STOP=1 >/dev/null
+          docker compose exec -T postgres psql -U postgres -d elmo -v ON_ERROR_STOP=1 \
+            -v role_password=e2e_tenant_role_only < packages/lib/scripts/selena-rls-runtime-role.sql >/dev/null
+
+      - name: Start web as the tenant role
+        run: |
+          if ! docker compose up -d --no-build web; then
+            docker compose logs --no-color db-migrate postgres web
+            exit 1
+          fi
+
+      - name: Wait for web
+        run: |
+          echo "Waiting for web to be ready on http://localhost:1515..."
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://localhost:1515/ 2>/dev/null; then
+              echo "Web is ready."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "ERROR: Web did not become ready in time."
+          docker compose logs
+          exit 1
+
+      - name: Seed test data
+        run: cd e2e && npx tsx seed.ts
+
+      # Phase 1 — worker still down. Run everything that reads the seeded
+      # fixtures, so no background job can mutate them mid-suite.
+      - name: Run Playwright E2E tests
+        run: pnpm -C e2e exec playwright test --project=fixtures
+
+      - name: Run Bruno API tests
+        run: pnpm test:api
+
+      # A green run proves nothing if the web silently fell back to the owner,
+      # so check the connections the tests actually used.
+      - name: Confirm the web ran as the tenant role
+        run: |
+          roles=$(docker compose exec -T postgres psql -U postgres -d elmo -Atc \
+            "SELECT string_agg(DISTINCT usename, ',') FROM pg_stat_activity WHERE application_name <> 'psql' AND usename IS NOT NULL AND datname = 'elmo'")
+          echo "Database roles connected: $roles"
+          case ",$roles," in *,selena_app,*) ;; *) echo "The web is not connected as selena_app." >&2; exit 1 ;; esac
+
+      - name: Dump service logs
+        if: failure()
+        run: docker compose logs db-migrate postgres web
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report-tenant-role
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: test-results-tenant-role
+          path: e2e/test-results/
+          retention-days: 7
+
   # Scheduling-policy verification: drives a real
   # worker over a real database with the no-network stub provider, in local
   # mode (legacy volume + dueness metering must match the pre-policy behavior
