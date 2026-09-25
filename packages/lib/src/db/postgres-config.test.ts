@@ -1,6 +1,6 @@
 import { Client } from "pg";
 import { describe, expect, it } from "vitest";
-import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "./postgres-config";
+import { runtimeDatabaseConnection, runtimeDatabaseUrl, runtimePgBossSchemaLifecycle } from "./postgres-config";
 
 const CERTIFICATE = ["-----BEGIN CERTIFICATE-----", "QUJDREVGRw==", "-----END CERTIFICATE-----"].join("\n");
 const PRIVATE_KEY = ["-----BEGIN ", "PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----"].join("");
@@ -89,5 +89,45 @@ describe("runtimePgBossSchemaLifecycle", () => {
 		expect(() => runtimePgBossSchemaLifecycle({ SELENA_PGBOSS_OWNER_MANAGED_SCHEMA: "TRUE" })).toThrow(
 			"SELENA_PGBOSS_OWNER_MANAGED_SCHEMA_INVALID",
 		);
+	});
+});
+
+describe("runtimeDatabaseUrl", () => {
+	const owner = "postgres://owner@db/elmo";
+	const web = "postgres://selena_app@db/elmo";
+	const worker = "postgres://selena_worker@db/elmo";
+
+	it("keeps the owner connection for migrations and processes that name no surface", () => {
+		expect(runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_WEB_DATABASE_URL: web })).toBe(owner);
+		expect(runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "migrate", SELENA_HOSTED: "true" })).toBe(
+			owner,
+		);
+	});
+
+	it("connects web and worker with their own roles", () => {
+		const env = { DATABASE_URL: owner, SELENA_WEB_DATABASE_URL: web, SELENA_WORKER_DATABASE_URL: worker };
+		expect(runtimeDatabaseUrl({ ...env, SELENA_DATABASE_SURFACE: "web" })).toBe(web);
+		expect(runtimeDatabaseUrl({ ...env, SELENA_DATABASE_SURFACE: "worker" })).toBe(worker);
+		expect(runtimeDatabaseConnection({ ...env, SELENA_DATABASE_SURFACE: "web" }).connectionString).toBe(web);
+	});
+
+	it("refuses to fall back to the owner on a hosted runtime", () => {
+		expect(() =>
+			runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "web", SELENA_HOSTED: "true" }),
+		).toThrow("SELENA_WEB_DATABASE_URL_REQUIRED");
+		expect(() =>
+			runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "worker", SELENA_HOSTED: "true" }),
+		).toThrow("SELENA_WORKER_DATABASE_URL_REQUIRED");
+	});
+
+	it("falls back to DATABASE_URL on a local install without a role URL", () => {
+		expect(runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "web" })).toBe(owner);
+	});
+
+	it("rejects a misspelled surface or hosted flag instead of guessing", () => {
+		expect(() => runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_DATABASE_SURFACE: "webb" })).toThrow(
+			"SELENA_DATABASE_SURFACE_INVALID",
+		);
+		expect(() => runtimeDatabaseUrl({ DATABASE_URL: owner, SELENA_HOSTED: "yes" })).toThrow("SELENA_HOSTED_INVALID");
 	});
 });
