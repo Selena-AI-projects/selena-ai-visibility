@@ -52,6 +52,7 @@ import { Route as AuthedAppBrandOpportunitiesRouteImport } from './routes/_authe
 import { Route as AuthedAppBrandQueryFanOutRouteImport } from './routes/_authed/app/$brand/query-fan-out'
 import { Route as AuthedAppBrandShareOfVoiceRouteImport } from './routes/_authed/app/$brand/share-of-voice'
 import { Route as AuthedAppBrandVisibilityRouteImport } from './routes/_authed/app/$brand/visibility'
+import { Route as AuthedAppSelenaAskMapsCycleIdRouteImport } from './routes/_authed/app/selena-ask-maps/$cycleId'
 import { Route as AuthedReportsRenderReportIdRouteImport } from './routes/_authed/reports/render/$reportId'
 import { Route as ApiPlausibleEventIndexRouteImport } from './routes/api/plausible/event/index'
 import { Route as ApiV1BrandsIndexRouteImport } from './routes/api/v1/brands/index'
@@ -350,6 +351,12 @@ const AuthedAppBrandVisibilityRoute =
     id: '/visibility',
     path: '/visibility',
     getParentRoute: () => AuthedAppBrandRoute,
+  } as any)
+const AuthedAppSelenaAskMapsCycleIdRoute =
+  AuthedAppSelenaAskMapsCycleIdRouteImport.update({
+    id: '/selena-ask-maps/$cycleId',
+    path: '/selena-ask-maps/$cycleId',
+    getParentRoute: () => AuthedAppRoute,
   } as any)
 const AuthedReportsRenderReportIdRoute =
   AuthedReportsRenderReportIdRouteImport.update({
@@ -848,6 +855,7 @@ export interface FileRoutesByFullPath {
   '/app/$brand/query-fan-out': typeof AuthedAppBrandQueryFanOutRoute
   '/app/$brand/share-of-voice': typeof AuthedAppBrandShareOfVoiceRoute
   '/app/$brand/visibility': typeof AuthedAppBrandVisibilityRoute
+  '/app/selena-ask-maps/$cycleId': typeof AuthedAppSelenaAskMapsCycleIdRoute
   '/reports/render/$reportId': typeof AuthedReportsRenderReportIdRoute
   '/api/v1/brands/$brandId': typeof ApiV1BrandsBrandIdRoute
   '/api/v1/competitors/$competitorId': typeof ApiV1CompetitorsCompetitorIdRoute
@@ -967,6 +975,7 @@ export interface FileRoutesByTo {
   '/app/$brand/query-fan-out': typeof AuthedAppBrandQueryFanOutRoute
   '/app/$brand/share-of-voice': typeof AuthedAppBrandShareOfVoiceRoute
   '/app/$brand/visibility': typeof AuthedAppBrandVisibilityRoute
+  '/app/selena-ask-maps/$cycleId': typeof AuthedAppSelenaAskMapsCycleIdRoute
   '/reports/render/$reportId': typeof AuthedReportsRenderReportIdRoute
   '/api/v1/brands/$brandId': typeof ApiV1BrandsBrandIdRoute
   '/api/v1/competitors/$competitorId': typeof ApiV1CompetitorsCompetitorIdRoute
@@ -1092,6 +1101,7 @@ export interface FileRoutesById {
   '/_authed/app/$brand/query-fan-out': typeof AuthedAppBrandQueryFanOutRoute
   '/_authed/app/$brand/share-of-voice': typeof AuthedAppBrandShareOfVoiceRoute
   '/_authed/app/$brand/visibility': typeof AuthedAppBrandVisibilityRoute
+  '/_authed/app/selena-ask-maps/$cycleId': typeof AuthedAppSelenaAskMapsCycleIdRoute
   '/_authed/reports/render/$reportId': typeof AuthedReportsRenderReportIdRoute
   '/api/v1/brands/$brandId': typeof ApiV1BrandsBrandIdRoute
   '/api/v1/competitors/$competitorId': typeof ApiV1CompetitorsCompetitorIdRoute
@@ -1217,6 +1227,7 @@ export interface FileRouteTypes {
     | '/app/$brand/query-fan-out'
     | '/app/$brand/share-of-voice'
     | '/app/$brand/visibility'
+    | '/app/selena-ask-maps/$cycleId'
     | '/reports/render/$reportId'
     | '/api/v1/brands/$brandId'
     | '/api/v1/competitors/$competitorId'
@@ -1336,6 +1347,7 @@ export interface FileRouteTypes {
     | '/app/$brand/query-fan-out'
     | '/app/$brand/share-of-voice'
     | '/app/$brand/visibility'
+    | '/app/selena-ask-maps/$cycleId'
     | '/reports/render/$reportId'
     | '/api/v1/brands/$brandId'
     | '/api/v1/competitors/$competitorId'
@@ -1460,6 +1472,7 @@ export interface FileRouteTypes {
     | '/_authed/app/$brand/query-fan-out'
     | '/_authed/app/$brand/share-of-voice'
     | '/_authed/app/$brand/visibility'
+    | '/_authed/app/selena-ask-maps/$cycleId'
     | '/_authed/reports/render/$reportId'
     | '/api/v1/brands/$brandId'
     | '/api/v1/competitors/$competitorId'
@@ -1926,6 +1939,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/$brand/visibility'
       preLoaderRoute: typeof AuthedAppBrandVisibilityRouteImport
       parentRoute: typeof AuthedAppBrandRoute
+    }
+    '/_authed/app/selena-ask-maps/$cycleId': {
+      id: '/_authed/app/selena-ask-maps/$cycleId'
+      path: '/selena-ask-maps/$cycleId'
+      fullPath: '/app/selena-ask-maps/$cycleId'
+      preLoaderRoute: typeof AuthedAppSelenaAskMapsCycleIdRouteImport
+      parentRoute: typeof AuthedAppRoute
     }
     '/_authed/reports/render/$reportId': {
       id: '/_authed/reports/render/$reportId'
@@ -2557,6 +2577,7 @@ interface AuthedAppRouteChildren {
   AuthedAppSelenaReportRoute: typeof AuthedAppSelenaReportRoute
   AuthedAppSelenaSourcesRoute: typeof AuthedAppSelenaSourcesRoute
   AuthedAppIndexRoute: typeof AuthedAppIndexRoute
+  AuthedAppSelenaAskMapsCycleIdRoute: typeof AuthedAppSelenaAskMapsCycleIdRoute
 }
 
 const AuthedAppRouteChildren: AuthedAppRouteChildren = {
@@ -2570,6 +2591,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppSelenaReportRoute: AuthedAppSelenaReportRoute,
   AuthedAppSelenaSourcesRoute: AuthedAppSelenaSourcesRoute,
   AuthedAppIndexRoute: AuthedAppIndexRoute,
+  AuthedAppSelenaAskMapsCycleIdRoute: AuthedAppSelenaAskMapsCycleIdRoute,
 }
 
 const AuthedAppRouteWithChildren = AuthedAppRoute._addFileChildren(
