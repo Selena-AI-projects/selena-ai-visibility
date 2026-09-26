@@ -214,7 +214,7 @@ jobs:
       # scopes the worker to the no-network stub provider.
       COMPOSE_FILE: e2e/.elmo/elmo.yaml:e2e/worker-override.yaml:e2e/tenant-role-override.yaml
       # The role bootstrap requires the full source frontier.
-      SELENA_MIGRATION_MAX_INDEX: "76"
+      SELENA_MIGRATION_MAX_INDEX: "77"
 
     steps:
       - name: Checkout
@@ -436,7 +436,7 @@ jobs:
           # Replay the complete source frontier after drizzle-kit has applied
           # it. This is a disposable CI database only.
           # Shared staging is bounded at the same index.
-          SELENA_MIGRATION_MAX_INDEX: "76"
+          SELENA_MIGRATION_MAX_INDEX: "77"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
 
       - name: Check row-level security coverage
@@ -447,6 +447,9 @@ jobs:
 
       - name: Verify Local external audit guards
         run: bash tools/visibility_os_disposable_rehearsal.sh --run local_external
+
+      - name: Verify weekly digest delivery guards
+        run: bash tools/visibility_os_disposable_rehearsal.sh --run weekly_digest
 
       - name: Verify owner-only journal no-spend reconciliation
         run: bash tools/visibility_os_disposable_rehearsal.sh --run 0059

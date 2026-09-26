@@ -391,7 +391,13 @@ FROM (VALUES
 	('sv_local_external_raw_evidence', 'INSERT'),
 	('sv_local_external_raw_evidence', 'UPDATE (raw_body, raw_deleted_at)'),
 	-- The retained body is written and later cleared, never read back at runtime.
-	('sv_local_external_raw_evidence', 'SELECT (provider_task_id, organization_id, audit_id, raw_sha256, captured_at, retention_expires_at, raw_deleted_at)')
+	('sv_local_external_raw_evidence', 'SELECT (provider_task_id, organization_id, audit_id, raw_sha256, captured_at, retention_expires_at, raw_deleted_at)'),
+	-- Weekly digest delivery (migration 0077). Digests and attempts are append-only.
+	('sv_delivery_connect_tokens', 'SELECT, INSERT, UPDATE'),
+	('sv_delivery_recipients', 'SELECT, INSERT, UPDATE'),
+	('sv_weekly_digests', 'SELECT, INSERT'),
+	('sv_digest_deliveries', 'SELECT, INSERT, UPDATE'),
+	('sv_digest_delivery_attempts', 'SELECT, INSERT')
 ) AS pilot(name, privileges)
 WHERE to_regclass('public.' || name) IS NOT NULL
 \gexec
