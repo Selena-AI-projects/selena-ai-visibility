@@ -77,7 +77,7 @@ async function callSpendFunction(executor: SqlExecutor, statement: SQL, column: 
 /** Holds budget for one unit of work, or refuses. Never partially reserves. */
 export async function reserveProviderSpend(
 	executor: SqlExecutor,
-	request: SpendRequest & { estimatedUsd: number },
+	request: SpendRequest & { estimatedUsd: number | string },
 ): Promise<SpendReceipt> {
 	return callSpendFunction(
 		executor,
@@ -98,7 +98,7 @@ export async function reserveProviderSpend(
  */
 export async function assertProviderSpendReserved(
 	executor: SqlExecutor,
-	request: SpendRequest & { estimatedUsd: number },
+	request: SpendRequest & { estimatedUsd: number | string },
 ): Promise<SpendReceipt> {
 	const receipt = await reserveProviderSpend(executor, request);
 	if (receipt.decision === "RESERVED" || receipt.decision === "ALREADY_RESERVED") return receipt;
@@ -108,7 +108,7 @@ export async function assertProviderSpendReserved(
 /** Records what the call actually cost. Safe to repeat. */
 export async function settleProviderSpend(
 	executor: SqlExecutor,
-	request: SpendRequest & { actualUsd: number },
+	request: SpendRequest & { actualUsd: number | string },
 ): Promise<SpendReceipt> {
 	return callSpendFunction(
 		executor,
@@ -166,3 +166,5 @@ export function createMeasurementSpendMeter(
 		},
 	};
 }
+
+export const LOCAL_MAPS_SPEND_SCOPE = "local-maps" as const;

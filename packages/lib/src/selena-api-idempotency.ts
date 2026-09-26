@@ -6,8 +6,13 @@ import {
 	localApiIdempotencyRecordSchema,
 	resolveLocalApiIdempotency,
 } from "@workspace/selena-visibility-contracts";
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, lte, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import {
+	type OrganizationDatabase,
+	type OrganizationTransaction,
+	withOrganizationTransaction,
+} from "./db/organization-transaction";
 import * as schema from "./db/schema";
 
 type Db = NodePgDatabase<typeof schema>;
@@ -105,4 +110,38 @@ export async function saveSelenaApiIdempotency(
 			],
 		});
 	return resolveLocalApiIdempotency(identity, await findRecord(tx, identity), now);
+}
+
+/** Serialize and persist the response in the same tenant transaction as its writes. */
+export async function withSelenaApiMutation<T>(input: {
+	db: OrganizationDatabase;
+	identity: LocalApiIdempotencyIdentity;
+	authorize?: (tx: OrganizationTransaction) => Promise<void>;
+	work: (tx: OrganizationTransaction) => Promise<T>;
+}): Promise<T> {
+	const identity = localApiIdempotencyIdentitySchema.parse(input.identity);
+	return withOrganizationTransaction(input.db, identity.tenantId, async (tx) => {
+		const key = JSON.stringify([identity.tenantId, identity.operation, identity.resourceId, identity.idempotencyKey]);
+		await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+		await input.authorize?.(tx);
+		const prior = await findRecord(tx, identity);
+		if (prior) {
+			if (prior.bodyHash !== identity.bodyHash) throw new Error("IDEMPOTENCY_BODY_CONFLICT");
+			// A retained receipt remains authoritative even past its cache TTL.
+			// Expiring a response must not itself authorize another business mutation.
+			return prior.responseBody as T;
+		}
+		const body = await input.work(tx);
+		await tx.insert(schema.svApiIdempotencyRecords).values({
+			organizationId: identity.tenantId,
+			operation: identity.operation,
+			resourceId: identity.resourceId,
+			idempotencyKey: identity.idempotencyKey,
+			bodyHash: identity.bodyHash,
+			responseStatus: 201,
+			responseBody: body,
+			expiresAt: sql`now() + interval '7 days'`,
+		});
+		return body;
+	});
 }

@@ -345,6 +345,100 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"How many pilot accounts may exist, stated independently of the guest list so the two must agree. A guest list longer than this cap is refused rather than trusted. Unset admits nobody.",
 	},
 	{
+		name: "SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Only exact 'true' permits Local provider execution; defaults to false. Also requires visibility and an open emergency stop.",
+	},
+	{
+		name: "SELENA_LOCAL_EMERGENCY_STOP",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Local execution emergency stop defaults to true. Only exact 'false' opens it; report reads remain independent.",
+	},
+	{
+		name: "SELENA_LOCAL_DISPATCH_ORGANIZATION_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Explicit single-organization scope for the Local transactional outbox dispatcher; unset disables dispatch.",
+	},
+	{
+		name: "SELENA_LOCAL_OUTBOX_LEASE_MS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Transactional outbox claim lease in milliseconds; must be a positive deployment value.",
+	},
+	{
+		name: "SELENA_LOCAL_OUTBOX_DISPATCH_INTERVAL_MS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Transactional outbox dispatcher interval; the approved pilot value is 5000 ms.",
+	},
+	{
+		name: "SELENA_LOCAL_PROVIDER_LEASE_DURATION_MS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Lease duration for one Local provider attempt; missing values fail closed.",
+	},
+	{
+		name: "SELENA_LOCAL_MAPS_PROVIDER_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Owner-approved live Google Maps rank provider identity.",
+	},
+	{
+		name: "SELENA_LOCAL_MAPS_PROVIDER_ENDPOINT",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Owner-approved live Maps provider endpoint; no call is made when unset.",
+	},
+	{
+		name: "SELENA_LOCAL_MAPS_PROVIDER_VERSION",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Provider API/version frozen into the Local configuration lock.",
+	},
+	{
+		name: "SELENA_LOCAL_MAPS_PROVIDER_API_KEY",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Secret for the owner-approved live Maps provider; never logged or persisted.",
+	},
+	{
+		name: "SELENA_LOCAL_MAPS_PROVIDER_TIMEOUT_MS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Bounded timeout for one live Maps provider request.",
+	},
+	{
+		name: "SELENA_LOCAL_DATAFORSEO_ENDPOINT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Optional DataForSEO Local Maps endpoint override; defaults to the documented Google Maps live endpoint.",
+	},
+	{
+		name: "SELENA_LOCAL_DATAFORSEO_VERSION",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Owner-approved DataForSEO contract/version frozen into a Local configuration lock.",
+	},
+	{
+		name: "SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Owner-approved worst-case USD price for one DataForSEO Local Maps attempt.",
+	},
+	{
+		name: "SELENA_LOCAL_DATAFORSEO_TIMEOUT_MS",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Bounded timeout for one DataForSEO Local Maps request.",
+	},
+	{
 		name: "SELENA_LOCAL_VISIBILITY_ENABLED",
 		scope: "server",
 		requiredBy: "optional",

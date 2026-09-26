@@ -41,8 +41,22 @@ export function isLocalVisibilityEnabled(env: Record<string, string | undefined>
 	return env.SELENA_LOCAL_VISIBILITY_ENABLED === "true";
 }
 
+/** Missing or malformed values are closed, independently of report visibility. */
+export function isLocalProviderExecutionEnabled(env: Record<string, string | undefined>): boolean {
+	return (
+		isLocalVisibilityEnabled(env) &&
+		env.SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED === "true" &&
+		env.SELENA_LOCAL_EMERGENCY_STOP === "false"
+	);
+}
+
+export function assertLocalProviderExecutionEnabled(env: Record<string, string | undefined>): void {
+	if (!isLocalProviderExecutionEnabled(env)) throw new Error("LOCAL_PROVIDER_EXECUTION_BLOCKED");
+}
+
 async function assertDispatchAllowed(gate: LocalExecutionGate, checkCardinality: boolean): Promise<void> {
 	if (!isLocalVisibilityEnabled(gate.env)) throw new Error("LOCAL_VISIBILITY_DISABLED");
+	assertLocalProviderExecutionEnabled(gate.env);
 	if (gate.cycle.emergencyStoppedAt !== null) {
 		await gate.recordIncident("LOCAL_EMERGENCY_STOP");
 		throw new Error("LOCAL_EMERGENCY_STOP");
@@ -89,3 +103,11 @@ export async function retryLocalObservation<TResult>(
 	await dependencies.completeObservation(observation.id, result);
 	return result;
 }
+
+export type LocalAttemptQueueData = {
+	organizationId: string;
+	measurementCycleId: string;
+	localCycleId: string;
+	observationId: string;
+	attemptId: string;
+};

@@ -64,6 +64,7 @@ export type LocalMapsLiveAttemptStore = {
 	finalizeSubmitted(input: {
 		continuation: SubmittedContinuation;
 		result: LocalMapsLiveProviderResult;
+		rawResponseBody?: string;
 		disposition: ReturnType<typeof attemptDisposition>;
 		budgetIncident: "REPORTED_COST_EXCEEDS_RESERVATION" | null;
 		requiredBudgetState: "RESERVED" | "SPENT" | "RELEASED";
@@ -105,6 +106,7 @@ const rawProviderObservationSchema = z.strictObject({
 	evidenceEligible: z.unknown(),
 	provenance: z.unknown(),
 	cost: z.unknown(),
+	rawResponseBody: z.string().max(4_000_000).optional(),
 });
 
 export type LocalMapsLiveRunnerResult =
@@ -212,9 +214,11 @@ export async function runLocalMapsLiveAttempt(input: {
 	}
 
 	let matched: ReturnType<typeof assertLocalMapsLiveResultMatchesCandidate>;
+	let rawResponseBody: string | undefined;
 	try {
 		const receivedAt = validNow(input.now());
 		const observation = rawProviderObservationSchema.parse(providerValue);
+		rawResponseBody = observation.rawResponseBody;
 		const result = localMapsLiveProviderResultSchema.parse({
 			schemaVersion: 1,
 			kind: "LOCAL_MAPS_LIVE_PROVIDER_RESULT",
@@ -268,6 +272,7 @@ export async function runLocalMapsLiveAttempt(input: {
 		finalized = await input.store.finalizeSubmitted({
 			continuation,
 			result: matched.result,
+			rawResponseBody,
 			disposition,
 			budgetIncident: matched.budgetIncident,
 			requiredBudgetState,

@@ -13,7 +13,11 @@ const runningCycle = {
 	expectedObservations: 9,
 };
 
-const enabled = { SELENA_LOCAL_VISIBILITY_ENABLED: "true" };
+const enabled = {
+	SELENA_LOCAL_VISIBILITY_ENABLED: "true",
+	SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED: "true",
+	SELENA_LOCAL_EMERGENCY_STOP: "false",
+};
 
 function dependencies() {
 	return {
@@ -39,6 +43,22 @@ describe("Local observation execution guard", () => {
 		).rejects.toThrow("LOCAL_VISIBILITY_DISABLED");
 		expect(deps.reserveObservation).not.toHaveBeenCalled();
 		expect(deps.callProvider).not.toHaveBeenCalled();
+	});
+
+	it("keeps provider execution closed until it is enabled and the emergency stop is released", async () => {
+		for (const env of [
+			{ SELENA_LOCAL_VISIBILITY_ENABLED: "true" },
+			{ ...enabled, SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED: "1" },
+			{ ...enabled, SELENA_LOCAL_EMERGENCY_STOP: undefined },
+			{ ...enabled, SELENA_LOCAL_EMERGENCY_STOP: "true" },
+		]) {
+			const deps = dependencies();
+			await expect(
+				executeLocalObservation({ env, cycle: runningCycle, recordIncident: vi.fn(async () => undefined) }, deps),
+			).rejects.toThrow("LOCAL_PROVIDER_EXECUTION_BLOCKED");
+			expect(deps.reserveObservation).not.toHaveBeenCalled();
+			expect(deps.callProvider).not.toHaveBeenCalled();
+		}
 	});
 
 	it("records expected plus one before reservation or provider execution", async () => {
