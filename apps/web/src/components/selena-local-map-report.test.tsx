@@ -47,12 +47,12 @@ const report: LocalReportContent = {
 	],
 };
 
-describe("Ask Maps report", () => {
+describe("Local Maps report", () => {
 	const html = renderToStaticMarkup(createElement(SelenaLocalMapReport, { report }));
 
-	it("is presented as Ask Maps", () => {
-		expect(html).toContain("Ask Maps visibility");
-		expect(html).not.toContain("Local Maps");
+	it("is presented as Google Maps visibility, not Ask Maps", () => {
+		expect(html).toContain("Google Maps visibility");
+		expect(html).not.toContain("Ask Maps");
 	});
 
 	it("links a measured position to its evidence and never shows a rank for an unconfirmed point", () => {

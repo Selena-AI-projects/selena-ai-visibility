@@ -28,7 +28,7 @@
 | Воркер | `local-dispatch-outbox`, `local-runtime-executor`, `local-raw-retention-scheduler`, `local-operator-alerts`, `jobs/selena-local-raw-retention`, `scripts/local-maps-one-shot`, `scripts/local-retention-health`; изменения в `local-index`, `handlers`, `index`, `jobs/selena-local-measure` | |
 | cloud | `email.ts` (+`sendEmailWithReceipt`) | |
 | env-registry | +15 переменных, ручной merge | |
-| Компоненты web | `selena-local-map-report`, `-external-report`, `-report-page` (убрать кнопку $49 и documents); маршрут `/selena/local/$cycleId`; переименование в Ask Maps | |
+| Компоненты web | `selena-local-map-report`, `-external-report`, `-report-page` (убрать кнопку $49 и documents); маршрут `/selena/local/$cycleId` | |
 
 ## Схема БД
 
@@ -78,5 +78,16 @@ Store для маршрутов #14–21 восстановлен в исход�
 | 4 | #187 | Pilot orchestrator, report-, dispatch- и retention-store перенесены сюда из шага 5 (это lib). |
 | 5 | #188 | Customer fixture scheduler не перенесён. Второй consumer retention в основном воркере убран. |
 | 6 | #189 | Действия оператора требуют platform admin. Маршрут `/api/local-ready` не изменён: у анонимной проверки из сборки нет вызывающих, и она нагружает базу. |
-| 7 | этот PR | Страница `/app/selena-ask-maps/$cycleId` без гейта `entitlementsFor`. Пилоты ручные и бесплатные, поэтому доступ определяют сессия, тенант и опубликованный отчёт. Plan-гейт закрыл бы все пилоты, пока оплата на паузе. |
+| 7 | этот PR | Страница `/app/selena-local-maps/$cycleId` без гейта `entitlementsFor`. Пилоты ручные и бесплатные, поэтому доступ определяют сессия, тенант и опубликованный отчёт. Plan-гейт закрыл бы все пилоты, пока оплата на паузе. |
 | 8 | — | Решение владельца 2026-09-26: отложено, пока клиентам не понадобится ссылка на отчёт для пересылки. В кабинете отчёт уже публикуется, отправляется и подтверждается. |
+
+## Поправка к шагу 7
+
+Сначала страница была ошибочно названа Ask Maps. Здесь перенесён **Local Maps**: автоматический замер позиций в Google Maps по сетке через DataForSEO. По LOCKED-решению он входит в $79 там, где замер проверен.
+
+**Ask Maps** — другой продукт: ручное исследование AI-ответов Google Maps аналитиком. Он входит в $399 и $2,490. Для него действует политика `local-discovery.ts` (`MANUAL_ONLY`, никаких автоматических запросов). Его код уже был в release до M3:
+- `pilot/cycles/*/tasks`;
+- `pilot/observations`;
+- `local-scan-cycles/*/ai-results`.
+
+Local-AI со staging (маршрут #3, миграция 0077) был синтетической имитацией с тестовой оплатой $0 и не переносится.
