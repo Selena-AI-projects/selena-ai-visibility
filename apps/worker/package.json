@@ -7,6 +7,7 @@
 		"dev": "tsx --env-file=../web/.env src/index.ts",
 		"start": "tsx src/index.ts",
 		"start:local": "tsx src/local-index.ts",
+		"local:maps-one-shot": "tsx src/scripts/local-maps-one-shot.ts",
 		"build": "tsc -p tsconfig.json",
 		"check-types": "tsc --noEmit",
 		"test": "tsx --test src/*.test.ts src/**/*.test.ts scripts/*.test.ts",
@@ -19,6 +20,7 @@
 	},
 	"dependencies": {
 		"@sentry/node": "^10.69.0",
+		"@workspace/cloud": "workspace:*",
 		"@workspace/config": "workspace:*",
 		"@workspace/deployment": "workspace:*",
 		"@workspace/lib": "workspace:*",

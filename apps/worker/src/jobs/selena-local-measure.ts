@@ -11,13 +11,19 @@ export interface SelenaLocalMeasureData {
 	measurementCycleId: string;
 	localCycleId: string;
 	organizationId: string;
-	actorId?: string;
+	observationId: string;
+	attemptId: string;
 }
 
 export interface SelenaLocalMeasureResult {
-	status: "OWNER_GATE_REQUIRED";
-	providerCalls: 0;
-	reason: "LOCAL_RUNTIME_EXECUTOR_NOT_REGISTERED";
+	status:
+		| "FINALIZED"
+		| "NOT_CALLED"
+		| "UNKNOWN_RECONCILIATION"
+		| "FINAL_STATE_ALREADY_PERSISTED"
+		| "UNKNOWN_PERSISTENCE_FAILED";
+	providerCalls: 0 | 1;
+	reason: string;
 }
 
 export type SelenaLocalMeasureExecutor = (data: SelenaLocalMeasureData) => Promise<SelenaLocalMeasureResult>;
@@ -28,10 +34,22 @@ export type SelenaLocalMeasureExecutor = (data: SelenaLocalMeasureData) => Promi
  * inject an owner-approved executor explicitly in a later slice.
  */
 export const ownerGatedLocalMeasureExecutor: SelenaLocalMeasureExecutor = async () => ({
-	status: "OWNER_GATE_REQUIRED",
+	status: "NOT_CALLED",
 	providerCalls: 0,
-	reason: "LOCAL_RUNTIME_EXECUTOR_NOT_REGISTERED",
+	reason: "LOCAL_MAPS_PROVIDER_CONFIGURATION_REQUIRED",
 });
+
+let defaultExecutorPromise: Promise<SelenaLocalMeasureExecutor> | undefined;
+async function defaultExecutor(): Promise<SelenaLocalMeasureExecutor> {
+	// Keep imports lazy so unit tests can exercise the queue contract without a
+	// DATABASE_URL or provider credential. Production local-index supplies the
+	// configured runtime and fails closed when its env is incomplete.
+	if (!defaultExecutorPromise)
+		defaultExecutorPromise = import("../local-runtime-executor.js").then((module) =>
+			module.configuredLocalMeasureExecutor(),
+		);
+	return defaultExecutorPromise;
+}
 
 /**
  * Consume Local jobs without acknowledging a false measurement. The default
@@ -41,16 +59,12 @@ export const ownerGatedLocalMeasureExecutor: SelenaLocalMeasureExecutor = async 
  */
 export async function selenaLocalMeasureJob(
 	jobs: Job<SelenaLocalMeasureData>[],
-	executor: SelenaLocalMeasureExecutor = ownerGatedLocalMeasureExecutor,
+	executor?: SelenaLocalMeasureExecutor,
 ): Promise<void> {
 	for (const job of jobs) {
-		const result = await executor(job.data);
-		// Do not let pg-boss acknowledge an owner-gated job as a successful
-		// measurement. With queue retries disabled, the failed job remains an
-		// explicit operational signal until an approved executor is wired.
-		if (result.status === "OWNER_GATE_REQUIRED") {
-			throw new Error(`${result.reason}:${job.data.localCycleId}`);
-		}
+		const activeExecutor = executor ?? (await defaultExecutor());
+		const result = await activeExecutor(job.data);
+		if (result.status === "UNKNOWN_PERSISTENCE_FAILED") throw new Error(`${result.reason}:${job.data.localCycleId}`);
 		console.warn(
 			`[selena-local-measure] ${job.data.localCycleId}: ${result.status} (${result.reason}); providerCalls=${result.providerCalls}`,
 		);
