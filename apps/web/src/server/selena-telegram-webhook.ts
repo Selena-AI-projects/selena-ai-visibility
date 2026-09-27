@@ -1,10 +1,11 @@
 import {
 	type DeliveryConnectOutcome,
+	deliveryConnectHint,
 	deliveryConnectReply,
 	isDeliveryConnectToken,
 	readTelegramDeliveryConfig,
 } from "@workspace/lib/selena-delivery-connect";
-import { parseTelegramStartUpdate } from "@workspace/lib/selena-telegram-adapter";
+import { parseTelegramBareStart, parseTelegramStartUpdate } from "@workspace/lib/selena-telegram-adapter";
 import { constantTimeEquals, telegramWebhookHeaderToken } from "@workspace/selena-visibility-contracts";
 
 export type TelegramWebhookDeps = {
@@ -40,15 +41,27 @@ export async function handleTelegramWebhook(request: Request, deps: TelegramWebh
 		return Response.json({ ok: true, ignored: "unparsable" });
 	}
 	const start = parseTelegramStartUpdate(update);
-	if (!start) return Response.json({ ok: true, ignored: "not-a-start-command" });
+	if (!start) {
+		const bareChatId = parseTelegramBareStart(update);
+		if (bareChatId) {
+			try {
+				await deps.reply({ botToken: config.botToken, chatId: bareChatId, text: deliveryConnectHint() });
+			} catch {
+				// A lost hint is not worth a redelivery.
+			}
+			return Response.json({ ok: true, ignored: "start-without-link" });
+		}
+		return Response.json({ ok: true, ignored: "not-a-start-command" });
+	}
 
 	let outcome: DeliveryConnectOutcome;
 	if (isDeliveryConnectToken(start.token)) {
 		try {
 			outcome = await deps.redeem(start);
 		} catch (error) {
-			// Nothing was bound, so letting Telegram redeliver is safe and gives a
-			// passing database outage a second chance.
+			// Usually nothing was bound, and a redelivery gives a passing outage a
+			// second chance. If the commit landed before the error surfaced, the
+			// redelivery only meets ALREADY_USED, whose reply allows for that.
 			console.error("selena telegram webhook: redemption failed", error instanceof Error ? error.name : "unknown");
 			return Response.json({ ok: false }, { status: 503 });
 		}

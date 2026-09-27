@@ -69,6 +69,19 @@ describe("Telegram webhook", () => {
 		expect(d.reply).not.toHaveBeenCalled();
 	});
 
+	it("points a bare /start in a private chat to the workspace link", async () => {
+		const d = deps();
+		const response = await handleTelegramWebhook(await request(start("/start")), d);
+		expect(response.status).toBe(200);
+		expect(d.redeem).not.toHaveBeenCalled();
+		expect(d.reply).toHaveBeenCalledOnce();
+		expect(vi.mocked(d.reply).mock.calls[0]?.[0].chatId).toBe("987654321");
+
+		const group = deps();
+		await handleTelegramWebhook(await request(start("/start", "group")), group);
+		expect(group.reply).not.toHaveBeenCalled();
+	});
+
 	it("answers a token it never minted as unknown without touching the database", async () => {
 		const d = deps();
 		const response = await handleTelegramWebhook(await request(start("/start v1.payload.signature")), d);
