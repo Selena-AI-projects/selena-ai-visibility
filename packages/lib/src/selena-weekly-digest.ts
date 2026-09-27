@@ -104,7 +104,7 @@ const copy = {
 		title: "Selena · отчёт за неделю",
 		period: "Период",
 		systems: (c: WeeklyDigestContent["systems"]) =>
-			`Упоминание в AI-системах: ${c.mentioned} из ${c.total}` + (c.unknown > 0 ? ` (нет данных: ${c.unknown})` : ""),
+			`Упоминание в AI-системах: ${c.mentioned} из ${c.total}${c.unknown > 0 ? ` (нет данных: ${c.unknown})` : ""}`,
 		rate: "Доля ответов с упоминанием",
 		unknown: "неизвестно",
 		first: "Это первый замер — сравнивать пока не с чем.",
@@ -121,7 +121,7 @@ const copy = {
 		title: "Selena · weekly report",
 		period: "Period",
 		systems: (c: WeeklyDigestContent["systems"]) =>
-			`Mentioned in AI systems: ${c.mentioned} of ${c.total}` + (c.unknown > 0 ? ` (no data: ${c.unknown})` : ""),
+			`Mentioned in AI systems: ${c.mentioned} of ${c.total}${c.unknown > 0 ? ` (no data: ${c.unknown})` : ""}`,
 		rate: "Answers that mention you",
 		unknown: "unknown",
 		first: "This is the first measurement — nothing to compare with yet.",
