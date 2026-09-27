@@ -14,7 +14,8 @@ import {
  *
  * Architecture v1.4 §11.2 — Telegram never starts a measurement. Nothing in
  * this module can: it has no queue client and no measurement import, and the
- * only outbound request it can build is `sendMessage`.
+ * only outbound requests it can build are `sendMessage` and the bot's own
+ * webhook registration.
  */
 
 export type TelegramCredentials = {
@@ -63,7 +64,33 @@ export async function sendTelegramMessage(
 ): Promise<TelegramSendResult> {
 	if (!credentials.botToken) throw new Error("SELENA_TELEGRAM_BOT_TOKEN_MISSING");
 	assertDigestIsShort(request.text);
+	return postMessage(credentials, request, options);
+}
 
+// Telegram's own cap on a text message.
+const TELEGRAM_TEXT_MAX_LENGTH = 4096;
+
+/**
+ * Sends production text. Unlike `sendTelegramMessage` it does not demand the
+ * staging `[TEST]` marker, so it is the path for replies to real clients and,
+ * later, their weekly digests.
+ */
+export async function sendTelegramText(
+	credentials: TelegramCredentials,
+	request: TelegramSendRequest,
+	options: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+): Promise<TelegramSendResult> {
+	if (!credentials.botToken) throw new Error("SELENA_TELEGRAM_BOT_TOKEN_MISSING");
+	if (request.text.trim().length === 0) throw new Error("SELENA_TELEGRAM_TEXT_EMPTY");
+	if (request.text.length > TELEGRAM_TEXT_MAX_LENGTH) throw new Error("SELENA_TELEGRAM_TEXT_TOO_LONG");
+	return postMessage(credentials, request, options);
+}
+
+async function postMessage(
+	credentials: TelegramCredentials,
+	request: TelegramSendRequest,
+	options: { fetchImpl?: typeof fetch; timeoutMs?: number },
+): Promise<TelegramSendResult> {
 	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 15_000);
@@ -169,5 +196,39 @@ export async function setTelegramWebhook(
 		};
 	} catch (error) {
 		return { ok: false, httpStatus: 0, description: describeFailure(error, credentials.botToken) };
+	}
+}
+
+/**
+ * Where the bot currently delivers updates. Read before `setTelegramWebhook`
+ * because setting it drops every pending update, and a bot that is already
+ * pointed here would lose `/start` commands still waiting to be delivered.
+ */
+export async function getTelegramWebhookInfo(
+	credentials: TelegramCredentials,
+	options: { fetchImpl?: typeof fetch } = {},
+): Promise<{ ok: boolean; url: string | null; lastErrorMessage: string | null; description: string | null }> {
+	if (!credentials.botToken) throw new Error("SELENA_TELEGRAM_BOT_TOKEN_MISSING");
+	const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+	try {
+		const response = await fetchImpl(`${TELEGRAM_API_ORIGIN}/bot${credentials.botToken}/getWebhookInfo`, {
+			method: "GET",
+		});
+		const body = (await response.json().catch(() => ({}))) as {
+			ok?: boolean;
+			description?: string;
+			result?: { url?: unknown; last_error_message?: unknown };
+		};
+		const ok = body.ok === true && response.ok;
+		const url = typeof body.result?.url === "string" && body.result.url.length > 0 ? body.result.url : null;
+		const lastError = body.result?.last_error_message;
+		return {
+			ok,
+			url: ok ? url : null,
+			lastErrorMessage: ok && typeof lastError === "string" ? redactBotToken(lastError, credentials.botToken) : null,
+			description: body.description ?? null,
+		};
+	} catch (error) {
+		return { ok: false, url: null, lastErrorMessage: null, description: describeFailure(error, credentials.botToken) };
 	}
 }
