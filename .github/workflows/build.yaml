@@ -62,6 +62,17 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The Postgres driver throws "Buffer is not defined" the moment a browser
+      # loads it, taking the page down behind the router's error boundary. A
+      # server-function module that imports the db handle statically and also
+      # exports plain helpers is enough to ship it, and nothing else fails.
+      - name: Verify the browser bundle carries no Postgres driver
+        run: |
+          if grep -l getTypeParser apps/web/.output/public/assets/*.js; then
+            echo "::error::The Postgres driver reached the browser bundle (files above). Load the db handle on demand inside the server code that needs it."
+            exit 1
+          fi
+
       - name: Verify the build left the working tree clean
         run: |
           if [ -n "$(git status --porcelain=v1 --untracked-files=all)" ]; then

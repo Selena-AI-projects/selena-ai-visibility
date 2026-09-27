@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svConfigurationLocks, svOrders } from "@workspace/lib/db/schema";
 import { type AnswerAnalysis, analyzeAnswer, summarizeScenarioSet } from "@workspace/lib/selena-answer-analysis";
@@ -14,7 +13,16 @@ import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 // leaned on. The stage is re-runnable on purpose: findings are derived, never
 // authored, so recomputing them can only ever restate what the answers say.
 
-const repositories = /* @__PURE__ */ createSelenaRepositories(db);
+/**
+ * The database handle, fetched when a call actually needs it. The admin page
+ * imports this module for its server function, and a static import of the
+ * handle would ship the Postgres driver to the browser, where it throws on
+ * load (`Buffer is not defined`) and takes the whole page down.
+ */
+const database = async () => (await import("@workspace/lib/db/db")).db;
+
+let repositoriesPromise: Promise<ReturnType<typeof createSelenaRepositories>> | undefined;
+const getRepositories = () => (repositoriesPromise ??= database().then(createSelenaRepositories));
 
 async function requireAdminContext(): Promise<SelenaRepositoryContext> {
 	await requireAdmin();
@@ -47,7 +55,7 @@ export function readStoredAnalysis(payload: unknown): AnswerAnalysis | null {
 export async function computeOrderAnalysis(context: SelenaRepositoryContext, orderId: string) {
 	const data = { orderId };
 	{
-		const lock = await withOrganizationTransaction(db, context.tenantId, async (tx) => {
+		const lock = await withOrganizationTransaction(await database(), context.tenantId, async (tx) => {
 			const [order] = await tx
 				.select({ id: svOrders.id, lockId: svOrders.lockId })
 				.from(svOrders)
@@ -68,6 +76,7 @@ export async function computeOrderAnalysis(context: SelenaRepositoryContext, ord
 		const subjects = parseLockedAnalysisSubjects(lock?.snapshot);
 		if (!subjects) throw new Error("SELENA_LOCK_SUBJECTS_MISSING");
 
+		const repositories = await getRepositories();
 		const runs = await repositories.runs.listForOrder(context, data.orderId);
 		const analyses: AnswerAnalysis[] = [];
 		let analyzed = 0;
