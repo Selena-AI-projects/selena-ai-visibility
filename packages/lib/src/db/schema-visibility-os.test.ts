@@ -1866,6 +1866,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 			{ idx: 75, version: "7", when: 1790320007000, tag: "0075_local_maps_pilot_runtime", breakpoints: true },
 			{ idx: 76, version: "7", when: 1790320008000, tag: "0076_local_external_audits", breakpoints: true },
 			{ idx: 77, version: "7", when: 1790320009000, tag: "0077_weekly_digest_delivery", breakpoints: true },
+			{ idx: 78, version: "7", when: 1790320010000, tag: "0078_delivery_connect_redemption", breakpoints: true },
 		]);
 	});
 
