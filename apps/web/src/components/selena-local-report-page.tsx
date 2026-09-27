@@ -101,7 +101,7 @@ export function SelenaLocalReportPage({ cycleId }: { cycleId: string }) {
 					<a href="/app/selena" className={`${control} mb-6`}>
 						Back to workspace
 					</a>
-					<h1 className="font-serif text-3xl sm:text-4xl">Your Ask Maps report</h1>
+					<h1 className="font-serif text-3xl sm:text-4xl">Your Google Maps report</h1>
 					<p className="mt-3 max-w-2xl text-[#574d45]">
 						Positions measured around your location, with the time and evidence for each point. Positions may change
 						after the measurement.

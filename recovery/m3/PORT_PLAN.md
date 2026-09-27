@@ -28,7 +28,7 @@
 | Воркер | `local-dispatch-outbox`, `local-runtime-executor`, `local-raw-retention-scheduler`, `local-operator-alerts`, `jobs/selena-local-raw-retention`, `scripts/local-maps-one-shot`, `scripts/local-retention-health`; изменения в `local-index`, `handlers`, `index`, `jobs/selena-local-measure` | |
 | cloud | `email.ts` (+`sendEmailWithReceipt`) | |
 | env-registry | +15 переменных, ручной merge | |
-| Компоненты web | `selena-local-map-report`, `-external-report`, `-report-page` (убрать кнопку $49 и documents); маршрут `/selena/local/$cycleId`; переименование в Ask Maps | |
+| Компоненты web | `selena-local-map-report`, `-external-report`, `-report-page` (убрать кнопку $49 и documents); маршрут `/selena/local/$cycleId` | |
 
 ## Схема БД
 
@@ -78,5 +78,18 @@ Store для маршрутов #14–21 восстановлен в исход�
 | 4 | #187 | Pilot orchestrator, report-, dispatch- и retention-store перенесены сюда из шага 5 (это lib). |
 | 5 | #188 | Customer fixture scheduler не перенесён. Второй consumer retention в основном воркере убран. |
 | 6 | #189 | Действия оператора требуют platform admin. Маршрут `/api/local-ready` не изменён: у анонимной проверки из сборки нет вызывающих, и она нагружает базу. |
-| 7 | этот PR | Страница `/app/selena-ask-maps/$cycleId` без гейта `entitlementsFor`. Пилоты ручные и бесплатные, поэтому доступ определяют сессия, тенант и опубликованный отчёт. Plan-гейт закрыл бы все пилоты, пока оплата на паузе. |
+| 7 | этот PR | Страница `/app/selena-local-maps/$cycleId` без гейта `entitlementsFor`. Пилоты ручные и бесплатные, поэтому доступ определяют сессия, тенант и опубликованный отчёт. Plan-гейт закрыл бы все пилоты, пока оплата на паузе. |
 | 8 | — | Решение владельца 2026-09-26: отложено, пока клиентам не понадобится ссылка на отчёт для пересылки. В кабинете отчёт уже публикуется, отправляется и подтверждается. |
+
+## Граница продукта (решение владельца 2026-09-26)
+
+Сначала страница шага 7 была ошибочно названа Ask Maps. Исправлено: она называется Google Maps / Local Maps.
+
+- **Google Maps / Local Visibility** — автоматическая measurement surface внутри $79 Full Discovery Landscape. Действует там, где проверен замер production-уровня. Это то, что перенесено в M3.
+- **Google Ask Maps / Local AI** — manual evidence surface, которую проверяет человек. Входит в $399 Verified Discovery & Competitive Audit. В $2,490 Managed Discovery используется для baseline и recheck, если это есть в согласованном scope. Действует политика `local-discovery.ts` (`MANUAL_ONLY`).
+- **Ни то, ни другое не отдельный коммерческий продукт.** Это не отдельные цены.
+- **Ручной workflow Local AI уже есть в release, его сохраняем.** Путь: задача → ответы по точкам со скриншотом и координатами → проверка → результат клиенту. Маршруты: `pilot/cycles/*/tasks`, `pilot/observations`, `local-scan-cycles/*/ai-results`.
+- **Local AI Geo-Grid со staging не восстанавливаем.** Это был синтетический прототип с оплатой $0: маршрут #3 и staging-миграция 0077 local-AI. Отдельную клиентскую страницу для него сейчас не делаем.
+- **«Local AI Geo-Grid» — только внутреннее инженерное название.** В клиентском интерфейсе и маркетинге его нет. Клиенту показываем раздел Local Discovery, внутри него два типа evidence:
+  - «Google Maps — автоматически, где проверено»;
+  - «Google Local AI / Ask Maps — проверено человеком, где входит».

@@ -16,7 +16,7 @@ type Props = {
 
 const copy = {
 	en: {
-		title: "Ask Maps visibility",
+		title: "Google Maps visibility",
 		captured: "Report generated",
 		grid: "3×3 measurement grid",
 		expected: "Expected",
@@ -36,7 +36,7 @@ const copy = {
 		noEvidence: "No accepted evidence",
 	},
 	ru: {
-		title: "Видимость в Ask Maps",
+		title: "Видимость в Google Maps",
 		captured: "Отчёт создан",
 		grid: "Сетка замера 3×3",
 		expected: "Ожидалось",
