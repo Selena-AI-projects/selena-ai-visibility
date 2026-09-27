@@ -151,9 +151,9 @@ describe("sending production text", () => {
 	});
 
 	it("refuses text Telegram would reject as too long", async () => {
-		await expect(
-			sendTelegramText({ botToken: BOT_TOKEN }, { chatId: "1", text: "x".repeat(4097) }),
-		).rejects.toThrow("SELENA_TELEGRAM_TEXT_TOO_LONG");
+		await expect(sendTelegramText({ botToken: BOT_TOKEN }, { chatId: "1", text: "x".repeat(4097) })).rejects.toThrow(
+			"SELENA_TELEGRAM_TEXT_TOO_LONG",
+		);
 	});
 });
 

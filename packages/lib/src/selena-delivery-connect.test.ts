@@ -63,9 +63,7 @@ describe("redeeming a token", () => {
 
 	it("answers a foreign token as unknown without asking the database", async () => {
 		const db = executor("BOUND");
-		await expect(redeemDeliveryConnectToken(db, { token: "not-ours", chatIdCiphertext: "c" })).resolves.toBe(
-			"UNKNOWN",
-		);
+		await expect(redeemDeliveryConnectToken(db, { token: "not-ours", chatIdCiphertext: "c" })).resolves.toBe("UNKNOWN");
 		expect(db.statements).toHaveLength(0);
 	});
 
