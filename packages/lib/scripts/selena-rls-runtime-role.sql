@@ -455,4 +455,9 @@ GRANT EXECUTE ON FUNCTION sv_resolve_user_organizations(text) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_brand_id_taken(text) TO selena_app;
 GRANT EXECUTE ON FUNCTION sv_organization_slug_taken(text) TO selena_app;
 
+-- A Telegram connect link is redeemed before its workspace is known (migration 0078).
+SELECT 'GRANT EXECUTE ON FUNCTION sv_redeem_delivery_connect_token(text, text) TO selena_app'
+WHERE to_regprocedure('public.sv_redeem_delivery_connect_token(text,text)') IS NOT NULL
+\gexec
+
 COMMIT;
