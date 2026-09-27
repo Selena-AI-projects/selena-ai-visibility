@@ -215,4 +215,36 @@ expect 'failed redemptions leave no recipient behind' 3 \
 expect 'another workspace sees none of the bindings' 0 \
 	"$(as_tenant dg-org-b dg-owner-b "SELECT count(*) FROM sv_delivery_recipients")"
 
+# Two links for one project redeemed at the same time: the later one must wait
+# for the earlier binding and retire it, not fail on the one-chat index.
+race_first_hash="$(token_hash connect-race-first)"
+race_second_hash="$(token_hash connect-race-second)"
+as_tenant dg-org-a dg-owner-a "$(connect_token_insert "$race_first_hash" ru 'now()' "now() + interval '15 minutes'")" >/dev/null
+as_tenant dg-org-a dg-owner-a "$(connect_token_insert "$race_second_hash" ru 'now()' "now() + interval '15 minutes'")" >/dev/null
+race_first_output="$(mktemp)"
+"${runtime_psql[@]}" >"$race_first_output" 2>&1 <<SQL &
+BEGIN;
+SELECT sv_redeem_delivery_connect_token('$race_first_hash', 'cipher-race-first');
+SELECT pg_sleep(2);
+COMMIT;
+SQL
+race_first_pid=$!
+# Waits until the first redemption has bound its chat and sits uncommitted.
+race_first_waiting="SELECT count(*) FROM pg_stat_activity WHERE state = 'active' AND query LIKE 'SELECT pg_sleep(2)%'"
+for _ in $(seq 1 50); do
+	if [[ "$("${psql[@]}" -Atc "$race_first_waiting")" != 0 ]]; then
+		break
+	fi
+	sleep 0.1
+done
+expect 'the first concurrent redemption is still open' 1 "$("${psql[@]}" -Atc "$race_first_waiting")"
+race_second="$(redeem "$race_second_hash" cipher-race-second)"
+wait "$race_first_pid"
+race_first="$(grep -x -E 'BOUND|ALREADY_USED|EXPIRED|UNKNOWN' "$race_first_output" || true)"
+rm -f "$race_first_output"
+expect 'the first of two concurrent links binds' BOUND "$race_first"
+expect 'the second of two concurrent links binds after it' BOUND "$race_second"
+expect 'concurrent links leave exactly one bound chat, the later one' '1|cipher-race-second' \
+	"$(as_tenant dg-org-a dg-owner-a "SELECT count(*) || '|' || max(chat_id_ciphertext) FROM sv_delivery_recipients WHERE project_id = '$project_a' AND status = 'BOUND'")"
+
 printf 'WEEKLY_DIGEST_E2E_OK\n'
