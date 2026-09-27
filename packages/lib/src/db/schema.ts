@@ -1918,6 +1918,7 @@ export const svDeliveryConnectTokens = pgTable(
 		projectId: uuid("project_id").notNull(),
 		userId: text("user_id").notNull(),
 		tokenHash: text("token_hash").notNull(),
+		locale: text("locale").default("ru").notNull(),
 		consumedAt: timestamp("consumed_at", { withTimezone: true }),
 		expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -1930,6 +1931,7 @@ export const svDeliveryConnectTokens = pgTable(
 		}),
 		tokenHashUnique: uniqueIndex("sv_delivery_connect_tokens_hash_unique").on(table.tokenHash),
 		hashCheck: check("sv_delivery_connect_tokens_hash_check", sql`${table.tokenHash} ~ '^[a-f0-9]{64}$'`),
+		localeCheck: check("sv_delivery_connect_tokens_locale_check", sql`${table.locale} IN ('ru', 'en')`),
 		expiryCheck: check("sv_delivery_connect_tokens_expiry_check", sql`${table.expiresAt} > ${table.createdAt}`),
 	}),
 ).enableRLS();

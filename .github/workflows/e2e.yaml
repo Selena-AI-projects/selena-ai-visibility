@@ -214,7 +214,7 @@ jobs:
       # scopes the worker to the no-network stub provider.
       COMPOSE_FILE: e2e/.elmo/elmo.yaml:e2e/worker-override.yaml:e2e/tenant-role-override.yaml
       # The role bootstrap requires the full source frontier.
-      SELENA_MIGRATION_MAX_INDEX: "77"
+      SELENA_MIGRATION_MAX_INDEX: "78"
 
     steps:
       - name: Checkout
@@ -314,6 +314,14 @@ jobs:
             | docker compose exec -T postgres psql -U postgres -d elmo -v ON_ERROR_STOP=1 >/dev/null
           docker compose exec -T postgres psql -U postgres -d elmo -v ON_ERROR_STOP=1 \
             -v role_password=e2e_tenant_role_only < packages/lib/scripts/selena-rls-runtime-role.sql >/dev/null
+          # The Telegram webhook redeems connect links through this function
+          # with no tenant context; without EXECUTE no client could connect.
+          can_redeem="$(docker compose exec -T postgres psql -U postgres -d elmo -Atc \
+            "SELECT has_function_privilege('selena_app', 'sv_redeem_delivery_connect_token(text, text)', 'EXECUTE')")"
+          if [[ "$can_redeem" != "t" ]]; then
+            echo "selena_app cannot execute sv_redeem_delivery_connect_token" >&2
+            exit 1
+          fi
 
       - name: Start web as the tenant role
         run: |
@@ -436,7 +444,7 @@ jobs:
           # Replay the complete source frontier after drizzle-kit has applied
           # it. This is a disposable CI database only.
           # Shared staging is bounded at the same index.
-          SELENA_MIGRATION_MAX_INDEX: "77"
+          SELENA_MIGRATION_MAX_INDEX: "78"
         run: node packages/lib/scripts/run-bounded-migrations.mjs
 
       - name: Check row-level security coverage

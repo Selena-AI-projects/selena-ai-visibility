@@ -809,17 +809,24 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"How long a staging connect link stays valid, in minutes. Left unset the product default applies; a rehearsal may lengthen it so the exercise does not fail on a round trip.",
 	},
 	{
+		name: "SELENA_WEEKLY_DIGEST_ENABLED",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Set to 'true' to let clients connect Telegram for the weekly digest and, once the worker job ships, to send it. Off by default.",
+	},
+	{
 		name: "SELENA_TELEGRAM_BOT_TOKEN",
 		scope: "server",
 		requiredBy: "optional",
 		description:
-			"Staging Telegram bot credential. Never stored in the database and redacted from any error this code reports.",
+			"Telegram bot credential for the weekly digest and the staging simulation. Never stored in the database and redacted from any error this code reports. The production webhook secret is derived from it, so rotating it rotates that secret.",
 	},
 	{
 		name: "SELENA_TELEGRAM_BOT_USERNAME",
 		scope: "server",
 		requiredBy: "optional",
-		description: "Staging Telegram bot username, used to build the connect deep link.",
+		description: "Telegram bot username, used to build the connect deep link.",
 	},
 	{
 		name: "SELENA_TELEGRAM_WEBHOOK_SECRET",

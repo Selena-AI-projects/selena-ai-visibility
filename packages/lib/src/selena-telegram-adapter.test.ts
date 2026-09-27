@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseTelegramStartUpdate, redactBotToken, sendTelegramMessage } from "./selena-telegram-adapter";
+import {
+	getTelegramWebhookInfo,
+	parseTelegramStartUpdate,
+	redactBotToken,
+	sendTelegramMessage,
+	sendTelegramText,
+} from "./selena-telegram-adapter";
 
 const BOT_TOKEN = "1234567890:AAtest-token-value-never-real";
 const DIGEST = "[TEST] Selena weekly digest — sample data, not a measurement";
@@ -124,6 +130,64 @@ describe("reading a start command", () => {
 	it("ignores anything that is not a start command carrying a token", () => {
 		for (const value of [null, {}, { message: {} }, update({ text: "/start" }), update({ text: "hello" })])
 			expect(parseTelegramStartUpdate(value)).toBeNull();
+	});
+});
+
+describe("sending production text", () => {
+	it("sends a plain message without the staging marker", async () => {
+		const bodies: unknown[] = [];
+		const result = await sendTelegramText(
+			{ botToken: BOT_TOKEN },
+			{ chatId: "555", text: "Готово" },
+			{
+				fetchImpl: (async (_url: string, init: RequestInit) => {
+					bodies.push(JSON.parse(String(init.body)));
+					return response({ ok: true, result: { message_id: 7 } }, 200);
+				}) as unknown as typeof fetch,
+			},
+		);
+		expect(result.outcome).toEqual({ kind: "SUCCESS" });
+		expect(bodies).toEqual([expect.objectContaining({ chat_id: "555", text: "Готово" })]);
+	});
+
+	it("refuses text Telegram would reject as too long", async () => {
+		await expect(sendTelegramText({ botToken: BOT_TOKEN }, { chatId: "1", text: "x".repeat(4097) })).rejects.toThrow(
+			"SELENA_TELEGRAM_TEXT_TOO_LONG",
+		);
+	});
+});
+
+describe("reading the webhook", () => {
+	it("reports where the bot delivers updates", async () => {
+		const info = await getTelegramWebhookInfo(
+			{ botToken: BOT_TOKEN },
+			{
+				fetchImpl: (async () =>
+					response(
+						{ ok: true, result: { url: "https://app.example/api/v1/selena/telegram/webhook" } },
+						200,
+					)) as unknown as typeof fetch,
+			},
+		);
+		expect(info).toMatchObject({ ok: true, url: "https://app.example/api/v1/selena/telegram/webhook" });
+	});
+
+	it("treats an unset webhook as no url and a transport error as not ok without leaking the token", async () => {
+		const unset = await getTelegramWebhookInfo(
+			{ botToken: BOT_TOKEN },
+			{ fetchImpl: (async () => response({ ok: true, result: { url: "" } }, 200)) as unknown as typeof fetch },
+		);
+		expect(unset).toMatchObject({ ok: true, url: null });
+		const failed = await getTelegramWebhookInfo(
+			{ botToken: BOT_TOKEN },
+			{
+				fetchImpl: (async () => {
+					throw new Error(`connect failed for /bot${BOT_TOKEN}/getWebhookInfo`);
+				}) as unknown as typeof fetch,
+			},
+		);
+		expect(failed.ok).toBe(false);
+		expect(failed.description).not.toContain(BOT_TOKEN);
 	});
 });
 

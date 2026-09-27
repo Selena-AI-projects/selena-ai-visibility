@@ -23,6 +23,7 @@ import { Checkbox } from "@workspace/ui/components/checkbox";
 import { Input } from "@workspace/ui/components/input";
 import { Label } from "@workspace/ui/components/label";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SelenaTelegramDigestCard } from "@/components/selena-telegram-digest-card";
 import { SelenaWordmark } from "@/components/selena-wordmark";
 import { useAuth } from "@/hooks/use-auth";
 import { validateWebsiteUrl } from "@/lib/brand-website";
@@ -625,6 +626,7 @@ function SelenaWorkspace() {
 							<MeasurementPanel project={selectedProject} locale={locale} />
 							<LocalVisibilityPanel state={localVisibility} locale={locale} />
 							<ResultsPanel project={selectedProject} locale={locale} />
+							<SelenaTelegramDigestCard projectId={selectedProject.project.id} locale={locale} />
 						</>
 					)}
 				</div>

@@ -92,6 +92,7 @@
 		"./selena-citation-gap": "./src/selena-citation-gap.ts",
 		"./selena-cycle-diff": "./src/selena-cycle-diff.ts",
 		"./selena-weekly-digest": "./src/selena-weekly-digest.ts",
+		"./selena-delivery-connect": "./src/selena-delivery-connect.ts",
 		"./selena-answer-retention": "./src/selena-answer-retention.ts",
 		"./selena-raw-evidence-storage": "./src/selena-raw-evidence-storage.ts",
 		"./selena-suggest-metering": "./src/selena-suggest-metering.ts",
