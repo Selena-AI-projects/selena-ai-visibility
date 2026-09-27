@@ -249,6 +249,17 @@ export function SelenaOrderDesk({ locale, onOrderCreated }: { locale: DeskLocale
 							>
 								{tr(locale, "Reject selected", "Отклонить выбранные")}
 							</Button>
+							{/* Every approved question starts selected, so ordering a few out of
+							    dozens would otherwise mean unticking the rest one by one. */}
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								disabled={selected.size === 0 || pending !== ""}
+								onClick={() => setSelected(new Set())}
+							>
+								{tr(locale, "Clear selection", "Снять выбор")}
+							</Button>
 						</div>
 
 						{project && project.scenarios.length > 0 && (
