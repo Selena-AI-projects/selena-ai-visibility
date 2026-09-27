@@ -85,12 +85,19 @@ export function deliveryConnectReply(outcome: DeliveryConnectOutcome): string {
 		case "BOUND":
 			return "Готово: сюда будет приходить еженедельный отчёт Selena.\nDone: your weekly Selena report will arrive here.";
 		case "ALREADY_USED":
-			return "Эта ссылка уже использована. Создайте новую в кабинете Selena.\nThis link has already been used. Create a new one in your Selena workspace.";
+			// A double tap or a redelivered update lands here after the chat was
+			// bound, so this must not read as a failure to someone already connected.
+			return "Эта ссылка уже использована. Если вы только что подключились — всё готово, статус виден в кабинете Selena.\nThis link has already been used. If you just connected, you are all set: the status is in your Selena workspace.";
 		case "EXPIRED":
 			return "Срок действия ссылки истёк. Создайте новую в кабинете Selena.\nThis link has expired. Create a new one in your Selena workspace.";
 		case "UNKNOWN":
 			return "Ссылка не распознана. Создайте новую в кабинете Selena.\nThis link is not recognised. Create a new one in your Selena workspace.";
 	}
+}
+
+/** The reply to a `/start` that arrived without a link's payload. */
+export function deliveryConnectHint(): string {
+	return "Чтобы подключить отчёт, откройте ссылку из кабинета Selena.\nTo connect your report, open the link from your Selena workspace.";
 }
 
 export type TelegramDeliveryConfig = {
@@ -109,5 +116,52 @@ export function readTelegramDeliveryConfig(env: Record<string, string | undefine
 	const botUsername = env.SELENA_TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, "");
 	const appUrl = env.APP_URL?.trim();
 	if (!botToken || !botUsername || !appUrl) return null;
+	// The same rule telegramDeepLink enforces, checked here so a bad name hides
+	// the feature instead of failing every link after its token was stored.
+	if (!/^[A-Za-z0-9_]{5,32}$/.test(botUsername)) return null;
+	// Telegram only delivers webhooks over HTTPS.
+	if (!/^https:\/\/[^/]/i.test(appUrl)) return null;
 	return { botToken, botUsername, appUrl };
+}
+
+export const STAGING_SIMULATION_WEBHOOK_PATH = "/api/v1/selena/staging/telegram/webhook";
+
+export type TelegramWebhookInfo = { ok: boolean; url: string | null; lastErrorMessage: string | null };
+
+export type TelegramWebhookRegistrarDeps = {
+	getInfo: (botToken: string) => Promise<TelegramWebhookInfo>;
+	setWebhook: (input: { botToken: string; url: string; dropPendingUpdates: boolean }) => Promise<{ ok: boolean }>;
+};
+
+/**
+ * Makes sure the bot delivers to this deployment's webhook before a link is
+ * handed out, touching Telegram as little as possible: once per process and
+ * bot token when the webhook is already in place.
+ *
+ * It never drops pending updates, because those can be other clients'
+ * `/start` commands that Telegram is still retrying.
+ */
+export function createTelegramWebhookRegistrar(deps: TelegramWebhookRegistrarDeps) {
+	let readyFor: string | null = null;
+	return async function ensureTelegramWebhook(config: TelegramDeliveryConfig): Promise<void> {
+		const url = telegramWebhookUrl(config.appUrl);
+		const cacheKey = createHash("sha256").update(`${config.botToken}\n${url}`).digest("hex");
+		if (readyFor === cacheKey) return;
+
+		const info = await deps.getInfo(config.botToken);
+		// Without knowing where the bot points, registering could take it away
+		// from whatever it serves now.
+		if (!info.ok) throw new Error("TELEGRAM_WEBHOOK_UNAVAILABLE");
+		// The staging simulation registers its own secret; repointing a shared
+		// bot would break that rig and flip back the next time it is set up.
+		if (info.url?.endsWith(STAGING_SIMULATION_WEBHOOK_PATH)) throw new Error("TELEGRAM_BOT_USED_BY_SIMULATION");
+		// A 401/403/404 from our own URL means Telegram presents a secret derived
+		// from an older bot token; a 5xx is ours and needs no re-registration.
+		const staleSecret = info.url === url && /\b40[134]\b/.test(info.lastErrorMessage ?? "");
+		if (info.url !== url || staleSecret) {
+			const set = await deps.setWebhook({ botToken: config.botToken, url, dropPendingUpdates: false });
+			if (!set.ok) throw new Error("TELEGRAM_WEBHOOK_UNAVAILABLE");
+		}
+		readyFor = cacheKey;
+	};
 }

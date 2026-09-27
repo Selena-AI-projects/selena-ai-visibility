@@ -1,16 +1,15 @@
-import { createHash } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { type OrganizationTransaction, withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svDeliveryConnectTokens, svDeliveryRecipients, svProjects } from "@workspace/lib/db/schema";
 import { getKeyring } from "@workspace/lib/secrets";
 import {
+	createTelegramWebhookRegistrar,
 	DELIVERY_CONNECT_TOKEN_TTL_MS,
 	hashDeliveryConnectToken,
 	mintDeliveryConnectToken,
 	readTelegramDeliveryConfig,
 	type TelegramDeliveryConfig,
-	telegramWebhookUrl,
 } from "@workspace/lib/selena-delivery-connect";
 import { getTelegramWebhookInfo, setTelegramWebhook } from "@workspace/lib/selena-telegram-adapter";
 import { telegramDeepLink, telegramWebhookHeaderToken } from "@workspace/selena-visibility-contracts";
@@ -43,31 +42,18 @@ async function assertProjectInTenant(tx: OrganizationTransaction, tenantId: stri
 	if (!project) throw new Error("Not found: project is outside AuthContext tenant");
 }
 
-// Remembers, per bot token and URL, that the webhook is already in place.
-// setWebhook drops every pending update, so it is not repeated for each link.
-let webhookReadyFor: string | null = null;
-
-async function ensureWebhook(config: TelegramDeliveryConfig): Promise<void> {
-	const url = telegramWebhookUrl(config.appUrl);
-	const cacheKey = createHash("sha256").update(`${config.botToken}\n${url}`).digest("hex");
-	if (webhookReadyFor === cacheKey) return;
-
-	const credentials = { botToken: config.botToken };
-	const info = await getTelegramWebhookInfo(credentials);
-	// A webhook at our URL that keeps failing was most likely registered with a
-	// secret from an older bot token, so it is registered again.
-	if (!info.ok || info.url !== url || info.lastErrorMessage) {
-		const set = await setTelegramWebhook(credentials, {
-			url,
-			secretToken: await telegramWebhookHeaderToken(config.botToken),
-		});
-		if (!set.ok) throw new Error("TELEGRAM_WEBHOOK_UNAVAILABLE");
-	}
-	webhookReadyFor = cacheKey;
-}
+const ensureWebhook = createTelegramWebhookRegistrar({
+	getInfo: (botToken) => getTelegramWebhookInfo({ botToken }),
+	setWebhook: async ({ botToken, url, dropPendingUpdates }) =>
+		setTelegramWebhook(
+			{ botToken },
+			{ url, secretToken: await telegramWebhookHeaderToken(botToken), dropPendingUpdates },
+		),
+});
 
 export type TelegramDeliveryState = {
 	available: boolean;
+	canWrite: boolean;
 	bound: { boundAt: string; locale: "ru" | "en" } | null;
 };
 
@@ -95,6 +81,7 @@ export const getTelegramDeliveryFn = createServerFn({ method: "GET" })
 		});
 		return {
 			available,
+			canWrite: canWrite(context),
 			bound: bound ? { boundAt: bound.boundAt.toISOString(), locale: bound.locale === "en" ? "en" : "ru" } : null,
 		};
 	});

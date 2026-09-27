@@ -161,6 +161,24 @@ export function parseTelegramStartUpdate(update: unknown): TelegramStartUpdate |
 }
 
 /**
+ * The chat of a `/start` sent in a private chat without a payload: someone who
+ * found the bot by name, or whose client dropped the link's payload. They get
+ * a hint instead of silence.
+ */
+export function parseTelegramBareStart(update: unknown): string | null {
+	if (typeof update !== "object" || update === null) return null;
+	const message = (update as { message?: unknown }).message;
+	if (typeof message !== "object" || message === null) return null;
+	const chat = (message as { chat?: unknown }).chat;
+	const text = (message as { text?: unknown }).text;
+	if (typeof chat !== "object" || chat === null || typeof text !== "string") return null;
+	const chatId = (chat as { id?: unknown }).id;
+	if ((chat as { type?: unknown }).type !== "private") return null;
+	if (typeof chatId !== "number" && typeof chatId !== "string") return null;
+	return /^\/start(?:@[A-Za-z0-9_]+)?$/.test(text.trim()) ? String(chatId) : null;
+}
+
+/**
  * Points the bot at this deployment's webhook.
  *
  * The secret travels to Telegram here and comes back on every update, which is
@@ -171,7 +189,7 @@ export function parseTelegramStartUpdate(update: unknown): TelegramStartUpdate |
  */
 export async function setTelegramWebhook(
 	credentials: TelegramCredentials,
-	request: { url: string; secretToken: string },
+	request: { url: string; secretToken: string; dropPendingUpdates?: boolean },
 	options: { fetchImpl?: typeof fetch } = {},
 ): Promise<{ ok: boolean; httpStatus: number; description: string | null }> {
 	if (!credentials.botToken) throw new Error("SELENA_TELEGRAM_BOT_TOKEN_MISSING");
@@ -185,7 +203,7 @@ export async function setTelegramWebhook(
 				url: request.url,
 				secret_token: request.secretToken,
 				allowed_updates: ["message"],
-				drop_pending_updates: true,
+				drop_pending_updates: request.dropPendingUpdates ?? true,
 			}),
 		});
 		const body = (await response.json().catch(() => ({}))) as { ok?: boolean; description?: string };

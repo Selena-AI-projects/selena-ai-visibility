@@ -1,6 +1,7 @@
 import type { SQL } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+	createTelegramWebhookRegistrar,
 	deliveryConnectReply,
 	hashDeliveryConnectToken,
 	isDeliveryConnectToken,
@@ -113,7 +114,69 @@ describe("delivery configuration", () => {
 		expect(readTelegramDeliveryConfig({ ...full, APP_URL: undefined })).toBeNull();
 	});
 
+	it("stays unavailable for a bot name no link can carry or an address Telegram will not call", () => {
+		expect(readTelegramDeliveryConfig({ ...full, SELENA_TELEGRAM_BOT_USERNAME: "bot" })).toBeNull();
+		expect(readTelegramDeliveryConfig({ ...full, SELENA_TELEGRAM_BOT_USERNAME: "selena-bot" })).toBeNull();
+		expect(readTelegramDeliveryConfig({ ...full, APP_URL: "http://app.example" })).toBeNull();
+		expect(readTelegramDeliveryConfig({ ...full, APP_URL: "app.example" })).toBeNull();
+	});
+
 	it("points the bot at the production webhook, not the staging one", () => {
 		expect(telegramWebhookUrl("https://app.example/")).toBe("https://app.example/api/v1/selena/telegram/webhook");
+	});
+});
+
+describe("webhook registration", () => {
+	const config = { botToken: "123:abc", botUsername: "selena_bot", appUrl: "https://app.example" };
+	const ours = "https://app.example/api/v1/selena/telegram/webhook";
+
+	function registrar(info: { ok: boolean; url: string | null; lastErrorMessage?: string | null }, setOk = true) {
+		const getInfo = vi.fn(async () => ({ lastErrorMessage: null, ...info }));
+		const setWebhook = vi.fn(async () => ({ ok: setOk }));
+		return { ensure: createTelegramWebhookRegistrar({ getInfo, setWebhook }), getInfo, setWebhook };
+	}
+
+	it("leaves a webhook already pointed here alone, even after a failed delivery of ours", async () => {
+		const r = registrar({
+			ok: true,
+			url: ours,
+			lastErrorMessage: "Wrong response from the webhook: 503 Service Unavailable",
+		});
+		await r.ensure(config);
+		expect(r.setWebhook).not.toHaveBeenCalled();
+	});
+
+	it("points the bot here once, keeping updates other clients are still waiting on", async () => {
+		const r = registrar({ ok: true, url: null });
+		await r.ensure(config);
+		await r.ensure(config);
+		expect(r.setWebhook).toHaveBeenCalledOnce();
+		expect(r.setWebhook).toHaveBeenCalledWith(expect.objectContaining({ url: ours, dropPendingUpdates: false }));
+		expect(r.getInfo).toHaveBeenCalledOnce();
+	});
+
+	it("registers again when Telegram presents a secret from an older bot token", async () => {
+		const r = registrar({ ok: true, url: ours, lastErrorMessage: "Wrong response from the webhook: 404 Not Found" });
+		await r.ensure(config);
+		expect(r.setWebhook).toHaveBeenCalledOnce();
+	});
+
+	it("does not register blindly when Telegram cannot say where the bot points", async () => {
+		const r = registrar({ ok: false, url: null });
+		await expect(r.ensure(config)).rejects.toThrow("TELEGRAM_WEBHOOK_UNAVAILABLE");
+		expect(r.setWebhook).not.toHaveBeenCalled();
+	});
+
+	it("does not take over a bot the staging simulation is using", async () => {
+		const r = registrar({ ok: true, url: "https://app.example/api/v1/selena/staging/telegram/webhook" });
+		await expect(r.ensure(config)).rejects.toThrow("TELEGRAM_BOT_USED_BY_SIMULATION");
+		expect(r.setWebhook).not.toHaveBeenCalled();
+	});
+
+	it("tries again on the next link when registration failed", async () => {
+		const r = registrar({ ok: true, url: null }, false);
+		await expect(r.ensure(config)).rejects.toThrow("TELEGRAM_WEBHOOK_UNAVAILABLE");
+		await expect(r.ensure(config)).rejects.toThrow("TELEGRAM_WEBHOOK_UNAVAILABLE");
+		expect(r.getInfo).toHaveBeenCalledTimes(2);
 	});
 });
