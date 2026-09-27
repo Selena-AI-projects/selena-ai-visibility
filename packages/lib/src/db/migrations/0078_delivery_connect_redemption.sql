@@ -48,6 +48,12 @@ BEGIN
 
 	UPDATE "sv_delivery_connect_tokens" SET "consumed_at" = now() WHERE "id" = link."id";
 
+	-- Two different links for one project redeemed at once would both find no
+	-- bound chat to retire and the second insert would fail on the one-chat
+	-- index. Serialising per project lets the later one see and retire the
+	-- earlier binding instead.
+	PERFORM pg_advisory_xact_lock(hashtextextended('sv_delivery_recipients:' || link."organization_id" || ':' || link."project_id"::text, 0));
+
 	-- One chat per project: a new binding retires the old one rather than
 	-- becoming a second destination for the same report.
 	UPDATE "sv_delivery_recipients"
