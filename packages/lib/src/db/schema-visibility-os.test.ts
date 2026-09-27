@@ -1755,7 +1755,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-37)).toEqual([
+		expect(journal.entries.slice(-38)).toEqual([
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1865,6 +1865,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 			{ idx: 74, version: "7", when: 1790320006000, tag: "0074_force_row_level_security", breakpoints: true },
 			{ idx: 75, version: "7", when: 1790320007000, tag: "0075_local_maps_pilot_runtime", breakpoints: true },
 			{ idx: 76, version: "7", when: 1790320008000, tag: "0076_local_external_audits", breakpoints: true },
+			{ idx: 77, version: "7", when: 1790320009000, tag: "0077_weekly_digest_delivery", breakpoints: true },
 		]);
 	});
 

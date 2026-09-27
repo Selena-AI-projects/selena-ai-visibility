@@ -540,6 +540,13 @@
       "when": 1790320008000,
       "tag": "0076_local_external_audits",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790320009000,
+      "tag": "0077_weekly_digest_delivery",
+      "breakpoints": true
     }
   ]
 }

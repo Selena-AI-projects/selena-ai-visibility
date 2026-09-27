@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
 	printf '%s\n' \
 		'Usage:' \
-		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045|0049|0051|0052|0057|0058|0059|0060|tenant_isolation|local_external|variants]' \
+		'  visibility_os_disposable_rehearsal.sh [--dry-run|--run] [gate12|0045|0049|0051|0052|0057|0058|0059|0060|tenant_isolation|local_external|weekly_digest|variants]' \
 		'' \
 		'--dry-run is the default and does not call Docker or apply migrations.' \
 		'--run starts a unique ephemeral PostgreSQL compose project, runs one suite, and removes it.'
@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
 	case "$1" in
 		--dry-run) mode='dry-run'; shift ;;
 		--run) mode='run'; shift ;;
-		gate12|0045|0049|0051|0052|0057|0058|0059|0060|tenant_isolation|local_external|variants) suite="$1"; shift ;;
+		gate12|0045|0049|0051|0052|0057|0058|0059|0060|tenant_isolation|local_external|weekly_digest|variants) suite="$1"; shift ;;
 		-h|--help) usage; exit 0 ;;
 		*) printf 'BLOCKED_SCOPE: unknown argument: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 	esac
@@ -49,6 +49,7 @@ case "$suite" in
 	0060) suite_script="$repo_root/tools/visibility_os_0060_journal_hold_reconciliation_e2e.sh" ;;
 	tenant_isolation) suite_script="$repo_root/tools/visibility_os_tenant_isolation_e2e.sh" ;;
 	local_external) suite_script="$repo_root/tools/visibility_os_local_external_e2e.sh" ;;
+	weekly_digest) suite_script="$repo_root/tools/visibility_os_weekly_digest_e2e.sh" ;;
 	variants) suite_script="$repo_root/tools/visibility_os_migration_variant_matrix_e2e.sh" ;;
 esac
 
