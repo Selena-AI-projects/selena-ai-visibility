@@ -95,6 +95,7 @@ import { Route as ApiV1SelenaScenariosIndexRouteImport } from './routes/api/v1/s
 import { Route as ApiV1SelenaStagingBootstrapRouteImport } from './routes/api/v1/selena/staging/bootstrap'
 import { Route as ApiV1SelenaStagingPaymentEventRouteImport } from './routes/api/v1/selena/staging/payment-event'
 import { Route as ApiV1SelenaStagingSimulationRouteImport } from './routes/api/v1/selena/staging/simulation'
+import { Route as ApiV1SelenaTelegramWebhookRouteImport } from './routes/api/v1/selena/telegram/webhook'
 import { Route as ApiV1SelenaCyclesCycleIdRunsRouteImport } from './routes/api/v1/selena/cycles/$cycleId/runs'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdAiResultsRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/ai-results'
 import { Route as ApiV1SelenaLocalScanCyclesCycleIdEvidenceRouteImport } from './routes/api/v1/selena/local-scan-cycles/$cycleId/evidence'
@@ -590,6 +591,12 @@ const ApiV1SelenaStagingSimulationRoute =
     path: '/api/v1/selena/staging/simulation',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiV1SelenaTelegramWebhookRoute =
+  ApiV1SelenaTelegramWebhookRouteImport.update({
+    id: '/api/v1/selena/telegram/webhook',
+    path: '/api/v1/selena/telegram/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiV1SelenaCyclesCycleIdRunsRoute =
   ApiV1SelenaCyclesCycleIdRunsRouteImport.update({
     id: '/api/v1/selena/cycles/$cycleId/runs',
@@ -889,6 +896,7 @@ export interface FileRoutesByFullPath {
   '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
+  '/api/v1/selena/telegram/webhook': typeof ApiV1SelenaTelegramWebhookRoute
   '/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
   '/app/$brand/settings/': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script/': typeof ApiPlausibleJsScriptIndexRoute
@@ -1009,6 +1017,7 @@ export interface FileRoutesByTo {
   '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
+  '/api/v1/selena/telegram/webhook': typeof ApiV1SelenaTelegramWebhookRoute
   '/app/$brand/prompts': typeof AuthedAppBrandPromptsIndexRoute
   '/app/$brand/settings': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script': typeof ApiPlausibleJsScriptIndexRoute
@@ -1135,6 +1144,7 @@ export interface FileRoutesById {
   '/api/v1/selena/staging/bootstrap': typeof ApiV1SelenaStagingBootstrapRoute
   '/api/v1/selena/staging/payment-event': typeof ApiV1SelenaStagingPaymentEventRoute
   '/api/v1/selena/staging/simulation': typeof ApiV1SelenaStagingSimulationRoute
+  '/api/v1/selena/telegram/webhook': typeof ApiV1SelenaTelegramWebhookRoute
   '/_authed/app/$brand/prompts/': typeof AuthedAppBrandPromptsIndexRoute
   '/_authed/app/$brand/settings/': typeof AuthedAppBrandSettingsIndexRoute
   '/api/plausible/js/script/': typeof ApiPlausibleJsScriptIndexRoute
@@ -1261,6 +1271,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
+    | '/api/v1/selena/telegram/webhook'
     | '/app/$brand/prompts/'
     | '/app/$brand/settings/'
     | '/api/plausible/js/script/'
@@ -1381,6 +1392,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
+    | '/api/v1/selena/telegram/webhook'
     | '/app/$brand/prompts'
     | '/app/$brand/settings'
     | '/api/plausible/js/script'
@@ -1506,6 +1518,7 @@ export interface FileRouteTypes {
     | '/api/v1/selena/staging/bootstrap'
     | '/api/v1/selena/staging/payment-event'
     | '/api/v1/selena/staging/simulation'
+    | '/api/v1/selena/telegram/webhook'
     | '/_authed/app/$brand/prompts/'
     | '/_authed/app/$brand/settings/'
     | '/api/plausible/js/script/'
@@ -1593,6 +1606,7 @@ export interface RootRouteChildren {
   ApiV1SelenaStagingBootstrapRoute: typeof ApiV1SelenaStagingBootstrapRoute
   ApiV1SelenaStagingPaymentEventRoute: typeof ApiV1SelenaStagingPaymentEventRoute
   ApiV1SelenaStagingSimulationRoute: typeof ApiV1SelenaStagingSimulationRoute
+  ApiV1SelenaTelegramWebhookRoute: typeof ApiV1SelenaTelegramWebhookRoute
   ApiPlausibleJsScriptIndexRoute: typeof ApiPlausibleJsScriptIndexRoute
   ApiV1SelenaCyclesIndexRoute: typeof ApiV1SelenaCyclesIndexRoute
   ApiV1SelenaFindingsIndexRoute: typeof ApiV1SelenaFindingsIndexRoute
@@ -2241,6 +2255,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiV1SelenaStagingSimulationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/selena/telegram/webhook': {
+      id: '/api/v1/selena/telegram/webhook'
+      path: '/api/v1/selena/telegram/webhook'
+      fullPath: '/api/v1/selena/telegram/webhook'
+      preLoaderRoute: typeof ApiV1SelenaTelegramWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/selena/cycles/$cycleId/runs': {
       id: '/api/v1/selena/cycles/$cycleId/runs'
       path: '/api/v1/selena/cycles/$cycleId/runs'
@@ -2728,6 +2749,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiV1SelenaStagingBootstrapRoute: ApiV1SelenaStagingBootstrapRoute,
   ApiV1SelenaStagingPaymentEventRoute: ApiV1SelenaStagingPaymentEventRoute,
   ApiV1SelenaStagingSimulationRoute: ApiV1SelenaStagingSimulationRoute,
+  ApiV1SelenaTelegramWebhookRoute: ApiV1SelenaTelegramWebhookRoute,
   ApiPlausibleJsScriptIndexRoute: ApiPlausibleJsScriptIndexRoute,
   ApiV1SelenaCyclesIndexRoute: ApiV1SelenaCyclesIndexRoute,
   ApiV1SelenaFindingsIndexRoute: ApiV1SelenaFindingsIndexRoute,
