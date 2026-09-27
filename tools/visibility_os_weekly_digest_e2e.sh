@@ -36,7 +36,7 @@ trap cleanup_on_exit EXIT
 for migration in "$repo_root"/packages/lib/src/db/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
 	migration_name="${migration##*/}"
 	migration_number="${migration_name%%_*}"
-	if ((10#$migration_number > 77)); then
+	if ((10#$migration_number > 78)); then
 		continue
 	fi
 	"${psql[@]}" --single-transaction < "$migration" >/dev/null
@@ -48,6 +48,7 @@ CREATE ROLE selena_app LOGIN PASSWORD '$runtime_password' NOSUPERUSER NOBYPASSRL
 GRANT USAGE ON SCHEMA public TO selena_app;
 GRANT SELECT, INSERT, UPDATE ON sv_delivery_connect_tokens, sv_delivery_recipients, sv_digest_deliveries TO selena_app;
 GRANT SELECT, INSERT ON sv_weekly_digests, sv_digest_delivery_attempts TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_redeem_delivery_connect_token(text, text) TO selena_app;
 SQL
 
 "${psql[@]}" <<'SQL' >/dev/null
@@ -161,6 +162,57 @@ expect_error 'a sixth send cannot be recorded' 'check constraint' \
 expect_error 'a delivery cannot be claimed as sending without a claim time' 'check constraint' \
 	"$(as_tenant dg-org-a dg-owner-a "UPDATE sv_digest_deliveries SET status = 'SENDING' WHERE id = '$delivery_id'")"
 expect 'tenant B sees no tenant A recipient' 0 \
+	"$(as_tenant dg-org-b dg-owner-b "SELECT count(*) FROM sv_delivery_recipients")"
+
+# Runs SQL as selena_app with no tenant context, the way the Telegram webhook
+# reaches the database.
+as_runtime() {
+	local query="$1" output
+	if output="$("${runtime_psql[@]}" -c "$query" 2>&1)"; then
+		printf '%s\n' "$output" | tail -n 1
+	else
+		printf 'FAILED %s\n' "$output"
+	fi
+}
+token_hash() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
+redeem() { as_runtime "SELECT sv_redeem_delivery_connect_token('$1', '$2')"; }
+connect_token_insert() {
+	local hash="$1" locale="$2" created="$3" expires="$4"
+	printf "INSERT INTO sv_delivery_connect_tokens (organization_id, project_id, user_id, token_hash, locale, created_at, expires_at) VALUES ('dg-org-a', '%s', 'dg-owner-a', '%s', '%s', %s, %s) RETURNING id" \
+		"$project_a" "$hash" "$locale" "$created" "$expires"
+}
+fresh_hash="$(token_hash connect-fresh)"
+expired_hash="$(token_hash connect-expired)"
+second_hash="$(token_hash connect-second)"
+as_tenant dg-org-a dg-owner-a "$(connect_token_insert "$fresh_hash" en 'now()' "now() + interval '15 minutes'")" >/dev/null
+as_tenant dg-org-a dg-owner-a "$(connect_token_insert "$expired_hash" ru "now() - interval '1 hour'" "now() - interval '45 minutes'")" >/dev/null
+as_tenant dg-org-a dg-owner-a "$(connect_token_insert "$second_hash" ru 'now()' "now() + interval '15 minutes'")" >/dev/null
+
+expect 'the runtime role cannot read connect links without a workspace' 0 \
+	"$(as_runtime "SELECT count(*) FROM sv_delivery_connect_tokens")"
+expect 'another workspace cannot read the connect links' 0 \
+	"$(as_tenant dg-org-b dg-owner-b "SELECT count(*) FROM sv_delivery_connect_tokens")"
+"${psql[@]}" -c 'CREATE ROLE selena_digest_probe NOLOGIN' >/dev/null
+probe_can_redeem="$("${psql[@]}" -Atc "SELECT has_function_privilege('selena_digest_probe', 'sv_redeem_delivery_connect_token(text, text)', 'EXECUTE')")"
+"${psql[@]}" -c 'DROP ROLE selena_digest_probe' >/dev/null
+expect 'an arbitrary role cannot redeem a connect link' f "$probe_can_redeem"
+
+expect 'a fresh link binds the chat without a workspace context' BOUND "$(redeem "$fresh_hash" cipher-fresh)"
+expect 'the binding carries the language chosen with the link' 'en|cipher-fresh|dg-owner-a' \
+	"$(as_tenant dg-org-a dg-owner-a "SELECT locale || '|' || chat_id_ciphertext || '|' || bound_by FROM sv_delivery_recipients WHERE project_id = '$project_a' AND status = 'BOUND'")"
+expect 'the chat bound earlier is retired, not kept as a second destination' 'UNBOUND|REPLACED_BY_NEW_BINDING' \
+	"$(as_tenant dg-org-a dg-owner-a "SELECT status || '|' || unbound_reason FROM sv_delivery_recipients WHERE id = '$recipient_id'")"
+expect 'a link works once' ALREADY_USED "$(redeem "$fresh_hash" cipher-again)"
+expect 'an expired link binds nothing' EXPIRED "$(redeem "$expired_hash" cipher-expired)"
+expect 'an unknown link binds nothing' UNKNOWN "$(redeem "$(token_hash never-issued)" cipher-unknown)"
+expect 'a malformed hash binds nothing' UNKNOWN "$(redeem not-a-hash cipher-unknown)"
+expect_error 'a binding needs a chat' DELIVERY_CHAT_REQUIRED "$(redeem "$second_hash" '')"
+expect 'a second link for the project binds the new chat' BOUND "$(redeem "$second_hash" cipher-second)"
+expect 'the project keeps exactly one bound chat, the newest' '1|cipher-second|ru' \
+	"$(as_tenant dg-org-a dg-owner-a "SELECT count(*) || '|' || max(chat_id_ciphertext) || '|' || max(locale) FROM sv_delivery_recipients WHERE project_id = '$project_a' AND status = 'BOUND'")"
+expect 'failed redemptions leave no recipient behind' 3 \
+	"$(as_tenant dg-org-a dg-owner-a "SELECT count(*) FROM sv_delivery_recipients WHERE project_id = '$project_a'")"
+expect 'another workspace sees none of the bindings' 0 \
 	"$(as_tenant dg-org-b dg-owner-b "SELECT count(*) FROM sv_delivery_recipients")"
 
 printf 'WEEKLY_DIGEST_E2E_OK\n'
