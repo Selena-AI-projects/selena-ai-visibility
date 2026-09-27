@@ -85,7 +85,7 @@ describe("Telegram webhook", () => {
 		expect(response.status).toBe(200);
 		const body = JSON.stringify(await response.json());
 		expect(d.redeem).toHaveBeenCalledWith({ token, chatId: "987654321" });
-		const sent = d.reply.mock.calls[0]?.[0];
+		const sent = vi.mocked(d.reply).mock.calls[0]?.[0];
 		expect(sent?.chatId).toBe("987654321");
 		for (const text of [body, sent?.text ?? ""]) {
 			expect(text).not.toContain(token);
