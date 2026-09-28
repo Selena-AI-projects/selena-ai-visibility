@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
-import { svCycles, svOrders, svPromptFamilies, svScenarios } from "@workspace/lib/db/schema";
+import { svConfigurationLocks, svCycles, svOrders, svPromptFamilies, svScenarios } from "@workspace/lib/db/schema";
+import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import { computeLedgerReport, type LedgerReport } from "@workspace/lib/selena-ledger-metrics";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq } from "drizzle-orm";
@@ -46,6 +47,7 @@ export const getSelenaMeasurementFn = createServerFn({ method: "GET" })
 					expectedRuns: svCycles.expectedRuns,
 					completedRuns: svCycles.completedRuns,
 					createdAt: svCycles.createdAt,
+					lockId: svCycles.lockId,
 				})
 				.from(svCycles)
 				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
@@ -56,16 +58,30 @@ export const getSelenaMeasurementFn = createServerFn({ method: "GET" })
 
 		if (cycles.length === 0) return { cycles: [], latest: null };
 
-		const [scenarioRows, ledger] = await Promise.all([
+		const [scenarioRows, ledger, [lock]] = await Promise.all([
 			withOrganizationTransaction(db, context.tenantId, (tx) =>
 				tx
-					.select({ id: svScenarios.id, intentType: svPromptFamilies.intentType })
+					.select({ id: svScenarios.id, text: svScenarios.text, intentType: svPromptFamilies.intentType })
 					.from(svScenarios)
 					.innerJoin(svPromptFamilies, eq(svScenarios.familyId, svPromptFamilies.id))
 					.where(and(eq(svPromptFamilies.projectId, data.projectId), eq(svScenarios.organizationId, context.tenantId))),
 			),
 			repositories.runs.ledgerForCycle(context, cycles[0].id),
+			// The brand the cycle was measured against, as the full report reads it.
+			withOrganizationTransaction(db, context.tenantId, (tx) =>
+				tx
+					.select({ snapshot: svConfigurationLocks.snapshot })
+					.from(svConfigurationLocks)
+					.where(
+						and(
+							eq(svConfigurationLocks.id, cycles[0].lockId),
+							eq(svConfigurationLocks.organizationId, context.tenantId),
+						),
+					)
+					.limit(1),
+			),
 		]);
+		const brand = parseLockedAnalysisSubjects(lock?.snapshot)?.brand ?? null;
 
 		return {
 			cycles: cycles.map((cycle) => ({
@@ -77,7 +93,7 @@ export const getSelenaMeasurementFn = createServerFn({ method: "GET" })
 			})),
 			latest: {
 				cycleId: cycles[0].id,
-				report: computeLedgerReport(ledger.rows, ledger.mentions, scenarioKindsFrom(scenarioRows)),
+				report: computeLedgerReport(ledger.rows, ledger.mentions, scenarioKindsFrom(scenarioRows, brand)),
 			},
 		};
 	});

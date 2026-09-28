@@ -1,17 +1,33 @@
-import { describe, expect, it } from "vitest";
 import type { LedgerGroup } from "@workspace/lib/selena-ledger-metrics";
+import { describe, expect, it } from "vitest";
 import { formatShare, groupView, scenarioKindsFrom } from "@/lib/selena-measurement-view";
 
 describe("scenarioKindsFrom", () => {
 	it("maps only the two known kinds and leaves the rest unclassified", () => {
-		const kinds = scenarioKindsFrom([
-			{ id: "s1", intentType: "branded" },
-			{ id: "s2", intentType: "discovery" },
-			{ id: "s3", intentType: "comparison" },
-		]);
+		const kinds = scenarioKindsFrom(
+			[
+				{ id: "s1", text: "who makes the best bread", intentType: "branded" },
+				{ id: "s2", text: "best bakery in Ubud", intentType: "discovery" },
+				{ id: "s3", text: "bakery vs cafe", intentType: "comparison" },
+			],
+			null,
+		);
 		expect(kinds.get("s1")).toBe("branded");
 		expect(kinds.get("s2")).toBe("discovery");
 		expect(kinds.has("s3")).toBe(false);
+	});
+
+	it("counts a profile question that names the brand as branded, as the full report does", () => {
+		const brand = { name: "Synthetic Dental Studio" };
+		const kinds = scenarioKindsFrom(
+			[
+				{ id: "named", text: "Synthetic Dental Studio reviews", intentType: "discovery" },
+				{ id: "category", text: "best dentist in Austin for a cleaning", intentType: "discovery" },
+			],
+			brand,
+		);
+		expect(kinds.get("named")).toBe("branded");
+		expect(kinds.get("category")).toBe("discovery");
 	});
 });
 
@@ -33,7 +49,7 @@ describe("groupView", () => {
 				stableMentionRate: null,
 				ownedCitationRate: null,
 				citationCoverage: null,
-				averageBrandPosition: 2,
+				averageBrandPosition: 1.5833333333333333,
 				relativeMentionShare: { brand: null, competitors: [] },
 				visitorApiDivergence: { visitorMentionRate: null, apiMentionRate: null, divergence: null },
 				captureModes: {},
@@ -44,7 +60,7 @@ describe("groupView", () => {
 			measuredRuns: 3,
 			unmeasuredRuns: 2,
 			mentionCoverage: "50%",
-			averageBrandPosition: 2,
+			averageBrandPosition: "1.6",
 		});
 	});
 });

@@ -1,3 +1,5 @@
+import type { AnalysisSubject } from "@workspace/lib/selena-answer-analysis";
+import { isBrandedQuestion } from "@workspace/lib/selena-grader-report";
 import type { LedgerGroup, LedgerScenarioKind } from "@workspace/lib/selena-ledger-metrics";
 
 /**
@@ -7,12 +9,19 @@ import type { LedgerGroup, LedgerScenarioKind } from "@workspace/lib/selena-ledg
  * headline score is ever derived.
  */
 
-export function scenarioKindsFrom(rows: { id: string; intentType: string }[]): Map<string, LedgerScenarioKind> {
+export function scenarioKindsFrom(
+	rows: { id: string; text: string; intentType: string }[],
+	brand: AnalysisSubject | null,
+): Map<string, LedgerScenarioKind> {
 	const kinds = new Map<string, LedgerScenarioKind>();
 	for (const row of rows) {
+		// Every profile question lands in one "discovery" family whatever it
+		// says, so the question's own text decides, by the rule the full report
+		// uses; otherwise the two views would split the same answers differently.
+		if (row.intentType === "branded" || (brand !== null && isBrandedQuestion(row.text, brand)))
+			kinds.set(row.id, "branded");
 		// Anything else stays unclassified and is surfaced as a count by the
 		// ledger report rather than guessed into a bucket.
-		if (row.intentType === "branded") kinds.set(row.id, "branded");
 		else if (row.intentType === "discovery") kinds.set(row.id, "discovery");
 	}
 	return kinds;
@@ -31,7 +40,8 @@ export type GroupView =
 			measuredRuns: number;
 			unmeasuredRuns: number;
 			mentionCoverage: string | null;
-			averageBrandPosition: number | null;
+			/** One decimal, as the full report prints positions. */
+			averageBrandPosition: string | null;
 	  };
 
 export function groupView(group: LedgerGroup): GroupView {
@@ -42,6 +52,6 @@ export function groupView(group: LedgerGroup): GroupView {
 		measuredRuns: metrics.validRuns - metrics.unmeasuredRuns,
 		unmeasuredRuns: metrics.unmeasuredRuns,
 		mentionCoverage: formatShare(metrics.mentionCoverage),
-		averageBrandPosition: metrics.averageBrandPosition,
+		averageBrandPosition: metrics.averageBrandPosition === null ? null : metrics.averageBrandPosition.toFixed(1),
 	};
 }
