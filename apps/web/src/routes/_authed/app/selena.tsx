@@ -17,6 +17,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { authClient } from "@workspace/lib/auth/client";
 import { parseGoogleMapsLocation } from "@workspace/lib/google-maps-location";
 import type { CycleDiffChange } from "@workspace/lib/selena-cycle-diff";
+import { isBrandedQuestion } from "@workspace/lib/selena-grader-report";
 import type { LedgerReport } from "@workspace/lib/selena-ledger-metrics";
 import { Button } from "@workspace/ui/components/button";
 import { Checkbox } from "@workspace/ui/components/checkbox";
@@ -1328,6 +1329,7 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 	const [checked, setChecked] = useState<Set<string>>(new Set());
 	const [bulkBusy, setBulkBusy] = useState(false);
 	const [busyId, setBusyId] = useState("");
+	const brandName = project.profile?.brandName.trim() ?? "";
 	const [rowError, setRowError] = useState("");
 
 	const load = () => {
@@ -1468,7 +1470,8 @@ function QuestionsPanel({ project, locale }: { project: WorkspaceProject; locale
 							<div className="min-w-0 flex-1">
 								<label htmlFor={`question-${scenario.id}`} className="text-xs uppercase tracking-wide text-[#574d45]">
 									{scenario.language.toUpperCase()} ·{" "}
-									{scenario.intentType === "branded"
+									{scenario.intentType === "branded" ||
+									(brandName !== "" && isBrandedQuestion(scenario.text, { name: brandName }))
 										? tr(locale, "names the brand", "с названием бренда")
 										: tr(locale, "category question", "вопрос про категорию")}
 								</label>

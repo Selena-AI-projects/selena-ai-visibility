@@ -1,3 +1,6 @@
+import type { AnalysisSubject } from "@workspace/lib/selena-answer-analysis";
+import type { CycleDiffChange, CycleDiffReport } from "@workspace/lib/selena-cycle-diff";
+import { isBrandedQuestion } from "@workspace/lib/selena-grader-report";
 import type { LedgerGroup, LedgerScenarioKind } from "@workspace/lib/selena-ledger-metrics";
 
 /**
@@ -7,12 +10,19 @@ import type { LedgerGroup, LedgerScenarioKind } from "@workspace/lib/selena-ledg
  * headline score is ever derived.
  */
 
-export function scenarioKindsFrom(rows: { id: string; intentType: string }[]): Map<string, LedgerScenarioKind> {
+export function scenarioKindsFrom(
+	rows: { id: string; text: string; intentType: string }[],
+	brand: AnalysisSubject | null,
+): Map<string, LedgerScenarioKind> {
 	const kinds = new Map<string, LedgerScenarioKind>();
 	for (const row of rows) {
+		// Every profile question lands in one "discovery" family whatever it
+		// says, so the question's own text decides, by the rule the full report
+		// uses; otherwise the two views would split the same answers differently.
+		if (row.intentType === "branded" || (brand !== null && isBrandedQuestion(row.text, brand)))
+			kinds.set(row.id, "branded");
 		// Anything else stays unclassified and is surfaced as a count by the
 		// ledger report rather than guessed into a bucket.
-		if (row.intentType === "branded") kinds.set(row.id, "branded");
 		else if (row.intentType === "discovery") kinds.set(row.id, "discovery");
 	}
 	return kinds;
@@ -31,7 +41,8 @@ export type GroupView =
 			measuredRuns: number;
 			unmeasuredRuns: number;
 			mentionCoverage: string | null;
-			averageBrandPosition: number | null;
+			/** One decimal, as the full report prints positions. */
+			averageBrandPosition: string | null;
 	  };
 
 export function groupView(group: LedgerGroup): GroupView {
@@ -42,6 +53,29 @@ export function groupView(group: LedgerGroup): GroupView {
 		measuredRuns: metrics.validRuns - metrics.unmeasuredRuns,
 		unmeasuredRuns: metrics.unmeasuredRuns,
 		mentionCoverage: formatShare(metrics.mentionCoverage),
-		averageBrandPosition: metrics.averageBrandPosition,
+		averageBrandPosition: metrics.averageBrandPosition === null ? null : metrics.averageBrandPosition.toFixed(1),
 	};
+}
+
+export type CycleCompareSummary =
+	| { state: "unknown"; notComparable: number }
+	| { state: "compared"; counts: Record<CycleDiffChange["type"], number>; notComparable: number };
+
+/**
+ * Change counts mean something only where a question was measured in both
+ * cycles; with no such pair a row of zeros would claim "nothing changed" about
+ * answers that were never compared.
+ */
+export function summarizeCycleCompare(report: CycleDiffReport): CycleCompareSummary {
+	const notComparable = report.groups.filter((group) => group.status === "UNKNOWN").length;
+	if (!report.groups.some((group) => group.status === "COMPARED")) return { state: "unknown", notComparable };
+	const counts: Record<CycleDiffChange["type"], number> = {
+		MENTION_APPEARED: 0,
+		MENTION_DISAPPEARED: 0,
+		POSITION_SHIFTED: 0,
+		SOURCE_APPEARED: 0,
+		SOURCE_DISAPPEARED: 0,
+	};
+	for (const change of report.changes) counts[change.type] += 1;
+	return { state: "compared", counts, notComparable };
 }

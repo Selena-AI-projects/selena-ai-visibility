@@ -20,9 +20,10 @@ export type CycleCompareResult =
 	  };
 
 /**
- * Step 7 of the cabinet: what changed between the two newest cycles, in which
- * measured runs — never why. Fewer than two cycles is a closed step, answered
- * as such rather than invented.
+ * Step 7 of the cabinet: what changed between the two newest finished cycles,
+ * in which measured runs — never why. Fewer than two is a closed step, answered
+ * as such rather than invented. A cycle still running, awaiting QC or rejected
+ * at QC is not a measurement the client was given, so it is never compared.
  */
 export const getSelenaCycleCompareFn = createServerFn({ method: "GET" })
 	.validator(z.object({ projectId: z.string().uuid() }))
@@ -36,7 +37,13 @@ export const getSelenaCycleCompareFn = createServerFn({ method: "GET" })
 				.select({ id: svCycles.id, createdAt: svCycles.createdAt })
 				.from(svCycles)
 				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-				.where(and(eq(svOrders.projectId, data.projectId), eq(svCycles.organizationId, context.tenantId)))
+				.where(
+					and(
+						eq(svOrders.projectId, data.projectId),
+						eq(svCycles.organizationId, context.tenantId),
+						eq(svCycles.status, "READY"),
+					),
+				)
 				.orderBy(desc(svCycles.createdAt))
 				.limit(2),
 		);
