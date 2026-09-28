@@ -331,6 +331,40 @@ export function validateCatalogScope(input: CatalogScope): SelenaPlan {
 	return plan;
 }
 
+/**
+ * The per-measurement check an order desk runs on the approved scenarios it is
+ * about to lock. `questionLimitPerMeasurement` is a per-language allowance:
+ * the $79 plan's 50 is 25 questions in each of two languages, not 50 in one.
+ * The negotiated Growth scope has no fixed allowance and is left to its own
+ * admin-approved lock.
+ */
+export function validateMeasurementLanguageScope(
+	planId: SelenaPlanId,
+	scenarioLanguages: readonly string[],
+): SelenaPlan {
+	const plan = getPlan(planId);
+	if (plan.questionLimitPerMeasurement === null) return plan;
+	const perLanguage = new Map<string, number>();
+	for (const language of scenarioLanguages) {
+		const key = language.trim().toLowerCase();
+		perLanguage.set(key, (perLanguage.get(key) ?? 0) + 1);
+	}
+	validateCatalogScope({
+		planId,
+		languages: [...perLanguage.keys()],
+		languageScenarios: scenarioLanguages.length,
+		repeats: plan.repeatCount ?? 1,
+		systems: [...plan.systems],
+		providerCostCap: plan.providerBudgetCap,
+		laborCapHours: plan.laborHours,
+		adminApproved: false,
+		growthScopeLocked: false,
+	});
+	for (const count of perLanguage.values())
+		if (count > plan.questionLimitPerMeasurement) throw new Error("LANGUAGE_QUESTION_LIMIT_EXCEEDED");
+	return plan;
+}
+
 export type OrderLockSnapshot = {
 	catalogVersion: string;
 	plan: SelenaPlan;

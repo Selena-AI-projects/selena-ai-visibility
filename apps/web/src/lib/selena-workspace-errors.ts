@@ -150,6 +150,20 @@ export function humanizeSelenaAdminError(cause: unknown, locale: WorkspaceLocale
 			: `Preflight blocked the action: ${hints}. Select the order in the queue below to see every check.`;
 	}
 
+	const languageScope = raw.match(
+		/^SELENA_LANGUAGE_SCOPE_EXCEEDED:\s*(\w+);.*?up to (\d+) language\(s\) and (\d+) questions/,
+	);
+	if (languageScope) {
+		const [, code, languages, questions] = languageScope;
+		if (code === "LANGUAGE_LIMIT_EXCEEDED")
+			return locale === "ru"
+				? `Вопросы в заказе на разных языках, а тариф принимает не больше ${languages} яз. Оставьте вопросы на разрешённом числе языков.`
+				: `The selected questions span more languages than this plan allows (${languages}). Keep questions in the allowed number of languages.`;
+		return locale === "ru"
+			? `На одном языке замер принимает не больше ${questions} вопросов. Снимите лишние или добавьте вопросы на втором языке, если тариф его включает.`
+			: `One measurement takes up to ${questions} questions per language. Unselect the extras, or use a second language if the plan includes one.`;
+	}
+
 	const planLimit = raw.match(/^SELENA_PLAN_SCENARIO_LIMIT_EXCEEDED:\s*(\d+)/);
 	if (planLimit) {
 		return locale === "ru"
