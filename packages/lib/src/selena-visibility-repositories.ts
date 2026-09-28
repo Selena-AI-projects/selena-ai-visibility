@@ -173,6 +173,48 @@ export async function allocateConfigurationLockInTransaction(
 	return lock;
 }
 
+/**
+ * Everything §12 is computed from, for one cycle: the terminal run rows and
+ * the mention rows extracted from them. Read as one pair so a metric can
+ * never combine the runs of one cycle with the mentions of another.
+ */
+export async function readCycleLedger(
+	runner: DbLike,
+	tenantId: string,
+	cycleId: string,
+): Promise<{ rows: LedgerRow[]; mentions: LedgerMention[] }> {
+	const [rows, mentions] = await Promise.all([
+		runner
+			.select({
+				runId: schema.svRuns.id,
+				scenarioId: schema.svRuns.scenarioId,
+				system: schema.svRuns.system,
+				channel: schema.svRuns.channel,
+				validity: schema.svRuns.validity,
+				extractorVersion: schema.svRuns.extractorVersion,
+				captureMode: schema.svRuns.captureMode,
+				ownedCitation: schema.svRuns.ownedCitation,
+				citations: schema.svRuns.citations,
+				finishedAt: schema.svRuns.finishedAt,
+			})
+			.from(schema.svRuns)
+			.where(and(eq(schema.svRuns.cycleId, cycleId), eq(schema.svRuns.organizationId, tenantId))),
+		runner
+			.select({
+				runId: schema.svResponseMentions.runId,
+				entityType: schema.svResponseMentions.entityType,
+				name: schema.svResponseMentions.name,
+				ordinalPosition: schema.svResponseMentions.ordinalPosition,
+				captureMode: schema.svResponseMentions.captureMode,
+			})
+			.from(schema.svResponseMentions)
+			.where(
+				and(eq(schema.svResponseMentions.cycleId, cycleId), eq(schema.svResponseMentions.organizationId, tenantId)),
+			),
+	]);
+	return { rows, mentions };
+}
+
 export function createSelenaRepositories(db: Db) {
 	const assertProjectOwned = async (ctx: SelenaRepositoryContext, projectId: string, runner: DbLike = db) => {
 		const [project] = await runner
@@ -308,50 +350,8 @@ export function createSelenaRepositories(db: Db) {
 		if (!observation) throw new Error("Not found: observation is outside AuthContext tenant");
 		return observation;
 	};
-	/**
-	 * Everything §12 is computed from, for one cycle: the terminal run rows and
-	 * the mention rows extracted from them. Read as one pair so a metric can
-	 * never combine the runs of one cycle with the mentions of another.
-	 */
-	const ledgerForCycle = async (
-		ctx: SelenaRepositoryContext,
-		cycleId: string,
-		runner: DbLike = db,
-	): Promise<{ rows: LedgerRow[]; mentions: LedgerMention[] }> => {
-		const [rows, mentions] = await Promise.all([
-			runner
-				.select({
-					runId: schema.svRuns.id,
-					scenarioId: schema.svRuns.scenarioId,
-					system: schema.svRuns.system,
-					channel: schema.svRuns.channel,
-					validity: schema.svRuns.validity,
-					extractorVersion: schema.svRuns.extractorVersion,
-					captureMode: schema.svRuns.captureMode,
-					ownedCitation: schema.svRuns.ownedCitation,
-					citations: schema.svRuns.citations,
-					finishedAt: schema.svRuns.finishedAt,
-				})
-				.from(schema.svRuns)
-				.where(and(eq(schema.svRuns.cycleId, cycleId), eq(schema.svRuns.organizationId, ctx.tenantId))),
-			runner
-				.select({
-					runId: schema.svResponseMentions.runId,
-					entityType: schema.svResponseMentions.entityType,
-					name: schema.svResponseMentions.name,
-					ordinalPosition: schema.svResponseMentions.ordinalPosition,
-					captureMode: schema.svResponseMentions.captureMode,
-				})
-				.from(schema.svResponseMentions)
-				.where(
-					and(
-						eq(schema.svResponseMentions.cycleId, cycleId),
-						eq(schema.svResponseMentions.organizationId, ctx.tenantId),
-					),
-				),
-		]);
-		return { rows, mentions };
-	};
+	const ledgerForCycle = (ctx: SelenaRepositoryContext, cycleId: string, runner: DbLike = db) =>
+		readCycleLedger(runner, ctx.tenantId, cycleId);
 	return {
 		projects: {
 			list: (ctx: SelenaRepositoryContext) =>

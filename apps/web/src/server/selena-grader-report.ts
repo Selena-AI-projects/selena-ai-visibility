@@ -9,22 +9,12 @@ import {
 	svScenarios,
 	svWebsiteSnapshots,
 } from "@workspace/lib/db/schema";
-import { analyzeAnswer } from "@workspace/lib/selena-answer-analysis";
+import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
-import {
-	buildGraderReport,
-	type GraderChannel,
-	type GraderReport,
-	type GraderRunInput,
-} from "@workspace/lib/selena-grader-report";
+import type { GraderReport } from "@workspace/lib/selena-grader-report";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
-import {
-	actionPlanSchema,
-	measurementScopeSchema,
-	monthlyAnswerAllowance,
-	resolvePlanId,
-} from "@workspace/selena-visibility-contracts";
+import { actionPlanSchema, monthlyAnswerAllowance, resolvePlanId } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -33,7 +23,6 @@ import {
 } from "@/lib/selena-monthly-allowance";
 import { selectReportAnchor } from "@/lib/selena-report-anchor";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
-import { readRetainedAnswer, readStoredAnalysis } from "./selena-order-analysis";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
@@ -234,7 +223,6 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		);
 		const snapshot = (lock?.snapshot ?? null) as Record<string, unknown> | null;
 		const subjects = parseLockedAnalysisSubjects(lock?.snapshot);
-		const scope = measurementScopeSchema.safeParse(snapshot?.measurementScope);
 		const storedPlanId = readString(snapshot?.planId);
 		const resolvedPlanId = storedPlanId ? resolvePlanId(storedPlanId) : null;
 		view.planId = resolvedPlanId ?? storedPlanId;
@@ -283,55 +271,6 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 							.from(svScenarios)
 							.where(and(inArray(svScenarios.id, scenarioIds), eq(svScenarios.organizationId, context.tenantId))),
 					);
-		const scenarioById = new Map(scenarioRows.map((row) => [row.id, row]));
-
-		// A run that predates systemId stamping still belongs to a channel; the
-		// scope names that channel's systems, so a single-system channel can be
-		// attributed and anything else stays visibly unattributed.
-		const channelSystems = new Map<string, string[]>();
-		if (scope.success)
-			for (const system of scope.data.systems) {
-				const bucket = channelSystems.get(system.channel) ?? [];
-				bucket.push(system.systemId);
-				channelSystems.set(system.channel, bucket);
-			}
-
-		const graderRuns: GraderRunInput[] = runs.map((run) => {
-			const scenario = scenarioById.get(run.scenarioId);
-			const channel: GraderChannel = run.channel === "API" ? "API" : "VISITOR";
-			const fallbackSystems = channelSystems.get(channel) ?? [];
-			return {
-				runId: run.id,
-				systemId: run.systemId ?? (fallbackSystems.length === 1 ? fallbackSystems[0] : "unattributed"),
-				channel,
-				captureMode: run.captureMode ?? null,
-				scenarioId: run.scenarioId,
-				scenarioText: scenario?.text ?? "",
-				scenarioLanguage: scenario?.language ?? "",
-				// A GET must not write: analysis is read from the payload when the
-				// admin action already saved it, and recomputed in memory from the
-				// retained text otherwise. Persisting stays with the admin POST, so
-				// a read-only viewer can always open the report.
-				analysis:
-					readStoredAnalysis(run.canonicalPayload) ??
-					(() => {
-						const retained = readRetainedAnswer(run.canonicalPayload);
-						return retained
-							? analyzeAnswer({
-									text: retained.text,
-									brand: subjects.brand,
-									competitors: subjects.competitors,
-									citedUrls: retained.citedUrls,
-								})
-							: null;
-					})(),
-			};
-		});
-
-		view.report = buildGraderReport({
-			runs: graderRuns,
-			subjects,
-			repeats: scope.success ? scope.data.repeats : null,
-		});
+		view.report = buildCycleGraderReport({ lockSnapshot: lock?.snapshot, runs, scenarios: scenarioRows });
 		return view;
 	});

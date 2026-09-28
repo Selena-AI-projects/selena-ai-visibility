@@ -9,6 +9,11 @@ import { type ScheduleMaintenanceData, scheduleMaintenanceJob } from "./jobs/sch
 import { type SelenaAnswerRetentionData, selenaAnswerRetentionJob } from "./jobs/selena-answer-retention";
 import { type FreeAiVisibilityJobData, freeAiVisibilityJob } from "./jobs/selena-free-ai-visibility";
 import { type SelenaMeasureData, selenaMeasureJob } from "./jobs/selena-measure";
+import {
+	createSelenaWeeklyDigestJob,
+	type SelenaWeeklyDigestData,
+	WEEKLY_DIGEST_QUEUE,
+} from "./jobs/selena-weekly-digest";
 import { type SyncAuth0MembershipsData, syncAuth0MembershipsJob } from "./jobs/sync-auth0-memberships";
 
 /**
@@ -71,6 +76,18 @@ export async function registerHandlers(boss: PgBoss): Promise<void> {
 		withSentry("selena-answer-retention", selenaAnswerRetentionJob),
 	);
 	console.log("Registered handler: selena-answer-retention");
+
+	await boss.work<SelenaWeeklyDigestData>(
+		WEEKLY_DIGEST_QUEUE,
+		{ localConcurrency: 1 },
+		withSentry(
+			WEEKLY_DIGEST_QUEUE,
+			createSelenaWeeklyDigestJob(async (data, startAfter) => {
+				await boss.send(WEEKLY_DIGEST_QUEUE, { kind: "deliver", ...data }, { startAfter });
+			}),
+		),
+	);
+	console.log(`Registered handler: ${WEEKLY_DIGEST_QUEUE}`);
 
 	// localConcurrency 1: a commercial cycle's spend is bounded by its permits,
 	// and serial execution keeps that bound easy to observe.
