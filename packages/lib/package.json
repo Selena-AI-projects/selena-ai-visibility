@@ -94,6 +94,7 @@
 		"./selena-cycle-diff": "./src/selena-cycle-diff.ts",
 		"./selena-cycle-report": "./src/selena-cycle-report.ts",
 		"./selena-weekly-digest": "./src/selena-weekly-digest.ts",
+		"./selena-weekly-digest-store": "./src/selena-weekly-digest-store.ts",
 		"./selena-delivery-connect": "./src/selena-delivery-connect.ts",
 		"./selena-answer-retention": "./src/selena-answer-retention.ts",
 		"./selena-raw-evidence-storage": "./src/selena-raw-evidence-storage.ts",
