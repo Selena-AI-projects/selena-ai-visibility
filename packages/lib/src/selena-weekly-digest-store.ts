@@ -24,6 +24,7 @@ import { type CycleDiffReport, computeCycleDiff } from "./selena-cycle-diff";
 import { buildCycleGraderReport } from "./selena-cycle-report";
 import { DELIVERY_RECIPIENT_CHAT_AAD, type DeliveryLocale } from "./selena-delivery-connect";
 import type { GraderReport } from "./selena-grader-report";
+import { REPORT_READY_CYCLE_STATUS } from "./selena-report-cycle";
 import { readCycleLedger } from "./selena-visibility-repositories";
 import { canonicalWeeklyDigest, type WeeklyDigestContent } from "./selena-weekly-digest";
 
@@ -59,9 +60,6 @@ export type WeeklyDigestSource = {
 	diff: CycleDiffReport | null;
 };
 
-// READY is the only state in which a cycle's evidence is final.
-const FINISHED_CYCLE_STATUS = "READY" as const;
-
 export async function readWeeklyDigestSource(
 	tx: OrganizationTransaction,
 	organizationId: string,
@@ -96,7 +94,7 @@ export async function readWeeklyDigestSource(
 				eq(svOrders.projectId, projectId),
 				eq(svOrders.organizationId, organizationId),
 				eq(svCycles.organizationId, organizationId),
-				eq(svCycles.status, FINISHED_CYCLE_STATUS),
+				eq(svCycles.status, REPORT_READY_CYCLE_STATUS),
 			),
 		)
 		.orderBy(desc(svCycles.createdAt))

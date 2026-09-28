@@ -3,6 +3,7 @@ import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svCycles, svOrders } from "@workspace/lib/db/schema";
 import { type CycleDiffReport, computeCycleDiff } from "@workspace/lib/selena-cycle-diff";
+import { REPORT_READY_CYCLE_STATUS } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -41,7 +42,7 @@ export const getSelenaCycleCompareFn = createServerFn({ method: "GET" })
 					and(
 						eq(svOrders.projectId, data.projectId),
 						eq(svCycles.organizationId, context.tenantId),
-						eq(svCycles.status, "READY"),
+						eq(svCycles.status, REPORT_READY_CYCLE_STATUS),
 					),
 				)
 				.orderBy(desc(svCycles.createdAt))
