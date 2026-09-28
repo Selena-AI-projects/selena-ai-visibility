@@ -16,7 +16,11 @@ import {
 	type WeeklyDigestSource,
 	type WeeklyDigestTarget,
 } from "@workspace/lib/selena-weekly-digest-store";
-import type { DeliveryDecision, DeliveryOutcome } from "@workspace/selena-visibility-contracts";
+import {
+	type DeliveryDecision,
+	type DeliveryOutcome,
+	planIncludesWeeklyDigest,
+} from "@workspace/selena-visibility-contracts";
 import type { Job } from "pg-boss";
 
 export const WEEKLY_DIGEST_QUEUE = "selena-weekly-digest";
@@ -67,6 +71,7 @@ export type TargetOutcome =
 	| "NO_PROJECT"
 	| "NO_RECIPIENT"
 	| "NO_FINISHED_CYCLE"
+	| "PLAN_EXCLUDES_DIGEST"
 	| "NO_BRAND_TO_COUNT"
 	| "NO_NEW_CYCLE"
 	| "DELIVERED"
@@ -76,7 +81,10 @@ export type TargetOutcome =
 	| `REFUSED:${string}`
 	| "ERROR";
 
-export type DeliveryResult = Exclude<TargetOutcome, "NO_PROJECT" | "NO_RECIPIENT" | "NO_FINISHED_CYCLE">;
+export type DeliveryResult = Exclude<
+	TargetOutcome,
+	"NO_PROJECT" | "NO_RECIPIENT" | "NO_FINISHED_CYCLE" | "PLAN_EXCLUDES_DIGEST"
+>;
 
 function config(env: Record<string, string | undefined>) {
 	return readTelegramDeliveryConfig(env);
@@ -144,6 +152,7 @@ export async function runWeeklyDigestSweep(
 				if (!source) return "NO_PROJECT" as const;
 				if (!source.recipient) return "NO_RECIPIENT" as const;
 				if (!source.cycle) return "NO_FINISHED_CYCLE" as const;
+				if (!planIncludesWeeklyDigest(source.planId)) return "PLAN_EXCLUDES_DIGEST" as const;
 				if (!source.report) return "NO_BRAND_TO_COUNT" as const;
 				const content = buildWeeklyDigest({
 					projectName: source.projectName,

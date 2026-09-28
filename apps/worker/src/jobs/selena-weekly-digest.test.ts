@@ -39,6 +39,7 @@ function report(systems: Array<{ answersAnalyzed: number; brandMentioned: number
 function source(overrides: Partial<WeeklyDigestSource> = {}): WeeklyDigestSource {
 	return {
 		projectName: "Synthetic Clinic",
+		planId: "visibility-snapshot",
 		recipient: { id: "recipient-1", locale: "ru" },
 		cycle: { id: "cycle-2", completedAt: IN_WEEK },
 		previousCycleId: null,
@@ -247,6 +248,34 @@ test("a week without a newly finished cycle sends nothing", async () => {
 	]);
 	assert.equal(h.tenant("org-a").digests.size, 0);
 	assert.deepEqual(h.sent, []);
+});
+
+test("only plans whose offer names the digest receive it", async () => {
+	const h = harness({
+		tenants: {
+			"org-a": {
+				snapshot: source({ planId: "visibility-snapshot" }),
+				managed: source({ planId: "managed-discovery-90" }),
+				legacySnapshot: source({ planId: "visitor-local" }),
+				landscape: source({ planId: "full-discovery-landscape" }),
+				audit: source({ planId: "competitive-audit" }),
+				unknown: source({ planId: "no-such-plan" }),
+				unrecorded: source({ planId: null }),
+			},
+		},
+	});
+	const result = await runWeeklyDigestSweep(h.deps);
+	assert.deepEqual("outcomes" in result && result.outcomes.map(({ projectId, outcome }) => `${projectId}:${outcome}`), [
+		"snapshot:DELIVERED",
+		"managed:DELIVERED",
+		"legacySnapshot:DELIVERED",
+		"landscape:PLAN_EXCLUDES_DIGEST",
+		"audit:PLAN_EXCLUDES_DIGEST",
+		"unknown:PLAN_EXCLUDES_DIGEST",
+		"unrecorded:PLAN_EXCLUDES_DIGEST",
+	]);
+	assert.equal(h.tenant("org-a").digests.size, 3);
+	assert.equal(h.sent.length, 3);
 });
 
 test("the digest is saved before it is sent, and a rerun never sends it twice", async () => {

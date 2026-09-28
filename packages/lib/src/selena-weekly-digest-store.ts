@@ -48,6 +48,8 @@ export async function listWeeklyDigestTargets(db: OrganizationDatabase): Promise
 
 export type WeeklyDigestSource = {
 	projectName: string;
+	/** The plan the newest finished cycle was ordered under, as stored in its lock. */
+	planId: string | null;
 	recipient: { id: string; locale: DeliveryLocale } | null;
 	/** The newest finished cycle; completedAt is null when none of its runs finished. */
 	cycle: { id: string; completedAt: Date | null } | null;
@@ -102,6 +104,7 @@ export async function readWeeklyDigestSource(
 
 	const base: WeeklyDigestSource = {
 		projectName: project.name,
+		planId: null,
 		recipient: recipient ? { id: recipient.id, locale: recipient.locale === "en" ? "en" : "ru" } : null,
 		cycle: null,
 		previousCycleId: null,
@@ -151,8 +154,10 @@ export async function readWeeklyDigestSource(
 		diff = computeCycleDiff(baseLedger, compareLedger);
 	}
 
+	const lockedPlanId = (lock?.snapshot as { planId?: unknown } | undefined)?.planId;
 	return {
 		...base,
+		planId: typeof lockedPlanId === "string" ? lockedPlanId : null,
 		cycle: { id: current.id, completedAt: finished?.at ?? null },
 		previousCycleId: previous?.id ?? null,
 		report: buildCycleGraderReport({ lockSnapshot: lock?.snapshot, runs, scenarios }),
