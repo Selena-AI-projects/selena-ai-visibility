@@ -113,8 +113,14 @@ export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryV
 /**
  * Plans whose published offer names the weekly Telegram digest. A client on
  * any other plan was not promised one, so the digest job leaves them alone.
+ * Landscape shares Snapshot's weekly measurement, so it gets the same digest
+ * (owner decision, 2026-09-28).
  */
-export const weeklyDigestPlans: readonly SelenaPlanId[] = ["visibility-snapshot", "managed-discovery-90"];
+export const weeklyDigestPlans: readonly SelenaPlanId[] = [
+	"visibility-snapshot",
+	"full-discovery-landscape",
+	"managed-discovery-90",
+];
 
 /** Takes the plan id as stored, so a legacy or unreadable id is answered too. */
 export function planIncludesWeeklyDigest(storedPlanId: string | null | undefined): boolean {
