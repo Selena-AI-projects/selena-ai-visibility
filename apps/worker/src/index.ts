@@ -115,6 +115,12 @@ async function main() {
 		retryDelay: 600,
 		expireInSeconds: 60 * 10,
 	});
+	// Retries are the delivery policy's, not the queue's: a failed attempt is
+	// recorded and its successor queued for the time the policy names.
+	await boss.createQueue("selena-weekly-digest", {
+		retryLimit: 0,
+		expireInSeconds: 60 * 10,
+	});
 	if (process.env.DEPLOYMENT_MODE === "whitelabel") {
 		await boss.createQueue("sync-auth0-memberships", {
 			retryLimit: 3,
@@ -132,6 +138,7 @@ async function main() {
 			legacyProviderExecutionEnabled,
 			maintenanceEnabled: isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED),
 			answerRetentionEnabled: process.env.SELENA_ANSWER_RETENTION_ENABLED,
+			weeklyDigestEnabled: process.env.SELENA_WEEKLY_DIGEST_ENABLED,
 			deploymentMode: process.env.DEPLOYMENT_MODE,
 			ownerManaged: isOwnerManagedPgBossRuntime(runtimePgBossSchemaLifecycle()),
 		},

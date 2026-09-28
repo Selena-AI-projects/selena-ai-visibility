@@ -39,6 +39,7 @@ const allEnabled: RecurringScheduleOptions = {
 	legacyProviderExecutionEnabled: true,
 	maintenanceEnabled: true,
 	answerRetentionEnabled: "true",
+	weeklyDigestEnabled: "true",
 	deploymentMode: "whitelabel",
 	ownerManaged: false,
 };
@@ -78,7 +79,12 @@ test("recurring startup is off by default and removes every managed schedule", a
 		assert.equal(started, undefined);
 		assert.equal(schedulerStarts, 0);
 		assert.deepEqual(scheduled, []);
-		assert.deepEqual(unscheduled, ["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"]);
+		assert.deepEqual(unscheduled, [
+			"schedule-maintenance",
+			"selena-answer-retention",
+			"sync-auth0-memberships",
+			"selena-weekly-digest",
+		]);
 	}
 });
 
@@ -95,7 +101,7 @@ test("an exact recurring opt-in reconciles schedules before starting Timekeeper"
 	assert.deepEqual(unscheduled, []);
 	assert.deepEqual(
 		scheduled.map(({ name }) => name),
-		["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"],
+		["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships", "selena-weekly-digest"],
 	);
 	assert.equal(events.at(-1), "start-timekeeper");
 });
@@ -111,13 +117,19 @@ test("the master opt-in does not bypass individual recurring gates", async () =>
 			legacyProviderExecutionEnabled: false,
 			maintenanceEnabled: false,
 			answerRetentionEnabled: "false",
+			weeklyDigestEnabled: undefined,
 			deploymentMode: "cloud",
 		},
 		async () => "started",
 	);
 
 	assert.deepEqual(scheduled, []);
-	assert.deepEqual(unscheduled, ["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"]);
+	assert.deepEqual(unscheduled, [
+		"schedule-maintenance",
+		"selena-answer-retention",
+		"sync-auth0-memberships",
+		"selena-weekly-digest",
+	]);
 });
 
 test("owner-managed Timekeeper stays fail-closed until a scheduler role is approved", async () => {
@@ -135,7 +147,12 @@ test("owner-managed Timekeeper stays fail-closed until a scheduler role is appro
 
 	assert.equal(schedulerStarts, 0);
 	assert.deepEqual(scheduled, []);
-	assert.deepEqual(unscheduled, ["schedule-maintenance", "selena-answer-retention", "sync-auth0-memberships"]);
+	assert.deepEqual(unscheduled, [
+		"schedule-maintenance",
+		"selena-answer-retention",
+		"sync-auth0-memberships",
+		"selena-weekly-digest",
+	]);
 });
 
 test("unknown schedule rows deny Timekeeper startup", async () => {
@@ -162,5 +179,29 @@ test("a managed queue name with an unexpected key is not allowlisted", async () 
 	await assert.rejects(
 		reconcileAndStartRecurringSchedules(scheduler, allEnabled, async () => "started"),
 		/PGBOSS_UNKNOWN_RECURRING_SCHEDULES:schedule-maintenance:NON_DEFAULT_KEY/,
+	);
+});
+
+test("the weekly digest is scheduled only on its own exact opt-in", async () => {
+	for (const weeklyDigestEnabled of [undefined, "", "false", "TRUE", "1"]) {
+		const { scheduler, scheduled, unscheduled } = fakeScheduler([]);
+		await reconcileAndStartRecurringSchedules(scheduler, { ...allEnabled, weeklyDigestEnabled }, async () => "started");
+		assert.equal(
+			scheduled.some(({ name }) => name === "selena-weekly-digest"),
+			false,
+		);
+		assert.ok(unscheduled.includes("selena-weekly-digest"));
+	}
+
+	const { scheduler, scheduled } = fakeScheduler([]);
+	await reconcileAndStartRecurringSchedules(scheduler, allEnabled, async () => "started");
+	assert.deepEqual(
+		scheduled.find(({ name }) => name === "selena-weekly-digest"),
+		{
+			name: "selena-weekly-digest",
+			cron: "0 6 * * 1",
+			data: { kind: "sweep", source: "scheduled" },
+			options: { tz: "UTC" },
+		},
 	);
 });

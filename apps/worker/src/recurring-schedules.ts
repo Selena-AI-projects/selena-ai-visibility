@@ -3,13 +3,15 @@ import type { PgBoss } from "pg-boss";
 const MAINTENANCE_QUEUE = "schedule-maintenance";
 const ANSWER_RETENTION_QUEUE = "selena-answer-retention";
 const AUTH0_SYNC_QUEUE = "sync-auth0-memberships";
-const MANAGED_SCHEDULES = [MAINTENANCE_QUEUE, ANSWER_RETENTION_QUEUE, AUTH0_SYNC_QUEUE] as const;
+const WEEKLY_DIGEST_QUEUE = "selena-weekly-digest";
+const MANAGED_SCHEDULES = [MAINTENANCE_QUEUE, ANSWER_RETENTION_QUEUE, AUTH0_SYNC_QUEUE, WEEKLY_DIGEST_QUEUE] as const;
 
 export interface RecurringScheduleOptions {
 	recurringEnabled: string | undefined;
 	legacyProviderExecutionEnabled: boolean;
 	maintenanceEnabled: boolean;
 	answerRetentionEnabled: string | undefined;
+	weeklyDigestEnabled: string | undefined;
 	deploymentMode: string | undefined;
 	ownerManaged: boolean;
 }
@@ -57,6 +59,7 @@ async function reconcileRecurringSchedules(scheduler: Scheduler, options: Recurr
 	const maintenanceEnabled = options.legacyProviderExecutionEnabled && options.maintenanceEnabled;
 	const answerRetentionEnabled = options.answerRetentionEnabled === "true";
 	const auth0SyncEnabled = options.deploymentMode === "whitelabel";
+	const weeklyDigestEnabled = options.weeklyDigestEnabled === "true";
 
 	if (maintenanceEnabled) {
 		await scheduler.schedule(MAINTENANCE_QUEUE, "*/5 * * * *", { source: "scheduled" }, { tz: "UTC" });
@@ -74,6 +77,12 @@ async function reconcileRecurringSchedules(scheduler: Scheduler, options: Recurr
 		await scheduler.schedule(AUTH0_SYNC_QUEUE, "*/15 * * * *", { source: "scheduled" }, { tz: "UTC" });
 	} else {
 		await scheduler.unschedule(AUTH0_SYNC_QUEUE);
+	}
+
+	if (weeklyDigestEnabled) {
+		await scheduler.schedule(WEEKLY_DIGEST_QUEUE, "0 6 * * 1", { kind: "sweep", source: "scheduled" }, { tz: "UTC" });
+	} else {
+		await scheduler.unschedule(WEEKLY_DIGEST_QUEUE);
 	}
 
 	return true;
