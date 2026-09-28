@@ -1,7 +1,14 @@
-import type { RunOutcome } from "@workspace/selena-visibility-contracts";
 import { assertDirectDispatchAllowed, type ControlledCycleState, cardinalityExceeded } from "@workspace/lib/run-policy";
+import type { RunOutcome } from "@workspace/selena-visibility-contracts";
 
 export type SelenaMeasurementChannel = "visitor_view" | "api_view";
+
+// The worker lease for the slow scraped collectors includes room after the
+// provider deadline for snapshot cancellation and the transaction that makes
+// the run and cycle terminal. It lives here rather than in the Bright Data
+// adapter because the web app sizes its queues from it and must not pull the
+// adapter (and node:crypto) into the browser.
+export const SLOW_COLLECTOR_QUEUE_LEASE_SECONDS = 35 * 60;
 export type SelenaMeasurementPermit = {
 	cycleId: string;
 	organizationId: string;

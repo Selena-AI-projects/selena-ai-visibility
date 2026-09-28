@@ -1,12 +1,12 @@
 import * as Sentry from "@sentry/node";
 import { reportUnknownSelenaEnv } from "@workspace/config/env";
 import { getDeployment } from "@workspace/deployment";
-import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import { getProvider, parseScrapeTargets, validateScrapeTargets } from "@workspace/lib/providers";
 import { isLegacyProviderExecutionEnabled, isMaintenanceEnabled } from "@workspace/lib/run-policy";
 import { startCredentialRefresh } from "@workspace/lib/secrets";
 import { FREE_AI_VISIBILITY_QUEUE } from "@workspace/lib/selena-free-ai-visibility";
+import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/selena-measurement";
 import type { PgBoss } from "pg-boss";
 import boss, { createRecurringSchedulerBoss } from "./boss";
 import { registerHandlers } from "./handlers";
