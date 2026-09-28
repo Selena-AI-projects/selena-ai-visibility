@@ -460,4 +460,9 @@ SELECT 'GRANT EXECUTE ON FUNCTION sv_redeem_delivery_connect_token(text, text) T
 WHERE to_regprocedure('public.sv_redeem_delivery_connect_token(text,text)') IS NOT NULL
 \gexec
 
+-- The weekly digest job learns which workspaces to visit before it can scope to one (migration 0079).
+SELECT 'GRANT EXECUTE ON FUNCTION sv_list_weekly_digest_targets() TO selena_app'
+WHERE to_regprocedure('public.sv_list_weekly_digest_targets()') IS NOT NULL
+\gexec
+
 COMMIT;
