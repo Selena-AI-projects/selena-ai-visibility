@@ -1,11 +1,6 @@
-import { analyzeAnswer } from "@workspace/lib/selena-answer-analysis";
-import { describe, expect, it, vi } from "vitest";
-import { readRetainedAnswer } from "./selena-order-analysis";
-
-// The module's server functions pull in the auth runtime, which needs a
-// deployment environment; reading a payload needs neither.
-vi.mock("@/lib/auth/helpers", () => ({ requireAdmin: vi.fn() }));
-vi.mock("../lib/selena-auth-context", () => ({ resolveSessionAuthContext: vi.fn() }));
+import { describe, expect, it } from "vitest";
+import { analyzeAnswer } from "./selena-answer-analysis";
+import { readRetainedAnswer } from "./selena-answer-payload";
 
 const brand = { name: "Synthetic Dental Studio" };
 
