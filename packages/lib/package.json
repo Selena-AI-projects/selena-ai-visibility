@@ -93,6 +93,7 @@
 		"./selena-citation-gap": "./src/selena-citation-gap.ts",
 		"./selena-cycle-diff": "./src/selena-cycle-diff.ts",
 		"./selena-cycle-report": "./src/selena-cycle-report.ts",
+		"./selena-report-cycle": "./src/selena-report-cycle.ts",
 		"./selena-weekly-digest": "./src/selena-weekly-digest.ts",
 		"./selena-weekly-digest-store": "./src/selena-weekly-digest-store.ts",
 		"./selena-delivery-connect": "./src/selena-delivery-connect.ts",
