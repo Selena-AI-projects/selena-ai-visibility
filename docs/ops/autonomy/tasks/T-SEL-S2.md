@@ -5,7 +5,7 @@
 | task_id | T-SEL-S2 |
 | repo / base SHA | `Selena-AI-projects/selena-ai-visibility` @ `39dda8f` (`release/selena-visibility-mvp`) |
 | Статус | TESTED_LOCAL (синтетические данные, фейковое хранилище). Против настоящего Postgres не запускалось |
-| Ветка / PR | `claude/six-projects-selena`, тот же draft PR, что и S1 |
+| Ветка / PR | `claude/six-projects-selena`, draft PR #202 |
 | План | `recovery/m5/PLAN.md`, шаг 4 |
 
 ## Что сделано (коммиты)

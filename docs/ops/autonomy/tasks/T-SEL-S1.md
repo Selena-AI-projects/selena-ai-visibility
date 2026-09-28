@@ -5,7 +5,7 @@
 | task_id | T-SEL-S1 |
 | repo / base SHA | `Selena-AI-projects/selena-ai-visibility` @ `39dda8f` (`release/selena-visibility-mvp`) |
 | Статус | DONE_CODE |
-| Ветка / PR | `claude/six-projects-selena`, draft PR (ссылка в описании запуска) |
+| Ветка / PR | `claude/six-projects-selena`, draft PR #202 |
 | Изменённые файлы | `HANDOFF.md` (3 строки) |
 | Коммит | `7bfefdf` Remove pilot client emails from the handoff notes |
 
