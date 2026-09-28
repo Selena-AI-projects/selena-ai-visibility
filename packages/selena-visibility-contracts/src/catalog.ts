@@ -110,6 +110,18 @@ export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryV
 	return { tabs, localDiscovery, localManualAudit: localManualAuditPlans.includes(planId) };
 }
 
+/**
+ * Plans whose published offer names the weekly Telegram digest. A client on
+ * any other plan was not promised one, so the digest job leaves them alone.
+ */
+export const weeklyDigestPlans: readonly SelenaPlanId[] = ["visibility-snapshot", "managed-discovery-90"];
+
+/** Takes the plan id as stored, so a legacy or unreadable id is answered too. */
+export function planIncludesWeeklyDigest(storedPlanId: string | null | undefined): boolean {
+	const planId = storedPlanId ? resolvePlanId(storedPlanId) : null;
+	return planId !== null && weeklyDigestPlans.includes(planId);
+}
+
 export type SelenaPlan = {
 	planId: SelenaPlanId;
 	name: string;

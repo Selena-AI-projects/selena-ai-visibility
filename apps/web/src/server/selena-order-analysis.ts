@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import { svConfigurationLocks, svOrders } from "@workspace/lib/db/schema";
 import { type AnswerAnalysis, analyzeAnswer, summarizeScenarioSet } from "@workspace/lib/selena-answer-analysis";
+import { readRetainedAnswer, readStoredAnalysis } from "@workspace/lib/selena-answer-payload";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, eq } from "drizzle-orm";
@@ -27,44 +28,6 @@ const getRepositories = () => (repositoriesPromise ??= database().then(createSel
 async function requireAdminContext(): Promise<SelenaRepositoryContext> {
 	await requireAdmin();
 	return resolveSessionAuthContext();
-}
-
-export function readRetainedAnswer(payload: unknown): { text: string; citedUrls?: string[] } | null {
-	if (typeof payload !== "object" || payload === null) return null;
-	const answer = (payload as Record<string, unknown>).answer;
-	if (typeof answer !== "object" || answer === null) return null;
-	const record = answer as Record<string, unknown>;
-	const text = typeof record.text === "string" ? record.text : "";
-	if (text.trim() === "") return null;
-	const citedUrls = Array.isArray(record.citedUrls)
-		? record.citedUrls.filter((url): url is string => typeof url === "string")
-		: readProviderCitationUrls(payload as Record<string, unknown>);
-	return citedUrls ? { text, citedUrls } : { text };
-}
-
-// Adapters store the sources a surface reported next to the answer, in the
-// run's measurement, not inside the answer text; without them an answer whose
-// text carries no links would read as citing nothing.
-function readProviderCitationUrls(payload: Record<string, unknown>): string[] | undefined {
-	const measurement = payload.measurement;
-	if (typeof measurement !== "object" || measurement === null) return undefined;
-	const citations = (measurement as Record<string, unknown>).citations;
-	if (!Array.isArray(citations)) return undefined;
-	const urls = citations.flatMap((citation) => {
-		if (typeof citation !== "object" || citation === null) return [];
-		const url = (citation as Record<string, unknown>).url;
-		return typeof url === "string" && url.trim() !== "" ? [url] : [];
-	});
-	return urls.length > 0 ? urls : undefined;
-}
-
-export function readStoredAnalysis(payload: unknown): AnswerAnalysis | null {
-	if (typeof payload !== "object" || payload === null) return null;
-	const analysis = (payload as Record<string, unknown>).analysis;
-	if (typeof analysis !== "object" || analysis === null) return null;
-	const record = analysis as Record<string, unknown>;
-	if (typeof record.brandMentioned !== "boolean" || !Array.isArray(record.mentions)) return null;
-	return record as unknown as AnswerAnalysis;
 }
 
 /** The whole read: shared by the operator action and the client's results step. */

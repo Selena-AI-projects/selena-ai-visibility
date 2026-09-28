@@ -74,7 +74,7 @@ recover the old ones — nothing here can read a code back out of its digest.
 
 ### The two clients — one thing left unconfirmed
 
-Emails: `victorialarust@gmail.com`, `booberid@gmail.com`. Sites named:
+Emails: kept out of this public repository — the owner has both. Sites named:
 `doki.help`, `petid.care`. **Which email belongs to which site was asked and
 never answered** — it does not matter to the pilot-seat mechanism (a seat is
 redeemed by whichever account uses its code first, not bound to an email),
@@ -90,7 +90,7 @@ the worker's stop is still engaged. Flip both, in this order:
 | Variable | Value |
 |---|---|
 | `SELENA_SELF_SERVE_SIGNUP_ENABLED` | `true` |
-| `SELENA_PILOT_SIGNUP_ALLOWLIST` | `victorialarust@gmail.com,booberid@gmail.com` |
+| `SELENA_PILOT_SIGNUP_ALLOWLIST` | the two client emails, comma-separated (the owner has them) |
 | `SELENA_PILOT_SEAT_CAP` | `20` — see caveat below |
 | `SELENA_FREE_AUTO_DISPATCH_ENABLED` | `true` |
 
@@ -188,7 +188,7 @@ the five API models answer; Gemini answered four of ten on 09-04; Perplexity
 through Bright Data returns the wall and every Perplexity row reads invalid.
 The access-class decision below is unchanged by any of this.
 
-The two clients: victorialarust@gmail.com and booberid@gmail.com, sites
+The two clients (emails with the owner, not in this repository), sites
 doki.help and petid.care, both on the Landscape plan with Visitor View
 included by the owner's decision. Neither site is reachable from this
 session's network, so the profiles are the clients' own to fill.
