@@ -8,9 +8,11 @@ import { Link, createFileRoute } from "@tanstack/react-router";
 import { Button } from "@workspace/ui/components/button";
 import { Fragment, useEffect, useState } from "react";
 import { z } from "zod";
+import type { CycleDiffChange } from "@workspace/lib/selena-cycle-diff";
 import type { GraderChannel } from "@workspace/lib/selena-grader-report";
 import { getSelenaWorkspaceFn } from "../../../server/selena-client";
 import { type CycleCompareResult, getSelenaCycleCompareFn } from "../../../server/selena-cycle-compare";
+import { summarizeCycleCompare } from "@/lib/selena-measurement-view";
 import { PRIORITY_LABELS, ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
 import { type GraderReportView, getSelenaGraderReportFn } from "../../../server/selena-grader-report";
 import { getSelenaRunDetailFn } from "../../../server/selena-run-explorer";
@@ -509,6 +511,7 @@ function SelenaReportPage() {
 	const projectId = search.project ?? projects[0]?.project.id ?? "";
 	const [view, setView] = useState<GraderReportView | null>(null);
 	const [compare, setCompare] = useState<CycleCompareResult | null>(null);
+	const compareSummary = compare?.comparable ? summarizeCycleCompare(compare.report) : null;
 	const [failed, setFailed] = useState(false);
 	const [answers, setAnswers] = useState<Record<string, { loading: boolean; text: string | null }>>({});
 	const [activeSection, setActiveSection] = useState<ReportSectionId>("overview");
@@ -1526,6 +1529,14 @@ function SelenaReportPage() {
 										"НЕИЗВЕСТНО — после первого замера сравнивать не с чем; динамика появится со второго цикла.",
 									)}
 								</p>
+							) : compareSummary?.state === "unknown" ? (
+								<p className="mt-4 text-sm font-semibold text-[#9a5f14]">
+									{tr(
+										locale,
+										"UNKNOWN — no question was measured by the same system in both cycles, so there is nothing to compare.",
+										"НЕИЗВЕСТНО — ни один вопрос не был измерен одной и той же системой в обоих циклах, сравнивать нечего.",
+									)}
+								</p>
 							) : (
 								<div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
 									{[
@@ -1535,10 +1546,17 @@ function SelenaReportPage() {
 										["SOURCE_APPEARED", tr(locale, "new sources", "новых источников")],
 									].map(([type, caption]) => (
 										<div key={type} className="rounded-xl border border-[#dccfbe] bg-[#fffdf8] px-4 py-3">
-											<p className="selena-heading text-2xl tabular-nums">{compare.report.changes.filter((change) => change.type === type).length}</p>
+											<p className="selena-heading text-2xl tabular-nums">{compareSummary?.state === "compared" ? compareSummary.counts[type as CycleDiffChange["type"]] : null}</p>
 											<p className="text-xs text-[#574d45]">{caption}</p>
 										</div>
 									))}
+									{compareSummary?.state === "compared" && compareSummary.notComparable > 0 && (
+										<p className="col-span-full text-xs text-[#574d45]">
+											{locale === "ru"
+												? `Несравнимых групп (вопрос × система): ${compareSummary.notComparable} — в них изменения не считались.`
+												: `${compareSummary.notComparable} question × system group(s) could not be compared and are not counted above.`}
+										</p>
+									)}
 								</div>
 							)}
 						</SectionCard>

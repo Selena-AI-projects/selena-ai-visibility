@@ -1,4 +1,5 @@
 import type { AnalysisSubject } from "@workspace/lib/selena-answer-analysis";
+import type { CycleDiffChange, CycleDiffReport } from "@workspace/lib/selena-cycle-diff";
 import { isBrandedQuestion } from "@workspace/lib/selena-grader-report";
 import type { LedgerGroup, LedgerScenarioKind } from "@workspace/lib/selena-ledger-metrics";
 
@@ -54,4 +55,27 @@ export function groupView(group: LedgerGroup): GroupView {
 		mentionCoverage: formatShare(metrics.mentionCoverage),
 		averageBrandPosition: metrics.averageBrandPosition === null ? null : metrics.averageBrandPosition.toFixed(1),
 	};
+}
+
+export type CycleCompareSummary =
+	| { state: "unknown"; notComparable: number }
+	| { state: "compared"; counts: Record<CycleDiffChange["type"], number>; notComparable: number };
+
+/**
+ * Change counts mean something only where a question was measured in both
+ * cycles; with no such pair a row of zeros would claim "nothing changed" about
+ * answers that were never compared.
+ */
+export function summarizeCycleCompare(report: CycleDiffReport): CycleCompareSummary {
+	const notComparable = report.groups.filter((group) => group.status === "UNKNOWN").length;
+	if (!report.groups.some((group) => group.status === "COMPARED")) return { state: "unknown", notComparable };
+	const counts: Record<CycleDiffChange["type"], number> = {
+		MENTION_APPEARED: 0,
+		MENTION_DISAPPEARED: 0,
+		POSITION_SHIFTED: 0,
+		SOURCE_APPEARED: 0,
+		SOURCE_DISAPPEARED: 0,
+	};
+	for (const change of report.changes) counts[change.type] += 1;
+	return { state: "compared", counts, notComparable };
 }

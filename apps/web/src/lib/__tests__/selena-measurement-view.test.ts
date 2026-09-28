@@ -1,6 +1,7 @@
+import type { CycleDiffReport } from "@workspace/lib/selena-cycle-diff";
 import type { LedgerGroup } from "@workspace/lib/selena-ledger-metrics";
 import { describe, expect, it } from "vitest";
-import { formatShare, groupView, scenarioKindsFrom } from "@/lib/selena-measurement-view";
+import { formatShare, groupView, scenarioKindsFrom, summarizeCycleCompare } from "@/lib/selena-measurement-view";
 
 describe("scenarioKindsFrom", () => {
 	it("maps only the two known kinds and leaves the rest unclassified", () => {
@@ -74,5 +75,46 @@ describe("formatShare", () => {
 	it("formats a real 0 as 0% — measured absence is not unknown", () => {
 		expect(formatShare(0)).toBe("0%");
 		expect(formatShare(2 / 3)).toBe("67%");
+	});
+});
+
+describe("summarizeCycleCompare", () => {
+	const evidence = { baseRunIds: ["b"], compareRunIds: ["c"] };
+
+	it("answers UNKNOWN, not zero changes, when no question was measured in both cycles", () => {
+		const report = {
+			formulaVersion: "cycle-diff/1",
+			groups: [
+				{ scenarioId: "q1", system: "ChatGPT", status: "UNKNOWN", reason: "NO_MEASURED_RUNS" },
+				{ scenarioId: "q1", system: "Claude", status: "UNKNOWN", reason: "NOT_IN_BASE" },
+			],
+			changes: [],
+		} as unknown as CycleDiffReport;
+		expect(summarizeCycleCompare(report)).toEqual({ state: "unknown", notComparable: 2 });
+	});
+
+	it("counts changes where groups were compared and says how many were not", () => {
+		const report = {
+			formulaVersion: "cycle-diff/1",
+			groups: [
+				{ scenarioId: "q1", system: "ChatGPT", status: "COMPARED" },
+				{ scenarioId: "q1", system: "Claude", status: "UNKNOWN", reason: "NOT_IN_BASE" },
+			],
+			changes: [
+				{ type: "MENTION_APPEARED", scenarioId: "q1", system: "ChatGPT", evidence },
+				{ type: "SOURCE_APPEARED", scenarioId: "q1", system: "ChatGPT", domain: "guide.example", evidence },
+			],
+		} as unknown as CycleDiffReport;
+		expect(summarizeCycleCompare(report)).toEqual({
+			state: "compared",
+			counts: {
+				MENTION_APPEARED: 1,
+				MENTION_DISAPPEARED: 0,
+				POSITION_SHIFTED: 0,
+				SOURCE_APPEARED: 1,
+				SOURCE_DISAPPEARED: 0,
+			},
+			notComparable: 1,
+		});
 	});
 });
