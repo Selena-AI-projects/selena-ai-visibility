@@ -813,7 +813,7 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: "optional",
 		description:
-			"Set to 'true' to let clients connect Telegram for the weekly digest and, once the worker job ships, to send it. Off by default.",
+			"Set to 'true' to let clients connect Telegram for the weekly digest and to let the worker send it on Mondays. Off by default.",
 	},
 	{
 		name: "SELENA_TELEGRAM_BOT_TOKEN",
