@@ -15,14 +15,11 @@ import type { GraderReport } from "@workspace/lib/selena-grader-report";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
 import { actionPlanSchema, monthlyAnswerAllowance, resolvePlanId } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import {
-	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
-	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
-} from "@/lib/selena-monthly-allowance";
 import { selectReportAnchor } from "@/lib/selena-report-anchor";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { readMonthlyAnswerUsage } from "./selena-monthly-allowance";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
@@ -36,8 +33,12 @@ export type GraderReportView = {
 	} | null;
 	planId: string | null;
 	measuredAt: string | null;
-	/** The calendar month's spent answers against the plan's quoted allowance. */
-	monthUsage: { used: number; allowance: number } | null;
+	/**
+	 * The calendar month against the plan's quoted allowance: answers with a
+	 * usable result as used, answers promised to running or waiting
+	 * measurements as reserved. Failed attempts cost the client nothing.
+	 */
+	monthUsage: { used: number; reserved: number; allowance: number } | null;
 	cycle: { status: string; expectedRuns: number; completedRuns: number } | null;
 	report: GraderReport | null;
 	/** The free website audit: every rule with its outcome, plus the plan. */
@@ -228,25 +229,10 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		view.planId = resolvedPlanId ?? storedPlanId;
 		const planForAllowance = resolvedPlanId ? monthlyAnswerAllowance(resolvedPlanId) : null;
 		if (planForAllowance !== null) {
-			const monthStart = new Date();
-			monthStart.setUTCDate(1);
-			monthStart.setUTCHours(0, 0, 0, 0);
-			const [usage] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-				tx
-					.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
-					.from(svCycles)
-					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-					.where(
-						and(
-							eq(svOrders.projectId, data.projectId),
-							eq(svOrders.organizationId, context.tenantId),
-							gte(svCycles.createdAt, monthStart),
-							notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
-							notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
-						),
-					),
+			const usage = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+				readMonthlyAnswerUsage(tx, { tenantId: context.tenantId, projectId: data.projectId }),
 			);
-			view.monthUsage = { used: Number(usage?.used ?? 0), allowance: planForAllowance };
+			view.monthUsage = { ...usage, allowance: planForAllowance };
 		}
 
 		const cycle = anchor.cycle;
