@@ -5,9 +5,7 @@ import {
 	svConfigurationLocks,
 	svCycles,
 	svOrders,
-	svQcRecords,
 	svRecommendationRuns,
-	svRuns,
 	svScenarios,
 	svWebsiteSnapshots,
 } from "@workspace/lib/db/schema";
@@ -80,20 +78,23 @@ const reportCycleColumns = {
 	completedRuns: svCycles.completedRuns,
 	createdAt: svCycles.createdAt,
 	// A completed run may have FAILED or come back INVALID; the successful count
-	// is what says whether the cycle measured anything at all.
+	// is what says whether the cycle measured anything at all. Both subqueries
+	// are written out in full: column references inside a select-list template
+	// are not table-qualified, and "cycle_id" = "id" would compare a run with
+	// itself.
 	succeededRuns: sql<number>`(
-		select count(*)::int from ${svRuns}
-		where ${svRuns.cycleId} = ${svCycles.id}
-			and ${svRuns.organizationId} = ${svCycles.organizationId}
-			and ${svRuns.status} = 'SUCCEEDED'
+		select count(*)::int from sv_runs as succeeded_runs
+		where succeeded_runs.cycle_id = sv_cycles.id
+			and succeeded_runs.organization_id = sv_cycles.organization_id
+			and succeeded_runs.status = 'SUCCEEDED'
 	)`,
 	// QC decides per order; a record may name the cycle or leave it implied.
 	latestQcDecision: sql<string | null>`(
-		select ${svQcRecords.decision} from ${svQcRecords}
-		where ${svQcRecords.orderId} = ${svCycles.orderId}
-			and ${svQcRecords.organizationId} = ${svCycles.organizationId}
-			and (${svQcRecords.cycleId} is null or ${svQcRecords.cycleId} = ${svCycles.id})
-		order by ${svQcRecords.createdAt} desc
+		select latest_qc.decision from sv_qc_records as latest_qc
+		where latest_qc.order_id = sv_cycles.order_id
+			and latest_qc.organization_id = sv_cycles.organization_id
+			and (latest_qc.cycle_id is null or latest_qc.cycle_id = sv_cycles.id)
+		order by latest_qc.created_at desc
 		limit 1
 	)`,
 };
