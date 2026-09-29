@@ -1,4 +1,11 @@
-import { assertDirectDispatchAllowed, type ControlledCycleState, cardinalityExceeded } from "@workspace/lib/run-policy";
+// The leaf module rather than the run-policy index: the web client bundles
+// this file through boss-client, and the index reaches the provider registry,
+// whose SDKs read Node built-ins while their module bodies evaluate.
+import {
+	assertDirectDispatchAllowed,
+	type ControlledCycleState,
+	cardinalityExceeded,
+} from "@workspace/lib/run-policy/controlled-cycle";
 import type { RunOutcome } from "@workspace/selena-visibility-contracts";
 
 export type SelenaMeasurementChannel = "visitor_view" | "api_view";
