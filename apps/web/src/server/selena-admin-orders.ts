@@ -110,6 +110,23 @@ async function getOwnedOrder(context: SelenaRepositoryContext, orderId: string) 
 }
 
 /**
+ * The owning organization of an order, read across tenants. Only reachable
+ * after requireAdmin(), which has gated the request to a platform operator and
+ * switched it onto the operator connection that spans every tenant; the desk
+ * uses it to scope the rest of a read to the order's own organization. Returns
+ * null when no such order exists. This never widens write access: the mutating
+ * paths keep getOwnedOrder, which stays scoped to the caller's own tenant.
+ */
+async function resolveOrderOrganization(orderId: string): Promise<string | null> {
+	const [row] = await (await database())
+		.select({ organizationId: svOrders.organizationId })
+		.from(svOrders)
+		.where(eq(svOrders.id, orderId))
+		.limit(1);
+	return row?.organizationId ?? null;
+}
+
+/**
  * The provider budget is an owner-set ceiling, not a balance read from any
  * provider: nothing in this layer may talk to one. Unset means zero, which
  * preflight reports as a blocker instead of guessing that money is available.
@@ -223,34 +240,46 @@ export const getSelenaAdminAccessFn = createServerFn({ method: "GET" }).handler(
 });
 
 export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).handler(async () => {
-	const context = await requireAdminContext();
-	const orders = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
-		tx
-			.select({
-				id: svOrders.id,
-				status: svOrders.status,
-				orderCap: svOrders.orderCap,
-				paidAt: svOrders.paidAt,
-				createdAt: svOrders.createdAt,
-				updatedAt: svOrders.updatedAt,
-				projectId: svOrders.projectId,
-				projectName: svProjects.name,
-				currency: svQuotes.currency,
-				lockVersion: svConfigurationLocks.version,
-				lockExpectedRuns: svConfigurationLocks.expectedRuns,
-				lockBudgetCap: svConfigurationLocks.budgetCap,
-			})
-			.from(svOrders)
-			.innerJoin(svProjects, eq(svOrders.projectId, svProjects.id))
-			.innerJoin(svQuotes, eq(svOrders.quoteId, svQuotes.id))
-			.innerJoin(svConfigurationLocks, eq(svOrders.lockId, svConfigurationLocks.id))
-			.where(and(eq(svOrders.organizationId, context.tenantId), inArray(svOrders.status, [...adminQueueStatuses])))
-			.orderBy(desc(svOrders.updatedAt)),
-	);
+	await requireAdminContext();
+	// The operator desk spans every tenant: list orders across organizations on
+	// the operator connection requireAdmin() entered, then enrich each one scoped
+	// to its own organization so tenant-forced tables stay readable. The owning
+	// organization travels with each row. This is read-only — the mutating desk
+	// actions keep the caller's own tenant and refuse another organization's order.
+	const db = await database();
+	const orders = await db
+		.select({
+			id: svOrders.id,
+			organizationId: svOrders.organizationId,
+			status: svOrders.status,
+			orderCap: svOrders.orderCap,
+			paidAt: svOrders.paidAt,
+			createdAt: svOrders.createdAt,
+			updatedAt: svOrders.updatedAt,
+			projectId: svOrders.projectId,
+			projectName: svProjects.name,
+			currency: svQuotes.currency,
+			lockId: svOrders.lockId,
+		})
+		.from(svOrders)
+		.innerJoin(svProjects, eq(svOrders.projectId, svProjects.id))
+		.innerJoin(svQuotes, eq(svOrders.quoteId, svQuotes.id))
+		.where(inArray(svOrders.status, [...adminQueueStatuses]))
+		.orderBy(desc(svOrders.updatedAt));
 	return Promise.all(
 		orders.map(async (order) => {
-			const [cycles, qc] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+			const organizationId = order.organizationId;
+			const [lock, cycles, qc] = await withOrganizationTransaction(db, organizationId, (tx) =>
 				Promise.all([
+					tx
+						.select({
+							version: svConfigurationLocks.version,
+							expectedRuns: svConfigurationLocks.expectedRuns,
+							budgetCap: svConfigurationLocks.budgetCap,
+						})
+						.from(svConfigurationLocks)
+						.where(and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, organizationId)))
+						.limit(1),
 					tx
 						.select({
 							id: svCycles.id,
@@ -271,7 +300,7 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 							)`,
 						})
 						.from(svCycles)
-						.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
+						.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, organizationId)))
 						.orderBy(desc(svCycles.createdAt)),
 					tx
 						.select({
@@ -283,7 +312,7 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 							reviewedAt: svQcRecords.reviewedAt,
 						})
 						.from(svQcRecords)
-						.where(and(eq(svQcRecords.orderId, order.id), eq(svQcRecords.organizationId, context.tenantId)))
+						.where(and(eq(svQcRecords.orderId, order.id), eq(svQcRecords.organizationId, organizationId)))
 						.orderBy(desc(svQcRecords.createdAt))
 						.limit(1),
 				]),
@@ -291,7 +320,7 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 			// What the providers charged (or were estimated to charge) for this
 			// order, from the spend ledger: the operator's number, never the
 			// client's, whose allowance counts answers rather than dollars.
-			const [spend] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+			const [spend] = await withOrganizationTransaction(db, organizationId, (tx) =>
 				tx
 					.select({
 						totalUsd: sql<number>`coalesce(sum(${svCostEvents.amountUsd}), 0)::float8`,
@@ -300,10 +329,22 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 					})
 					.from(svCostEvents)
 					.innerJoin(svCycles, eq(svCostEvents.cycleId, svCycles.id))
-					.where(and(eq(svCycles.orderId, order.id), eq(svCostEvents.organizationId, context.tenantId))),
+					.where(and(eq(svCycles.orderId, order.id), eq(svCostEvents.organizationId, organizationId))),
 			);
 			return {
-				...order,
+				id: order.id,
+				organizationId,
+				status: order.status,
+				orderCap: order.orderCap,
+				paidAt: order.paidAt,
+				createdAt: order.createdAt,
+				updatedAt: order.updatedAt,
+				projectId: order.projectId,
+				projectName: order.projectName,
+				currency: order.currency,
+				lockVersion: lock[0]?.version ?? null,
+				lockExpectedRuns: lock[0]?.expectedRuns ?? null,
+				lockBudgetCap: lock[0]?.budgetCap ?? null,
 				cycles,
 				latestQc: qc[0] ?? null,
 				providerSpend: {
@@ -320,7 +361,13 @@ export const getSelenaOrderPreflightFn = createServerFn({ method: "GET" })
 	.validator(orderIdSchema)
 	.handler(async ({ data }) => {
 		const context = await requireAdminContext();
-		return collectPreflight(context, data.orderId);
+		// The operator reads any tenant's order; scope the read to the order's own
+		// organization so its tenant-forced tables are visible. Reading the
+		// preflight never acts on the order — approval and the rest keep the
+		// caller's own tenant (getOwnedOrder).
+		const organizationId = await resolveOrderOrganization(data.orderId);
+		if (!organizationId) throw new Error("Not found: order does not exist");
+		return collectPreflight({ ...context, tenantId: organizationId }, data.orderId);
 	});
 
 /**
