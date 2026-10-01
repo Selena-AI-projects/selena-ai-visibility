@@ -17,7 +17,11 @@ import { isMaintenanceEnabled } from "@workspace/lib/run-policy/controlled-cycle
 import { qcDecisions } from "@workspace/lib/selena-dispatch";
 import { assertApprovable, evaluatePreflight, type PreflightEvaluation } from "@workspace/lib/selena-preflight";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
-import { measurementConfigFromEnv, parseMeasurementScope } from "@workspace/selena-visibility-contracts";
+import {
+	measurementConfigFromEnv,
+	parseMeasurementScope,
+	worstCaseOrderCostUsd,
+} from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isAdmin, requireAdmin, requireAuthSession } from "@/lib/auth/helpers";
@@ -225,9 +229,11 @@ export async function collectPreflight(
 		maintenanceActive: isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED),
 		providerBudgetRemaining: providerBudgetRemaining(),
 		orderCap: Number(order.orderCap),
-		// The lock's committed budget cap is the configuration's worst case: it
-		// is the most this order may ever cost under the locked scope.
-		worstCaseCost: Number(lock?.budgetCap ?? Number.NaN),
+		// What the worker can reserve for this many answers, not the plan's cap:
+		// the cap is the order cap below, and comparing it with itself proved
+		// nothing, and refused every order whenever the owner's per-order
+		// ceiling sat below the plan's cap.
+		worstCaseCost: lock ? worstCaseOrderCostUsd(lock.expectedRuns) : Number.NaN,
 		paymentRecorded: Boolean(payment[0]),
 		currency: quote?.currency,
 	});

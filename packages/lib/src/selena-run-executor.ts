@@ -1,7 +1,7 @@
 import {
 	assertAdaptersConfigured,
 	assertMeasurementAllowed,
-	measurementAdapterNamesFor,
+	estimatedAnswerCostUsd,
 	type RunOutcome,
 	resolveMeasurementAdapterName,
 	runOutcomeSchema,
@@ -20,6 +20,7 @@ import type { SelenaExecutablePermit, SelenaMeasurementAdapter } from "./selena-
 export {
 	assertDispatchModes,
 	isAffirmativeEnvValue,
+	MEASUREMENT_ESTIMATED_COST_USD,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	type SelenaMeasurementConfig,
@@ -80,18 +81,6 @@ export type MeasurementSpendMeter = {
 	release(request: { requestKey: string }): Promise<void>;
 };
 
-/**
- * What one answer is booked at before the invoice says otherwise. Read off the
- * account's own usage on 2026-09-01: nine ChatGPT records cost USD 0.0135.
- */
-export const MEASUREMENT_ESTIMATED_COST_USD = 0.0015;
-const DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD = 0.005;
-
-function estimatedCostForAdapter(configuredAdapter: string): number {
-	return measurementAdapterNamesFor(configuredAdapter).includes("dataforseo-perplexity")
-		? DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD
-		: MEASUREMENT_ESTIMATED_COST_USD;
-}
 
 /**
  * Storage port for the runner. Kept structural so this module stays free of
@@ -152,7 +141,7 @@ export async function runMeasurementForPermit<Ctx>(input: {
 	assertAdaptersConfigured(input.config.adapter, Object.keys(input.adapters));
 	// Held before the claim for the same reason, and keyed by the permit so a
 	// redelivered job rides on the reservation it already made.
-	const estimatedCostUsd = estimatedCostForAdapter(input.config.adapter);
+	const estimatedCostUsd = estimatedAnswerCostUsd(input.config.adapter);
 	if (input.spend) await input.spend.reserve({ requestKey: input.permitId, estimatedUsd: estimatedCostUsd });
 	const claimTime = input.now ?? input.clock?.() ?? new Date();
 	const completionTime = () => input.clock?.() ?? new Date();

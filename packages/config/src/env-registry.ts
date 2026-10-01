@@ -840,7 +840,7 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		scope: "server",
 		requiredBy: "optional",
 		description:
-			"Ceiling for one order's worst-case provider cost, checked at preflight. Not a running total — cumulative spending is metered in sv_provider_spend_budgets, where the runtime cannot raise it.",
+			"Read by the web service only. Ceiling for one order's worst-case provider reservation (its answers times the highest per-answer estimate), checked at preflight; unset refuses every order. Not a running total — cumulative spending is metered in sv_provider_spend_budgets, where the runtime cannot raise it.",
 	},
 	{
 		name: "SELENA_FREE_AI_VISIBILITY_ENABLED",

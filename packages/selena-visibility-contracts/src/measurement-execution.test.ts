@@ -3,11 +3,13 @@ import {
 	assertAdapterAllowed,
 	assertAdaptersConfigured,
 	assertMeasurementAllowed,
+	estimatedAnswerCostUsd,
 	isAffirmativeEnvValue,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	resolveMeasurementAdapterName,
 	runOutcomeSchema,
+	worstCaseOrderCostUsd,
 } from "./measurement-execution";
 
 describe("Selena measurement execution boundary", () => {
@@ -222,5 +224,25 @@ describe("Selena measurement execution boundary", () => {
 			runOutcomeSchema.safeParse({ ...succeeded, measurement: { ...measurement, extractorVersion: undefined } })
 				.success,
 		).toBe(false);
+	});
+});
+
+describe("an order's worst-case provider reservation", () => {
+	it("is what the executor can reserve for its answers, not the plan's cap", () => {
+		// A Snapshot measurement of 3 questions × 3 systems: well inside a $2
+		// per-order ceiling, although the plan's provider cap is $12.
+		expect(worstCaseOrderCostUsd(9)).toBe(0.045);
+		// A full Landscape month at 25 questions × 2 languages × 8 systems.
+		expect(worstCaseOrderCostUsd(400)).toBe(2);
+	});
+
+	it("never undercuts the reservation of any route the worker may take", () => {
+		for (const adapter of ["noop", "brightdata", "branch-c", "auto", "openrouter"])
+			expect(worstCaseOrderCostUsd(1)).toBeGreaterThanOrEqual(estimatedAnswerCostUsd(adapter));
+	});
+
+	it("is unreadable for a corrupt answer count, which preflight reports as a blocker", () => {
+		expect(worstCaseOrderCostUsd(-1)).toBeNaN();
+		expect(worstCaseOrderCostUsd(1.5)).toBeNaN();
 	});
 });
