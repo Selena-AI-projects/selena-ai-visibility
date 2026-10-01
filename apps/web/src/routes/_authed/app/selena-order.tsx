@@ -42,12 +42,22 @@ function requestOutcomeText(result: OrderRequestOutcome, locale: OrderLocale): s
 			"Online payment is not available yet, so we will contact you at the address you left to arrange the payment and start the measurement.",
 			"Онлайн-оплаты пока нет, поэтому мы свяжемся с вами по указанному контакту, чтобы договориться об оплате и запустить замер.",
 		);
-	const heldElsewhere = result.seatHeldElsewhere
+	if (result.legacySeat && result.launch.state === "NOT_STARTED")
+		return t(
+			"Your workspace already has a promo request made earlier, so this code does not start a second free measurement. The operator will check that request and contact you.",
+			"В вашем пространстве уже есть заявка по промокоду, оформленная ранее, поэтому второй бесплатный замер не запускается. Оператор проверит ту заявку и свяжется с вами.",
+		);
+	const heldElsewhere = result.legacySeat
 		? t(
-				"This promo code was already used by your workspace for another project or plan; here is the state of that measurement. ",
-				"Этот промокод ваше пространство уже использовало для другого проекта или тарифа; ниже — состояние того замера. ",
+				"Your workspace already has a promo request made earlier; here is the state of its measurement, and no second free one is started. ",
+				"В вашем пространстве уже есть заявка по промокоду, оформленная ранее; ниже — состояние её замера, второй бесплатный не запускается. ",
 			)
-		: "";
+		: result.seatHeldElsewhere
+			? t(
+					"This promo code was already used by your workspace for another project or plan; here is the state of that measurement. ",
+					"Этот промокод ваше пространство уже использовало для другого проекта или тарифа; ниже — состояние того замера. ",
+				)
+			: "";
 	switch (result.launch.state) {
 		case "QUEUED":
 		case "RUNNING":

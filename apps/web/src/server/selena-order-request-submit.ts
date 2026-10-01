@@ -13,7 +13,7 @@ import {
 	pilotSeatRequestId,
 	SELENA_CATALOG,
 } from "@workspace/selena-visibility-contracts";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
 	prepareSelenaScenarios,
 	readMeasurementByKey,
@@ -230,6 +230,12 @@ export type OrderRequestOutcome = {
 	promoApplied: boolean;
 	/** The code was already spent by this workspace on another project or plan. */
 	seatHeldElsewhere: boolean;
+	/**
+	 * The workspace already holds a free request from before seats had a
+	 * derived id, so this submission was linked to it instead of spending a
+	 * seat; `id` and `launch` are that request's.
+	 */
+	legacySeat: boolean;
 	/** For a free request: what actually happened to the measurement. */
 	launch: FreeRequestLaunch | null;
 };
@@ -278,7 +284,27 @@ export async function submitSelenaOrderRequest(
 						.limit(1)
 				)[0];
 			const held = await findSeatRequest();
-			if (held) return { row: held, promoApplied: true };
+			if (held) return { row: held, promoApplied: true, legacy: false };
+			// A request saved before seat ids were derived has a random (v4) id
+			// and cannot be matched to the code that made it free. If this
+			// workspace already has one for the plan, the code is most likely the
+			// same seat: it is not redeemed again and no second free order is
+			// drafted — the earlier request is reported, and anything else is the
+			// operator's to settle (see scripts/reconcile-pilot-seat-requests.ts).
+			const [legacy] = await tx
+				.select(columns)
+				.from(svOrderRequests)
+				.where(
+					and(
+						eq(svOrderRequests.organizationId, context.tenantId),
+						eq(svOrderRequests.planId, data.planId),
+						eq(svOrderRequests.promoApplied, true),
+						sql`substr(${svOrderRequests.id}::text, 15, 1) = '4'`,
+					),
+				)
+				.orderBy(desc(svOrderRequests.createdAt))
+				.limit(1);
+			if (legacy) return { row: legacy, promoApplied: true, legacy: true };
 			const seat = await redeemPilotInvite(tx, {
 				code,
 				planId: data.planId,
@@ -294,17 +320,35 @@ export async function submitSelenaOrderRequest(
 				// A parallel submission of the same code stored the request first.
 				const row = inserted ?? (await findSeatRequest());
 				if (!row) throw new Error("SELENA_ORDER_REQUEST_WRITE_FAILED");
-				return { row, promoApplied: true };
+				return { row, promoApplied: true, legacy: false };
 			}
 		}
 		const [inserted] = await tx
 			.insert(svOrderRequests)
 			.values({ ...lead, promoApplied: false })
 			.returning(columns);
-		return { row: inserted, promoApplied: false };
+		return { row: inserted, promoApplied: false, legacy: false };
 	});
 	const { row, promoApplied } = saved;
-	if (!promoApplied) return { id: row.id, promoApplied, seatHeldElsewhere: false, launch: null };
+	if (!promoApplied) return { id: row.id, promoApplied, seatHeldElsewhere: false, legacySeat: false, launch: null };
+
+	if (saved.legacy) {
+		const order = await readMeasurementByKey(context, autoRequestKey(row.id));
+		await recordRequestAudit(context, row.id, "ORDER_REQUEST_LEGACY_SEAT_RESUBMITTED", {
+			planId: data.planId,
+			projectId: data.projectId,
+			orderId: order?.orderId ?? null,
+		});
+		return {
+			id: row.id,
+			promoApplied,
+			seatHeldElsewhere: false,
+			legacySeat: true,
+			launch: order
+				? freeRequestLaunch({ orderStatus: order.status, runsQueued: order.runsQueued })
+				: { state: "NOT_STARTED", reason: "LEGACY_REQUEST_NEEDS_OPERATOR" },
+		};
+	}
 
 	if (row.projectId !== data.projectId || row.planId !== data.planId) {
 		const order = await readMeasurementByKey(context, autoRequestKey(row.id));
@@ -312,6 +356,7 @@ export async function submitSelenaOrderRequest(
 			id: row.id,
 			promoApplied,
 			seatHeldElsewhere: true,
+			legacySeat: false,
 			launch: order
 				? freeRequestLaunch({ orderStatus: order.status, runsQueued: order.runsQueued })
 				: { state: "NOT_STARTED", reason: "SEAT_HELD_BY_ANOTHER_REQUEST" },
@@ -323,5 +368,5 @@ export async function submitSelenaOrderRequest(
 		start,
 	);
 	if (launch.state !== "STARTING") await settleRequestStatus(context, row.id, freeAutoDispatchStatusFor(launch));
-	return { id: row.id, promoApplied, seatHeldElsewhere: false, launch };
+	return { id: row.id, promoApplied, seatHeldElsewhere: false, legacySeat: false, launch };
 }

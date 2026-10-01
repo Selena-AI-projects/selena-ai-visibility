@@ -23,6 +23,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 	let desk: typeof import("../selena-order-desk-core");
 	let repositories: ReturnType<typeof import("@workspace/lib/selena-visibility-repositories").createSelenaRepositories>;
 	let hashCode: typeof import("@workspace/lib/selena-pilot-invites").hashPilotInviteCode;
+	let reconcile: typeof import("@workspace/lib/selena-pilot-seat-reconciliation").readPilotSeatReconciliation;
 
 	beforeAll(async () => {
 		Object.assign(process.env, {
@@ -39,6 +40,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		desk = await import("../selena-order-desk-core");
 		repositories = (await import("@workspace/lib/selena-visibility-repositories")).createSelenaRepositories(db);
 		hashCode = (await import("@workspace/lib/selena-pilot-invites")).hashPilotInviteCode;
+		reconcile = (await import("@workspace/lib/selena-pilot-seat-reconciliation")).readPilotSeatReconciliation;
 	});
 
 	beforeEach(() => {
@@ -238,5 +240,107 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		expect(again.launch).toEqual({ state: "STOPPED", orderStatus: "CANCELLED" });
 		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(9);
+	});
+
+	/**
+	 * What a submission left behind before seat ids were derived: the seat
+	 * redeemed by this workspace, a request under a random (v4) id and, when
+	 * asked, the order drafted for it under that request's key.
+	 */
+	async function legacyRequest(g: Awaited<ReturnType<typeof guest>>, code: string, withOrder: boolean) {
+		await db.execute(
+			sql`select public.sv_redeem_pilot_invite(${hashCode(code)}, 'visibility-snapshot', ${g.organizationId}, ${g.context.actorId})`,
+		);
+		const [row] = (
+			await db.execute(
+				sql`insert into sv_order_requests (organization_id, project_id, plan_id, contact_name, contact_channel, promo_code, promo_applied, status)
+					values (${g.organizationId}, ${g.project.id}, 'visibility-snapshot', 'Synthetic Guest', 'guest@synthetic.example', ${code}, true, 'AUTO_QUEUED')
+					returning id::text as id`,
+			)
+		).rows as Array<{ id: string }>;
+		if (withOrder) {
+			const { familyId } = await desk.prepareSelenaScenarios(g.context, g.project.id);
+			const scenarioIds = (await repositories.scenarios.list(g.context, familyId)).map((scenario) => scenario.id);
+			await db.execute(sql`update sv_scenarios set status = 'APPROVED' where family_id = ${familyId}`);
+			await desk.startSelenaMeasurement(g.context, {
+				projectId: g.project.id,
+				planId: "visibility-snapshot",
+				scenarioIds,
+				idempotencyKey: `auto-request:${row.id}`,
+				settlement: "pilot_seat",
+			});
+		}
+		return row.id;
+	}
+
+	async function issueSeat() {
+		const code = `R3-${randomUUID().slice(0, 8).toUpperCase()}`;
+		await db.execute(
+			sql`insert into sv_pilot_invites (code_hash, plan_id, label, expires_at) values (${hashCode(code)}, 'visibility-snapshot', 'r3 fixture', now() + interval '1 day')`,
+		);
+		return code;
+	}
+
+	const seatRedeemed = async (code: string) =>
+		(await count(
+			sql`select count(*) from sv_pilot_invites where code_hash = ${hashCode(code)} and redeemed_at is not null`,
+		)) === 1;
+
+	const reconciled = async (organizationId: string) =>
+		(await reconcile(db)).filter((row) => row.organizationId === organizationId);
+
+	it("answers a repeated legacy code with the order it already has, and drafts no second free order", async () => {
+		const g = await guest();
+		const legacyId = await legacyRequest(g, g.code, true);
+		const before = await state(g.organizationId);
+		expect(before).toMatchObject({ requests: 1, orders: 1, seatsHeld: 1 });
+
+		const again = await requests.submitSelenaOrderRequest(g.context, g.submit);
+		expect(again).toMatchObject({ id: legacyId, promoApplied: true, legacySeat: true });
+		expect(again.launch).toEqual({ state: "AWAITING_OPERATOR", orderStatus: "QUEUED" });
+		expect(await state(g.organizationId)).toEqual(before);
+		expect(await reconciled(g.organizationId)).toMatchObject([{ class: "LEGACY_ORDERED", requestIds: [legacyId] }]);
+	});
+
+	it("does not spend another code on the plan while a legacy request is unsettled", async () => {
+		const g = await guest();
+		const legacyId = await legacyRequest(g, g.code, false);
+		const fresh = await issueSeat();
+
+		const withFresh = await requests.submitSelenaOrderRequest(g.context, { ...g.submit, promoCode: fresh });
+		expect(withFresh).toMatchObject({ id: legacyId, legacySeat: true });
+		expect(withFresh.launch).toEqual({ state: "NOT_STARTED", reason: "LEGACY_REQUEST_NEEDS_OPERATOR" });
+		expect(await seatRedeemed(fresh)).toBe(false);
+		expect(await state(g.organizationId)).toMatchObject({ requests: 1, orders: 0, claims: 0, seatsHeld: 1 });
+		expect(await reconciled(g.organizationId)).toMatchObject([{ class: "LEGACY_NO_ORDER", orders: [] }]);
+	});
+
+	it("reports two legacy seats with two requests as ambiguous and orders nothing more for either code", async () => {
+		const g = await guest();
+		const second = await issueSeat();
+		const firstId = await legacyRequest(g, g.code, true);
+		const secondId = await legacyRequest(g, second, false);
+		const before = await state(g.organizationId);
+		expect(before).toMatchObject({ requests: 2, orders: 1, seatsHeld: 2 });
+
+		for (const promoCode of [g.code, second]) {
+			const again = await requests.submitSelenaOrderRequest(g.context, { ...g.submit, promoCode });
+			expect(again).toMatchObject({ legacySeat: true });
+			expect([firstId, secondId]).toContain(again.id);
+		}
+		expect(await state(g.organizationId)).toEqual(before);
+		const rows = await reconciled(g.organizationId);
+		expect(rows).toHaveLength(2);
+		for (const row of rows) {
+			expect(row.class).toBe("LEGACY_AMBIGUOUS");
+			expect([...row.requestIds].sort()).toEqual([firstId, secondId].sort());
+		}
+	});
+
+	it("classes a seat spent through the current flow by its derived request", async () => {
+		const g = await guest();
+		const done = await requests.submitSelenaOrderRequest(g.context, g.submit);
+		expect(done.legacySeat).toBe(false);
+		expect(await reconciled(g.organizationId)).toMatchObject([{ class: "NEW_FLOW_ORDERED", requestIds: [done.id] }]);
 	});
 });

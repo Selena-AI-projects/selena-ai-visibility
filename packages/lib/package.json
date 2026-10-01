@@ -62,6 +62,7 @@
 		"./selena-free-ai-visibility": "./src/selena-free-ai-visibility.ts",
 		"./selena-registrable-domain": "./src/selena-registrable-domain.ts",
 		"./selena-pilot-invites": "./src/selena-pilot-invites.ts",
+		"./selena-pilot-seat-reconciliation": "./src/selena-pilot-seat-reconciliation.ts",
 		"./selena-free-auto-dispatch-claims": "./src/selena-free-auto-dispatch-claims.ts",
 		"./selena-pilot-seat-issuance": "./src/selena-pilot-seat-issuance.ts",
 		"./selena-provider-spend-budget": "./src/selena-provider-spend-budget.ts",
