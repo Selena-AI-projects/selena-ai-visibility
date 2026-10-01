@@ -1,6 +1,9 @@
 import type { RunOutcome } from "@workspace/selena-visibility-contracts";
 import { sql } from "drizzle-orm";
+import { assertGlobalProviderStop } from "./run-policy/spend-gate";
 import type { SqlExecutor } from "./selena-pilot-invites";
+
+type Env = Record<string, string | undefined>;
 
 export const FREE_AI_VISIBILITY_SPEND_SCOPE = "free-ai-visibility-global";
 export const FREE_AI_VISIBILITY_COST_USD = 0.003;
@@ -75,10 +78,17 @@ export function serializeFreeAiVisibilityReport(input: {
 }
 
 /** Executes the fixed pair once each. A failed call cannot suppress the other system. */
-export async function executeFreeAiVisibilityCheck(input: {
-	domain: string;
-	execute: (system: FreeAiVisibilitySystem, prompt: string) => Promise<RunOutcome>;
-}): Promise<FreeAiVisibilityReport> {
+export async function executeFreeAiVisibilityCheck(
+	input: {
+		domain: string;
+		execute: (system: FreeAiVisibilitySystem, prompt: string) => Promise<RunOutcome>;
+	},
+	env: Env = process.env,
+): Promise<FreeAiVisibilityReport> {
+	// Аварийный стоп обязан сработать до любого вызова провайдера (а не только
+	// в платном measurement): стоп, при котором бесплатная проверка продолжает
+	// звонить вендору, — это не стоп.
+	assertGlobalProviderStop(env);
 	const prompt = freeAiVisibilityPrompt(input.domain);
 	const outcomes: Partial<Record<FreeAiVisibilitySystem, RunOutcome | null>> = {};
 	for (const system of freeAiVisibilitySystems) {
@@ -106,7 +116,11 @@ function claimFrom(value: unknown): FreeAiVisibilityClaimResult {
 export async function claimFreeAiVisibilityCheck(
 	executor: SqlExecutor,
 	input: { userId: string; organizationId: string; domain: string },
+	env: Env = process.env,
 ): Promise<FreeAiVisibilityClaimResult> {
+	// Стоп обязан сработать до резервирования бюджета: иначе проверка резервирует
+	// деньги и уходит в очередь даже при включённом стопе.
+	assertGlobalProviderStop(env);
 	const result = await executor.execute(sql`SELECT public.sv_claim_free_ai_visibility(
 		${input.userId}::text,
 		${input.organizationId}::text,
