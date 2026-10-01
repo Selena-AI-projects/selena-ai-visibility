@@ -113,8 +113,14 @@ export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryV
 /**
  * Plans whose published offer names the weekly Telegram digest. A client on
  * any other plan was not promised one, so the digest job leaves them alone.
+ * Landscape shares Snapshot's weekly measurement, so it gets the same digest
+ * (owner decision, 2026-09-28).
  */
-export const weeklyDigestPlans: readonly SelenaPlanId[] = ["visibility-snapshot", "managed-discovery-90"];
+export const weeklyDigestPlans: readonly SelenaPlanId[] = [
+	"visibility-snapshot",
+	"full-discovery-landscape",
+	"managed-discovery-90",
+];
 
 /** Takes the plan id as stored, so a legacy or unreadable id is answered too. */
 export function planIncludesWeeklyDigest(storedPlanId: string | null | undefined): boolean {
@@ -340,6 +346,40 @@ export function validateCatalogScope(input: CatalogScope): SelenaPlan {
 		throw new Error("GROWTH_ADMIN_APPROVAL_REQUIRED");
 	if (input.systems.length !== plan.systems.length || input.systems.some((system) => !plan.systems.includes(system)))
 		throw new Error("SYSTEM_SCOPE_MISMATCH");
+	return plan;
+}
+
+/**
+ * The per-measurement check an order desk runs on the approved scenarios it is
+ * about to lock. `questionLimitPerMeasurement` is a per-language allowance:
+ * the $79 plan's 50 is 25 questions in each of two languages, not 50 in one.
+ * The negotiated Growth scope has no fixed allowance and is left to its own
+ * admin-approved lock.
+ */
+export function validateMeasurementLanguageScope(
+	planId: SelenaPlanId,
+	scenarioLanguages: readonly string[],
+): SelenaPlan {
+	const plan = getPlan(planId);
+	if (plan.questionLimitPerMeasurement === null) return plan;
+	const perLanguage = new Map<string, number>();
+	for (const language of scenarioLanguages) {
+		const key = language.trim().toLowerCase();
+		perLanguage.set(key, (perLanguage.get(key) ?? 0) + 1);
+	}
+	validateCatalogScope({
+		planId,
+		languages: [...perLanguage.keys()],
+		languageScenarios: scenarioLanguages.length,
+		repeats: plan.repeatCount ?? 1,
+		systems: [...plan.systems],
+		providerCostCap: plan.providerBudgetCap,
+		laborCapHours: plan.laborHours,
+		adminApproved: false,
+		growthScopeLocked: false,
+	});
+	for (const count of perLanguage.values())
+		if (count > plan.questionLimitPerMeasurement) throw new Error("LANGUAGE_QUESTION_LIMIT_EXCEEDED");
 	return plan;
 }
 

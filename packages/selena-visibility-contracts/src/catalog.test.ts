@@ -17,6 +17,7 @@ import {
 	retiredCommercialOffers,
 	SELENA_CHECKOUT_METADATA,
 	validateCatalogScope,
+	validateMeasurementLanguageScope,
 } from "./catalog";
 
 const systems = ["ChatGPT", "Gemini", "Perplexity"];
@@ -224,4 +225,34 @@ describe("canonical product catalog", () => {
 		expect(entitlementsFor("competitive-audit", verified).localManualAudit).toBe(true);
 		expect(entitlementsFor("managed-discovery-90", verified).localManualAudit).toBe(true);
 	});
+});
+
+describe("languages in one measurement order", () => {
+	const questions = (count: number, language: string) => Array.from({ length: count }, () => language);
+
+	it("refuses 50 questions in one language on the two-language $79 plan", () =>
+		expect(() => validateMeasurementLanguageScope("full-discovery-landscape", questions(50, "en"))).toThrow(
+			"LANGUAGE_QUESTION_LIMIT_EXCEEDED",
+		));
+	it("refuses an uneven split that puts more than 25 questions in one language", () =>
+		expect(() =>
+			validateMeasurementLanguageScope("full-discovery-landscape", [...questions(40, "en"), ...questions(10, "ru")]),
+		).toThrow("LANGUAGE_QUESTION_LIMIT_EXCEEDED"));
+	it("accepts 25 questions in each of two languages on $79", () =>
+		expect(
+			validateMeasurementLanguageScope("full-discovery-landscape", [...questions(25, "en"), ...questions(25, "ru")])
+				.planId,
+		).toBe("full-discovery-landscape"));
+	it("refuses a second language on the one-language $49 plan", () =>
+		expect(() =>
+			validateMeasurementLanguageScope("visibility-snapshot", [...questions(10, "en"), ...questions(1, "ru")]),
+		).toThrow("LANGUAGE_LIMIT_EXCEEDED"));
+	it("counts the same language written differently as one language", () =>
+		expect(validateMeasurementLanguageScope("visibility-snapshot", ["en", "EN", " en "]).planId).toBe(
+			"visibility-snapshot",
+		));
+	it("accepts 25 questions in one language on $49", () =>
+		expect(validateMeasurementLanguageScope("visibility-snapshot", questions(25, "ru")).planId).toBe(
+			"visibility-snapshot",
+		));
 });

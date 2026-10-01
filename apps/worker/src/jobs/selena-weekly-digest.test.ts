@@ -269,13 +269,13 @@ test("only plans whose offer names the digest receive it", async () => {
 		"snapshot:DELIVERED",
 		"managed:DELIVERED",
 		"legacySnapshot:DELIVERED",
-		"landscape:PLAN_EXCLUDES_DIGEST",
+		"landscape:DELIVERED",
 		"audit:PLAN_EXCLUDES_DIGEST",
 		"unknown:PLAN_EXCLUDES_DIGEST",
 		"unrecorded:PLAN_EXCLUDES_DIGEST",
 	]);
-	assert.equal(h.tenant("org-a").digests.size, 3);
-	assert.equal(h.sent.length, 3);
+	assert.equal(h.tenant("org-a").digests.size, 4);
+	assert.equal(h.sent.length, 4);
 });
 
 test("the digest is saved before it is sent, and a rerun never sends it twice", async () => {

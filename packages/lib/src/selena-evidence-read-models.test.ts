@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createHmacEvidenceCursorCodec } from "./selena-evidence-cursor-codec";
 import {
-	createHmacEvidenceCursorCodec,
 	customerModuleState,
 	summarizeEvidenceCoverage,
 	toEvidenceReadModel,
