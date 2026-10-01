@@ -257,6 +257,17 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 							expectedRuns: svCycles.expectedRuns,
 							createdRuns: svCycles.createdRuns,
 							completedRuns: svCycles.completedRuns,
+							// A completed run may have FAILED or come back INVALID; only the
+							// successful ones tell the operator whether the cycle measured anything.
+							// Written out in full: column references inside a select-list
+							// template are not table-qualified, and an unqualified
+							// "cycle_id" = "id" would compare the run with itself.
+							succeededRuns: sql<number>`(
+								select count(*)::int from sv_runs as succeeded_runs
+								where succeeded_runs.cycle_id = sv_cycles.id
+									and succeeded_runs.organization_id = sv_cycles.organization_id
+									and succeeded_runs.status = 'SUCCEEDED'
+							)`,
 						})
 						.from(svCycles)
 						.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
