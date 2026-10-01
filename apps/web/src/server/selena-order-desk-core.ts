@@ -3,7 +3,6 @@ import { withOrganizationTransaction } from "@workspace/lib/db/organization-tran
 import {
 	svAuditEvents,
 	svConfigurationLocks,
-	svCycles,
 	svOrders,
 	svPayments,
 	svProjectProfiles,
@@ -24,7 +23,6 @@ import {
 	expectedRunsFromScope,
 	type MeasurementScope,
 	measurementScopeSchema,
-	monthlyAnswerAllowance,
 	paymentConfigFromEnv,
 	type planIds,
 	SELENA_CATALOG,
@@ -35,12 +33,9 @@ import {
 	validateMeasurementLanguageScope,
 	visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
-import {
-	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
-	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
-} from "@/lib/selena-monthly-allowance";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { approveOrder, enqueueOrderRunsForOrder } from "./selena-admin-orders";
+import { assertMonthlyAllowanceAvailable } from "./selena-monthly-allowance";
 import { freezeSelenaOrderRequest, matchesFrozenSelenaOrderRequest } from "./selena-order-idempotency";
 
 // The order desk: where a confirmed brand profile becomes an order the
@@ -368,34 +363,14 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		}
 		// The pricing page quotes a monthly allowance (300/800 answers); an
 		// order that would overrun it is refused with the numbers, not queued
-		// quietly. Usage counts this calendar month's created, non-cancelled,
-		// non-terminal cycles. Stopped, failed and cardinality incidents release
-		// allowance; orders awaiting review still have no cycle and remain the
-		// operator's call.
-		const allowance = monthlyAnswerAllowance(plan.planId);
-		if (allowance !== null) {
-			const monthStart = new Date();
-			monthStart.setUTCDate(1);
-			monthStart.setUTCHours(0, 0, 0, 0);
-			const [usage] = await tx
-				.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
-				.from(svCycles)
-				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-				.where(
-					and(
-						eq(svOrders.projectId, data.projectId),
-						eq(svOrders.organizationId, context.tenantId),
-						gte(svCycles.createdAt, monthStart),
-						notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
-						notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
-					),
-				);
-			const used = Number(usage?.used ?? 0);
-			if (used + expectedRuns > allowance)
-				throw new Error(
-					`SELENA_MONTHLY_ALLOWANCE_EXCEEDED: used ${used} of ${allowance} this month; this measurement needs ${expectedRuns} more`,
-				);
-		}
+		// quietly. Orders awaiting review and cycles still running hold their
+		// answers as reserved; only answers with a usable result count as used.
+		await assertMonthlyAllowanceAvailable(tx, {
+			tenantId: context.tenantId,
+			projectId: data.projectId,
+			planId: plan.planId,
+			expectedRuns,
+		});
 
 		// Frozen with the scope: analysis looks for exactly the brand and
 		// competitors the customer agreed to, so a later profile edit cannot

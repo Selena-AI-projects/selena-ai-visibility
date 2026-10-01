@@ -741,6 +741,12 @@ function SelenaReportPage() {
 									`${view.monthUsage.used} of ${view.monthUsage.allowance} answers used this month`,
 									`использовано ответов в этом месяце: ${view.monthUsage.used} из ${view.monthUsage.allowance}`,
 								)}
+								{view.monthUsage.reserved > 0 &&
+									tr(
+										locale,
+										` · ${view.monthUsage.reserved} in progress`,
+										` · в работе: ${view.monthUsage.reserved}`,
+									)}
 							</span>
 						)}
 						{view?.measuredAt && (

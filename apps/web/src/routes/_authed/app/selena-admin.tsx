@@ -265,6 +265,7 @@ function SelenaAdminOrders() {
 										<TableHead className="text-right">{tr(locale, "Order cap", "Лимит заказа")}</TableHead>
 										<TableHead>{tr(locale, "Cycle", "Цикл")}</TableHead>
 										<TableHead>{tr(locale, "Latest QC", "Последний QC")}</TableHead>
+										<TableHead className="text-right">{tr(locale, "Provider spend", "Расход провайдера")}</TableHead>
 										<TableHead />
 									</TableRow>
 								</TableHeader>
@@ -290,6 +291,9 @@ function SelenaAdminOrders() {
 											</TableCell>
 											<TableCell className="text-xs text-muted-foreground">
 												{order.latestQc ? order.latestQc.decision : tr(locale, "none", "нет")}
+											</TableCell>
+											<TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+												{providerSpendLabel(order.providerSpend, locale)}
 											</TableCell>
 											<TableCell className="text-right">
 												<Button type="button" variant="outline" size="sm" onClick={() => setSelectedOrderId(order.id)}>
@@ -662,6 +666,21 @@ function cycleSummary(order: QueueOrder, locale: AdminLocale): string {
 				`${cycle.status} · успешных ${progress.succeededRuns} / ${progress.expectedRuns}`,
 			);
 	}
+}
+
+/**
+ * Dollars the providers charged for the order, from the spend ledger. This is
+ * the operator's figure: the client's allowance counts answers, not money.
+ */
+function providerSpendLabel(spend: QueueOrder["providerSpend"], locale: AdminLocale): string {
+	if (spend.events === 0) return tr(locale, "no calls yet", "вызовов ещё нет");
+	const amount = `$${spend.totalUsd.toFixed(4)}`;
+	if (spend.estimatedEvents === 0) return amount;
+	return tr(
+		locale,
+		`${amount} · ${spend.estimatedEvents} of ${spend.events} estimated`,
+		`${amount} · оценка для ${spend.estimatedEvents} из ${spend.events}`,
+	);
 }
 
 function checkLabel(code: string, locale: AdminLocale): string {

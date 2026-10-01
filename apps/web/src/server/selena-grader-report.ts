@@ -3,8 +3,6 @@ import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svConfigurationLocks,
-	svCycles,
-	svOrders,
 	svRecommendationRuns,
 	svScenarios,
 	svWebsiteSnapshots,
@@ -16,13 +14,10 @@ import type { ReportCycleUpdate } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
 import { actionPlanSchema, monthlyAnswerAllowance, resolvePlanId } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import {
-	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
-	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
-} from "@/lib/selena-monthly-allowance";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { readMonthlyAnswerUsage } from "./selena-monthly-allowance";
 import { loadReportAnchor } from "./selena-report-cycle-query";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
@@ -42,8 +37,12 @@ export type GraderReportView = {
 	planId: string | null;
 	/** When the READY cycle the report speaks for was created. */
 	measuredAt: string | null;
-	/** The calendar month's spent answers against the plan's quoted allowance. */
-	monthUsage: { used: number; allowance: number } | null;
+	/**
+	 * The calendar month against the plan's quoted allowance: answers with a
+	 * usable result as used, answers promised to running or waiting
+	 * measurements as reserved. Failed attempts cost the client nothing.
+	 */
+	monthUsage: { used: number; reserved: number; allowance: number } | null;
 	/** The READY cycle behind the report; null until an operator has signed one off. */
 	cycle: { status: string; expectedRuns: number; completedRuns: number } | null;
 	/**
@@ -197,25 +196,10 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		view.planId = resolvedPlanId ?? storedPlanId;
 		const planForAllowance = resolvedPlanId ? monthlyAnswerAllowance(resolvedPlanId) : null;
 		if (planForAllowance !== null) {
-			const monthStart = new Date();
-			monthStart.setUTCDate(1);
-			monthStart.setUTCHours(0, 0, 0, 0);
-			const [usage] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-				tx
-					.select({ used: sql<number>`coalesce(sum(${svCycles.expectedRuns}), 0)` })
-					.from(svCycles)
-					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-					.where(
-						and(
-							eq(svOrders.projectId, data.projectId),
-							eq(svOrders.organizationId, context.tenantId),
-							gte(svCycles.createdAt, monthStart),
-							notInArray(svOrders.status, [...MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES]),
-							notInArray(svCycles.status, [...MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES]),
-						),
-					),
+			const usage = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+				readMonthlyAnswerUsage(tx, { tenantId: context.tenantId, projectId: data.projectId }),
 			);
-			view.monthUsage = { used: Number(usage?.used ?? 0), allowance: planForAllowance };
+			view.monthUsage = { ...usage, allowance: planForAllowance };
 		}
 
 		// Without a READY cycle there is no report: a page built from an
