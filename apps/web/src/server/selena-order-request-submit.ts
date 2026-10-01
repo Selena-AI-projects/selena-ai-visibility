@@ -130,6 +130,14 @@ async function dispatchFreeRequest(
 	const gate = decideFreeAutoDispatch({ config, promoApplied: true, dispatchedToday: 0, dispatchedTodayForProject: 0 });
 	if (!gate.dispatch) return { state: "NOT_STARTED", reason: gate.reason };
 
+	// A stopped order has nothing left to resume, and taking the lease would
+	// overwrite the request status that records why it stopped.
+	const before = await readMeasurementByKey(context, autoRequestKey(requestId));
+	if (before) {
+		const launch = freeRequestLaunch({ orderStatus: before.status, runsQueued: before.runsQueued });
+		if (launch.state === "STOPPED") return launch;
+	}
+
 	if (!(await takeDispatchLease(context, requestId))) {
 		const order = await readMeasurementByKey(context, autoRequestKey(requestId));
 		return order
@@ -367,6 +375,9 @@ export async function submitSelenaOrderRequest(
 		{ context, requestId: row.id, projectId: data.projectId, planId: data.planId },
 		start,
 	);
-	if (launch.state !== "STARTING") await settleRequestStatus(context, row.id, freeAutoDispatchStatusFor(launch));
+	// A stopped order's request carries why it stopped — a QC rejection or the
+	// operator's stop — and a resubmitted form must not overwrite that.
+	if (launch.state !== "STARTING" && launch.state !== "STOPPED")
+		await settleRequestStatus(context, row.id, freeAutoDispatchStatusFor(launch));
 	return { id: row.id, promoApplied, seatHeldElsewhere: false, legacySeat: false, launch };
 }

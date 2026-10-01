@@ -235,9 +235,13 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 			scope: "nine answers read",
 			decision: "rejected",
 		});
+		const requestStatus = async () =>
+			(await db.execute(sql`select status from sv_order_requests where id = ${first.id}`)).rows[0];
+		const statusAtRejection = await requestStatus();
 		const again = await requests.submitSelenaOrderRequest(g.context, g.submit);
 		expect(again.id).toBe(first.id);
 		expect(again.launch).toEqual({ state: "STOPPED", orderStatus: "CANCELLED" });
+		expect(await requestStatus()).toEqual(statusAtRejection);
 		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(9);
 	});

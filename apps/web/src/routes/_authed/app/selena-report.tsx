@@ -383,7 +383,8 @@ function formatReportDate(locale: ReportLocale, iso: string): string {
 
 type ReportUpdate = NonNullable<GraderReportView["update"]>;
 
-function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
+/** Russian agrees the participle with its subject: «обновление» is neuter, «замер» masculine. */
+function updateOutcome(locale: ReportLocale, update: ReportUpdate, subject: "update" | "measurement" = "update"): string {
 	if (update.state === "in_progress")
 		return tr(
 			locale,
@@ -391,7 +392,11 @@ function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
 			`выполняется: проверено ответов ${update.completedRuns} из ${update.expectedRuns}`,
 		);
 	if (update.state === "awaiting_review")
-		return tr(locale, "is complete and awaiting quality review", "завершено и ожидает проверку качества");
+		return tr(
+			locale,
+			"is complete and awaiting quality review",
+			subject === "update" ? "завершено и ожидает проверку качества" : "завершён и ожидает проверку качества",
+		);
 	switch (update.reason) {
 		case "QC_REJECTED":
 			return tr(locale, "was rejected at quality review", "отклонено при проверке качества");
@@ -445,21 +450,26 @@ function MeasurementUpdateNotice({
 				</p>
 			</div>
 		);
+	// The same status, reason and next step the cabinet shows for it.
+	const outcome =
+		update.state === "unsuccessful"
+			? unsuccessfulMeasurementText(
+					{ reason: update.reason, succeededRuns: update.succeededRuns, expectedRuns: update.expectedRuns },
+					locale,
+				)
+			: null;
 	return (
 		<SectionCard id="overview">
 			<div data-testid="measurement-update">
-				<SectionTitle title={tr(locale, "The report is not ready yet", "Отчёт ещё не готов")} />
+				<SectionTitle title={outcome ? outcome.status : tr(locale, "The report is not ready yet", "Отчёт ещё не готов")} />
 				<p className={`mt-4 rounded-xl border px-4 py-3 text-sm leading-6 ${tone}`}>
-					{tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} {updateOutcome(locale, update)}.
+					{outcome
+						? `${tr(locale, `Measurement of ${updateDate}.`, `Замер от ${updateDate}.`)} ${outcome.reason}`
+						: `${tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} ${updateOutcome(locale, update, "measurement")}.`}
 				</p>
 				<p className="mt-3 max-w-2xl text-sm leading-6 text-[#574d45]">
-					{update.state === "unsuccessful"
-						? `${tr(locale, "No result is shown for it: an unsuccessful measurement is not a report.", "Результат по нему не показывается: неудачный замер — не отчёт.")} ${
-								unsuccessfulMeasurementText(
-									{ reason: update.reason, succeededRuns: update.succeededRuns, expectedRuns: update.expectedRuns },
-									locale,
-								).nextStep
-							}`
+					{outcome
+						? `${tr(locale, "No result is shown for it: an unsuccessful measurement is not a report.", "Результат по нему не показывается: неудачный замер — не отчёт.")} ${outcome.nextStep}`
 						: tr(
 								locale,
 								"The report appears here once the measurement is complete and has passed quality review.",
