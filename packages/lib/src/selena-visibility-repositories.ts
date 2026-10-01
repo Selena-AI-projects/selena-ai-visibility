@@ -2103,11 +2103,14 @@ export function createSelenaRepositories(db: Db) {
 								status: schema.svCycles.status,
 								expectedRuns: schema.svCycles.expectedRuns,
 								completedRuns: schema.svCycles.completedRuns,
+								// Written out in full: column references inside a select-list
+								// template are not table-qualified, and "cycle_id" = "id" would
+								// compare a run with itself.
 								succeededRuns: sql<number>`(
-									select count(*)::int from ${schema.svRuns}
-									where ${schema.svRuns.cycleId} = ${schema.svCycles.id}
-										and ${schema.svRuns.organizationId} = ${schema.svCycles.organizationId}
-										and ${schema.svRuns.status} = 'SUCCEEDED'
+									select count(*)::int from sv_runs as succeeded_runs
+									where succeeded_runs.cycle_id = sv_cycles.id
+										and succeeded_runs.organization_id = sv_cycles.organization_id
+										and succeeded_runs.status = 'SUCCEEDED'
 								)`,
 							})
 							.from(schema.svCycles)

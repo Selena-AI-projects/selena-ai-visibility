@@ -244,8 +244,8 @@ function SelenaAdminOrders() {
 					<CardDescription>
 						{tr(
 							locale,
-							"Orders in the review, dispatch and QC stages of your workspace.",
-							"Заказы вашего пространства на стадиях проверки, диспетчеризации и QC.",
+							"Orders from every workspace in the review, dispatch and QC stages; each row names its workspace.",
+							"Заказы всех пространств на стадиях проверки, диспетчеризации и QC; в строке указано пространство.",
 						)}
 					</CardDescription>
 				</CardHeader>
