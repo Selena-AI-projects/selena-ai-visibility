@@ -176,25 +176,34 @@ function capture(page) {
 	return calls;
 }
 
-async function replay(role, calls, leakPattern) {
+/**
+ * Replays another session's calls. A call whose answer to its owner carries
+ * the client's data is `sensitive`: it must be refused to everyone else. The
+ * page's own session and workspace reads answer every caller about itself,
+ * so for those only the absence of the client's data is required.
+ */
+async function replay(role, calls, leakPattern, owner) {
 	const results = [];
 	for (const call of calls) {
-		const response = await sessions[role].context.request.fetch(call.url, {
-			method: call.method,
-			data: call.body ?? undefined,
-			headers: call.headers,
-		});
-		const text = await response.text();
+		const send = (as) =>
+			sessions[as].context.request
+				.fetch(call.url, { method: call.method, data: call.body ?? undefined, headers: call.headers })
+				.then(async (response) => ({ status: response.status(), text: await response.text() }));
+		const sensitive = call.method === "POST" || leakPattern.test((await send(owner)).text);
+		const { status, text } = await send(role);
 		results.push({
 			role,
 			fn: `${call.method} ${call.url.split("/_serverFn/")[1].slice(0, 12)}`,
-			status: response.status(),
+			sensitive,
+			status,
 			refusal: (text.match(/(Unauthorized|Forbidden|Not found)[^"\\]*/) ?? [])[0] ?? null,
 			leaks: leakPattern.test(text),
 		});
 	}
 	return results;
 }
+
+const refusedWhereSensitive = (rows) => rows.length > 0 && rows.every((row) => !row.leaks && (!row.sensitive || row.refusal));
 
 try {
 	// 1. Four people sign up through the pilot allowlist and verify by email.
@@ -285,16 +294,22 @@ try {
 	check("S9", "QC approved оператором → READY; аудит в организации клиента с crossTenant", audit.some((row) => row.event === "OPERATOR_ACTION" && row.cross_tenant === "true"), audit);
 	const qcBefore = (await q(`select count(*)::int as n from sv_qc_records`))[0].n;
 	const denials = [
-		...(await replay("client", operatorCalls, /Relax Point|Studio Lumen \(HARNESS\)/)),
-		...(await replay("rival", operatorCalls, /Relax Point|Studio Lumen \(HARNESS\)/)),
+		...(await replay("client", operatorCalls, /Relax Point|Studio Lumen \(HARNESS\)/, "operator")),
+		...(await replay("rival", operatorCalls, /Relax Point|Studio Lumen \(HARNESS\)/, "operator")),
 	];
 	const qcAfter = (await q(`select count(*)::int as n from sv_qc_records`))[0].n;
 	fs.writeFileSync(`${OUT}/operator-replays.json`, JSON.stringify(denials, null, 1));
 	check(
 		"D1",
 		"Клиент и администратор другого пространства повторяют вызовы оператора → отказ, данных нет, QC не записан",
-		denials.length > 0 && denials.every((row) => row.refusal && !row.leaks) && qcAfter === qcBefore,
-		{ calls: denials.length, refusals: [...new Set(denials.map((row) => row.refusal))], qcBefore, qcAfter },
+		refusedWhereSensitive(denials) && denials.some((row) => row.sensitive) && qcAfter === qcBefore,
+		{
+			calls: denials.length,
+			sensitive: denials.filter((row) => row.sensitive).length,
+			refusals: [...new Set(denials.filter((row) => row.sensitive).map((row) => row.refusal))],
+			qcBefore,
+			qcAfter,
+		},
 	);
 
 	// 5. The client signs in again and reads the report; the numbers are the runs'.
@@ -340,13 +355,19 @@ try {
 		values: matched.length,
 		missing: matched.filter((row) => !row.found).map((row) => row.value),
 	});
-	const reportDenials = await replay("rival", reportCalls, /Relax Point|studio-lumen-harness/);
+	const reportDenials = await replay("rival", reportCalls, /Relax Point|studio-lumen-harness/, "clientAgain");
 	fs.writeFileSync(`${OUT}/report-replays.json`, JSON.stringify(reportDenials, null, 1));
 	check(
 		"D2",
-		"Клиент другого пространства повторяет вызовы отчёта → без данных клиента",
-		reportDenials.length > 0 && reportDenials.every((row) => !row.leaks),
-		{ calls: reportDenials.length, refusals: [...new Set(reportDenials.map((row) => row.refusal))] },
+		"Клиент другого пространства повторяет вызовы отчёта → данных клиента нет, вызовы по его проекту отклонены",
+		// Calls without an object id answer the caller about its own workspace;
+		// the ones naming the client's project must be refused.
+		reportDenials.every((row) => !row.leaks) && reportDenials.some((row) => row.refusal),
+		{
+			calls: reportDenials.length,
+			leaks: reportDenials.filter((row) => row.leaks).length,
+			refusals: [...new Set(reportDenials.map((row) => row.refusal).filter(Boolean))],
+		},
 	);
 
 	// 6. A second invited client whose measurement gets no answers; QC rejects it.
