@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(fileURLToPath(new URL("../../server/selena-order-requests.ts", import.meta.url)), "utf8");
+// The request layer is the server-function module plus the submission it
+// calls; the invariants hold for both.
+const source = ["../../server/selena-order-requests.ts", "../../server/selena-order-request-submit.ts"]
+	.map((path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8"))
+	.join("\n");
 
 describe("plan request layer zero invariant", () => {
 	// A request is a lead. Turning one into a paid measurement stays the

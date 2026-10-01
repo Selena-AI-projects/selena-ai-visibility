@@ -18,7 +18,7 @@ const url = process.env.SELENA_TEST_DATABASE_URL;
 describe.skipIf(!url)("free pilot request on a database", () => {
 	let db: import("@workspace/lib/db/organization-transaction").OrganizationDatabase;
 	let sql: typeof import("drizzle-orm").sql;
-	let requests: typeof import("../selena-order-requests");
+	let requests: typeof import("../selena-order-request-submit");
 	let desk: typeof import("../selena-order-desk-core");
 	let repositories: ReturnType<typeof import("@workspace/lib/selena-visibility-repositories").createSelenaRepositories>;
 	let hashCode: typeof import("@workspace/lib/selena-pilot-invites").hashPilotInviteCode;
@@ -34,7 +34,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		});
 		db = (await import("@workspace/lib/db/db")).db;
 		sql = (await import("drizzle-orm")).sql;
-		requests = await import("../selena-order-requests");
+		requests = await import("../selena-order-request-submit");
 		desk = await import("../selena-order-desk-core");
 		repositories = (await import("@workspace/lib/selena-visibility-repositories")).createSelenaRepositories(db);
 		hashCode = (await import("@workspace/lib/selena-pilot-invites")).hashPilotInviteCode;
