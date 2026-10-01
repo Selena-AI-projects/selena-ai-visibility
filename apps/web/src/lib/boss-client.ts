@@ -1,6 +1,6 @@
-import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/adapters/brightdata";
 import { runtimeDatabaseConnection, runtimePgBossSchemaLifecycle } from "@workspace/lib/db/postgres-config";
 import { FREE_AI_VISIBILITY_QUEUE } from "@workspace/lib/selena-free-ai-visibility";
+import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/selena-measurement";
 import type { PgBoss } from "pg-boss";
 
 let bossInstance: PgBoss | null = null;

@@ -3,8 +3,6 @@ import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svConfigurationLocks,
-	svCycles,
-	svOrders,
 	svRecommendationRuns,
 	svScenarios,
 	svWebsiteSnapshots,
@@ -12,16 +10,21 @@ import {
 import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import type { GraderReport } from "@workspace/lib/selena-grader-report";
+import type { ReportCycleUpdate } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
 import { actionPlanSchema, monthlyAnswerAllowance, resolvePlanId } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { selectReportAnchor } from "@/lib/selena-report-anchor";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 import { readMonthlyAnswerUsage } from "./selena-monthly-allowance";
+import { loadReportAnchor } from "./selena-report-cycle-query";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
+
+// Distributes over the union so each update state keeps its own fields once
+// the date is a string on the wire.
+type SerializedUpdate<T> = T extends { createdAt: Date } ? Omit<T, "createdAt"> & { createdAt: string } : never;
 
 export type GraderReportView = {
 	project: { id: string; name: string; region: string | null; country: string | null };
@@ -32,6 +35,7 @@ export type GraderReportView = {
 		competitorsConfigured: number;
 	} | null;
 	planId: string | null;
+	/** When the READY cycle the report speaks for was created. */
 	measuredAt: string | null;
 	/**
 	 * The calendar month against the plan's quoted allowance: answers with a
@@ -39,7 +43,13 @@ export type GraderReportView = {
 	 * measurements as reserved. Failed attempts cost the client nothing.
 	 */
 	monthUsage: { used: number; reserved: number; allowance: number } | null;
+	/** The READY cycle behind the report; null until an operator has signed one off. */
 	cycle: { status: string; expectedRuns: number; completedRuns: number } | null;
+	/**
+	 * A cycle newer than the report (or the only cycle, when nothing is READY
+	 * yet), as a status the client is told about rather than a report they see.
+	 */
+	update: SerializedUpdate<ReportCycleUpdate> | null;
 	report: GraderReport | null;
 	/** The free website audit: every rule with its outcome, plus the plan. */
 	freeAudit: {
@@ -159,59 +169,16 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			measuredAt: null,
 			monthUsage: null,
 			cycle: null,
+			update: null,
 			report: null,
 			freeAudit,
 		};
 
-		const [cycleRows, orderRows] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			Promise.all([
-				tx
-					.select({
-						id: svCycles.id,
-						orderId: svCycles.orderId,
-						lockId: svCycles.lockId,
-						status: svCycles.status,
-						expectedRuns: svCycles.expectedRuns,
-						completedRuns: svCycles.completedRuns,
-						createdAt: svCycles.createdAt,
-					})
-					.from(svCycles)
-					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-					.where(
-						and(
-							eq(svOrders.projectId, data.projectId),
-							eq(svOrders.organizationId, context.tenantId),
-							eq(svCycles.organizationId, context.tenantId),
-						),
-					)
-					.orderBy(desc(svCycles.createdAt))
-					.limit(1),
-				tx
-					.select({ id: svOrders.id, lockId: svOrders.lockId, createdAt: svOrders.createdAt })
-					.from(svOrders)
-					.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
-					.orderBy(desc(svOrders.createdAt))
-					.limit(1),
-			]),
-		);
-		const latestCycle = cycleRows[0];
-		const anchor = selectReportAnchor(
-			latestCycle
-				? {
-						orderId: latestCycle.orderId,
-						lockId: latestCycle.lockId,
-						cycle: {
-							id: latestCycle.id,
-							status: latestCycle.status,
-							expectedRuns: latestCycle.expectedRuns,
-							completedRuns: latestCycle.completedRuns,
-							createdAt: latestCycle.createdAt,
-						},
-					}
-				: null,
-			orderRows[0] ?? null,
+		const anchor = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			loadReportAnchor(tx, { projectId: data.projectId, tenantId: context.tenantId }),
 		);
 		if (!anchor) return view;
+		if (anchor.update) view.update = { ...anchor.update, createdAt: anchor.update.createdAt.toISOString() };
 
 		const [lock] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
 			tx
@@ -235,17 +202,18 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			view.monthUsage = { ...usage, allowance: planForAllowance };
 		}
 
+		// Without a READY cycle there is no report: a page built from an
+		// unfinished or rejected cycle's runs would print its gaps as findings.
 		const cycle = anchor.cycle;
-		if (cycle) {
-			view.cycle = { status: cycle.status, expectedRuns: cycle.expectedRuns, completedRuns: cycle.completedRuns };
-			view.measuredAt = cycle.createdAt.toISOString();
-		}
+		if (!cycle) return view;
+		view.cycle = { status: cycle.status, expectedRuns: cycle.expectedRuns, completedRuns: cycle.completedRuns };
+		view.measuredAt = cycle.createdAt.toISOString();
 		if (!subjects) return view;
 
 		const allRuns = await repositories.runs.listForOrder(context, anchor.orderId);
-		// The report speaks for the newest cycle: mixing runs from an order's
-		// earlier cycles would double-count questions and misstate the counts.
-		const runs = cycle ? allRuns.filter((run) => run.cycleId === cycle.id) : [];
+		// The report speaks for one cycle: mixing runs from an order's earlier
+		// cycles would double-count questions and misstate the counts.
+		const runs = allRuns.filter((run) => run.cycleId === cycle.id);
 
 		const scenarioIds = [...new Set(runs.map((run) => run.scenarioId))];
 		const scenarioRows =

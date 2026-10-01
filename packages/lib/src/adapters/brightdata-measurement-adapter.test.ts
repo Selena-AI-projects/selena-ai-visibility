@@ -7,7 +7,7 @@ import {
 } from "@workspace/selena-visibility-contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ControlledCycleState } from "../run-policy";
-import type { SelenaExecutablePermit } from "../selena-measurement";
+import { type SelenaExecutablePermit, SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "../selena-measurement";
 import { executePermit } from "../selena-run-executor";
 import { estimateRunCostUsd } from "../usage/cost";
 import {
@@ -20,7 +20,6 @@ import {
 	parseBrightDataAnswer,
 	resolveBrightDataCost,
 	SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS,
-	SLOW_COLLECTOR_QUEUE_LEASE_SECONDS,
 } from "./brightdata-measurement-adapter";
 
 const API_KEY = "brd-secret-owner-token";

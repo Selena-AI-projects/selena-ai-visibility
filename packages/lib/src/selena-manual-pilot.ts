@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import {
 	assertObservationCardinality,
 	type LocalAiDiscoveryLockBlock,
 	type LocalAiTaskContextSnapshot,
 	localAiDiscoveryLockBlockSchema,
 	localAiTaskContextHash,
+	sha256HexSync,
 } from "@workspace/selena-visibility-contracts";
 
 // RC7 Phase E planning is pure: a lock block goes in, a finite task matrix
@@ -57,5 +57,5 @@ export function planCaptureTasks(block: LocalAiDiscoveryLockBlock): PlannedCaptu
 // Transcript hash for the immutable observation record; corrections supersede
 // rather than rewrite, so the original digest stays verifiable.
 export function observationContentSha256(transcript: string): string {
-	return createHash("sha256").update(transcript).digest("hex");
+	return sha256HexSync(transcript);
 }

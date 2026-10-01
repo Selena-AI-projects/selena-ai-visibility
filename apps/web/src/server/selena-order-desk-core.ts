@@ -30,6 +30,7 @@ import {
 	SELENA_CHECKOUT_METADATA,
 	type SelenaPlan,
 	type SelenaPlanId,
+	validateMeasurementLanguageScope,
 	visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -335,6 +336,21 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		if (approved.length !== data.scenarioIds.length) throw new Error("SELENA_SCENARIOS_NOT_APPROVED");
 		if (plan.scenarioLimit !== null && approved.length > plan.scenarioLimit)
 			throw new Error(`SELENA_PLAN_SCENARIO_LIMIT_EXCEEDED: ${plan.scenarioLimit}`);
+
+		// Language count and questions per language come from the scenarios
+		// themselves: an order for one language cannot borrow the second
+		// language's allowance.
+		try {
+			validateMeasurementLanguageScope(
+				plan.planId,
+				approved.map((scenario) => scenario.language),
+			);
+		} catch (error) {
+			const code = error instanceof Error ? error.message : String(error);
+			throw new Error(
+				`SELENA_LANGUAGE_SCOPE_EXCEEDED: ${code}; this plan takes up to ${plan.languageLimit} language(s) and ${plan.questionLimitPerMeasurement} questions per language per measurement`,
+			);
+		}
 
 		// One measurement takes at most the plan's question count (× languages):
 		// twenty-five real questions beat a hundred invented ones.

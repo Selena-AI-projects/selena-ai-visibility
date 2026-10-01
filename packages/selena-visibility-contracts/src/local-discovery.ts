@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
+import { sha256HexSync } from "./sha256.js";
 
 // RC7 boundary: Google Ask Maps is a manual-observation-only surface. This
 // module is the single policy gate for local AI discovery — the backend must
@@ -109,7 +109,7 @@ export function contextHash(context: ObserverContext): string {
 		const value = (conditions as Record<string, unknown>)[key];
 		if (value !== undefined) canonical[key] = value;
 	}
-	return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+	return sha256HexSync(JSON.stringify(canonical));
 }
 
 export function localAiTaskContextHash(snapshot: unknown): string {
