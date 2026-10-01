@@ -8,6 +8,7 @@ import { embedBinaries, externalizeResvg } from "@workspace/og/vite-plugin";
 import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 import pkg from "./package.json" with { type: "json" };
+import { nodeBuiltinsInertOnClient } from "./vite-node-builtins-inert";
 
 const tslibEsm = fileURLToPath(import.meta.resolve("tslib/tslib.es6.mjs"));
 
@@ -18,6 +19,7 @@ export default defineConfig({
 	define: {
 		__APP_VERSION__: JSON.stringify(pkg.version),
 	},
+	optimizeDeps: nodeBuiltinsInertOnClient.optimizeDeps,
 	resolve: {
 		tsconfigPaths: true,
 		alias: {
@@ -26,6 +28,7 @@ export default defineConfig({
 		},
 	},
 	plugins: [
+		nodeBuiltinsInertOnClient.plugin(),
 		embedBinaries(),
 		externalizeResvg(),
 		devtools(),

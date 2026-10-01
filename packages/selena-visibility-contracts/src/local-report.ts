@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { z } from "zod";
 import { mapsProviderLockSchema, mapsRequestLockSchema } from "./local-locks.js";
 import { canonicalLocalMapsJson } from "./local-maps-live.js";
 import { localMapsRankCapabilitySchema } from "./local-maps-rank-adapter.js";
+import { sha256HexSync } from "./sha256.js";
 
 export const localPilotCycleStatuses = [
 	"CREATED",
@@ -53,9 +53,7 @@ export const localProviderContractSchema = z.strictObject({
 export type LocalProviderContract = z.infer<typeof localProviderContractSchema>;
 
 export function localProviderContractDigest(value: LocalProviderContract): string {
-	return `sha256:${createHash("sha256")
-		.update(canonicalLocalMapsJson(localProviderContractSchema.parse(value)))
-		.digest("hex")}`;
+	return `sha256:${sha256HexSync(canonicalLocalMapsJson(localProviderContractSchema.parse(value)))}`;
 }
 
 export const localPilotObservationSchema = z

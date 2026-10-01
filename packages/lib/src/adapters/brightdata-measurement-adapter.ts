@@ -228,9 +228,6 @@ const DEFAULT_SNAPSHOT_TIMEOUT_MS = 12 * 60_000;
 // RESPONSE_TOO_LARGE is handled separately by projecting the collector output;
 // a larger deadline cannot make an oversized response safe to buffer.
 export const SLOW_COLLECTOR_MEASUREMENT_DEADLINE_MS = 25 * 60_000;
-// The worker lease includes room after the provider deadline for snapshot
-// cancellation and the transaction that makes the run and cycle terminal.
-export const SLOW_COLLECTOR_QUEUE_LEASE_SECONDS = 35 * 60;
 const SLOW_COLLECTOR_SURFACES = new Set(["perplexity", "gemini"]);
 const DEFAULT_SNAPSHOT_POLL_MS = 10_000;
 const SNAPSHOT_CANCEL_TIMEOUT_MS = 5_000;
