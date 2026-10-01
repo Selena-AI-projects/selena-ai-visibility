@@ -1,4 +1,5 @@
 import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
+import { cycleProgress } from "@workspace/lib/selena-report-cycle";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Input } from "@workspace/ui/components/input";
@@ -9,7 +10,6 @@ import { useCallback, useEffect, useState } from "react";
 import { SelenaOrderDesk } from "@/components/selena-order-desk";
 import { SelenaRequestInbox } from "@/components/selena-request-inbox";
 import { humanizeSelenaAdminError } from "@/lib/selena-workspace-errors";
-import { analyzeSelenaOrderFn } from "@/server/selena-order-analysis";
 import {
 	approveSelenaOrderFn,
 	enqueueSelenaOrderRunsFn,
@@ -19,6 +19,7 @@ import {
 	recordSelenaQcFn,
 	stopSelenaOrderFn,
 } from "@/server/selena-admin-orders";
+import { analyzeSelenaOrderFn } from "@/server/selena-order-analysis";
 
 export const Route = createFileRoute("/_authed/app/selena-admin")({
 	beforeLoad: async () => {
@@ -264,6 +265,7 @@ function SelenaAdminOrders() {
 										<TableHead className="text-right">{tr(locale, "Order cap", "Лимит заказа")}</TableHead>
 										<TableHead>{tr(locale, "Cycle", "Цикл")}</TableHead>
 										<TableHead>{tr(locale, "Latest QC", "Последний QC")}</TableHead>
+										<TableHead className="text-right">{tr(locale, "Provider spend", "Расход провайдера")}</TableHead>
 										<TableHead />
 									</TableRow>
 								</TableHeader>
@@ -278,9 +280,20 @@ function SelenaAdminOrders() {
 											<TableCell className="text-right tabular-nums">
 												{order.orderCap} {order.currency}
 											</TableCell>
-											<TableCell className="text-xs text-muted-foreground">{cycleSummary(order)}</TableCell>
+											<TableCell
+												className={
+													order.cycles[0] && cycleProgress(order.cycles[0]).kind === "unsuccessful"
+														? "text-xs font-medium text-destructive"
+														: "text-xs text-muted-foreground"
+												}
+											>
+												{cycleSummary(order, locale)}
+											</TableCell>
 											<TableCell className="text-xs text-muted-foreground">
 												{order.latestQc ? order.latestQc.decision : tr(locale, "none", "нет")}
+											</TableCell>
+											<TableCell className="text-right text-xs tabular-nums text-muted-foreground">
+												{providerSpendLabel(order.providerSpend, locale)}
 											</TableCell>
 											<TableCell className="text-right">
 												<Button type="button" variant="outline" size="sm" onClick={() => setSelectedOrderId(order.id)}>
@@ -629,10 +642,45 @@ function formatShare(value: number | null, locale: AdminLocale): string {
 	return `${Math.round(value * 100)}%`;
 }
 
-function cycleSummary(order: QueueOrder): string {
+function cycleSummary(order: QueueOrder, locale: AdminLocale): string {
 	const cycle = order.cycles[0];
 	if (!cycle) return "—";
-	return `${cycle.status} ${cycle.completedRuns}/${cycle.expectedRuns}`;
+	const progress = cycleProgress(cycle);
+	switch (progress.kind) {
+		case "in_progress":
+			return tr(
+				locale,
+				`${cycle.status} · ${progress.completedRuns} of ${progress.expectedRuns} done, ${progress.succeededRuns} successful`,
+				`${cycle.status} · завершено ${progress.completedRuns} из ${progress.expectedRuns}, успешных ${progress.succeededRuns}`,
+			);
+		case "unsuccessful":
+			return tr(
+				locale,
+				`${cycle.status} · unsuccessful: 0 successful / ${progress.expectedRuns}`,
+				`${cycle.status} · неудачно: успешных 0 / ${progress.expectedRuns}`,
+			);
+		case "finished":
+			return tr(
+				locale,
+				`${cycle.status} · ${progress.succeededRuns} successful / ${progress.expectedRuns}`,
+				`${cycle.status} · успешных ${progress.succeededRuns} / ${progress.expectedRuns}`,
+			);
+	}
+}
+
+/**
+ * Dollars the providers charged for the order, from the spend ledger. This is
+ * the operator's figure: the client's allowance counts answers, not money.
+ */
+function providerSpendLabel(spend: QueueOrder["providerSpend"], locale: AdminLocale): string {
+	if (spend.events === 0) return tr(locale, "no calls yet", "вызовов ещё нет");
+	const amount = `$${spend.totalUsd.toFixed(4)}`;
+	if (spend.estimatedEvents === 0) return amount;
+	return tr(
+		locale,
+		`${amount} · ${spend.estimatedEvents} of ${spend.events} estimated`,
+		`${amount} · оценка для ${spend.estimatedEvents} из ${spend.events}`,
+	);
 }
 
 function checkLabel(code: string, locale: AdminLocale): string {

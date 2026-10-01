@@ -3,6 +3,7 @@ import { withOrganizationTransaction } from "@workspace/lib/db/organization-tran
 import {
 	svAuditEvents,
 	svConfigurationLocks,
+	svCostEvents,
 	svCycles,
 	svOrders,
 	svPayments,
@@ -257,6 +258,17 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 							expectedRuns: svCycles.expectedRuns,
 							createdRuns: svCycles.createdRuns,
 							completedRuns: svCycles.completedRuns,
+							// A completed run may have FAILED or come back INVALID; only the
+							// successful ones tell the operator whether the cycle measured anything.
+							// Written out in full: column references inside a select-list
+							// template are not table-qualified, and an unqualified
+							// "cycle_id" = "id" would compare the run with itself.
+							succeededRuns: sql<number>`(
+								select count(*)::int from sv_runs as succeeded_runs
+								where succeeded_runs.cycle_id = sv_cycles.id
+									and succeeded_runs.organization_id = sv_cycles.organization_id
+									and succeeded_runs.status = 'SUCCEEDED'
+							)`,
 						})
 						.from(svCycles)
 						.where(and(eq(svCycles.orderId, order.id), eq(svCycles.organizationId, context.tenantId)))
@@ -276,7 +288,30 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 						.limit(1),
 				]),
 			);
-			return { ...order, cycles, latestQc: qc[0] ?? null };
+			// What the providers charged (or were estimated to charge) for this
+			// order, from the spend ledger: the operator's number, never the
+			// client's, whose allowance counts answers rather than dollars.
+			const [spend] = await withOrganizationTransaction(await database(), context.tenantId, (tx) =>
+				tx
+					.select({
+						totalUsd: sql<number>`coalesce(sum(${svCostEvents.amountUsd}), 0)::float8`,
+						estimatedEvents: sql<number>`count(*) filter (where ${svCostEvents.basis} <> 'actual')::int`,
+						events: sql<number>`count(*)::int`,
+					})
+					.from(svCostEvents)
+					.innerJoin(svCycles, eq(svCostEvents.cycleId, svCycles.id))
+					.where(and(eq(svCycles.orderId, order.id), eq(svCostEvents.organizationId, context.tenantId))),
+			);
+			return {
+				...order,
+				cycles,
+				latestQc: qc[0] ?? null,
+				providerSpend: {
+					totalUsd: Number(spend?.totalUsd ?? 0),
+					events: Number(spend?.events ?? 0),
+					estimatedEvents: Number(spend?.estimatedEvents ?? 0),
+				},
+			};
 		}),
 	);
 });

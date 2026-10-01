@@ -376,6 +376,99 @@ function railValue(locale: ReportLocale, value: number | null, fallback: string)
 	return value === null ? fallback : new Intl.NumberFormat(locale === "ru" ? "ru-RU" : "en-US").format(value);
 }
 
+function formatReportDate(locale: ReportLocale, iso: string): string {
+	return new Date(iso).toLocaleDateString(locale === "ru" ? "ru-RU" : "en-US");
+}
+
+type ReportUpdate = NonNullable<GraderReportView["update"]>;
+
+function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
+	if (update.state === "in_progress")
+		return tr(
+			locale,
+			`is in progress: ${update.completedRuns} of ${update.expectedRuns} answers checked so far`,
+			`выполняется: проверено ответов ${update.completedRuns} из ${update.expectedRuns}`,
+		);
+	if (update.state === "awaiting_review")
+		return tr(locale, "is complete and awaiting quality review", "завершено и ожидает проверку качества");
+	switch (update.reason) {
+		case "QC_REJECTED":
+			return tr(locale, "did not pass quality review", "не прошло проверку качества");
+		case "NO_SUCCESSFUL_RUNS":
+			return tr(
+				locale,
+				`did not succeed: none of its ${update.expectedRuns} answers could be measured`,
+				`не удалось: ни один из ${update.expectedRuns} ответов не был измерен`,
+			);
+		case "STOPPED":
+			return tr(locale, "was stopped by the operator", "остановлено оператором");
+		default:
+			return tr(
+				locale,
+				`failed: ${update.succeededRuns} of ${update.expectedRuns} answers were measured before it broke off`,
+				`прервалось с ошибкой: измерено ответов ${update.succeededRuns} из ${update.expectedRuns}`,
+			);
+	}
+}
+
+/**
+ * A cycle newer than the report is news about the measurement, not a report:
+ * the client is told how it stands and which cycle the numbers below belong to.
+ */
+function MeasurementUpdateNotice({
+	update,
+	measuredAt,
+	locale,
+}: {
+	update: ReportUpdate;
+	measuredAt: string | null;
+	locale: ReportLocale;
+}) {
+	const updateDate = formatReportDate(locale, update.createdAt);
+	const unsuccessful = update.state === "unsuccessful";
+	const tone = unsuccessful
+		? "border-[#e2b7a2] bg-[#fff4ee] text-[#7a3d17]"
+		: "border-[#dccfbe] bg-[#fbf7ef] text-[#3d362e]";
+	if (measuredAt)
+		return (
+			<div className={`rounded-2xl border px-5 py-4 text-sm leading-6 ${tone}`} data-testid="measurement-update">
+				<p className="font-semibold">
+					{tr(locale, `Update of ${updateDate}`, `Обновление от ${updateDate}`)} {updateOutcome(locale, update)}.
+				</p>
+				<p className="mt-1">
+					{tr(
+						locale,
+						`You are looking at the report from ${formatReportDate(locale, measuredAt)}, the latest one that passed quality review.`,
+						`Ниже показан отчёт от ${formatReportDate(locale, measuredAt)} — последний, прошедший проверку качества.`,
+					)}
+				</p>
+			</div>
+		);
+	return (
+		<SectionCard id="overview">
+			<div data-testid="measurement-update">
+				<SectionTitle title={tr(locale, "The report is not ready yet", "Отчёт ещё не готов")} />
+				<p className={`mt-4 rounded-xl border px-4 py-3 text-sm leading-6 ${tone}`}>
+					{tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} {updateOutcome(locale, update)}.
+				</p>
+				<p className="mt-3 max-w-2xl text-sm leading-6 text-[#574d45]">
+					{unsuccessful
+						? tr(
+								locale,
+								"No result is shown for it: an unsuccessful measurement is not a report. The operator re-runs it, and the report appears here once a measurement passes quality review.",
+								"Результат по нему не показывается: неудачный замер — не отчёт. Оператор запустит его повторно, и отчёт появится здесь, как только замер пройдёт проверку качества.",
+							)
+						: tr(
+								locale,
+								"The report appears here once the measurement is complete and has passed quality review.",
+								"Отчёт появится здесь, когда замер завершится и пройдёт проверку качества.",
+							)}
+				</p>
+			</div>
+		</SectionCard>
+	);
+}
+
 function ReportContextRail({
 	view,
 	report,
@@ -405,7 +498,11 @@ function ReportContextRail({
 		{
 			title: tr(locale, "Measurement", "Замер"),
 			items: [
-				{ id: "overview", label: tr(locale, "Overview", "Обзор"), value: view?.cycle ? view.cycle.status : noMeasurement },
+				{
+					id: "overview",
+					label: tr(locale, "Overview", "Обзор"),
+					value: view?.cycle ? view.cycle.status : view?.update ? tr(locale, "not ready", "не готов") : noMeasurement,
+				},
 				{ id: "visibility", label: tr(locale, "Visibility", "Видимость"), value: railValue(locale, systemsCount, noMeasurement) },
 				{
 					id: "share-of-voice",
@@ -644,6 +741,12 @@ function SelenaReportPage() {
 									`${view.monthUsage.used} of ${view.monthUsage.allowance} answers used this month`,
 									`использовано ответов в этом месяце: ${view.monthUsage.used} из ${view.monthUsage.allowance}`,
 								)}
+								{view.monthUsage.reserved > 0 &&
+									tr(
+										locale,
+										` · ${view.monthUsage.reserved} in progress`,
+										` · в работе: ${view.monthUsage.reserved}`,
+									)}
 							</span>
 						)}
 						{view?.measuredAt && (
@@ -685,6 +788,8 @@ function SelenaReportPage() {
 						</Link>
 					</SectionCard>
 				)}
+
+				{view?.update && <MeasurementUpdateNotice update={view.update} measuredAt={view.measuredAt} locale={locale} />}
 
 				{view?.inputs && (
 					<SectionCard id="brand-profile">
@@ -952,7 +1057,7 @@ function SelenaReportPage() {
 									</Link>
 								</SectionCard>
 							</>
-						) : (
+						) : view.update ? null : (
 							<SectionCard id="overview">
 								<SectionTitle title={tr(locale, "No checks yet", "Проверок ещё не было")} />
 								<p className="mt-3 text-sm text-[#574d45]">

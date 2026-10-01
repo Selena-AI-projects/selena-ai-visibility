@@ -144,6 +144,7 @@ export * from "./outcome-layer.js";
 export * from "./payment.js";
 export * from "./pilot-access.js";
 export * from "./recommendation.js";
+export * from "./sha256.js";
 export * from "./staging-simulation.js";
 export * from "./visibility-map.js";
 export * from "./visibility-os.js";
