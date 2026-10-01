@@ -103,6 +103,7 @@ export function measurementAdapterNamesFor(configuredAdapter: string): string[] 
  * account's own usage on 2026-09-01: nine ChatGPT records cost USD 0.0135.
  */
 export const MEASUREMENT_ESTIMATED_COST_USD = 0.0015;
+// The `dataforseo` placeholder in packages/lib/src/usage/cost.ts; no invoice has confirmed it.
 const DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD = 0.005;
 
 /** The amount the executor reserves against the spend scope before one answer. */
@@ -116,6 +117,8 @@ export function estimatedAnswerCostUsd(configuredAdapter: string): number {
  * The most the executor can reserve for an order of this size. The web
  * service approving the order does not know which adapter the worker runs, so
  * it takes the highest per-answer reservation any approved route can make.
+ * It bounds the reservation, not the charge: an answer whose provider reports
+ * no cost settles at the route's own estimate, which can be higher.
  */
 export function worstCaseOrderCostUsd(expectedRuns: number): number {
 	if (!Number.isInteger(expectedRuns) || expectedRuns < 0) return Number.NaN;

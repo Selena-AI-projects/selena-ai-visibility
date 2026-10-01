@@ -20,15 +20,67 @@ background scheduler and an order-scoped dispatch would both drive provider
 calls for the same work, which doubles spend and breaks cardinality.
 
 `SELENA_PROVIDER_BUDGET_USD` (on `web`; the worker never reads it) is the
-ceiling for a single order's worst-case cost, not a wallet balance — no
-provider balance is ever read. The worst case is the order's answers times the
-highest per-answer reservation the worker can make ($0.005): a Snapshot
+ceiling for a single order's estimated reservation, not a wallet balance — no
+provider balance is ever read. Preflight multiplies the order's answers by the
+highest per-answer reservation any approved route makes ($0.005): a Snapshot
 measurement of 9 answers is $0.045, a full Landscape measurement of 400
 answers is $2.00, a full Expert Verified audit of 2,000 answers is $10.00. Its
 job is to catch a scope typo before the first paid call: an order that
 suddenly needs ten times the usual answers cannot be approved. Set it just
-above the largest order you mean to approve, and re-tune it against the first
-real provider invoice.
+above the largest order you mean to approve.
+
+### $0.005 is an estimated reservation, not a price
+
+No figure below has been reconciled with a provider invoice for these routes.
+Each answer is booked twice: the worker reserves an estimate before the call,
+and settles the reservation after it at the provider's reported cost, or at
+the route's estimate when the provider reports none.
+
+| Route | Reserved before the call | Settled when the provider reports no cost | Where the figure comes from |
+|---|---:|---:|---|
+| `brightdata-*` | $0.0015 | $0.01 | Reservation: the account's usage on 2026-09-01, nine ChatGPT records for $0.0135. Settlement: a coarse placeholder in `packages/lib/src/usage/cost.ts`. |
+| `oxylabs-perplexity` | $0.0015 | $0.01 | Same reservation; the settlement is the same placeholder table. |
+| `olostep-perplexity` | $0.0015 | $0.0054 | Three credits at the smallest paid plan's list rate. |
+| `openrouter` | $0.0015 | $0.005 | Placeholder table. |
+| `dataforseo-perplexity` | $0.005 | $0.005 | The `dataforseo` placeholder in the same table. This is where the $0.005 comes from. |
+
+So the $0.005 preflight figure is the highest *reservation*, not the highest
+*charge*: an answer on a route that reports no cost settles at up to $0.01.
+
+What happens around one answer:
+
+- **Before the call.** The reservation is taken against the `measure` spend
+  scope (`sv_provider_spend_budgets`, set with
+  `packages/lib/scripts/set-provider-spend-budget.ts`). It counts every open
+  reservation at its estimate and every settled one at its settled amount,
+  across all orders and workspaces. If that sum plus the new estimate would
+  pass the cap, the reservation is refused: the job fails before the permit is
+  claimed, no provider is called and the permit stays unspent. Nothing re-runs
+  it on its own — this is the moment spending stops.
+- **Retries.** `selena-measure` has no retries, and a permit is consumed when
+  it is claimed, so one permit makes at most one provider call. A reservation
+  is keyed by the permit, so a redelivered job never takes a second one. A
+  second attempt that finds the permit already spent releases the open
+  reservation under that key; were the first attempt still in flight, its
+  later settlement would then be refused and its cost left out of the scope.
+  Enqueueing is deduplicated per permit, so this needs a duplicate delivery
+  while a call is running — it is listed as an open item, not handled.
+- **Errors.** A run that fails after the claim is settled at its reservation,
+  not released, because the call may have reached the provider. A worker that
+  dies mid-call leaves the reservation open, and it keeps counting against the
+  cap.
+- **Overshoot.** The cap is checked when reserving, so it can be passed by the
+  difference between settlement and reservation of the answers in flight —
+  one at a time per worker process. For an answer settled at an estimate that
+  is at most $0.0085 on today's table; a cost the provider reports has no upper
+  bound here.
+
+Three limits stand between an order and a bill: this preflight ceiling (per
+order, before approval), the `measure` scope (cumulative, per answer, the one
+that stops a run) and the hard limit in each provider account (the only one
+that survives a failure outside this application). None of them changes what a
+provider actually charges; that stays unknown until the first invoice is read
+against the settled rows.
 
 Neither variable replaces a hard spend limit configured in the provider
 accounts themselves. Set those too: they are the only guard that survives a

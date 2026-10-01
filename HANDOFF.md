@@ -111,8 +111,9 @@ the worker's stop is still engaged. Flip both, in this order:
 > This list used to put `SELENA_PROVIDER_BUDGET_USD` on `worker`, which never
 > reads it, and left the four `web` rows above out. With that list every promo
 > request ended `AUTO_FAILED` at preflight. Preflight now compares the order's
-> own worst case (answers × the highest per-answer reservation, $0.005) with
-> the variable, so `2` admits up to 400 answers per order; before the fix it
+> estimated reservation (answers × $0.005, the highest per-answer reservation —
+> an estimate, not a provider price; see "$0.005 is an estimated reservation"
+> in `SELENA_OWNER_OPERATING_GUIDE.md`) with the variable, so `2` admits up to 400 answers per order; before the fix it
 > compared the plan's provider cap ($12 / $28) and refused everything below
 > it. Verified end to end on a local disposable stack (acceptance run
 > `E2E-20261001-R2-*`), not on staging. Real spend is still bounded by the

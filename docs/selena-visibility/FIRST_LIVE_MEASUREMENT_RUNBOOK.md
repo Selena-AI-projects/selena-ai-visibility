@@ -145,7 +145,7 @@ spending twenty-six times more.
 
    | Variable | Value | Why |
    |---|---|---|
-   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight: the order's answers × $0.005, the highest per-answer reservation the worker can make. Read by `web` only; the worker never reads it. |
+   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order ceiling at preflight on the order's estimated reservation: its answers × $0.005, the highest per-answer reservation the worker makes — an estimate, not a provider price. Read by `web` only; the worker never reads it. |
    | `SCHEDULE_MAINTENANCE_ENABLED` | `false` | Preflight reads it here as well; unset counts as on and blocks every order. |
    | `SELENA_MEASUREMENT_ENABLED` | `true` | Web refuses to enqueue while it is off. |
    | `SELENA_PAYMENTS_ENABLED` / `SELENA_PAYMENT_MODE` | `true` / `test` | The desk and a free promo order both draft through a test payment. |
