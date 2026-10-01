@@ -37,7 +37,11 @@ describe.skipIf(!url)("QC sign-off on a database", () => {
 			planId: "visibility-snapshot",
 		});
 		const order = await seedOrder(fixture, { expectedRuns: outcomes.length, orderStatus: "RUNNING" });
-		const cycle = await seedCycle(fixture, { ...order, expectedRuns: outcomes.length, keyPrefix: `${fixture.projectId}:q` });
+		const cycle = await seedCycle(fixture, {
+			...order,
+			expectedRuns: outcomes.length,
+			keyPrefix: `${fixture.projectId}:q`,
+		});
 		for (const [index, permitId] of cycle.permitIds.entries()) await finishPermit(fixture, permitId, outcomes[index]);
 		return { fixture, orderId: order.orderId };
 	}

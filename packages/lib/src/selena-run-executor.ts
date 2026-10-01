@@ -81,7 +81,6 @@ export type MeasurementSpendMeter = {
 	release(request: { requestKey: string }): Promise<void>;
 };
 
-
 /**
  * Storage port for the runner. Kept structural so this module stays free of
  * repository and database imports; the worker passes the real repositories.
