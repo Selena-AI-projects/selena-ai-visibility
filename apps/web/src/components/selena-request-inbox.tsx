@@ -1,9 +1,9 @@
+import { resolvePlanId } from "@workspace/selena-visibility-contracts";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table";
 import { useCallback, useEffect, useState } from "react";
-import { resolvePlanId } from "@workspace/selena-visibility-contracts";
 import {
 	listSelenaOrderRequestsFn,
 	type OrderRequestRow,
@@ -98,6 +98,7 @@ export function SelenaRequestInbox({ locale }: { locale: InboxLocale }) {
 									<TableRow key={request.id}>
 										<TableCell className="font-medium">
 											{request.projectName}
+											<span className="block text-xs text-muted-foreground">{request.organizationName}</span>
 											{request.comment && (
 												<span className="mt-1 block text-xs text-muted-foreground">{request.comment}</span>
 											)}
@@ -109,7 +110,7 @@ export function SelenaRequestInbox({ locale }: { locale: InboxLocale }) {
 										</TableCell>
 										<TableCell>
 											{request.promoApplied ? (
-												<Badge>{tr(locale, `Free · ${request.promoCode}`, `Бесплатно · ${request.promoCode}`)}</Badge>
+												<Badge>{tr(locale, "Free · pilot seat", "Бесплатно · пилотное место")}</Badge>
 											) : (
 												<span className="text-xs text-muted-foreground">
 													{tr(locale, "To be arranged", "Нужно согласовать")}

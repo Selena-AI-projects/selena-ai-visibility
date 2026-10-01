@@ -272,7 +272,12 @@ function SelenaAdminOrders() {
 								<TableBody>
 									{orders.map((order) => (
 										<TableRow key={order.id} data-state={order.id === selectedOrder?.id ? "selected" : undefined}>
-											<TableCell className="font-medium">{order.projectName}</TableCell>
+											<TableCell className="font-medium">
+												{order.projectName}
+												<span className="block text-xs font-normal text-muted-foreground">
+													{order.organizationName}
+												</span>
+											</TableCell>
 											<TableCell>
 												<span className="rounded-full border px-2 py-0.5 text-xs">{order.status}</span>
 											</TableCell>

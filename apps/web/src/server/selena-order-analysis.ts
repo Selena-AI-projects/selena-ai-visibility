@@ -7,8 +7,7 @@ import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-co
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth/helpers";
-import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { operatorScopeForOrder } from "./selena-operator-scope";
 
 // Reads the answers an order produced and reports who they named and what they
 // leaned on. The stage is re-runnable on purpose: findings are derived, never
@@ -24,11 +23,6 @@ const database = async () => (await import("@workspace/lib/db/db")).db;
 
 let repositoriesPromise: Promise<ReturnType<typeof createSelenaRepositories>> | undefined;
 const getRepositories = () => (repositoriesPromise ??= database().then(createSelenaRepositories));
-
-async function requireAdminContext(): Promise<SelenaRepositoryContext> {
-	await requireAdmin();
-	return resolveSessionAuthContext();
-}
 
 /** The whole read: shared by the operator action and the client's results step. */
 export async function computeOrderAnalysis(context: SelenaRepositoryContext, orderId: string) {
@@ -101,4 +95,6 @@ export async function computeOrderAnalysis(context: SelenaRepositoryContext, ord
 
 export const analyzeSelenaOrderFn = createServerFn({ method: "POST" })
 	.validator(z.object({ orderId: z.string().uuid() }))
-	.handler(async ({ data }) => computeOrderAnalysis(await requireAdminContext(), data.orderId));
+	.handler(async ({ data }) =>
+		computeOrderAnalysis(await operatorScopeForOrder(data.orderId, "view_answers"), data.orderId),
+	);
