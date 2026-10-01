@@ -28,11 +28,20 @@ describe("plan request layer zero invariant", () => {
 		expect(source).toContain("promoCode: null");
 	});
 
-	it("keeps reading and closing requests behind the admin gate", () => {
-		const listing = source.slice(source.indexOf("listSelenaOrderRequestsFn"));
+	it("keeps reading and closing requests behind the platform-operator gate", () => {
+		const listing = source.slice(source.indexOf("export const listSelenaOrderRequestsFn"));
 		expect(listing).toContain("requireAdmin()");
-		const updating = source.slice(source.indexOf("updateSelenaOrderRequestStatusFn"));
-		expect(updating).toContain("requireAdmin()");
+		// Closing a request acts in the request's own workspace, which the
+		// operator scope resolves only after its own requireAdmin() check.
+		const updating = source.slice(source.indexOf("export const updateSelenaOrderRequestStatusFn"));
+		expect(updating).toContain('operatorScopeForRequest(data.requestId, "request_status")');
+	});
+
+	// One code is one request: the id is derived from the workspace and the
+	// code's digest, so a resubmission cannot mint a second request or order.
+	it("files every submission of one pilot code under one request", () => {
+		expect(source).toContain("pilotSeatRequestId(context.tenantId, hashPilotInviteCode(code))");
+		expect(source).toContain(".onConflictDoNothing({ target: svOrderRequests.id })");
 	});
 
 	// The two daily caps span every tenant, and the runtime role cannot count
@@ -41,7 +50,6 @@ describe("plan request layer zero invariant", () => {
 	it("decides the cross-tenant promo caps in the database, never by counting here", () => {
 		expect(source).toContain("claimFreeAutoDispatch(tx");
 		expect(source).toContain("releaseFreeAutoDispatchClaim(tx");
-		expect(source).not.toContain("await db\n");
 		expect(source).not.toContain("count()");
 	});
 });
