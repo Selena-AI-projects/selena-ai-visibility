@@ -43,6 +43,9 @@ cleanup() {
 	# Each background step runs in its own process group, so the server and
 	# the worker go down with the shell that started them.
 	for pid in "${PIDS[@]}"; do kill -- "-$pid" 2>/dev/null || true; done
+	sleep 3
+	# The web server's graceful shutdown can wait on idle connections indefinitely.
+	for pid in "${PIDS[@]}"; do kill -9 -- "-$pid" 2>/dev/null || true; done
 	wait 2>/dev/null || true
 	[ "${HARNESS_KEEP:-0}" = "1" ] && return
 	git -C "$REPO" worktree remove --force "$SRC" 2>/dev/null || true

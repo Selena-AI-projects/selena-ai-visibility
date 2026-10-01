@@ -165,9 +165,10 @@ const orderState = async (organizationId) =>
 function capture(page) {
 	const calls = [];
 	page.on("request", (request) => {
-		if (request.url().includes("/_serverFn/") && request.method() === "POST")
+		if (request.url().includes("/_serverFn/"))
 			calls.push({
 				url: request.url(),
+				method: request.method(),
 				body: request.postData(),
 				headers: Object.fromEntries(Object.entries(request.headers()).filter(([key]) => key !== "cookie")),
 			});
@@ -179,14 +180,14 @@ async function replay(role, calls, leakPattern) {
 	const results = [];
 	for (const call of calls) {
 		const response = await sessions[role].context.request.fetch(call.url, {
-			method: "POST",
+			method: call.method,
 			data: call.body ?? undefined,
 			headers: call.headers,
 		});
 		const text = await response.text();
 		results.push({
 			role,
-			fn: call.url.split("/_serverFn/")[1].slice(0, 12),
+			fn: `${call.method} ${call.url.split("/_serverFn/")[1].slice(0, 12)}`,
 			status: response.status(),
 			refusal: (text.match(/(Unauthorized|Forbidden|Not found)[^"\\]*/) ?? [])[0] ?? null,
 			leaks: leakPattern.test(text),
@@ -205,6 +206,9 @@ try {
 		check(`S1-${role}`, `Регистрация и подтверждение почты: ${role}`, /\/app/.test(landed), landed.replace(APP, ""));
 	}
 	await q(`update "user" set role = 'admin' where email = $1`, [people.operator.email]);
+	// The session carries the role it was issued with; the new role applies from the next sign-in.
+	await sessions.operator.context.close();
+	sessions.operator = await signIn("operator");
 	const roles = await q(
 		`select u.email, u.role as platform, m.role as workspace from "user" u join member m on m.user_id = u.id order by u.email`,
 	);
@@ -227,7 +231,7 @@ try {
 	const resubmit = await submitRequest(client.page, projectId, codes.main, people.client.email);
 	await resubmit.click();
 	await client.page.waitForTimeout(5000);
-	const orderCall = submissions.find((call) => (call.body ?? "").includes("contactChannel"));
+	const orderCall = submissions.find((call) => call.method === "POST" && (call.body ?? "").includes("contactChannel"));
 	await Promise.all(
 		[0, 1].map(() =>
 			client.context.request.fetch(orderCall.url, { method: "POST", data: orderCall.body, headers: orderCall.headers }),
@@ -252,8 +256,8 @@ try {
 		() => orderState(clientOrg.id),
 		(state) => state.cycle_status === "QC_REQUIRED",
 	);
-	const runs = await q(`select status::text, provider, count(*)::int as n from sv_runs where organization_id = $1 group by 1, 2`, [clientOrg.id]);
-	check("S6", "Очередь → harness worker (stub) → 9 прогонов → цикл QC_REQUIRED", measured.runs === 9, { ...measured, runs });
+	const runs = await q(`select status::text, canonical_payload ->> 'provider' as provider, count(*)::int as n from sv_runs where organization_id = $1 group by 1, 2`, [clientOrg.id]);
+	check("S6", "Очередь → harness worker (stub) → 9 прогонов → цикл QC_REQUIRED", measured.runs === 9, { ...measured, byStatus: runs });
 	await go(client.page, "/app/selena");
 	const cabinetInReview = await bodyText(client.page);
 	await shot(client.page, "S6_client_cabinet_in_review");
@@ -392,7 +396,15 @@ try {
 			await go(back.page, "/app/selena-report");
 			const reportPage = await bodyText(back.page);
 			await shot(back.page, "R5_rejected_client_report_page");
-			check("R5", "Страница отчёта у отклонённого замера: тот же текст, отчёта нет", reportPage.includes("Замер не принят") && !reportPage.includes("получено ответов: 9 из 9"), reportPage.match(/Замер не принят[^\n]*/)?.[0] ?? null);
+			check(
+				"R5",
+				"Страница отчёта у отклонённого замера: тот же статус, причина и следующий шаг, отчёта нет",
+				reportPage.includes("Замер не принят") &&
+					reportPage.includes("Проверка качества отклонила замер") &&
+					reportPage.includes("Повторный замер сам не запускается") &&
+					!reportPage.includes("получено ответов:"),
+				reportPage.match(/Замер не принят[\s\S]{0,400}/)?.[0]?.replace(/\n+/g, " | ") ?? null,
+			);
 			const jobsBefore = (await orderState(rejectedOrg.id)).jobs;
 			await (await submitRequest(back.page, rejectedProject, codes.rejected, people.rejected.email)).click();
 			await back.page.waitForTimeout(5000);
@@ -410,7 +422,9 @@ try {
 	}
 
 	// 7. Nothing left the machine: the only adapter that ran is the stub, the only mail the sink's.
-	const providers = await q(`select canonical_payload ->> 'provider' as provider, count(*)::int as n, sum(cost_usd)::text as cost from sv_runs group by 1`);
+	const providers = await q(
+		`select status::text, canonical_payload ->> 'provider' as provider, count(*)::int as n, sum(cost_usd)::text as cost from sv_runs group by 1, 2 order by 1`,
+	);
 	const spend = {
 		budgets: await q(`select scope, cap_usd::text from sv_provider_spend_budgets`),
 		reservations: await q(
@@ -419,7 +433,12 @@ try {
 		),
 	};
 	fs.writeFileSync(`${OUT}/spend.json`, JSON.stringify(spend, null, 1));
-	check("N1", "Внешних вызовов нет: прогоны только provider=stub, стоимость 0", providers.every((row) => row.provider === "stub"), { providers, spend });
+	check(
+		"N1",
+		"Внешних вызовов нет: ответы только от stub по цене 0, прогоны без ответа без провайдера",
+		providers.every((row) => (row.status === "SUCCEEDED" ? row.provider === "stub" && Number(row.cost) === 0 : row.provider === null)),
+		{ providers, spend },
+	);
 	const pageErrors = Object.fromEntries(Object.entries(sessions).map(([role, s]) => [role, s.errors]));
 	check("N2", "Нет ошибок JavaScript на страницах", Object.values(pageErrors).every((errors) => errors.length === 0), pageErrors);
 } catch (error) {
