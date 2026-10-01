@@ -69,6 +69,24 @@ describe("humanizeSelenaAdminError", () => {
 		expect(humanizeSelenaAdminError(new Error("  "), "en", "fallback")).toBe("fallback");
 	});
 
+	it("tells the operator whether the language count or the per-language questions broke the plan", () => {
+		const tail = "this plan takes up to 1 language(s) and 25 questions per language per measurement";
+		expect(
+			humanizeSelenaAdminError(
+				new Error(`SELENA_LANGUAGE_SCOPE_EXCEEDED: LANGUAGE_LIMIT_EXCEEDED; ${tail}`),
+				"ru",
+				"x",
+			),
+		).toContain("не больше 1 яз.");
+		expect(
+			humanizeSelenaAdminError(
+				new Error(`SELENA_LANGUAGE_SCOPE_EXCEEDED: LANGUAGE_QUESTION_LIMIT_EXCEEDED; ${tail}`),
+				"en",
+				"x",
+			),
+		).toContain("up to 25 questions per language");
+	});
+
 	it("states the plan question limit with its number", () => {
 		expect(humanizeSelenaAdminError(new Error("SELENA_PLAN_SCENARIO_LIMIT_EXCEEDED: 12"), "ru", "fallback")).toContain(
 			"12",
