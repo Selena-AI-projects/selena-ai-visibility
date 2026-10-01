@@ -810,7 +810,7 @@ function ProjectOverview({ project, locale }: { project: WorkspaceProject; local
 /** Why the newest measurement did not become a report, and what happens next. */
 function UnsuccessfulMeasurementNotice({ project, locale }: { project: WorkspaceProject; locale: WorkspaceLocale }) {
 	const update = project.report?.update;
-	if (!update || update.state !== "unsuccessful" || !update.reason) return null;
+	if (update?.state !== "unsuccessful" || !update.reason) return null;
 	const text = unsuccessfulMeasurementText(
 		{ reason: update.reason, succeededRuns: update.succeededRuns ?? 0, expectedRuns: update.expectedRuns ?? 0 },
 		locale,
