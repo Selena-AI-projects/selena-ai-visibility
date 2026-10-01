@@ -139,14 +139,22 @@ spending twenty-six times more.
    | `SELENA_MEASUREMENT_ENABLED` | `true` | Anything else, a misspelling included, leaves execution off. |
    | `SELENA_MEASUREMENT_ADAPTER` | `brightdata` | A family name: the concrete adapter is chosen per permit from the surface that permit authorizes, so a customer is never measured on a surface they did not buy. |
    | `SCHEDULE_MAINTENANCE_ENABLED` | `false` | Recurring maintenance and an order-scoped dispatch would drive the same work twice. |
-   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight. |
    | `BRIGHTDATA_API_TOKEN` | present | Sealed; never read back. |
 
-   Leave `SELENA_RECURRING_JOBS_ENABLED` off. `SELENA_PAYMENTS_ENABLED` belongs
-   to `web`, which serves the payment endpoints; no code path in the worker
-   reads it, so setting it here neither enables nor prevents anything. What
-   governs the worker is the measurement, adapter, emergency-stop and
-   scheduling flags in the table above.
+   On the staging `web` service, which runs preflight, approval and enqueue:
+
+   | Variable | Value | Why |
+   |---|---|---|
+   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight: the order's answers × $0.005, the highest per-answer reservation the worker can make. Read by `web` only; the worker never reads it. |
+   | `SCHEDULE_MAINTENANCE_ENABLED` | `false` | Preflight reads it here as well; unset counts as on and blocks every order. |
+   | `SELENA_MEASUREMENT_ENABLED` | `true` | Web refuses to enqueue while it is off. |
+   | `SELENA_PAYMENTS_ENABLED` / `SELENA_PAYMENT_MODE` | `true` / `test` | The desk and a free promo order both draft through a test payment. |
+
+   Leave `SELENA_RECURRING_JOBS_ENABLED` off. What governs the worker is the
+   measurement, adapter, emergency-stop and scheduling flags in the first
+   table; what governs whether an order may be approved and queued is the
+   second. Real spend is bounded by the `measure` spend scope
+   (`sv_provider_spend_budgets`), not by `SELENA_PROVIDER_BUDGET_USD`.
 6. **Enqueue exactly one order** from the desk. Nothing runs on a timer; a
    commercial run starts from an explicit admin action.
 7. **Close the path again.** Set `SELENA_EMERGENCY_STOP=true` as soon as the run

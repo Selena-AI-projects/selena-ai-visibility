@@ -93,6 +93,10 @@ the worker's stop is still engaged. Flip both, in this order:
 | `SELENA_PILOT_SIGNUP_ALLOWLIST` | the two client emails, comma-separated (the owner has them) |
 | `SELENA_PILOT_SEAT_CAP` | `20` — see caveat below |
 | `SELENA_FREE_AUTO_DISPATCH_ENABLED` | `true` |
+| `SELENA_PAYMENTS_ENABLED` / `SELENA_PAYMENT_MODE` | `true` / `test` — the free order is drafted with a test payment of 0 |
+| `SELENA_MEASUREMENT_ENABLED` | `true` — web refuses to enqueue while it is off |
+| `SCHEDULE_MAINTENANCE_ENABLED` | `false` — preflight reads it on web; unset counts as on and blocks |
+| `SELENA_PROVIDER_BUDGET_USD` | `2` — read by web only (see below) |
 
 **On `worker`:**
 
@@ -102,7 +106,17 @@ the worker's stop is still engaged. Flip both, in this order:
 | `SELENA_MEASUREMENT_ENABLED` | `true` |
 | `SELENA_MEASUREMENT_ADAPTER` | `auto` |
 | `SCHEDULE_MAINTENANCE_ENABLED` | `false` |
-| `SELENA_PROVIDER_BUDGET_USD` | `2` |
+
+> **Corrected 2026-10-01 (branch `claude/selena-e2e-client-flow-cmguqx`).**
+> This list used to put `SELENA_PROVIDER_BUDGET_USD` on `worker`, which never
+> reads it, and left the four `web` rows above out. With that list every promo
+> request ended `AUTO_FAILED` at preflight. Preflight now compares the order's
+> own worst case (answers × the highest per-answer reservation, $0.005) with
+> the variable, so `2` admits up to 400 answers per order; before the fix it
+> compared the plan's provider cap ($12 / $28) and refused everything below
+> it. Verified end to end on a local disposable stack (acceptance run
+> `E2E-20261001-R2-*`), not on staging. Real spend is still bounded by the
+> `measure` spend scope, not by this variable.
 
 **`SELENA_PILOT_SEAT_CAP=20` is a guess, not a read fact.** The gate is
 `seatsTaken >= seatCap` where `seatsTaken` counts every row in the `user`

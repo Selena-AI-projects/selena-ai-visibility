@@ -19,13 +19,16 @@ While recurring maintenance is on, a commercial order cannot be approved: the
 background scheduler and an order-scoped dispatch would both drive provider
 calls for the same work, which doubles spend and breaks cardinality.
 
-`SELENA_PROVIDER_BUDGET_USD` is the ceiling for a single order's worst-case
-cost, not a wallet balance — no provider balance is ever read. Its job is to
-catch a scope typo before the first paid call: an order that suddenly costs ten
-times the usual amount cannot be approved. A starting value of `25` leaves
-roughly a fourfold margin over the current per-order estimates while still
-stopping an order-of-magnitude mistake. Re-tune it against the first real
-provider invoice.
+`SELENA_PROVIDER_BUDGET_USD` (on `web`; the worker never reads it) is the
+ceiling for a single order's worst-case cost, not a wallet balance — no
+provider balance is ever read. The worst case is the order's answers times the
+highest per-answer reservation the worker can make ($0.005): a Snapshot
+measurement of 9 answers is $0.045, a full Landscape measurement of 400
+answers is $2.00, a full Expert Verified audit of 2,000 answers is $10.00. Its
+job is to catch a scope typo before the first paid call: an order that
+suddenly needs ten times the usual answers cannot be approved. Set it just
+above the largest order you mean to approve, and re-tune it against the first
+real provider invoice.
 
 Neither variable replaces a hard spend limit configured in the provider
 accounts themselves. Set those too: they are the only guard that survives a
