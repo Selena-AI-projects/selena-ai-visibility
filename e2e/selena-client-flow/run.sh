@@ -11,7 +11,7 @@
 # Environment:
 #   HARNESS_PG       local Postgres superuser URL (default postgres://postgres@127.0.0.1:5432)
 #   HARNESS_DIR      where the run lives (default $TMPDIR/selena-client-flow/<run id>)
-#   HARNESS_KEEP_DB  1 keeps the database after the run
+#   HARNESS_KEEP     1 keeps the worktree and the database after the run
 #   CHROMIUM_PATH    browser binary, when Playwright's own is not installed
 #
 # Evidence, the redacted configuration and run.json are left in
@@ -44,8 +44,9 @@ cleanup() {
 	# the worker go down with the shell that started them.
 	for pid in "${PIDS[@]}"; do kill -- "-$pid" 2>/dev/null || true; done
 	wait 2>/dev/null || true
+	[ "${HARNESS_KEEP:-0}" = "1" ] && return
 	git -C "$REPO" worktree remove --force "$SRC" 2>/dev/null || true
-	if [ "${HARNESS_KEEP_DB:-0}" != "1" ]; then psql "$PG/postgres" -qc "drop database if exists $DB" >/dev/null 2>&1 || true; fi
+	psql "$PG/postgres" -qc "drop database if exists $DB" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 

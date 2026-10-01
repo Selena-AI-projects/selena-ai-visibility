@@ -100,8 +100,9 @@ async function signIn(role) {
 
 async function createProject(page, projectName, brand, domain) {
 	await go(page, "/app/selena");
-	const newProject = page.getByRole("button", { name: "Новый проект" });
-	if (await newProject.isVisible().catch(() => false)) await newProject.click();
+	// A workspace without projects opens on the form; otherwise it is behind a button.
+	if (!(await page.getByLabel("Название проекта").isVisible().catch(() => false)))
+		await page.getByRole("button", { name: "Новый проект" }).click();
 	await page.getByLabel("Название проекта").fill(projectName);
 	await page.getByLabel("Категория бизнеса").fill("Massage studio");
 	await page.getByLabel("Код страны").fill("UZ");
@@ -423,6 +424,8 @@ try {
 	check("N2", "Нет ошибок JavaScript на страницах", Object.values(pageErrors).every((errors) => errors.length === 0), pageErrors);
 } catch (error) {
 	check("X", "Сценарий прерван", false, String(error?.stack ?? error));
+	for (const [role, s] of Object.entries(sessions))
+		await s.page.screenshot({ path: `${OUT}/screens/X_${role}_at_failure.png`, fullPage: true }).catch(() => {});
 } finally {
 	fs.writeFileSync(`${OUT}/steps.json`, JSON.stringify(steps, null, 1));
 	await browser.close();
