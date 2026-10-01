@@ -8,10 +8,11 @@
  * provider timeout would, so the run can drive a measurement QC must reject.
  */
 import { db } from "@workspace/lib/db/db";
+import { runtimeDatabaseConnection } from "@workspace/lib/db/postgres-config";
 import { createSelenaMeasurementResolvers } from "@workspace/lib/selena-extraction-context";
 import { SLOW_COLLECTOR_QUEUE_LEASE_SECONDS } from "@workspace/lib/selena-measurement";
 import pg from "pg";
-import boss from "../../apps/worker/src/boss";
+import { PgBoss } from "pg-boss";
 import { createSelenaMeasureJob, type SelenaMeasureData } from "../../apps/worker/src/jobs/selena-measure";
 import { createStubMeasurementAdapter } from "../../packages/lib/src/adapters/stub-measurement-adapter";
 
@@ -33,6 +34,7 @@ async function workspaceName(organizationId: string): Promise<string> {
 	return result.rows[0]?.name ?? "";
 }
 
+const boss = new PgBoss({ ...runtimeDatabaseConnection(), schema: "pgboss", schedule: false });
 const handler = createSelenaMeasureJob({
 	stub: {
 		...stub,

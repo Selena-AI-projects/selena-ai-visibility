@@ -40,7 +40,9 @@ mkdir -p "$CONFIG" "$EVIDENCE/logs"
 PIDS=()
 
 cleanup() {
-	for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+	# Each background step runs in its own process group, so the server and
+	# the worker go down with the shell that started them.
+	for pid in "${PIDS[@]}"; do kill -- "-$pid" 2>/dev/null || true; done
 	wait 2>/dev/null || true
 	git -C "$REPO" worktree remove --force "$SRC" 2>/dev/null || true
 	if [ "${HARNESS_KEEP_DB:-0}" != "1" ]; then psql "$PG/postgres" -qc "drop database if exists $DB" >/dev/null 2>&1 || true; fi
@@ -98,7 +100,14 @@ sed -E 's/^(BETTER_AUTH_SECRET|ELMO_ENCRYPTION_KEY)=.*/\1=<generated per run>/; 
 printf '%s,visibility-snapshot,harness main client\n%s,visibility-snapshot,harness rejected client\n' \
 	"$MAIN_CODE" "$REJECT_CODE" >"$CONFIG/seats.csv"
 
-with_env() { (set -a && . "$CONFIG/harness.env" && set +a && "$@"); }
+# Only the generated file and what the tools need to start: nothing from the
+# caller's shell or from a local .env reaches the build, the server or the worker.
+with_env() {
+	env -i PATH="$PATH" HOME="$HOME" TMPDIR="${TMPDIR:-/tmp}" LANG=C.UTF-8 \
+		${PLAYWRIGHT_BROWSERS_PATH:+PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH"} \
+		${CHROMIUM_PATH:+CHROMIUM_PATH="$CHROMIUM_PATH"} \
+		bash -c 'set -a && . "$0" && set +a && exec "$@"' "$CONFIG/harness.env" "$@"
+}
 
 echo "== migrations, seats, measure budget"
 with_env env SELENA_MIGRATIONS_DIR="$SRC/packages/lib/src/db/migrations" \
@@ -111,6 +120,8 @@ echo "== web build"
 (cd "$SRC/apps/web" && with_env pnpm build >"$EVIDENCE/logs/web-build.log" 2>&1)
 
 echo "== sink, web, harness worker"
+# Job control gives each background step its own process group (its id is $!).
+set -m
 SINK_LOG="$EVIDENCE/email-sink.jsonl"
 SINK_LOG="$SINK_LOG" SINK_PORT=$SINK_PORT node "$SRC/e2e/selena-client-flow/sink.mjs" >"$EVIDENCE/logs/sink.log" 2>&1 &
 PIDS+=($!)
@@ -133,7 +144,7 @@ set -e
 psql "$DATABASE_URL" -c "select o.name as workspace, p.name as project, ord.status as order_status, c.status as cycle_status, c.expected_runs
 	from sv_orders ord join sv_projects p on p.id = ord.project_id join organization o on o.id = ord.organization_id
 	left join sv_cycles c on c.order_id = ord.id order by ord.created_at" \
-	-c "select o.name as workspace, r.status, r.provider, count(*) from sv_runs r join organization o on o.id = r.organization_id group by 1, 2, 3 order by 1" \
+	-c "select o.name as workspace, r.status, r.canonical_payload ->> 'provider' as provider, count(*), sum(r.cost_usd) as cost_usd from sv_runs r join organization o on o.id = r.organization_id group by 1, 2, 3 order by 1" \
 	-c "select decision, scope from sv_qc_records order by created_at" \
 	-c "select name, state, count(*) from pgboss.job where name = 'selena-measure' group by 1, 2" \
 	-c "select label, redeemed_at is not null as redeemed from sv_pilot_invites order by label" >"$EVIDENCE/db-state.txt"

@@ -88,6 +88,7 @@ async function register(role) {
 
 /** A fresh browser that signs in through the login page, as a returning client would. */
 async function signIn(role) {
+	await new Promise((resolve) => setTimeout(resolve, 4_000));
 	const s = await session();
 	await go(s.page, "/auth/login");
 	await s.page.fill('input[type="email"]', people[role].email);
@@ -138,7 +139,7 @@ async function submitRequest(page, projectId, code, contact) {
 const orgOf = async (email) =>
 	(
 		await q(
-			'select m."organizationId" as id, o.name from "user" u join member m on m."userId" = u.id join organization o on o.id = m."organizationId" where u.email = $1',
+			'select m.organization_id as id, o.name from "user" u join member m on m.user_id = u.id join organization o on o.id = m.organization_id where u.email = $1',
 			[email],
 		)
 	)[0];
@@ -196,12 +197,15 @@ async function replay(role, calls, leakPattern) {
 try {
 	// 1. Four people sign up through the pilot allowlist and verify by email.
 	for (const role of Object.keys(people)) {
+		// Better Auth allows three sign-ups per ten seconds per caller, and every
+		// browser here is one caller to it.
+		if (Object.keys(sessions).length > 0) await new Promise((resolve) => setTimeout(resolve, 11_000));
 		const landed = await register(role);
 		check(`S1-${role}`, `Регистрация и подтверждение почты: ${role}`, /\/app/.test(landed), landed.replace(APP, ""));
 	}
 	await q(`update "user" set role = 'admin' where email = $1`, [people.operator.email]);
 	const roles = await q(
-		`select u.email, u.role as platform, m.role as workspace from "user" u join member m on m."userId" = u.id order by u.email`,
+		`select u.email, u.role as platform, m.role as workspace from "user" u join member m on m.user_id = u.id order by u.email`,
 	);
 	fs.writeFileSync(`${OUT}/accounts.json`, JSON.stringify(roles, null, 1));
 	check("S2", "Платформенная роль оператора (fixture), у остальных — только роль в своём пространстве", roles.filter((row) => row.platform === "admin").length === 1, roles);
@@ -405,7 +409,7 @@ try {
 	}
 
 	// 7. Nothing left the machine: the only adapter that ran is the stub, the only mail the sink's.
-	const providers = await q(`select provider, count(*)::int as n from sv_runs group by 1`);
+	const providers = await q(`select canonical_payload ->> 'provider' as provider, count(*)::int as n, sum(cost_usd)::text as cost from sv_runs group by 1`);
 	const spend = {
 		budgets: await q(`select scope, cap_usd::text from sv_provider_spend_budgets`),
 		reservations: await q(
