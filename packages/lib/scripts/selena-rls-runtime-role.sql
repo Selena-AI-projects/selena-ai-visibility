@@ -1,5 +1,5 @@
 -- Owner-run staging bootstrap for the non-owner application role. Migrations
--- through 0060 must be committed first so this script can grant only known runtime
+-- through 0067 must be committed first so this script can grant only known runtime
 -- surfaces. Re-running the script converges privileges to this allowlist.
 --
 --   psql -v role_password='...' -f selena-rls-runtime-role.sql
@@ -464,5 +464,44 @@ WHERE to_regprocedure('public.sv_redeem_delivery_connect_token(text,text)') IS N
 SELECT 'GRANT EXECUTE ON FUNCTION sv_list_weekly_digest_targets() TO selena_app'
 WHERE to_regprocedure('public.sv_list_weekly_digest_targets()') IS NOT NULL
 \gexec
+
+-- Runtime grants from migrations 0061–0067. On a clean install the migrations
+-- run before selena_app exists, so their own `IF EXISTS (role) THEN GRANT`
+-- blocks are skipped; this script then never granted them either, so the role
+-- could not reach provider-spend metering (0062), pilot-invite redemption
+-- (0061), free auto-dispatch caps (0066), or the free AI visibility check
+-- (0067) — the last fully breaks on the web. These are core, not later-migration
+-- optional surfaces, so assert them first: a clean install fails loudly here
+-- instead of silently under-granting.
+DO $preflight_runtime_0067$
+BEGIN
+	IF to_regprocedure('public.sv_redeem_pilot_invite(text,text,text,text)') IS NULL
+		OR to_regprocedure('public.sv_reserve_provider_spend(text,text,text,numeric)') IS NULL
+		OR to_regprocedure('public.sv_settle_provider_spend(text,text,text,numeric)') IS NULL
+		OR to_regprocedure('public.sv_release_provider_spend(text,text,text)') IS NULL
+		OR to_regprocedure('public.sv_claim_free_auto_dispatch(uuid,text,uuid,integer,integer)') IS NULL
+		OR to_regprocedure('public.sv_release_free_auto_dispatch(uuid,text)') IS NULL
+		OR to_regprocedure('public.sv_claim_free_ai_visibility(text,text,text)') IS NULL
+		OR to_regprocedure('public.sv_begin_free_ai_visibility_check(uuid,text)') IS NULL
+		OR to_regprocedure('public.sv_complete_free_ai_visibility_check(uuid,text,jsonb)') IS NULL
+		OR to_regclass('public.sv_free_ai_visibility_checks') IS NULL THEN
+		RAISE EXCEPTION 'SELENA_RUNTIME_ROLE_REQUIRES_MIGRATION_0067';
+	END IF;
+END $preflight_runtime_0067$;
+
+-- 0061 pilot-invite redemption.
+GRANT EXECUTE ON FUNCTION sv_redeem_pilot_invite(text, text, text, text) TO selena_app;
+-- 0062 provider-spend metering, called directly by the web order path.
+GRANT EXECUTE ON FUNCTION sv_reserve_provider_spend(text, text, text, numeric) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_settle_provider_spend(text, text, text, numeric) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_release_provider_spend(text, text, text) TO selena_app;
+-- 0066 free auto-dispatch caps.
+GRANT EXECUTE ON FUNCTION sv_claim_free_auto_dispatch(uuid, text, uuid, integer, integer) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_release_free_auto_dispatch(uuid, text) TO selena_app;
+-- 0067 free AI visibility check: the row is read directly; the three functions drive it.
+GRANT SELECT ON sv_free_ai_visibility_checks TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_claim_free_ai_visibility(text, text, text) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_begin_free_ai_visibility_check(uuid, text) TO selena_app;
+GRANT EXECUTE ON FUNCTION sv_complete_free_ai_visibility_check(uuid, text, jsonb) TO selena_app;
 
 COMMIT;
