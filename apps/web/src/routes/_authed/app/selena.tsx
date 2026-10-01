@@ -29,6 +29,7 @@ import { SelenaWordmark } from "@/components/selena-wordmark";
 import { useAuth } from "@/hooks/use-auth";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import { resetPostHog } from "@/lib/posthog";
+import { measurementReportLabel } from "@/lib/selena-measurement-label";
 import { formatShare, type GroupView, groupView } from "@/lib/selena-measurement-view";
 import { ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
 import { groupRunsByQuestion, isRunAvailable } from "@/lib/selena-run-explorer";
@@ -2474,12 +2475,11 @@ function parseScenario(line: string, fallbackLanguage: string) {
 
 /**
  * The most recent check this project has actually had — the AI measurement
- * when one exists, otherwise the website review. Nothing checked yet reads as
- * exactly that, not as a blank.
+ * when one has been ordered, otherwise the website review. Nothing checked yet
+ * reads as exactly that, not as a blank.
  */
 function lastAuditLabel(project: WorkspaceProject, locale: WorkspaceLocale): string {
-	if (project.measurement)
-		return `${tr(locale, "AI measurement", "AI-замер")}: ${formatDate(project.measurement.updatedAt, locale)}`;
+	if (project.report) return measurementReportLabel(project.report, locale, (iso) => formatDate(iso, locale));
 	if (project.website)
 		return `${tr(locale, "Website audit", "Аудит сайта")}: ${formatDate(project.website.capturedAt, locale)}`;
 	return tr(locale, "Not audited yet", "Проверок ещё не было");

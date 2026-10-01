@@ -14,6 +14,7 @@ import { actionPlanSchema, projectCreateSchema } from "@workspace/selena-visibil
 import { and, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { loadReportAnchor } from "./selena-report-cycle-query";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
@@ -33,7 +34,7 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 	const projects = await repositories.projects.list(context);
 	const summaries = await Promise.all(
 		projects.map(async (project) => {
-			const [profile, website, cycle, recommendationRun] = await withOrganizationTransaction(
+			const [profile, website, cycle, recommendationRun, reportAnchor] = await withOrganizationTransaction(
 				db,
 				context.tenantId,
 				(tx) =>
@@ -103,6 +104,7 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 							.orderBy(desc(svRecommendationRuns.createdAt))
 							.limit(1)
 							.then((rows) => rows[0] ?? null),
+						loadReportAnchor(tx, { projectId: project.id, tenantId: context.tenantId }),
 					]),
 			);
 
@@ -139,6 +141,16 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 							completedRuns: cycle.completedRuns,
 							createdAt: cycle.createdAt.toISOString(),
 							updatedAt: cycle.updatedAt.toISOString(),
+						}
+					: null,
+				// The same cycle the client report speaks for, so the project row
+				// and the report never name different measurements.
+				report: reportAnchor
+					? {
+							measuredAt: reportAnchor.cycle?.createdAt.toISOString() ?? null,
+							update: reportAnchor.update
+								? { state: reportAnchor.update.state, createdAt: reportAnchor.update.createdAt.toISOString() }
+								: null,
 						}
 					: null,
 				recommendation: recommendationRun

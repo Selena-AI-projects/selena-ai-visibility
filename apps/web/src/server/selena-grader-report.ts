@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
-import { type OrganizationTransaction, withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
+import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
 	svConfigurationLocks,
 	svCycles,
@@ -12,22 +12,18 @@ import {
 import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import type { GraderReport } from "@workspace/lib/selena-grader-report";
-import {
-	REPORT_READY_CYCLE_STATUS,
-	type ReportCycleCandidate,
-	type ReportCycleUpdate,
-	selectReportAnchor,
-} from "@workspace/lib/selena-report-cycle";
+import type { ReportCycleUpdate } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
 import { actionPlanSchema, monthlyAnswerAllowance, resolvePlanId } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, gte, inArray, notInArray, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
 	MONTHLY_ALLOWANCE_EXCLUDED_CYCLE_STATUSES,
 	MONTHLY_ALLOWANCE_EXCLUDED_ORDER_STATUSES,
 } from "@/lib/selena-monthly-allowance";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { loadReportAnchor } from "./selena-report-cycle-query";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
 
@@ -67,53 +63,6 @@ export type GraderReportView = {
 
 function readString(value: unknown): string | null {
 	return typeof value === "string" && value.trim() !== "" ? value : null;
-}
-
-const reportCycleColumns = {
-	id: svCycles.id,
-	orderId: svCycles.orderId,
-	lockId: svCycles.lockId,
-	status: svCycles.status,
-	expectedRuns: svCycles.expectedRuns,
-	completedRuns: svCycles.completedRuns,
-	createdAt: svCycles.createdAt,
-	// A completed run may have FAILED or come back INVALID; the successful count
-	// is what says whether the cycle measured anything at all. Both subqueries
-	// are written out in full: column references inside a select-list template
-	// are not table-qualified, and "cycle_id" = "id" would compare a run with
-	// itself.
-	succeededRuns: sql<number>`(
-		select count(*)::int from sv_runs as succeeded_runs
-		where succeeded_runs.cycle_id = sv_cycles.id
-			and succeeded_runs.organization_id = sv_cycles.organization_id
-			and succeeded_runs.status = 'SUCCEEDED'
-	)`,
-	// QC decides per order; a record may name the cycle or leave it implied.
-	latestQcDecision: sql<string | null>`(
-		select latest_qc.decision from sv_qc_records as latest_qc
-		where latest_qc.order_id = sv_cycles.order_id
-			and latest_qc.organization_id = sv_cycles.organization_id
-			and (latest_qc.cycle_id is null or latest_qc.cycle_id = sv_cycles.id)
-		order by latest_qc.created_at desc
-		limit 1
-	)`,
-};
-
-type ReportCycleRow = {
-	id: string;
-	orderId: string;
-	lockId: string;
-	status: string;
-	expectedRuns: number;
-	completedRuns: number;
-	createdAt: Date;
-	succeededRuns: number;
-	latestQcDecision: string | null;
-};
-
-function toCandidate(row: ReportCycleRow | undefined): ReportCycleCandidate | null {
-	if (!row) return null;
-	return { ...row, succeededRuns: Number(row.succeededRuns ?? 0), latestQcDecision: row.latestQcDecision ?? null };
 }
 
 /**
@@ -226,38 +175,9 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			freeAudit,
 		};
 
-		const newestProjectCycle = (tx: OrganizationTransaction, filter?: SQL) =>
-			tx
-				.select(reportCycleColumns)
-				.from(svCycles)
-				.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-				.where(
-					and(
-						eq(svOrders.projectId, data.projectId),
-						eq(svOrders.organizationId, context.tenantId),
-						eq(svCycles.organizationId, context.tenantId),
-						filter,
-					),
-				)
-				.orderBy(desc(svCycles.createdAt))
-				.limit(1);
-		const [readyRows, newestRows, orderRows] = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			Promise.all([
-				newestProjectCycle(tx, eq(svCycles.status, REPORT_READY_CYCLE_STATUS)),
-				newestProjectCycle(tx),
-				tx
-					.select({ id: svOrders.id, lockId: svOrders.lockId, createdAt: svOrders.createdAt })
-					.from(svOrders)
-					.where(and(eq(svOrders.projectId, data.projectId), eq(svOrders.organizationId, context.tenantId)))
-					.orderBy(desc(svOrders.createdAt))
-					.limit(1),
-			]),
+		const anchor = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+			loadReportAnchor(tx, { projectId: data.projectId, tenantId: context.tenantId }),
 		);
-		const anchor = selectReportAnchor({
-			latestReadyCycle: toCandidate(readyRows[0]),
-			latestCycle: toCandidate(newestRows[0]),
-			latestOrder: orderRows[0] ?? null,
-		});
 		if (!anchor) return view;
 		if (anchor.update) view.update = { ...anchor.update, createdAt: anchor.update.createdAt.toISOString() };
 
