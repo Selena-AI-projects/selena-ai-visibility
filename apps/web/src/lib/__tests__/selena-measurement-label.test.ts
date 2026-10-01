@@ -27,14 +27,15 @@ describe("the project row names the same measurement as the client report", () =
 	});
 
 	it("gives neither a date nor a count while no cycle has passed review", () => {
-		for (const update of [
-			null,
-			{ state: "in_progress" as const, createdAt: "2026-09-20T10:00:00Z" },
-			{ state: "unsuccessful" as const, createdAt: "2026-09-20T10:00:00Z" },
-		]) {
+		for (const [update, expected] of [
+			[null, "AI-замер: отчёт не готов"],
+			[{ state: "in_progress" as const, createdAt: "2026-09-20T10:00:00Z" }, "AI-замер: отчёт не готов"],
+			// A rejected first measurement is final, not pending: it must not read as "not ready yet".
+			[{ state: "unsuccessful" as const, createdAt: "2026-09-20T10:00:00Z" }, "AI-замер: не принят, отчёта нет"],
+		] as const) {
 			const label = measurementReportLabel({ measuredAt: null, update }, "ru", formatDate);
 
-			expect(label).toBe("AI-замер: отчёт не готов");
+			expect(label).toBe(expected);
 			expect(label).not.toMatch(/\d/);
 		}
 		expect(measurementReportLabel({ measuredAt: null, update: null }, "en", formatDate)).toBe(
