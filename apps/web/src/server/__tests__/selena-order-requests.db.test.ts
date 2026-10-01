@@ -28,6 +28,8 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 	beforeAll(async () => {
 		Object.assign(process.env, {
 			DATABASE_URL: url,
+			DEPLOYMENT_MODE: "local",
+			APP_URL: "http://localhost:3000",
 			SELENA_PAYMENTS_ENABLED: "true",
 			SELENA_PAYMENT_MODE: "test",
 			SELENA_FREE_AUTO_DISPATCH_ENABLED: "true",
