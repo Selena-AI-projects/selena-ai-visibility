@@ -30,6 +30,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { validateWebsiteUrl } from "@/lib/brand-website";
 import { resetPostHog } from "@/lib/posthog";
 import { measurementReportLabel } from "@/lib/selena-measurement-label";
+import { unsuccessfulMeasurementText } from "@/lib/selena-measurement-outcome";
 import { formatShare, type GroupView, groupView } from "@/lib/selena-measurement-view";
 import { ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
 import { groupRunsByQuestion, isRunAvailable } from "@/lib/selena-run-explorer";
@@ -801,7 +802,30 @@ function ProjectOverview({ project, locale }: { project: WorkspaceProject; local
 					</span>
 				)}
 			</div>
+			<UnsuccessfulMeasurementNotice project={project} locale={locale} />
 		</section>
+	);
+}
+
+/** Why the newest measurement did not become a report, and what happens next. */
+function UnsuccessfulMeasurementNotice({ project, locale }: { project: WorkspaceProject; locale: WorkspaceLocale }) {
+	const update = project.report?.update;
+	if (!update || update.state !== "unsuccessful" || !update.reason) return null;
+	const text = unsuccessfulMeasurementText(
+		{ reason: update.reason, succeededRuns: update.succeededRuns ?? 0, expectedRuns: update.expectedRuns ?? 0 },
+		locale,
+	);
+	return (
+		<div
+			className="mt-6 max-w-2xl rounded-2xl border border-[#e0a37a] bg-[#5a2f1a] px-5 py-4 text-sm leading-6 text-[#fbe9dc]"
+			data-testid="measurement-not-accepted"
+		>
+			<p className="font-semibold">
+				{text.status} · {formatDate(update.createdAt, locale)}
+			</p>
+			<p className="mt-1">{text.reason}</p>
+			<p className="mt-1">{text.nextStep}</p>
+		</div>
 	);
 }
 
@@ -2487,6 +2511,8 @@ function lastAuditLabel(project: WorkspaceProject, locale: WorkspaceLocale): str
 
 function projectStageLabel(project: WorkspaceProject, locale: WorkspaceLocale): string {
 	if (project.measurement?.status === "READY") return tr(locale, "AI report ready", "Отчёт AI готов");
+	if (!project.report?.measuredAt && project.report?.update?.state === "unsuccessful")
+		return tr(locale, "Measurement not accepted", "Замер не принят");
 	if (project.measurement) return humanStatus(project.measurement.status, locale);
 	if (project.recommendation) return tr(locale, "Website action plan ready", "План для сайта готов");
 	if (project.website) return tr(locale, "Website review saved", "Проверка сайта сохранена");
@@ -2503,9 +2529,16 @@ function humanStatus(value: string, locale: WorkspaceLocale): string {
 	const translations: Record<string, string> = {
 		Draft: "Черновик",
 		Pending: "Ожидает",
+		Created: "Создан",
+		Approved: "Одобрен",
+		Queued: "В очереди",
 		Running: "Выполняется",
+		Analyzing: "Разбор ответов",
+		"Qc required": "На проверке качества",
 		Ready: "Готово",
+		Stopped: "Остановлен",
 		Failed: "Ошибка",
+		"Cardinality incident": "Остановлен: сбой учёта прогонов",
 		Cancelled: "Отменено",
 	};
 	return translations[status] ?? status;

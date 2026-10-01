@@ -105,6 +105,12 @@ describe("how a cycle that is not the report is described", () => {
 		).toMatchObject({ state: "unsuccessful", reason: "QC_REJECTED" });
 	});
 
+	it("keeps the rejection as the reason once the rejection has stopped the cycle", () => {
+		expect(
+			describeCycleUpdate(cycle({ ...base, status: "STOPPED", succeededRuns: 0, latestQcDecision: "rejected" })),
+		).toMatchObject({ state: "unsuccessful", reason: "QC_REJECTED" });
+	});
+
 	it("names a stopped or failed cycle by what happened to it", () => {
 		expect(describeCycleUpdate(cycle({ ...base, status: "STOPPED", succeededRuns: 20 }))).toMatchObject({
 			state: "unsuccessful",

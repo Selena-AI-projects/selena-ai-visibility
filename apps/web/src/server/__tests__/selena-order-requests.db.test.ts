@@ -12,6 +12,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { finishPermit } from "./selena-quota-fixture";
 
 const url = process.env.SELENA_TEST_DATABASE_URL;
 
@@ -207,5 +208,35 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		const elsewhere = await requests.submitSelenaOrderRequest(g.context, { ...g.submit, projectId: other.id });
 		expect(elsewhere.seatHeldElsewhere).toBe(true);
 		expect(await state(g.organizationId)).toMatchObject({ requests: 1, orders: 1 });
+	});
+
+	it("leaves a code whose measurement was rejected at QC closed, with no new runs on resubmission", async () => {
+		const g = await guest();
+		const first = await requests.submitSelenaOrderRequest(g.context, g.submit);
+		expect(first.launch).toEqual({ state: "AWAITING_OPERATOR", orderStatus: "QUEUED" });
+		const fixture = {
+			db,
+			organizationId: g.organizationId,
+			actorId: g.context.actorId,
+			projectId: g.project.id,
+			planId: "visibility-snapshot" as const,
+		};
+		const permits = (
+			await db.execute(sql`select id from sv_run_permits where organization_id = ${g.organizationId} order by id`)
+		).rows as Array<{ id: string }>;
+		for (const permit of permits) await finishPermit(fixture, permit.id, "FAILED");
+		const [order] = (await db.execute(sql`select id from sv_orders where organization_id = ${g.organizationId}`))
+			.rows as Array<{ id: string }>;
+		await repositories.qcRecords.create(g.context, {
+			orderId: order.id,
+			reviewedAt: new Date(),
+			scope: "nine answers read",
+			decision: "rejected",
+		});
+		const again = await requests.submitSelenaOrderRequest(g.context, g.submit);
+		expect(again.id).toBe(first.id);
+		expect(again.launch).toEqual({ state: "STOPPED", orderStatus: "CANCELLED" });
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
+		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(9);
 	});
 });

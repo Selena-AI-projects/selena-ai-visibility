@@ -149,7 +149,13 @@ export const getSelenaWorkspaceFn = createServerFn({ method: "GET" }).handler(as
 					? {
 							measuredAt: reportAnchor.cycle?.createdAt.toISOString() ?? null,
 							update: reportAnchor.update
-								? { state: reportAnchor.update.state, createdAt: reportAnchor.update.createdAt.toISOString() }
+								? {
+										state: reportAnchor.update.state,
+										createdAt: reportAnchor.update.createdAt.toISOString(),
+										reason: reportAnchor.update.state === "unsuccessful" ? reportAnchor.update.reason : undefined,
+										succeededRuns: reportAnchor.update.succeededRuns,
+										expectedRuns: reportAnchor.update.expectedRuns,
+									}
 								: null,
 						}
 					: null,

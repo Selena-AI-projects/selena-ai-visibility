@@ -74,8 +74,8 @@ function requestOutcomeText(result: OrderRequestOutcome, locale: OrderLocale): s
 			);
 		case "STOPPED":
 			return `${heldElsewhere}${t(
-				"The order for this promo code was stopped by the operator. Contact us to arrange a new measurement.",
-				"Заказ по этому промокоду остановлен оператором. Свяжитесь с нами, чтобы договориться о новом замере.",
+				"The measurement for this promo code is closed: the operator stopped it or it was not accepted at quality review (the reason is in your cabinet). Nothing re-runs or is charged automatically; the operator will contact you to agree on a new measurement.",
+				"Замер по этому промокоду закрыт: оператор остановил его или он не прошёл проверку качества (причина — в кабинете). Повторный замер сам не запускается и ничего не списывает; оператор свяжется с вами, чтобы договориться о новом замере.",
 			)}`;
 		case "NOT_STARTED":
 			return `${heldElsewhere}${t(

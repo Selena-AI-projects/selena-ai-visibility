@@ -9,8 +9,17 @@ export type MeasurementReportSummary = {
 	/** When the READY cycle the report speaks for was created; null until one is signed off. */
 	measuredAt: string | null;
 	/** A cycle newer than the report, stated as an update rather than shown as the report. */
-	update: { state: "in_progress" | "awaiting_review" | "unsuccessful"; createdAt: string } | null;
+	update: {
+		state: "in_progress" | "awaiting_review" | "unsuccessful";
+		createdAt: string;
+		/** Why an unsuccessful cycle did not become a report. */
+		reason?: UnsuccessfulReason;
+		succeededRuns?: number;
+		expectedRuns?: number;
+	} | null;
 };
+
+import type { UnsuccessfulReason } from "./selena-measurement-outcome";
 
 export type MeasurementLabelLocale = "en" | "ru";
 
@@ -33,7 +42,10 @@ export function measurementReportLabel(
 	formatDate: (iso: string) => string,
 ): string {
 	const prefix = tr(locale, "AI measurement", "AI-замер");
-	if (!report.measuredAt) return `${prefix}: ${tr(locale, "report not ready", "отчёт не готов")}`;
+	if (!report.measuredAt)
+		return report.update?.state === "unsuccessful"
+			? `${prefix}: ${tr(locale, "not accepted, no report", "не принят, отчёта нет")}`
+			: `${prefix}: ${tr(locale, "report not ready", "отчёт не готов")}`;
 	const date = formatDate(report.measuredAt);
 	if (!report.update) return `${prefix}: ${date}`;
 	return `${prefix}: ${updateOutcome(locale, report.update.state)}, ${tr(locale, `showing the report of ${date}`, `показан отчёт от ${date}`)}`;

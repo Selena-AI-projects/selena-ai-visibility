@@ -20,11 +20,16 @@ describe.skipIf(!url)("QC sign-off on a database", () => {
 	const organizationId = `r2-qc-${Date.now().toString(36)}`;
 	let db: import("@workspace/lib/db/organization-transaction").OrganizationDatabase;
 	let repositories: ReturnType<typeof import("@workspace/lib/selena-visibility-repositories").createSelenaRepositories>;
+	let withOrganizationTransaction: typeof import("@workspace/lib/db/organization-transaction").withOrganizationTransaction;
+	let loadReportAnchor: typeof import("../selena-report-cycle-query").loadReportAnchor;
 
 	beforeAll(async () => {
 		Reflect.set(process.env, "DATABASE_URL", url);
 		db = (await import("@workspace/lib/db/db")).db;
 		repositories = (await import("@workspace/lib/selena-visibility-repositories")).createSelenaRepositories(db);
+		withOrganizationTransaction = (await import("@workspace/lib/db/organization-transaction"))
+			.withOrganizationTransaction;
+		loadReportAnchor = (await import("../selena-report-cycle-query")).loadReportAnchor;
 		await ensureOrganization(db, organizationId);
 	});
 
@@ -73,5 +78,29 @@ describe.skipIf(!url)("QC sign-off on a database", () => {
 		const { fixture, orderId } = await reviewedOrder("nothing answered", ["FAILED", "FAILED", "FAILED"]);
 		await expect(approve(fixture, orderId)).rejects.toThrow("SELENA_QC_NO_VALID_ANSWERS");
 		expect(await orderStatus(fixture, orderId)).toBe("QC_REQUIRED");
+	});
+
+	it("closes a rejected order: the review ends, nothing is re-run, and the client is told why", async () => {
+		const { fixture, orderId } = await reviewedOrder("rejected", ["FAILED", "FAILED", "FAILED"]);
+		await repositories.qcRecords.create(fixtureContext(fixture), {
+			orderId,
+			reviewedAt: new Date(),
+			scope: "every answer read",
+			decision: "rejected",
+			notes: "nothing came back",
+		});
+		expect(await orderStatus(fixture, orderId)).toBe("CANCELLED");
+		const anchor = await withOrganizationTransaction(db, organizationId, (tx) =>
+			loadReportAnchor(tx, { projectId: fixture.projectId, tenantId: organizationId }),
+		);
+		expect(anchor?.cycle).toBeNull();
+		expect(anchor?.update).toMatchObject({ state: "unsuccessful", reason: "QC_REJECTED", succeededRuns: 0 });
+		const permits = await db.execute(
+			(await import("drizzle-orm"))
+				.sql`select count(*)::int as n from sv_run_permits where organization_id = ${organizationId} and consumed_at is null`,
+		);
+		expect(permits.rows[0]).toEqual({ n: 0 });
+		// A cancelled order cannot be signed off afterwards: a new measurement is a new order.
+		await expect(approve(fixture, orderId)).rejects.toThrow("SELENA_QC_ORDER_NOT_IN_REVIEW");
 	});
 });

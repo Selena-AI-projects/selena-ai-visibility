@@ -2138,13 +2138,41 @@ export function createSelenaRepositories(db: Db) {
 							);
 						published = true;
 					}
-					// A rejection is recorded and the order stays in review: sending
-					// it anywhere else would be a decision the reviewer did not take.
+					// A rejection of an order in review closes it: the cycle stops and
+					// the order is cancelled, so neither the client nor the queue is
+					// left with a review that never ends. Nothing is re-run — a new
+					// measurement is a new order someone has to place. A rejection of an
+					// order already published is recorded only, as before.
+					let closed = false;
+					if (input.decision === "rejected" && order.status === "QC_REQUIRED") {
+						await tx
+							.update(schema.svCycles)
+							.set({ status: "STOPPED", updatedAt: new Date() })
+							.where(
+								and(
+									eq(schema.svCycles.orderId, input.orderId),
+									eq(schema.svCycles.organizationId, ctx.tenantId),
+									eq(schema.svCycles.status, "QC_REQUIRED"),
+								),
+							);
+						await tx
+							.update(schema.svOrders)
+							.set({ status: "CANCELLED", updatedAt: new Date() })
+							.where(
+								and(
+									eq(schema.svOrders.id, input.orderId),
+									eq(schema.svOrders.organizationId, ctx.tenantId),
+									eq(schema.svOrders.status, "QC_REQUIRED"),
+								),
+							);
+						closed = true;
+					}
 					await recordAudit(tx, ctx, "QC_RECORD_CREATED", "sv_qc_records", record.id, {
 						orderId: input.orderId,
 						cycleId: input.cycleId ?? null,
 						decision: input.decision,
 						published,
+						closed,
 					});
 					return record;
 				});

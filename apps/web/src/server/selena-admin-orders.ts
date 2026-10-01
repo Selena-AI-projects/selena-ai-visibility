@@ -6,6 +6,7 @@ import {
 	svConfigurationLocks,
 	svCostEvents,
 	svCycles,
+	svOrderRequests,
 	svOrders,
 	svPayments,
 	svProjects,
@@ -540,7 +541,7 @@ export const recordSelenaQcFn = createServerFn({ method: "POST" })
 	)
 	.handler(async ({ data }) => {
 		const context = await operatorScopeForOrder(data.orderId, "qc");
-		return (await getRepositories()).qcRecords.create(context, {
+		const record = await (await getRepositories()).qcRecords.create(context, {
 			orderId: data.orderId,
 			cycleId: data.cycleId ?? null,
 			reviewer: data.reviewer,
@@ -549,4 +550,26 @@ export const recordSelenaQcFn = createServerFn({ method: "POST" })
 			decision: data.decision,
 			notes: data.notes ?? null,
 		});
+		// The client is told the operator will be in touch about a new
+		// measurement; the request that started the order goes back to the
+		// inbox as that follow-up.
+		if (data.decision === "rejected") await reopenRequestForOrder(context, data.orderId);
+		return record;
 	});
+
+/** The free request whose dispatch drafted this order, marked for the operator's follow-up. */
+async function reopenRequestForOrder(context: SelenaRepositoryContext, orderId: string) {
+	await withOrganizationTransaction(await database(), context.tenantId, async (tx) => {
+		const [payment] = await tx
+			.select({ key: svPayments.providerEventId })
+			.from(svPayments)
+			.where(and(eq(svPayments.orderId, orderId), eq(svPayments.organizationId, context.tenantId)))
+			.limit(1);
+		const requestId = payment?.key.match(/^auto-request:([0-9a-f-]{36})$/)?.[1];
+		if (!requestId) return;
+		await tx
+			.update(svOrderRequests)
+			.set({ status: "QC_REJECTED", updatedAt: new Date() })
+			.where(and(eq(svOrderRequests.id, requestId), eq(svOrderRequests.organizationId, context.tenantId)));
+	});
+}

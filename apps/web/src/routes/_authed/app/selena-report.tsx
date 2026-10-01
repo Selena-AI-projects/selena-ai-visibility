@@ -15,6 +15,7 @@ import { type CycleCompareResult, getSelenaCycleCompareFn } from "../../../serve
 import { summarizeCycleCompare } from "@/lib/selena-measurement-view";
 import { PRIORITY_LABELS, ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
 import { type GraderReportView, getSelenaGraderReportFn } from "../../../server/selena-grader-report";
+import { unsuccessfulMeasurementText } from "@/lib/selena-measurement-outcome";
 import { getSelenaRunDetailFn } from "../../../server/selena-run-explorer";
 
 export const Route = createFileRoute("/_authed/app/selena-report")({
@@ -393,7 +394,7 @@ function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
 		return tr(locale, "is complete and awaiting quality review", "завершено и ожидает проверку качества");
 	switch (update.reason) {
 		case "QC_REJECTED":
-			return tr(locale, "did not pass quality review", "не прошло проверку качества");
+			return tr(locale, "was rejected at quality review", "отклонено при проверке качества");
 		case "NO_SUCCESSFUL_RUNS":
 			return tr(
 				locale,
@@ -452,12 +453,13 @@ function MeasurementUpdateNotice({
 					{tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} {updateOutcome(locale, update)}.
 				</p>
 				<p className="mt-3 max-w-2xl text-sm leading-6 text-[#574d45]">
-					{unsuccessful
-						? tr(
-								locale,
-								"No result is shown for it: an unsuccessful measurement is not a report. The operator re-runs it, and the report appears here once a measurement passes quality review.",
-								"Результат по нему не показывается: неудачный замер — не отчёт. Оператор запустит его повторно, и отчёт появится здесь, как только замер пройдёт проверку качества.",
-							)
+					{update.state === "unsuccessful"
+						? `${tr(locale, "No result is shown for it: an unsuccessful measurement is not a report.", "Результат по нему не показывается: неудачный замер — не отчёт.")} ${
+								unsuccessfulMeasurementText(
+									{ reason: update.reason, succeededRuns: update.succeededRuns, expectedRuns: update.expectedRuns },
+									locale,
+								).nextStep
+							}`
 						: tr(
 								locale,
 								"The report appears here once the measurement is complete and has passed quality review.",
