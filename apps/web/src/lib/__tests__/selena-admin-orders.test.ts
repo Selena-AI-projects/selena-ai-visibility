@@ -110,3 +110,29 @@ describe("run enqueue gate", () => {
 		expect(enqueue).toContain('"RUNS_ENQUEUED"');
 	});
 });
+
+describe("operator order desk cross-org read (P1-9)", () => {
+	it("keeps the shared order fetch scoped to the caller's own tenant, so mutations never cross orgs", () => {
+		// getOwnedOrder backs approve/enqueue/stop; its own-tenant filter is what
+		// confines a platform operator's actions to their own organization even
+		// though the desk now reads across organizations.
+		expect(adminOrdersSource).toContain("eq(svOrders.organizationId, context.tenantId)");
+		for (const name of ["approveOrder", "enqueueOrderRunsForOrder"]) {
+			expect(serverFnSource(name)).toContain("getOwnedOrder(context, orderId)");
+		}
+	});
+
+	it("lists the queue across organizations and enriches each order in its own tenant", () => {
+		const queue = serverFnSource("getSelenaAdminOrderQueueFn");
+		// No own-tenant filter on the order list: the operator sees every org.
+		expect(queue).not.toContain("eq(svOrders.organizationId, context.tenantId)");
+		// Each order's detail is read scoped to that order's own organization.
+		expect(queue).toContain("withOrganizationTransaction(db, organizationId");
+	});
+
+	it("reads an order's preflight scoped to the order's own organization", () => {
+		const preflight = serverFnSource("getSelenaOrderPreflightFn");
+		expect(preflight).toContain("resolveOrderOrganization(data.orderId)");
+		expect(preflight).toContain("tenantId: organizationId");
+	});
+});
