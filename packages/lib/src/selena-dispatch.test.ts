@@ -139,6 +139,7 @@ describe("assertQcApprovable", () => {
 		status: "QC_REQUIRED",
 		expectedRuns: 12,
 		completedRuns: 12,
+		succeededRuns: 12,
 		...overrides,
 	});
 
@@ -154,6 +155,16 @@ describe("assertQcApprovable", () => {
 		expect(() => assertQcApprovable("QC_REQUIRED", [cycle({ completedRuns: 11 })])).toThrow(
 			"SELENA_QC_CYCLE_UNFINISHED",
 		);
+	});
+
+	it("refuses to publish a cycle in which no run produced an answer", () => {
+		expect(() => assertQcApprovable("QC_REQUIRED", [cycle({ succeededRuns: 0 })])).toThrow(
+			"SELENA_QC_NO_VALID_ANSWERS",
+		);
+	});
+
+	it("lets a partly answered cycle be signed off, so its report can show the gaps", () => {
+		expect(() => assertQcApprovable("QC_REQUIRED", [cycle({ succeededRuns: 6 })])).not.toThrow();
 	});
 
 	it("refuses an order that never ran and one that is not in review", () => {

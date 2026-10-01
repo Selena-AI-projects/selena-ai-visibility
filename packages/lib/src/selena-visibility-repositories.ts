@@ -2098,7 +2098,18 @@ export function createSelenaRepositories(db: Db) {
 					let published = false;
 					if (input.decision === "approved") {
 						const cycles = await tx
-							.select()
+							.select({
+								id: schema.svCycles.id,
+								status: schema.svCycles.status,
+								expectedRuns: schema.svCycles.expectedRuns,
+								completedRuns: schema.svCycles.completedRuns,
+								succeededRuns: sql<number>`(
+									select count(*)::int from ${schema.svRuns}
+									where ${schema.svRuns.cycleId} = ${schema.svCycles.id}
+										and ${schema.svRuns.organizationId} = ${schema.svCycles.organizationId}
+										and ${schema.svRuns.status} = 'SUCCEEDED'
+								)`,
+							})
 							.from(schema.svCycles)
 							.where(and(eq(schema.svCycles.orderId, input.orderId), eq(schema.svCycles.organizationId, ctx.tenantId)));
 						assertQcApprovable(order.status, cycles);

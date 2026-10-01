@@ -796,8 +796,8 @@ function ProjectOverview({ project, locale }: { project: WorkspaceProject; local
 				{project.measurement && (
 					<span>
 						{locale === "ru"
-							? `Проверено ответов: ${project.measurement.completedRuns} из ${project.measurement.expectedRuns}`
-							: `${project.measurement.completedRuns} of ${project.measurement.expectedRuns} answers checked`}
+							? `Прогонов завершено: ${project.measurement.completedRuns} из ${project.measurement.expectedRuns}`
+							: `${project.measurement.completedRuns} of ${project.measurement.expectedRuns} runs finished`}
 					</span>
 				)}
 			</div>
@@ -2330,8 +2330,8 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 					{project.measurement ? (
 						<p className="mt-4 text-sm text-[#574d45]">
 							{locale === "ru"
-								? `Проверено ответов: ${project.measurement.completedRuns} из ${project.measurement.expectedRuns}`
-								: `${project.measurement.completedRuns} of ${project.measurement.expectedRuns} answers checked`}
+								? `Прогонов завершено: ${project.measurement.completedRuns} из ${project.measurement.expectedRuns}`
+								: `${project.measurement.completedRuns} of ${project.measurement.expectedRuns} runs finished`}
 						</p>
 					) : null}
 				</div>

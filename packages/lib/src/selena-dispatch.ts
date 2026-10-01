@@ -67,7 +67,14 @@ export function assertQcDecision(value: string): asserts value is QcDecision {
 }
 
 /** What a cycle has to look like before its order can be signed off. */
-export type QcReviewableCycle = { id: string; status: string; expectedRuns: number; completedRuns: number };
+export type QcReviewableCycle = {
+	id: string;
+	status: string;
+	expectedRuns: number;
+	completedRuns: number;
+	/** Runs that came back with an answer; FAILED and INVALID runs are completed but not succeeded. */
+	succeededRuns: number;
+};
 
 /**
  * Whether an approved QC record may publish this order. Approval is the human
@@ -82,6 +89,11 @@ export function assertQcApprovable(orderStatus: string, cycles: readonly QcRevie
 	if (orderStatus !== "QC_REQUIRED" && orderStatus !== "READY") throw new Error("SELENA_QC_ORDER_NOT_IN_REVIEW");
 	if (cycles.length === 0) throw new Error("SELENA_QC_NO_CYCLE");
 	if (cycles.some((cycle) => cycle.completedRuns < cycle.expectedRuns)) throw new Error("SELENA_QC_CYCLE_UNFINISHED");
+	// A cycle in which no run produced an answer has nothing to publish. Signing
+	// it off would put a READY report in front of the client built from absence
+	// alone; the operator stops or rejects it instead.
+	if (cycles.some((cycle) => cycle.status !== "STOPPED" && cycle.succeededRuns === 0))
+		throw new Error("SELENA_QC_NO_VALID_ANSWERS");
 }
 
 /**

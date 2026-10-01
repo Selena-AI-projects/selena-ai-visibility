@@ -720,8 +720,17 @@ function SelenaReportPage() {
 							<span className="rounded-full border border-[#b9825b66] px-3 py-1.5 tabular-nums">
 								{tr(
 									locale,
-									`${view.cycle.completedRuns} of ${view.cycle.expectedRuns} answers checked`,
-									`проверено ответов: ${view.cycle.completedRuns} из ${view.cycle.expectedRuns}`,
+									`${view.cycle.succeededRuns} of ${view.cycle.expectedRuns} answers received`,
+									`получено ответов: ${view.cycle.succeededRuns} из ${view.cycle.expectedRuns}`,
+								)}
+							</span>
+						)}
+						{view?.cycle && view.cycle.succeededRuns < view.cycle.expectedRuns && (
+							<span className="rounded-full border border-[#e0a37a] bg-[#5a2f1a] px-3 py-1.5 tabular-nums">
+								{tr(
+									locale,
+									`partial: ${view.cycle.expectedRuns - view.cycle.succeededRuns} without an answer (failed or invalid), shown as UNKNOWN`,
+									`частичный замер: без ответа ${view.cycle.expectedRuns - view.cycle.succeededRuns} (сбой или недействительный ответ), показаны как НЕИЗВЕСТНО`,
 								)}
 							</span>
 						)}
@@ -1204,7 +1213,7 @@ function SelenaReportPage() {
 																}
 															caption={
 																	system.answersAnalyzed === 0
-																		? tr(locale, "no analyzed answers yet", "разобранных ответов пока нет")
+																		? tr(locale, "no answer came back (failed or invalid runs)", "ответа нет: прогоны завершились сбоем или без ответа")
 																		: tr(locale, "answers name you — all questions together, split below", "ответов называют вас — все вопросы вместе, разбивка ниже")
 																}
 															/>
@@ -1268,8 +1277,8 @@ function SelenaReportPage() {
 							<p className="mt-3 max-w-3xl text-xs italic text-[#574d45]">
 								{tr(
 									locale,
-									"UNKNOWN means the run has no analyzable answer yet or the retained text was not available; it is never counted as a miss.",
-									"НЕИЗВЕСТНО означает, что у прогона пока нет разобранного ответа или сохранённый текст недоступен; это никогда не считается промахом.",
+									"UNKNOWN means the run failed, came back invalid, or its retained text is not available; it is never counted as a miss.",
+									"НЕИЗВЕСТНО означает, что прогон завершился сбоем, вернул недействительный ответ или сохранённый текст недоступен; это никогда не считается промахом.",
 								)}
 							</p>
 						</SectionCard>
@@ -1306,8 +1315,8 @@ function SelenaReportPage() {
 									{report.methodology.answersAnalyzed === 0
 										? tr(
 												locale,
-												"UNKNOWN — no analyzed answers yet, so there is nothing to count.",
-												"НЕИЗВЕСТНО — разобранных ответов пока нет, считать нечего.",
+												"UNKNOWN — no run came back with an answer, so there is nothing to count.",
+												"НЕИЗВЕСТНО — ни один прогон не вернул ответ, считать нечего.",
 											)
 										: tr(
 												locale,
@@ -1410,7 +1419,7 @@ function SelenaReportPage() {
 							{report.gaps.length === 0 ? (
 								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
-										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
+										? tr(locale, "UNKNOWN — no run came back with an answer.", "НЕИЗВЕСТНО — ни один прогон не вернул ответ.")
 										: tr(locale, "No such answers: wherever a competitor was named, you were named too.", "Таких ответов нет: везде, где назван конкурент, названы и вы.")}
 								</p>
 							) : (
@@ -1462,7 +1471,7 @@ function SelenaReportPage() {
 							{report.overall.citationGap.length === 0 ? (
 								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
-										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
+										? tr(locale, "UNKNOWN — no run came back with an answer.", "НЕИЗВЕСТНО — ни один прогон не вернул ответ.")
 										: tr(locale, "The analyzed answers cited no sources.", "В разобранных ответах источники не встречались.")}
 								</p>
 							) : (
