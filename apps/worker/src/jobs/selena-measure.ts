@@ -79,7 +79,22 @@ const resolvers = createSelenaMeasurementResolvers(db);
  * timer: a commercial run starts from an explicit admin action, so the worker
  * only supplies the handler.
  */
-export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<void> {
+export const selenaMeasureJob = createSelenaMeasureJob();
+
+/**
+ * The handler with adapters registered beside the built-in ones. Only code
+ * can pass them, never configuration: the production worker passes none, and
+ * an inert test adapter reaches a worker only when a test harness constructs
+ * the handler itself. Each name still has to pass the owner allowlist.
+ */
+export function createSelenaMeasureJob(extraAdapters: MeasurementAdapterRegistry = {}) {
+	return (jobs: Job<SelenaMeasureData>[]) => runSelenaMeasureJobs(jobs, extraAdapters);
+}
+
+async function runSelenaMeasureJobs(
+	jobs: Job<SelenaMeasureData>[],
+	extraAdapters: MeasurementAdapterRegistry,
+): Promise<void> {
 	const config = measurementConfigFromEnv(process.env);
 	if (!config.enabled) {
 		console.log(`[selena-measure] Skipped ${jobs.length} job(s) because SELENA_MEASUREMENT_ENABLED is not true`);
@@ -95,6 +110,7 @@ export async function selenaMeasureJob(jobs: Job<SelenaMeasureData>[]): Promise<
 	// once, because one plan is measured across several systems.
 	const selected = new Set(measurementAdapterNamesFor(config.adapter));
 	const adapters: MeasurementAdapterRegistry = {
+		...extraAdapters,
 		...ADAPTERS,
 		...(selected.has("openrouter")
 			? {
