@@ -90,6 +90,53 @@ const AI_OVERVIEW_OK = {
 };
 
 describe("dataforseo provider", () => {
+	// DataForSEO's per-call price varies by endpoint, queue, depth and whatever
+	// the account is on, so the response is the only trustworthy source for what
+	// a call actually cost. These check that the figure survives the parse and
+	// that a missing or nonsense one is reported as unknown rather than invented.
+	describe("reported cost", () => {
+		function scraperResponse(result: Record<string, unknown>, extra: Record<string, unknown> = {}) {
+			return { tasks: [{ status_code: 20000, status_message: "Ok.", result: [result], ...extra }] };
+		}
+		const SCRAPE = { model: "gpt-5-5", markdown: "An answer.", sources: [] };
+
+		it("carries the charge DataForSEO reports on the task", async () => {
+			dataforseoClient.chatGptLlmScraperLiveAdvanced.mockResolvedValueOnce(scraperResponse(SCRAPE, { cost: 0.0021 }));
+
+			const result = await dataforseo.run("chatgpt", "What is it?", { webSearch: true });
+
+			expect(result.costUsd).toBe(0.0021);
+		});
+
+		it("reads the cost off an AI Overview run too", async () => {
+			dataforseoClient.googleOrganicLiveAdvanced.mockResolvedValueOnce({
+				tasks: [{ ...AI_OVERVIEW_OK.tasks[0], cost: 0.0018 }],
+			});
+
+			const result = await dataforseo.run("google-ai-overview", "sonos era 300", { webSearch: true });
+
+			expect(result.costUsd).toBe(0.0018);
+		});
+
+		it("reports unknown rather than zero when the response states no cost", async () => {
+			dataforseoClient.chatGptLlmScraperLiveAdvanced.mockResolvedValueOnce(scraperResponse(SCRAPE));
+
+			const result = await dataforseo.run("chatgpt", "What is it?", { webSearch: true });
+
+			expect(result.costUsd).toBeUndefined();
+		});
+
+		it("refuses a cost that is not a usable number", async () => {
+			for (const cost of ["0.002", -1, Number.NaN, null]) {
+				dataforseoClient.chatGptLlmScraperLiveAdvanced.mockResolvedValueOnce(scraperResponse(SCRAPE, { cost }));
+
+				const result = await dataforseo.run("chatgpt", "What is it?", { webSearch: true });
+
+				expect(result.costUsd, `cost ${String(cost)} must not be trusted`).toBeUndefined();
+			}
+		});
+	});
+
 	it("rejects prompts longer than DataForSEO's 500 character limit before calling the API", async () => {
 		await expect(dataforseo.run("chatgpt", "x".repeat(501), { webSearch: true })).rejects.toThrow(
 			/DataForSEO prompts must be 500 characters or fewer/,
