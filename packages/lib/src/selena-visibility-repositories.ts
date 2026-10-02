@@ -2082,6 +2082,20 @@ export function createSelenaRepositories(db: Db) {
 						.where(and(eq(schema.svOrders.id, input.orderId), eq(schema.svOrders.organizationId, ctx.tenantId)))
 						.for("update");
 					if (!order) throw new Error("Not found: order is outside AuthContext tenant");
+					// A rejection repeated on the order it already closed is the same
+					// decision: it answers with the record that closed it and writes
+					// nothing, so neither the order, its request nor the audit moves.
+					if (input.decision === "rejected" && order.status === "CANCELLED") {
+						const [latest] = await tx
+							.select()
+							.from(schema.svQcRecords)
+							.where(
+								and(eq(schema.svQcRecords.orderId, input.orderId), eq(schema.svQcRecords.organizationId, ctx.tenantId)),
+							)
+							.orderBy(desc(schema.svQcRecords.createdAt))
+							.limit(1);
+						if (latest?.decision === "rejected") return latest;
+					}
 					const [record] = await tx
 						.insert(schema.svQcRecords)
 						.values({
@@ -2144,6 +2158,7 @@ export function createSelenaRepositories(db: Db) {
 					// measurement is a new order someone has to place. A rejection of an
 					// order already published is recorded only, as before.
 					let closed = false;
+					let requestId: string | null = null;
 					if (input.decision === "rejected" && order.status === "QC_REQUIRED") {
 						await tx
 							.update(schema.svCycles)
@@ -2165,6 +2180,27 @@ export function createSelenaRepositories(db: Db) {
 									eq(schema.svOrders.status, "QC_REQUIRED"),
 								),
 							);
+						// A free request drafted this order under its own payment key; it
+						// goes back to the operator's inbox as the follow-up the client is
+						// promised, in the same commit as the order it explains.
+						const [payment] = await tx
+							.select({ key: schema.svPayments.providerEventId })
+							.from(schema.svPayments)
+							.where(
+								and(eq(schema.svPayments.orderId, input.orderId), eq(schema.svPayments.organizationId, ctx.tenantId)),
+							)
+							.limit(1);
+						requestId = payment?.key?.match(/^auto-request:([0-9a-f-]{36})$/)?.[1] ?? null;
+						if (requestId)
+							await tx
+								.update(schema.svOrderRequests)
+								.set({ status: "QC_REJECTED", updatedAt: new Date() })
+								.where(
+									and(
+										eq(schema.svOrderRequests.id, requestId),
+										eq(schema.svOrderRequests.organizationId, ctx.tenantId),
+									),
+								);
 						closed = true;
 					}
 					await recordAudit(tx, ctx, "QC_RECORD_CREATED", "sv_qc_records", record.id, {
@@ -2173,6 +2209,7 @@ export function createSelenaRepositories(db: Db) {
 						decision: input.decision,
 						published,
 						closed,
+						requestId,
 					});
 					return record;
 				});

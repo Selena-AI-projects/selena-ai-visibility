@@ -231,19 +231,36 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		for (const permit of permits) await finishPermit(fixture, permit.id, "FAILED");
 		const [order] = (await db.execute(sql`select id from sv_orders where organization_id = ${g.organizationId}`))
 			.rows as Array<{ id: string }>;
-		await repositories.qcRecords.create(g.context, {
+		const rejection = {
 			orderId: order.id,
 			reviewedAt: new Date(),
 			scope: "nine answers read",
 			decision: "rejected",
-		});
-		const requestStatus = async () =>
-			(await db.execute(sql`select status from sv_order_requests where id = ${first.id}`)).rows[0];
-		const statusAtRejection = await requestStatus();
+		};
+		const recorded = await repositories.qcRecords.create(g.context, rejection);
+		const outcome = async () =>
+			(
+				await db.execute(sql`select
+					(select status from sv_order_requests where id = ${first.id}) as request,
+					(select status::text from sv_orders where id = ${order.id}) as order,
+					(select string_agg(status::text, ',') from sv_cycles where order_id = ${order.id}) as cycles,
+					(select count(*)::int from sv_qc_records where order_id = ${order.id}) as qc_records,
+					(select count(*)::int from sv_audit_events where organization_id = ${g.organizationId}) as audit_events,
+					(select count(*)::int from pgboss.job where name = 'selena-measure' and data ->> 'organizationId' = ${g.organizationId}) as jobs`)
+			).rows[0];
+		// One operation closes the order, its cycle and the request that drafted it.
+		const atRejection = await outcome();
+		expect(atRejection).toMatchObject({ request: "QC_REJECTED", order: "CANCELLED", cycles: "STOPPED", qc_records: 1 });
+
+		// The same rejection again is the same decision: nothing moves.
+		const repeated = await repositories.qcRecords.create(g.context, rejection);
+		expect(repeated.id).toBe(recorded.id);
+		expect(await outcome()).toEqual(atRejection);
+
 		const again = await requests.submitSelenaOrderRequest(g.context, g.submit);
 		expect(again.id).toBe(first.id);
 		expect(again.launch).toEqual({ state: "STOPPED", orderStatus: "CANCELLED" });
-		expect(await requestStatus()).toEqual(statusAtRejection);
+		expect(await outcome()).toEqual(atRejection);
 		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(9);
 	});
