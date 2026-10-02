@@ -149,7 +149,9 @@ describe("operator order desk across organizations", () => {
 
 	it("lists the queue across organizations and enriches each order in its own tenant", () => {
 		const queue = serverFnSource("getSelenaAdminOrderQueueFn");
+		// No own-tenant filter on the order list: the operator sees every org.
 		expect(queue).not.toContain("eq(svOrders.organizationId, context.tenantId)");
+		// Each order's detail is read scoped to that order's own organization.
 		expect(queue).toContain("withOrganizationTransaction(db, organizationId");
 	});
 });

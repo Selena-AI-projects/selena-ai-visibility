@@ -60,4 +60,24 @@ describe("free AI visibility check", () => {
 		);
 		expect(result).toEqual({ decision: "REFUSED_OVER_CAP" });
 	});
+
+	it("refuses to reserve budget when the global stop is engaged", async () => {
+		const execute = vi.fn();
+		await expect(
+			claimFreeAiVisibilityCheck(
+				{ execute },
+				{ userId: "user-1", organizationId: "org-1", domain: "example.com" },
+				{ SELENA_EMERGENCY_STOP: "true" },
+			),
+		).rejects.toThrow("PROVIDER_CALLS_STOPPED");
+		expect(execute).not.toHaveBeenCalled();
+	});
+
+	it("does not call a provider when the global stop is engaged", async () => {
+		const execute = vi.fn();
+		await expect(
+			executeFreeAiVisibilityCheck({ domain: "example.com", execute }, { SELENA_EMERGENCY_STOP: "true" }),
+		).rejects.toThrow("PROVIDER_CALLS_STOPPED");
+		expect(execute).not.toHaveBeenCalled();
+	});
 });
