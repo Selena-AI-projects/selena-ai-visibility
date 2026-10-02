@@ -77,9 +77,50 @@ export async function executePermit(input: ExecutePermitInput): Promise<RunOutco
  */
 export type MeasurementSpendMeter = {
 	reserve(request: { requestKey: string; estimatedUsd: number }): Promise<void>;
+	/** Must throw unless the reservation now records `actualUsd`, or already recorded a settlement. */
 	settle(request: { requestKey: string; actualUsd: number }): Promise<void>;
-	release(request: { requestKey: string }): Promise<void>;
 };
+
+/** How many times a settlement is tried before the run reports it loudly. */
+const SETTLE_ATTEMPTS = 3;
+
+export class MeasurementSpendUnsettled extends Error {
+	constructor(
+		readonly permitId: string,
+		readonly runId: string,
+		readonly actualUsd: number,
+		cause: unknown,
+	) {
+		super(`SELENA_SPEND_UNSETTLED: permit ${permitId}, run ${runId}, ${actualUsd} USD: ${failureReason(cause)}`, {
+			cause,
+		});
+		this.name = "MeasurementSpendUnsettled";
+	}
+}
+
+/**
+ * Records what one claimed permit cost. The run outcome is already stored
+ * when this runs, so a failure here cannot lose the answer; it is retried, and
+ * then raised rather than swallowed. Until it succeeds the reservation stays
+ * open at its estimate, so the scope keeps counting it.
+ */
+async function settleSpend(
+	spend: MeasurementSpendMeter,
+	permitId: string,
+	runId: string,
+	actualUsd: number,
+): Promise<void> {
+	let lastError: unknown;
+	for (let attempt = 1; attempt <= SETTLE_ATTEMPTS; attempt++) {
+		try {
+			await spend.settle({ requestKey: permitId, actualUsd });
+			return;
+		} catch (error) {
+			lastError = error;
+		}
+	}
+	throw new MeasurementSpendUnsettled(permitId, runId, actualUsd, lastError);
+}
 
 /**
  * Storage port for the runner. Kept structural so this module stays free of
@@ -155,9 +196,10 @@ export async function runMeasurementForPermit<Ctx>(input: {
 		throw new Error("SELENA_JOURNAL_PROVIDER_BOUNDARY_MISSING");
 	}
 	if (!claimed) {
-		// Someone else already ran this permit, so this attempt spends nothing
-		// and must not keep holding budget for a call it will never make.
-		if (input.spend) await input.spend.release({ requestKey: input.permitId });
+		// The reservation under this permit belongs to whoever claimed it, and
+		// that attempt may still be talking to the provider: giving the hold
+		// back here would let its settlement land on a released row and drop
+		// the cost from the scope. This attempt spends nothing and leaves it.
 		return { status: "skipped", reason: "SELENA_PERMIT_ALREADY_CONSUMED" };
 	}
 	// Chosen from the permit, not from the environment: a plan sells several
@@ -177,18 +219,15 @@ export async function runMeasurementForPermit<Ctx>(input: {
 		orderStopped: cycle.status === "STOPPED",
 		...input.cycleState,
 	};
+	let result: MeasurementRunResult;
+	// The adapter's own figure when it reported one, in full even above the
+	// estimate; otherwise the estimate the reservation was taken at.
+	let actualUsd: number;
 	try {
 		const outcome = await executePermit({ permit, adapter, cycleState, config: input.config, now: claimTime });
 		await input.store.complete(input.ctx, run.id, outcome, { now: completionTime() });
-		// The adapter's own figure when it reported one; otherwise the estimate
-		// the reservation was taken at. Either way the meter records a number
-		// rather than leaving the hold open.
-		if (input.spend)
-			await input.spend.settle({
-				requestKey: input.permitId,
-				actualUsd: outcome.costUsd ?? estimatedCostUsd,
-			});
-		return { status: "completed", runId: run.id, outcome };
+		result = { status: "completed", runId: run.id, outcome };
+		actualUsd = outcome.costUsd ?? estimatedCostUsd;
 	} catch (error) {
 		const reason = failureReason(error);
 		await input.store.complete(
@@ -197,10 +236,14 @@ export async function runMeasurementForPermit<Ctx>(input: {
 			{ dispatchKey: permit.dispatchKey, status: "FAILED", validity: "INVALID", invalidReason: reason },
 			{ now: completionTime() },
 		);
+		result = { status: "failed", runId: run.id, reason };
 		// A failed run may still have reached the provider, so this is not a
 		// release: the transport boundary decides, and until it says otherwise
 		// the estimate stays committed rather than being handed back.
-		if (input.spend) await input.spend.settle({ requestKey: input.permitId, actualUsd: estimatedCostUsd });
-		return { status: "failed", runId: run.id, reason };
+		actualUsd = estimatedCostUsd;
 	}
+	// Outside the try above: a settlement that fails must not rewrite a stored
+	// outcome as a provider failure.
+	if (input.spend) await settleSpend(input.spend, input.permitId, run.id, actualUsd);
+	return result;
 }

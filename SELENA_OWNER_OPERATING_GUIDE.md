@@ -57,18 +57,20 @@ What happens around one answer:
   pass the cap, the reservation is refused: the job fails before the permit is
   claimed, no provider is called and the permit stays unspent. Nothing re-runs
   it on its own — this is the moment spending stops.
-- **Retries.** `selena-measure` has no retries, and a permit is consumed when
-  it is claimed, so one permit makes at most one provider call. A reservation
-  is keyed by the permit, so a redelivered job never takes a second one. A
-  second attempt that finds the permit already spent releases the open
-  reservation under that key; were the first attempt still in flight, its
-  later settlement would then be refused and its cost left out of the scope.
-  Enqueueing is deduplicated per permit, so this needs a duplicate delivery
-  while a call is running — it is listed as an open item, not handled.
+- **Retries and duplicates.** `selena-measure` has no retries, and a permit is
+  consumed when it is claimed, so one permit makes at most one provider call.
+  A reservation is keyed by the permit and belongs to the attempt that claimed
+  it: a duplicate delivery finds the permit spent and leaves the hold alone,
+  even while the first attempt is still waiting on the provider. A permit
+  that completes again is settled once; a repeat adds nothing.
 - **Errors.** A run that fails after the claim is settled at its reservation,
-  not released, because the call may have reached the provider. A worker that
-  dies mid-call leaves the reservation open, and it keeps counting against the
-  cap.
+  not released, because the call may have reached the provider. A cost the
+  provider reports is booked in full, above the reservation if it is higher.
+  A settlement that cannot be written is retried and then raised as
+  `SELENA_SPEND_UNSETTLED` with the permit, run and amount; the run keeps its
+  outcome and cost, and the reservation stays open at its estimate, so the
+  scope keeps counting it. A worker that dies mid-call leaves the same open
+  reservation.
 - **Overshoot.** The cap is checked when reserving, so it can be passed by the
   difference between settlement and reservation of the answers in flight —
   one at a time per worker process. For an answer settled at an estimate that
