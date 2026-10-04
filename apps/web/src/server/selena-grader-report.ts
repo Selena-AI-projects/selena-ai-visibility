@@ -5,6 +5,7 @@ import { svConfigurationLocks, svRecommendationRuns, svScenarios, svWebsiteSnaps
 import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import type { GraderReport } from "@workspace/lib/selena-grader-report";
+import { createRecommendationFollowupRepository } from "@workspace/lib/selena-recommendation-followups-store";
 import type { ReportCycleUpdate } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
 import { WEBSITE_SIGNAL_RULES } from "@workspace/lib/website-collector";
@@ -13,9 +14,14 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { resolveSessionAuthContext } from "../lib/selena-auth-context";
 import { readMonthlyAnswerUsage } from "./selena-monthly-allowance";
+import {
+	type RecommendationFollowupView,
+	serializeRecommendationFollowup,
+} from "./selena-recommendation-followups-view";
 import { loadReportAnchor } from "./selena-report-cycle-query";
 
 const repositories = /* @__PURE__ */ createSelenaRepositories(db);
+const followups = /* @__PURE__ */ createRecommendationFollowupRepository(db);
 
 // Distributes over the union so each update state keeps its own fields once
 // the date is a string on the wire.
@@ -39,7 +45,9 @@ export type GraderReportView = {
 	 */
 	monthUsage: { used: number; reserved: number; allowance: number } | null;
 	/** The READY cycle behind the report; null until an operator has signed one off. */
-	cycle: { status: string; expectedRuns: number; completedRuns: number; succeededRuns: number } | null;
+	cycle: { cycleId: string; status: string; expectedRuns: number; completedRuns: number; succeededRuns: number } | null;
+	/** What the client has recorded against this cycle's recommendations, by recommendation key. */
+	followups: RecommendationFollowupView[];
 	/**
 	 * A cycle newer than the report (or the only cycle, when nothing is READY
 	 * yet), as a status the client is told about rather than a report they see.
@@ -164,6 +172,7 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			measuredAt: null,
 			monthUsage: null,
 			cycle: null,
+			followups: [],
 			update: null,
 			report: null,
 			freeAudit,
@@ -202,12 +211,16 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		const cycle = anchor.cycle;
 		if (!cycle) return view;
 		view.cycle = {
+			cycleId: cycle.id,
 			status: cycle.status,
 			expectedRuns: cycle.expectedRuns,
 			completedRuns: cycle.completedRuns,
 			succeededRuns: cycle.succeededRuns,
 		};
 		view.measuredAt = cycle.createdAt.toISOString();
+		view.followups = (await followups.list(context, { projectId: data.projectId, cycleId: cycle.id })).map(
+			serializeRecommendationFollowup,
+		);
 		if (!subjects) return view;
 
 		const allRuns = await repositories.runs.listForOrder(context, anchor.orderId);
