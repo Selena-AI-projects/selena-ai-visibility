@@ -49,7 +49,7 @@ const PLANS = {
 		repeats: 1,
 	},
 };
-const plan = PLANS[process.env.HARNESS_PLAN ?? "snapshot"];
+const plan = PLANS[process.env.HARNESS_PLAN || "snapshot"];
 if (!plan) throw new Error(`HARNESS_PLAN must be one of ${Object.keys(PLANS).join(", ")}`);
 /** The questions createProject() writes into the profile and approves. */
 const QUESTIONS = 3;
@@ -306,7 +306,7 @@ try {
 		`select q.price_amount::text as nominal, p.amount::text as paid from sv_orders o join sv_quotes q on q.id = o.quote_id join sv_payments p on p.order_id = o.id where o.organization_id = $1`,
 		[clientOrg.id],
 	);
-	check("S5", `Номинал тарифа ${plan.planId} и фактическая оплата пилотного места`, payment[0]?.nominal === plan.nominal && payment[0]?.paid === "0.00", payment[0]);
+	check("S5", `Номинал тарифа $${plan.nominal} и фактическая оплата пилотного места`, payment[0]?.nominal === plan.nominal && payment[0]?.paid === "0.00", payment[0]);
 
 	// 3. The harness worker executes the queued permits.
 	const measured = await waitFor(

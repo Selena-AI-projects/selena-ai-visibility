@@ -80,8 +80,8 @@ function FreeAiVisibilityPage() {
 			<div className="mx-auto max-w-3xl">
 				<header className="selena-app-header flex items-center justify-between gap-3 rounded-2xl px-5 py-4 sm:px-6">
 					<SelenaWordmark />
-					<div className="flex items-center gap-3">
-						<p className="hidden text-sm text-[#574d45] sm:block">
+					<div className="flex flex-wrap items-center justify-end gap-3">
+						<p className="text-sm text-[#574d45]">
 							{tr(locale, "Verified account check", "Проверка для подтверждённого аккаунта")}
 						</p>
 						<fieldset className="selena-locale-switch">

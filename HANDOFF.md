@@ -98,7 +98,7 @@ the worker's stop is still engaged. Flip both, in this order:
 | `SCHEDULE_MAINTENANCE_ENABLED` | `false` — preflight reads it on web; unset counts as on and blocks |
 | `SELENA_PROVIDER_BUDGET_USD` | `2` — read by web only (see below) |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | set — self-serve signup requires email verification (`apps/web/src/lib/auth/server.ts:46-47`) and the verification mail goes out through Resend (`packages/cloud/src/email.ts:14`, `:27-28`); without them registration stalls at the unverified step |
-| `APP_URL` / `VITE_APP_URL` | the public staging URL — the auth base URL, and so the verification link, is built from `APP_URL` (`packages/local/src/auth-provider.ts:35`) |
+| `APP_URL` / `VITE_APP_URL` | the public staging URL — the auth base URL, and so the verification link, is built from `APP_URL` (`packages/lib/src/auth/server.ts:66-73`) |
 
 **On `worker`:**
 
@@ -106,7 +106,7 @@ the worker's stop is still engaged. Flip both, in this order:
 |---|---|
 | `SELENA_EMERGENCY_STOP` | remove, or `false` |
 | `SELENA_MEASUREMENT_ENABLED` | `true` |
-| `SELENA_MEASUREMENT_ADAPTER` | `auto` |
+| `SELENA_MEASUREMENT_ADAPTER` | `brightdata` for a Snapshot (three visitor surfaces); `auto` only for a Landscape pilot, whose five API models need OpenRouter — `auto` also reserves $0.005 per answer instead of $0.0015 (see the 2026-10 staging procedure in `docs/selena-visibility/FIRST_LIVE_MEASUREMENT_RUNBOOK.md`) |
 | `SCHEDULE_MAINTENANCE_ENABLED` | `false` |
 
 > **Corrected 2026-10-01 (branch `claude/selena-e2e-client-flow-cmguqx`).**
