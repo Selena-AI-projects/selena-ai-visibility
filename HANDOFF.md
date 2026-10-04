@@ -97,6 +97,8 @@ the worker's stop is still engaged. Flip both, in this order:
 | `SELENA_MEASUREMENT_ENABLED` | `true` — web refuses to enqueue while it is off |
 | `SCHEDULE_MAINTENANCE_ENABLED` | `false` — preflight reads it on web; unset counts as on and blocks |
 | `SELENA_PROVIDER_BUDGET_USD` | `2` — read by web only (see below) |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | set — self-serve signup requires email verification (`apps/web/src/lib/auth/server.ts:46-47`) and the verification mail goes out through Resend (`packages/cloud/src/email.ts:14`, `:27-28`); without them registration stalls at the unverified step |
+| `APP_URL` / `VITE_APP_URL` | the public staging URL — the auth base URL, and so the verification link, is built from `APP_URL` (`packages/local/src/auth-provider.ts:35`) |
 
 **On `worker`:**
 
@@ -118,6 +120,20 @@ the worker's stop is still engaged. Flip both, in this order:
 > it. Verified end to end on a local disposable stack (acceptance run
 > `E2E-20261001-R2-*`), not on staging. Real spend is still bounded by the
 > `measure` spend scope, not by this variable.
+
+**Set on staging but read by no service — remove these.** Each is either on
+the wrong service or a name nothing reads; the second kind is reported at
+every start by `reportUnknownSelenaEnv` (`packages/config/src/env.ts:262-267`).
+
+| Service | Variable | Why it is dead there |
+|---|---|---|
+| `worker` | `SELENA_PROVIDER_BUDGET_USD` | read by web's preflight only (`apps/web/src/server/selena-admin-orders.ts:118`) |
+| `worker` | `SELENA_PAYMENTS_ENABLED` | read where a payment is recorded (`packages/selena-visibility-contracts/src/payment.ts:12`), which is web |
+| `worker` | `SELENA_FREE_AUTO_DISPATCH_ENABLED` | read by web's promo request (`packages/selena-visibility-contracts/src/free-auto-dispatch.ts:40`, via `apps/web/src/server/selena-order-request-submit.ts`) |
+| `worker` | `SELENA_PROMO_CODES` | nothing reads it |
+| `web` | `SELENA_SELF_SERVE_SIGNUP` | a typo of `SELENA_SELF_SERVE_SIGNUP_ENABLED`, which is also present |
+| `web` | `SELENA_PROMO_CODES` | nothing reads it |
+| `web` | `SELENA_SUGGEST_BUDGET_USD` | nothing reads it; the suggestion switch is `SELENA_SUGGEST_LLM` (`packages/lib/src/run-policy/spend-gate.ts:19`) |
 
 **`SELENA_PILOT_SEAT_CAP=20` is a guess, not a read fact.** The gate is
 `seatsTaken >= seatCap` where `seatsTaken` counts every row in the `user`
