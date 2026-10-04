@@ -6,9 +6,12 @@
 # Resend, and the harness worker in place of the provider worker.
 #
 # Usage:
-#   bash e2e/selena-client-flow/run.sh [<commit>]        # default HEAD
+#   bash e2e/selena-client-flow/run.sh [<commit>]        # default HEAD, Visibility Snapshot
+#   HARNESS_PLAN=landscape bash e2e/selena-client-flow/run.sh [<commit>]
 #
 # Environment:
+#   HARNESS_PLAN     snapshot (default) or landscape: the catalog plan both invited
+#                    clients redeem, and so the number of runs the scenario expects
 #   HARNESS_PG       local Postgres superuser URL (default postgres://postgres@127.0.0.1:5432)
 #   HARNESS_DIR      where the run lives (default $TMPDIR/selena-client-flow/<run id>)
 #   HARNESS_KEEP     1 keeps the worktree and the database after the run
@@ -20,12 +23,21 @@ set -euo pipefail
 
 REPO="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 SHA="$(git -C "$REPO" rev-parse --verify "${1:-HEAD}^{commit}")"
-RUN_ID="selena-flow-$(date -u +%Y%m%dT%H%M%SZ)-${SHA:0:7}"
+HARNESS_PLAN="${HARNESS_PLAN:-snapshot}"
+# The seat must be issued for the plan the request names: redemption is
+# plan-bound, so the catalog id (packages/selena-visibility-contracts/src/catalog.ts)
+# goes into seats.csv and the short name into the order page's ?plan=.
+case "$HARNESS_PLAN" in
+	snapshot) PLAN_ID=visibility-snapshot ;;
+	landscape) PLAN_ID=full-discovery-landscape ;;
+	*) echo "HARNESS_PLAN must be snapshot or landscape, found '$HARNESS_PLAN'" >&2; exit 1 ;;
+esac
+RUN_ID="selena-flow-$HARNESS_PLAN-$(date -u +%Y%m%dT%H%M%SZ)-${SHA:0:7}"
 DIR="${HARNESS_DIR:-${TMPDIR:-/tmp}/selena-client-flow/$RUN_ID}"
 PG="${HARNESS_PG:-postgres://postgres@127.0.0.1:5432}"
 WEB_PORT=3100
 SINK_PORT=3191
-DB="selena_flow_$(date -u +%Y%m%d%H%M%S)_${SHA:0:7}"
+DB="selena_flow_${HARNESS_PLAN}_$(date -u +%Y%m%d%H%M%S)_${SHA:0:7}"
 
 case "$(node -v)" in v24.*) ;; *) echo "Node 24 required, found $(node -v)" >&2; exit 1 ;; esac
 case "$(node -e 'console.log(new URL(process.argv[1]).hostname)' "$PG")" in
@@ -101,8 +113,8 @@ EOF
 chmod 600 "$CONFIG/harness.env"
 sed -E 's/^(BETTER_AUTH_SECRET|ELMO_ENCRYPTION_KEY)=.*/\1=<generated per run>/; s#^DATABASE_URL=.*#DATABASE_URL=<local disposable database>#' \
 	"$CONFIG/harness.env" >"$EVIDENCE/harness.env.redacted"
-printf '%s,visibility-snapshot,harness main client\n%s,visibility-snapshot,harness rejected client\n' \
-	"$MAIN_CODE" "$REJECT_CODE" >"$CONFIG/seats.csv"
+printf '%s,%s,harness main client\n%s,%s,harness rejected client\n' \
+	"$MAIN_CODE" "$PLAN_ID" "$REJECT_CODE" "$PLAN_ID" >"$CONFIG/seats.csv"
 
 # Only the generated file and what the tools need to start: nothing from the
 # caller's shell or from a local .env reaches the build, the server or the worker.
@@ -140,7 +152,7 @@ echo "== scenario"
 STARTED="$(date -u +%FT%TZ)"
 set +e
 (cd "$SRC/e2e" && with_env env APP_URL="http://localhost:$WEB_PORT" EVIDENCE_DIR="$EVIDENCE" SINK_LOG="$SINK_LOG" \
-	HARNESS_CODES="{\"main\":\"$MAIN_CODE\",\"rejected\":\"$REJECT_CODE\"}" node selena-client-flow/scenario.mjs) |
+	HARNESS_PLAN="$HARNESS_PLAN" HARNESS_CODES="{\"main\":\"$MAIN_CODE\",\"rejected\":\"$REJECT_CODE\"}" node selena-client-flow/scenario.mjs) |
 	tee "$EVIDENCE/scenario.log"
 STATUS=${PIPESTATUS[0]}
 set -e
@@ -157,7 +169,9 @@ cat >"$EVIDENCE/run.json" <<EOF
 {
  "run": "$RUN_ID",
  "commit": "$SHA",
- "command": "bash e2e/selena-client-flow/run.sh $SHA",
+ "plan": "$HARNESS_PLAN",
+ "planId": "$PLAN_ID",
+ "command": "HARNESS_PLAN=$HARNESS_PLAN bash e2e/selena-client-flow/run.sh $SHA",
  "node": "$(node -v)",
  "pnpm": "$(pnpm -v)",
  "scenarioStarted": "$STARTED",

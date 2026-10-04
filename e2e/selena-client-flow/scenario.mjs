@@ -6,6 +6,9 @@
 // It writes nothing to the database except the one fixture a person would
 // set by hand (the operator's platform role); everything else goes through
 // the pages. Each check lands in steps.json; the process fails on any FAIL.
+//
+// HARNESS_PLAN (set by run.sh) names the plan both invited clients redeem;
+// every run count and price below is derived from it.
 import fs from "node:fs";
 import { chromium } from "@playwright/test";
 import pg from "pg";
@@ -15,6 +18,52 @@ const OUT = process.env.EVIDENCE_DIR;
 const SINK_LOG = process.env.SINK_LOG;
 const codes = JSON.parse(process.env.HARNESS_CODES);
 const PASSWORD = "Harness-Synthetic-Pass-2026!";
+
+// A copy of packages/selena-visibility-contracts/src/catalog.ts for the two
+// plans a pilot seat can pay for: `systems` are the sv_runs.system_id values
+// in the catalog's order, `nominal` the quote price, `search` the value
+// /app/selena-order accepts in ?plan=. Kept literal so a catalog change
+// fails this scenario instead of silently moving its expectations.
+const PLANS = {
+	snapshot: {
+		planId: "visibility-snapshot",
+		search: "snapshot",
+		nominal: "49.00",
+		systems: ["ChatGPT", "Gemini", "Perplexity"],
+		repeats: 1,
+	},
+	landscape: {
+		planId: "full-discovery-landscape",
+		search: "landscape",
+		nominal: "79.00",
+		systems: [
+			"ChatGPT",
+			"Gemini",
+			"Perplexity",
+			"anthropic/claude-haiku-4.5",
+			"deepseek/deepseek-v3.2",
+			"qwen/qwen3.5-9b",
+			"mistralai/mistral-small-2603",
+			"x-ai/grok-4.5",
+		],
+		repeats: 1,
+	},
+};
+const plan = PLANS[process.env.HARNESS_PLAN ?? "snapshot"];
+if (!plan) throw new Error(`HARNESS_PLAN must be one of ${Object.keys(PLANS).join(", ")}`);
+/** The questions createProject() writes into the profile and approves. */
+const QUESTIONS = 3;
+const expectedRuns = QUESTIONS * plan.systems.length * plan.repeats;
+
+/** «9 прогонов», «24 прогона»: the step texts stay grammatical for either plan. */
+function runsText(count) {
+	const tens = count % 100;
+	const ones = count % 10;
+	if (tens >= 11 && tens <= 14) return `${count} прогонов`;
+	if (ones === 1) return `${count} прогон`;
+	if (ones >= 2 && ones <= 4) return `${count} прогона`;
+	return `${count} прогонов`;
+}
 fs.mkdirSync(`${OUT}/screens`, { recursive: true });
 
 const people = {
@@ -130,7 +179,7 @@ async function createProject(page, projectName, brand, domain) {
 }
 
 async function submitRequest(page, projectId, code, contact) {
-	await go(page, `/app/selena-order?plan=snapshot&project=${projectId}`);
+	await go(page, `/app/selena-order?plan=${plan.search}&project=${projectId}`);
 	await page.getByLabel("Ваше имя").fill("Harness Client");
 	await page.getByLabel("Как с вами связаться").fill(contact);
 	await page.getByLabel("Промокод").fill(code);
@@ -229,7 +278,7 @@ try {
 	const clientOrg = await orgOf(people.client.email);
 	const projectId = await createProject(client.page, "Studio Lumen (HARNESS)", "Studio Lumen", "http://studio-lumen-harness.example/");
 	const approved = await q(`select count(*)::int as n from sv_scenarios where organization_id = $1 and status = 'APPROVED'`, [clientOrg.id]);
-	check("S3", "Проект, профиль и три утверждённых вопроса", approved[0].n === 3, `APPROVED ${approved[0].n}`);
+	check("S3", `Проект, профиль и ${QUESTIONS} утверждённых вопроса`, approved[0].n === QUESTIONS, `APPROVED ${approved[0].n}`);
 
 	const submissions = capture(client.page);
 	const button = await submitRequest(client.page, projectId, codes.main, people.client.email);
@@ -250,14 +299,14 @@ try {
 	check(
 		"S4",
 		"Двойной клик + повторная отправка + 2 параллельных повтора вызова → одна заявка, один заказ",
-		afterSubmissions.requests === 1 && afterSubmissions.orders === 1 && afterSubmissions.permits === 9,
+		afterSubmissions.requests === 1 && afterSubmissions.orders === 1 && afterSubmissions.permits === expectedRuns,
 		{ ...afterSubmissions, screen: afterDoubleClick.match(/Промокод принят[^\n]*/)?.[0] ?? null },
 	);
 	const payment = await q(
 		`select q.price_amount::text as nominal, p.amount::text as paid from sv_orders o join sv_quotes q on q.id = o.quote_id join sv_payments p on p.order_id = o.id where o.organization_id = $1`,
 		[clientOrg.id],
 	);
-	check("S5", "Номинал тарифа и фактическая оплата пилотного места", payment[0]?.nominal === "49.00" && payment[0]?.paid === "0.00", payment[0]);
+	check("S5", `Номинал тарифа ${plan.planId} и фактическая оплата пилотного места`, payment[0]?.nominal === plan.nominal && payment[0]?.paid === "0.00", payment[0]);
 
 	// 3. The harness worker executes the queued permits.
 	const measured = await waitFor(
@@ -266,7 +315,7 @@ try {
 		(state) => state.cycle_status === "QC_REQUIRED",
 	);
 	const runs = await q(`select status::text, canonical_payload ->> 'provider' as provider, count(*)::int as n from sv_runs where organization_id = $1 group by 1, 2`, [clientOrg.id]);
-	check("S6", "Очередь → harness worker (stub) → 9 прогонов → цикл QC_REQUIRED", measured.runs === 9, { ...measured, byStatus: runs });
+	check("S6", `Очередь → harness worker (stub) → ${runsText(expectedRuns)} → цикл QC_REQUIRED`, measured.runs === expectedRuns, { ...measured, byStatus: runs });
 	await go(client.page, "/app/selena");
 	const cabinetInReview = await bodyText(client.page);
 	await shot(client.page, "S6_client_cabinet_in_review");
@@ -281,7 +330,7 @@ try {
 	await operator.page.locator("tr", { hasText: "Studio Lumen (HARNESS)" }).getByRole("button", { name: "Выбрать" }).click();
 	await operator.page.getByRole("button", { name: "Разобрать ответы" }).click();
 	await operator.page.waitForTimeout(2500);
-	await operator.page.getByLabel("Объём проверки").fill("9/9 harness stub answers read (not real AI)");
+	await operator.page.getByLabel("Объём проверки").fill(`${expectedRuns}/${expectedRuns} harness stub answers read (not real AI)`);
 	await operator.page.getByLabel("Заметки").fill("Harness acceptance QC");
 	await operator.page.getByRole("button", { name: "Записать QC" }).click();
 	await waitFor("the order to be READY", () => orderState(clientOrg.id), (state) => state.order_status === "READY", 30_000);
@@ -333,7 +382,9 @@ try {
 	);
 	fs.writeFileSync(`${OUT}/client-runs.json`, JSON.stringify(rows, null, 1));
 	const expected = [`получено ответов: ${rows.filter((row) => row.status === "SUCCEEDED").length} из ${rows.length}`];
-	for (const system of ["ChatGPT", "Gemini", "Perplexity"]) {
+	// The report prints the same rows for a Visitor surface and an API model;
+	// only the heading differs, and these expectations carry no heading.
+	for (const system of plan.systems) {
 		const own = rows.filter((row) => row.system === system);
 		const named = own.filter((row) => row.brand_position !== null);
 		const mentions = own.reduce((sum, row) => sum + row.mentions, 0);
@@ -381,11 +432,11 @@ try {
 		() => orderState(rejectedOrg.id),
 		(state) => state.cycle_status === "QC_REQUIRED",
 	);
-	check("R1", "Второй клиент: 9 прогонов без ответа (контролируемый таймаут harness) → QC_REQUIRED", failed.runs === 9, failed);
+	check("R1", `Второй клиент: ${runsText(expectedRuns)} без ответа (контролируемый таймаут harness) → QC_REQUIRED`, failed.runs === expectedRuns, failed);
 	await go(operator.page, "/app/selena-admin");
 	const row = operator.page.locator("tr", { hasText: "Studio Nord (HARNESS)" });
 	await row.getByRole("button", { name: "Выбрать" }).click();
-	await operator.page.getByLabel("Объём проверки").fill("9/9 runs failed (harness timeout)");
+	await operator.page.getByLabel("Объём проверки").fill(`${expectedRuns}/${expectedRuns} runs failed (harness timeout)`);
 	await operator.page.getByRole("button", { name: "Записать QC" }).click();
 	await operator.page.waitForTimeout(2500);
 	const refusal = await bodyText(operator.page);
@@ -435,7 +486,7 @@ try {
 			check(
 				"R6",
 				"Повтор того же промокода после отказа: новых прогонов, заказов и платных вызовов нет",
-				after.orders === 1 && after.runs === 9 && after.jobs === jobsBefore && after.permits === 9,
+				after.orders === 1 && after.runs === expectedRuns && after.jobs === jobsBefore && after.permits === expectedRuns,
 				{ ...after, screen: resubmitText.match(/Замер по этому промокоду закрыт[^\n]*/)?.[0] ?? null },
 			);
 		}
