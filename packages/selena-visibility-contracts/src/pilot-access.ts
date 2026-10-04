@@ -66,4 +66,4 @@ export function evaluatePilotSignup(input: PilotSignupInput): PilotSignupDecisio
  * whether a given address is on the guest list, and it should never report the
  * operator's configuration state, so every refusal reads the same from outside.
  */
-export const PILOT_SIGNUP_REFUSAL_MESSAGE = "Registration is open to invited pilot restaurants only.";
+export const PILOT_SIGNUP_REFUSAL_MESSAGE = "Registration is open to invited pilot participants only.";
