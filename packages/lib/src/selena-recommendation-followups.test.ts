@@ -71,6 +71,8 @@ describe("recommendation follow-up input", () => {
 
 	it("rejects a due date that is not a calendar date", () => {
 		expect(recommendationFollowupInputSchema.safeParse({ ...valid, dueOn: "2026-13-45" }).success).toBe(false);
+		expect(recommendationFollowupInputSchema.safeParse({ ...valid, dueOn: "2026-02-31" }).success).toBe(false);
+		expect(recommendationFollowupInputSchema.safeParse({ ...valid, dueOn: "2028-02-29" }).success).toBe(true);
 		expect(recommendationFollowupInputSchema.safeParse({ ...valid, dueOn: "30.11.2026" }).success).toBe(false);
 		expect(recommendationFollowupInputSchema.safeParse({ ...valid, dueOn: "next week" }).success).toBe(false);
 	});

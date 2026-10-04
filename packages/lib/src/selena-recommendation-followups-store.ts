@@ -94,8 +94,10 @@ export function createRecommendationFollowupRepository(db: OrganizationDatabase)
 					.limit(1);
 				if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
 
+				// Locked for the transaction, so two saves of one recommendation
+				// serialise and each audit row names the status it really moved from.
 				const [previous] = await tx
-					.select({ status: svRecommendationFollowups.status })
+					.select()
 					.from(svRecommendationFollowups)
 					.where(
 						and(
@@ -104,7 +106,8 @@ export function createRecommendationFollowupRepository(db: OrganizationDatabase)
 							eq(svRecommendationFollowups.recommendationKey, input.recommendationKey),
 						),
 					)
-					.limit(1);
+					.limit(1)
+					.for("update");
 
 				const fields = {
 					status: input.status,
@@ -113,6 +116,16 @@ export function createRecommendationFollowupRepository(db: OrganizationDatabase)
 					note: optionalText(input.note),
 					updatedBy: ctx.actorId,
 				};
+				// A save that repeats what is stored is not a change: no row is touched
+				// and no audit event claims a move that did not happen.
+				if (
+					previous &&
+					previous.status === fields.status &&
+					previous.assignee === fields.assignee &&
+					previous.dueOn === fields.dueOn &&
+					previous.note === fields.note
+				)
+					return toRecord(previous);
 				const [row] = await tx
 					.insert(svRecommendationFollowups)
 					.values({

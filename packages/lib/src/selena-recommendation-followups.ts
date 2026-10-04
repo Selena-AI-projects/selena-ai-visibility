@@ -26,10 +26,16 @@ export function recommendationKey(recommendation: GraderRecommendation): string 
 	}
 }
 
+/** The date type accepts 2026-02-31; Postgres would not, with a message nobody can act on. */
+function isCalendarDate(value: string): boolean {
+	const parsed = new Date(`${value}T00:00:00Z`);
+	return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 export const recommendationFollowupInputSchema = z.object({
 	status: z.enum(followupStatuses),
 	assignee: z.string().trim().max(FOLLOWUP_ASSIGNEE_MAX_LENGTH).optional(),
-	dueOn: z.iso.date().optional(),
+	dueOn: z.iso.date().refine(isCalendarDate, "not a calendar date").optional(),
 	note: z.string().trim().max(FOLLOWUP_NOTE_MAX_LENGTH).optional(),
 });
 

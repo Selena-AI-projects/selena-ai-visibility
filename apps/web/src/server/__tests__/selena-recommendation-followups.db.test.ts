@@ -48,11 +48,18 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 		).createRecommendationFollowupRepository(db);
 		inputSchema = (await import("@workspace/lib/selena-recommendation-followups")).recommendationFollowupInputSchema;
 
-		await db.execute(
-			sql.raw(
-				`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_ROLE}') THEN CREATE ROLE ${RLS_ROLE} LOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$`,
-			),
-		);
+		// The test connection is a superuser and so bypasses every row policy;
+		// the policy is exercised through a role that cannot. Creating it needs
+		// CREATEROLE on the test connection, which a local Postgres gives.
+		await db
+			.execute(
+				sql.raw(
+					`DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_ROLE}') THEN CREATE ROLE ${RLS_ROLE} LOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$`,
+				),
+			)
+			.catch((cause: unknown) => {
+				throw new Error(`SELENA_TEST_DATABASE_URL needs CREATEROLE for the row-policy test: ${String(cause)}`);
+			});
 		await db.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${RLS_ROLE}`));
 		await db.execute(sql.raw(`GRANT SELECT, INSERT, UPDATE ON sv_recommendation_followups TO ${RLS_ROLE}`));
 		const roleUrl = new URL(url as string);
@@ -67,6 +74,10 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 
 	afterAll(async () => {
 		await rlsDb?.$client.end();
+		// The role is this suite's fixture, not the cluster's.
+		await db.execute(sql.raw(`REVOKE ALL ON sv_recommendation_followups FROM ${RLS_ROLE}`));
+		await db.execute(sql.raw(`REVOKE USAGE ON SCHEMA public FROM ${RLS_ROLE}`));
+		await db.execute(sql.raw(`DROP ROLE IF EXISTS ${RLS_ROLE}`));
 	});
 
 	/** A workspace whose project has one signed-off cycle, as the report page finds it. */
@@ -160,6 +171,17 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 			{ recommendationKey: SOURCE_KEY, from: null, to: "IN_PROGRESS", assignee: "Anna", dueOn: "2026-11-30" },
 			{ recommendationKey: SOURCE_KEY, from: "IN_PROGRESS", to: "DONE", assignee: null, dueOn: null },
 		]);
+
+		// Saving the same thing again is not a change the history should show.
+		const repeated = await repository.upsert(a.ctx, {
+			projectId: a.projectId,
+			cycleId: a.cycleId,
+			recommendationKey: SOURCE_KEY,
+			status: "DONE",
+			note: "Listed on the page",
+		});
+		expect(repeated).toEqual(second);
+		expect(await auditTrail(a, first.id)).toHaveLength(2);
 	});
 
 	it("keeps one workspace's follow-ups out of another's reach through the repository", async () => {
