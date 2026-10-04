@@ -47,7 +47,7 @@ export function weeklyDigestPeriod(now: Date): { periodStart: Date; periodEnd: D
 
 /** What one workspace's scoped transaction can do; nothing here can see another workspace. */
 export type TenantDigestStore = {
-	readSource(projectId: string): Promise<WeeklyDigestSource | null>;
+	readSource(projectId: string, window: { periodEnd: Date }): Promise<WeeklyDigestSource | null>;
 	saveDigest(input: Parameters<typeof saveWeeklyDigest>[2]): Promise<{ digestId: string; created: boolean }>;
 	ensureDelivery(input: Parameters<typeof ensureDigestDelivery>[2]): Promise<{ deliveryId: string }>;
 	claim(input: {
@@ -148,7 +148,10 @@ export async function runWeeklyDigestSweep(
 		let outcome: TargetOutcome;
 		try {
 			const prepared = await deps.inTenant(target.organizationId, async (store) => {
-				const source = await store.readSource(target.projectId);
+				// The store picks the newest cycle finished before the week ended, so
+				// a cycle that finishes after midnight cannot hide the one this week
+				// is about; buildWeeklyDigest still refuses a cycle older than the week.
+				const source = await store.readSource(target.projectId, { periodEnd });
 				if (!source) return "NO_PROJECT" as const;
 				if (!source.recipient) return "NO_RECIPIENT" as const;
 				if (!source.cycle) return "NO_FINISHED_CYCLE" as const;
@@ -198,7 +201,7 @@ function databaseDeps(scheduleDelivery: WeeklyDigestDeps["scheduleDelivery"]): W
 		inTenant: (organizationId, work) =>
 			withOrganizationTransaction(db, organizationId, (tx) =>
 				work({
-					readSource: (projectId) => readWeeklyDigestSource(tx, organizationId, projectId),
+					readSource: (projectId, window) => readWeeklyDigestSource(tx, organizationId, projectId, window),
 					saveDigest: (input) => saveWeeklyDigest(tx, organizationId, input),
 					ensureDelivery: (input) => ensureDigestDelivery(tx, organizationId, input),
 					claim: (input) => claimDigestDelivery(tx, organizationId, { ...input, keyring: requireKeyring() }),

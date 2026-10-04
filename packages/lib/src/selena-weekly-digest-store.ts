@@ -5,7 +5,7 @@ import {
 	decideNextDelivery,
 	resolveDeliveryPrecondition,
 } from "@workspace/selena-visibility-contracts";
-import { and, desc, eq, inArray, max, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import type { OrganizationDatabase, OrganizationTransaction } from "./db/organization-transaction";
 import {
 	svConfigurationLocks,
@@ -49,11 +49,12 @@ export async function listWeeklyDigestTargets(db: OrganizationDatabase): Promise
 
 export type WeeklyDigestSource = {
 	projectName: string;
-	/** The plan the newest finished cycle was ordered under, as stored in its lock. */
+	/** The plan the digested cycle was ordered under, as stored in its lock. */
 	planId: string | null;
 	recipient: { id: string; locale: DeliveryLocale } | null;
-	/** The newest finished cycle; completedAt is null when none of its runs finished. */
+	/** The newest cycle whose last run finished before the window's end. */
 	cycle: { id: string; completedAt: Date | null } | null;
+	/** The cycle finished before that one, which the digest compares against. */
 	previousCycleId: string | null;
 	/** Null when the cycle's lock names no brand, so nothing can be counted. */
 	report: GraderReport | null;
@@ -64,6 +65,7 @@ export async function readWeeklyDigestSource(
 	tx: OrganizationTransaction,
 	organizationId: string,
 	projectId: string,
+	window: { periodEnd: Date },
 ): Promise<WeeklyDigestSource | null> {
 	const [project] = await tx
 		.select({ name: svProjects.name })
@@ -85,10 +87,19 @@ export async function readWeeklyDigestSource(
 		)
 		.limit(1);
 
+	// A cycle has no completion stamp of its own; it finished when its last run
+	// did. Cycles are ranked by that stamp, not by creation, and only those
+	// finished before the window's end count: a cycle that finishes after
+	// midnight belongs to the next week and must not hide the one this week is
+	// about. The identifiers are written out by hand: Drizzle leaves column
+	// references inside a select-list template unqualified on a single-table
+	// select, and this stamp must not depend on the joins staying as they are.
+	const completedAt = sql<Date | null>`max("sv_runs"."finished_at")`.mapWith(svRuns.finishedAt);
 	const cycles = await tx
-		.select({ id: svCycles.id, lockId: svCycles.lockId })
+		.select({ id: svCycles.id, lockId: svCycles.lockId, completedAt })
 		.from(svCycles)
 		.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+		.leftJoin(svRuns, and(eq(svRuns.cycleId, svCycles.id), eq(svRuns.organizationId, svCycles.organizationId)))
 		.where(
 			and(
 				eq(svOrders.projectId, projectId),
@@ -97,7 +108,9 @@ export async function readWeeklyDigestSource(
 				eq(svCycles.status, REPORT_READY_CYCLE_STATUS),
 			),
 		)
-		.orderBy(desc(svCycles.createdAt))
+		.groupBy(svCycles.id, svCycles.lockId, svCycles.createdAt)
+		.having(lt(completedAt, window.periodEnd))
+		.orderBy(desc(completedAt), desc(svCycles.createdAt))
 		.limit(2);
 
 	const base: WeeklyDigestSource = {
@@ -111,12 +124,6 @@ export async function readWeeklyDigestSource(
 	};
 	const [current, previous] = cycles;
 	if (!current) return base;
-
-	// A cycle has no completion stamp of its own; it finished when its last run did.
-	const [finished] = await tx
-		.select({ at: max(svRuns.finishedAt) })
-		.from(svRuns)
-		.where(and(eq(svRuns.cycleId, current.id), eq(svRuns.organizationId, organizationId)));
 
 	const [lock] = await tx
 		.select({ snapshot: svConfigurationLocks.snapshot })
@@ -156,7 +163,7 @@ export async function readWeeklyDigestSource(
 	return {
 		...base,
 		planId: typeof lockedPlanId === "string" ? lockedPlanId : null,
-		cycle: { id: current.id, completedAt: finished?.at ?? null },
+		cycle: { id: current.id, completedAt: current.completedAt },
 		previousCycleId: previous?.id ?? null,
 		report: buildCycleGraderReport({ lockSnapshot: lock?.snapshot, runs, scenarios }),
 		diff,
