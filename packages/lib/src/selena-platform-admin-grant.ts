@@ -54,7 +54,11 @@ export async function grantPlatformAdmin(executor: SqlExecutor, email: string): 
 	const maskedEmail = maskEmail(address);
 	if (matched === 0) throw new Error(`SELENA_OWNER_ADMIN_NOT_FOUND (${maskedEmail})`);
 	if (matched > 1) throw new Error(`SELENA_OWNER_ADMIN_AMBIGUOUS (${matched} users match ${maskedEmail})`);
-	return { maskedEmail, updated: count(row.granted) };
+	const granted = count(row.granted);
+	// One match that the update did not reach is not a grant; saying "updated 0"
+	// as a success line would have the owner open a desk that stays closed.
+	if (granted !== 1) throw new Error(`SELENA_OWNER_ADMIN_NOT_GRANTED (${granted} rows updated for ${maskedEmail})`);
+	return { maskedEmail, updated: granted };
 }
 
 export function formatPlatformAdminGrant(grant: PlatformAdminGrant): string[] {

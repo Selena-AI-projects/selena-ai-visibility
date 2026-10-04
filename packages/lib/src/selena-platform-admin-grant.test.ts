@@ -41,8 +41,13 @@ describe("platform admin grant", () => {
 		await expect(grantPlatformAdmin(executor, EMAIL)).rejects.toThrow(/^SELENA_OWNER_ADMIN_AMBIGUOUS/);
 	});
 
+	it("refuses to report a match the update did not reach as a grant", async () => {
+		const executor = executorAnswering([{ matched: 1, granted: 0 }]);
+		await expect(grantPlatformAdmin(executor, EMAIL)).rejects.toThrow(/^SELENA_OWNER_ADMIN_NOT_GRANTED/);
+	});
+
 	it("never puts the full address in a message", async () => {
-		for (const rows of [[{ matched: 0, granted: 0 }], [{ matched: 2, granted: 0 }]]) {
+		for (const rows of [[{ matched: 0, granted: 0 }], [{ matched: 2, granted: 0 }], [{ matched: 1, granted: 0 }]]) {
 			const error = await grantPlatformAdmin(executorAnswering(rows), EMAIL).catch((reason: unknown) => reason);
 			expect(error).toBeInstanceOf(Error);
 			expect((error as Error).message).not.toContain(EMAIL);
