@@ -1,3 +1,4 @@
+import { SELENA_CATALOG } from "@workspace/selena-visibility-contracts";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
@@ -22,12 +23,19 @@ type DeskProject = Awaited<ReturnType<typeof getSelenaOrderDeskFn>>[number];
 type DeskScenario = DeskProject["scenarios"][number];
 type DeskLocale = "en" | "ru";
 
-/** Kept in step with the catalog plans an operator sells from this desk. */
-const PLANS = [
-	{ id: "visibility-snapshot" as const, label: "Snapshot · $49/mo", systems: 3, repeats: 1, budgetCap: 12 },
-	{ id: "full-discovery-landscape" as const, label: "Landscape · $79/mo", systems: 8, repeats: 1, budgetCap: 28 },
-	{ id: "competitive-audit" as const, label: "Expert Verified · $399", systems: 8, repeats: 5, budgetCap: 140 },
-];
+// The plans an operator sells from this desk. The answer count and the
+// ceiling the confirmation states are read from the catalog, so the dialog
+// cannot quote a cap the executor does not enforce.
+const PLANS = (
+	[
+		{ id: "visibility-snapshot", label: "Snapshot · $49/mo" },
+		{ id: "full-discovery-landscape", label: "Landscape · $79/mo" },
+		{ id: "competitive-audit", label: "Expert Verified · $399" },
+	] as const
+).map((entry) => {
+	const plan = SELENA_CATALOG[entry.id];
+	return { ...entry, systems: plan.systems.length, repeats: plan.repeatCount ?? 1, budgetCap: plan.providerBudgetCap };
+});
 
 function tr(locale: DeskLocale, english: string, russian: string): string {
 	return locale === "ru" ? russian : english;
