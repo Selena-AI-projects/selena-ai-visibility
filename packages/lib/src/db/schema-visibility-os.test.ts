@@ -1755,7 +1755,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 		const journal = JSON.parse(readFileSync(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8")) as {
 			entries: Array<{ idx: number; tag: string }>;
 		};
-		expect(journal.entries.slice(-40)).toEqual([
+		expect(journal.entries.slice(-41)).toEqual([
 			{ idx: 40, version: "7", when: 1787940002000, tag: "0040_visibility_os_action_evidence_loop", breakpoints: true },
 			{ idx: 41, version: "7", when: 1787940003000, tag: "0041_visibility_os_visibility_map", breakpoints: true },
 			{ idx: 42, version: "7", when: 1787940004000, tag: "0042_visibility_os_outcome_layer", breakpoints: true },
@@ -1868,6 +1868,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 			{ idx: 77, version: "7", when: 1790320009000, tag: "0077_weekly_digest_delivery", breakpoints: true },
 			{ idx: 78, version: "7", when: 1790320010000, tag: "0078_delivery_connect_redemption", breakpoints: true },
 			{ idx: 79, version: "7", when: 1790320011000, tag: "0079_weekly_digest_targets", breakpoints: true },
+			{ idx: 80, version: "7", when: 1790320012000, tag: "0080_recommendation_followups", breakpoints: true },
 		]);
 	});
 
@@ -1992,5 +1993,43 @@ describe("Visibility OS Outcome Layer schema", () => {
 		expect(migration).not.toContain("ownerApprovedMeasurementAdapters");
 		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_incidents"');
 		expect(rollback).not.toContain('DROP TABLE IF EXISTS "sv_audit_events"');
+	});
+});
+
+describe("Recommendation follow-ups", () => {
+	it("keeps one tenant-isolated row per recommendation per cycle, granted only through the role bootstrap", () => {
+		const migration = readFileSync(new URL("./migrations/0080_recommendation_followups.sql", import.meta.url), "utf8");
+		const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
+		const config = getTableConfig(schema.svRecommendationFollowups);
+		const unique = config.indexes.find((index) => index.config.name === "sv_recommendation_followups_cycle_key_unique");
+
+		expect(config.name).toBe("sv_recommendation_followups");
+		expect(config.enableRLS).toBe(true);
+		expect(unique?.config.unique).toBe(true);
+		expect(config.foreignKeys.map((foreignKey) => foreignKey.getName()).sort()).toEqual([
+			"sv_recommendation_followups_cycle_fk",
+			"sv_recommendation_followups_organization_id_organization_id_fk",
+			"sv_recommendation_followups_project_fk",
+		]);
+
+		expect(migration).toContain('CREATE TABLE "sv_recommendation_followups"');
+		expect(migration).toContain(
+			'FOREIGN KEY ("project_id","organization_id") REFERENCES "sv_projects"("id","organization_id")',
+		);
+		expect(migration).toContain(
+			'FOREIGN KEY ("cycle_id","organization_id") REFERENCES "sv_cycles"("id","organization_id")',
+		);
+		expect(migration).toContain("\"status\" IN ('NEW', 'IN_PROGRESS', 'DONE', 'DISMISSED')");
+		expect(migration).toContain(
+			'CREATE UNIQUE INDEX "sv_recommendation_followups_cycle_key_unique" ON "sv_recommendation_followups" USING btree ("organization_id","cycle_id","recommendation_key")',
+		);
+		expect(migration).toContain('ALTER TABLE "sv_recommendation_followups" ENABLE ROW LEVEL SECURITY');
+		expect(migration).toContain('ALTER TABLE "sv_recommendation_followups" FORCE ROW LEVEL SECURITY');
+		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_recommendation_followups"');
+		expect(migration).not.toContain("GRANT ");
+
+		// Rows are rewritten in place and never removed by the application.
+		expect(roleBootstrap).toContain("('sv_recommendation_followups', 'SELECT, INSERT, UPDATE')");
+		expect(roleBootstrap).not.toMatch(/sv_recommendation_followups[^\n]*DELETE/);
 	});
 });

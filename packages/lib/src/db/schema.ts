@@ -2103,3 +2103,58 @@ export const svDigestDeliveryAttempts = pgTable(
 		),
 	}),
 ).enableRLS();
+
+// A report recommendation is recomputed from the cycle's runs on every read
+// and has no id; the key derived from its content (selena-recommendation-
+// followups) is what ties this row to it. Status stays text so a new state
+// never needs an enum migration.
+export const svRecommendationFollowups = pgTable(
+	"sv_recommendation_followups",
+	{
+		id: uuid("id").defaultRandom().primaryKey().notNull(),
+		organizationId: text("organization_id")
+			.notNull()
+			.references(() => organization.id),
+		projectId: uuid("project_id").notNull(),
+		cycleId: uuid("cycle_id").notNull(),
+		recommendationKey: text("recommendation_key").notNull(),
+		status: text("status").notNull().default("NEW"),
+		assignee: text("assignee"),
+		dueOn: date("due_on", { mode: "string" }),
+		note: text("note"),
+		updatedBy: text("updated_by").notNull(),
+		createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+		updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+	},
+	(table) => ({
+		projectReference: foreignKey({
+			columns: [table.projectId, table.organizationId],
+			foreignColumns: [svProjects.id, svProjects.organizationId],
+			name: "sv_recommendation_followups_project_fk",
+		}),
+		cycleReference: foreignKey({
+			columns: [table.cycleId, table.organizationId],
+			foreignColumns: [svCycles.id, svCycles.organizationId],
+			name: "sv_recommendation_followups_cycle_fk",
+		}),
+		cycleKeyUnique: uniqueIndex("sv_recommendation_followups_cycle_key_unique").on(
+			table.organizationId,
+			table.cycleId,
+			table.recommendationKey,
+		),
+		projectIdx: index("sv_recommendation_followups_project_idx").on(table.organizationId, table.projectId),
+		keyCheck: check("sv_recommendation_followups_key_check", sql`length(btrim(${table.recommendationKey})) > 0`),
+		statusCheck: check(
+			"sv_recommendation_followups_status_check",
+			sql`${table.status} IN ('NEW', 'IN_PROGRESS', 'DONE', 'DISMISSED')`,
+		),
+		assigneeCheck: check(
+			"sv_recommendation_followups_assignee_check",
+			sql`${table.assignee} IS NULL OR length(${table.assignee}) <= 120`,
+		),
+		noteCheck: check(
+			"sv_recommendation_followups_note_check",
+			sql`${table.note} IS NULL OR length(${table.note}) <= 2000`,
+		),
+	}),
+).enableRLS();
