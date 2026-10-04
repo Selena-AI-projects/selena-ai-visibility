@@ -345,6 +345,13 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"How many pilot accounts may exist, stated independently of the guest list so the two must agree. A guest list longer than this cap is refused rather than trusted. Unset admits nobody.",
 	},
 	{
+		name: "SELENA_OWNER_ADMIN_EMAIL",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read by the owner one-shot task only (SELENA_OWNER_TASK=grant-platform-admin): the address of the one existing account to make a platform operator. Web and worker never read it; clear it once the grant has run.",
+	},
+	{
 		name: "SELENA_LOCAL_PROVIDER_EXECUTION_ENABLED",
 		scope: "server",
 		requiredBy: "optional",

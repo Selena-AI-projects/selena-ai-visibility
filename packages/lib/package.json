@@ -65,6 +65,7 @@
 		"./selena-pilot-seat-reconciliation": "./src/selena-pilot-seat-reconciliation.ts",
 		"./selena-free-auto-dispatch-claims": "./src/selena-free-auto-dispatch-claims.ts",
 		"./selena-pilot-seat-issuance": "./src/selena-pilot-seat-issuance.ts",
+		"./selena-platform-admin-grant": "./src/selena-platform-admin-grant.ts",
 		"./selena-provider-spend-budget": "./src/selena-provider-spend-budget.ts",
 		"./selena-visibility-repositories": "./src/selena-visibility-repositories.ts",
 		"./selena-api-idempotency": "./src/selena-api-idempotency.ts",

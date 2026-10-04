@@ -157,7 +157,8 @@ COPY --from=builder /deploy/worker ./
 CMD ["./node_modules/.bin/tsx", "src/scripts/publish-journal.ts"]
 
 # Owner stage — one database step that needs owner rights, then exits: minting
-# pilot seats, reading or setting a spend ceiling. It takes the migration
+# pilot seats, reading or setting a spend ceiling, granting the operator role
+# to an account. It takes the migration
 # runner's connection, not the product runtime's, because the runtime role is
 # deliberately unable to mint a seat or raise its own limit. Which step, and
 # with what inputs, is named by variables on the service, and the log carries

@@ -456,8 +456,9 @@ says so as it runs.
 
 ### Owner database steps on Railway
 
-Minting pilot seats and reading or setting a spend ceiling need a connection
-with owner rights, which the product runtime deliberately does not hold and
+Minting pilot seats, reading or setting a spend ceiling and granting the
+operator role need a connection with owner rights, which the product runtime
+deliberately does not hold and
 which should not live on anyone's laptop either. The `owner` service is where
 those steps run: a one-shot job built from the worker image (the Dockerfile's
 `owner` stage), whose `DATABASE_URL` and `SELENA_RUNTIME_DATABASE_CA_PEM` are
@@ -467,11 +468,12 @@ exits; nothing here spends on a provider. Keep its restart policy at never.
 
 | Variable | What it does |
 |---|---|
-| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget` or `set-spend-budget` |
+| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget`, `set-spend-budget` or `grant-platform-admin` |
 | `SELENA_PILOT_SEATS_CSV` | The seats file's contents, one `CODE,planId[,label]` per line |
 | `SELENA_PILOT_SEAT_DAYS` | How many days the seats stay redeemable; default 30 |
 | `SELENA_SPEND_SCOPE` | The scope to read or set; default `measure` |
 | `SELENA_SPEND_CAP_USD` | The ceiling to set, for `set-spend-budget` only |
+| `SELENA_OWNER_ADMIN_EMAIL` | The address of the one existing account to make a platform operator, for `grant-platform-admin` only |
 
 A run is: set the task and its inputs, deploy, read the log. The seat task
 logs how many seats were new and how many already existed and never a code,
@@ -479,6 +481,20 @@ so delete `SELENA_PILOT_SEATS_CSV` once the seats are issued — until then the
 codes sit in a variable anyone with the dashboard can read. A second deploy
 of the seat task with the same contents issues nothing and says so, so a
 restart cannot double-mint.
+
+`grant-platform-admin` is how an account becomes a platform operator. The desk
+at `/app/selena-admin` opens only for a user whose `role` is `admin`
+(`apps/web/src/routes/_authed/app/selena-admin.tsx:25-27`); nothing in the
+product sets that column, and on a hosted environment there is no query window
+to set it by hand. Register the account in the product first, then on the
+`owner` service set `SELENA_OWNER_TASK=grant-platform-admin` and
+`SELENA_OWNER_ADMIN_EMAIL=<the account's address>`, deploy, and read
+`grant-platform-admin: updated 1 user (p***@domain)` — the address is matched
+without regard to case and is never printed in full. Then clear
+`SELENA_OWNER_ADMIN_EMAIL`. The task refuses, and grants nobody, when no
+account has the address (`SELENA_OWNER_ADMIN_NOT_FOUND`) or more than one does
+(`SELENA_OWNER_ADMIN_AMBIGUOUS`); a second deploy for an account that already
+is an operator reports `updated 1 user` again and changes nothing else.
 
 ### Applying Railway variable changes
 
