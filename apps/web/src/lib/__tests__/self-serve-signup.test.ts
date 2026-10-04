@@ -14,10 +14,17 @@ import {
 	pilotSeatCapFromEnv,
 } from "@workspace/selena-visibility-contracts";
 import { beforeEach, describe, expect, it } from "vitest";
+import { shouldAwaitVerification } from "../auth/email-verification";
 
 function canRegister(env: Record<string, string | undefined>, hasUsers: boolean): boolean {
 	const deployment = getDeployment({ env: { DEPLOYMENT_MODE: "local", ...env } });
 	return deployment.features.selfServeSignup || (deployment.mode === "local" && !hasUsers);
+}
+
+/** What the sign-up page shows next, read off the same deployment the server configures from. */
+function awaitsVerification(env: Record<string, string | undefined>): boolean {
+	const deployment = getDeployment({ env: { DEPLOYMENT_MODE: "local", ...env } });
+	return shouldAwaitVerification({ mode: deployment.mode, features: deployment.features });
 }
 
 /** The door as apps/web/src/lib/auth/server.ts actually opens it. */
@@ -95,5 +102,28 @@ describe("pilot guest list behind the open door", () => {
 
 	it("refuses once the seats are gone", () => {
 		expect(admits({ ...open, SELENA_PILOT_SEAT_CAP: "2" }, "kora@example.com", 2)).toBe(false);
+	});
+});
+
+/**
+ * The server refuses to sign an unverified pilot guest in, so the page that
+ * just created the account has to say "check your email" rather than send the
+ * guest to the app and let the auth layout bounce them to login unexplained.
+ */
+describe("what a new signup sees next", () => {
+	beforeEach(() => {
+		resetDeploymentCache();
+	});
+
+	it("asks an invited pilot guest to check their email", () => {
+		expect(awaitsVerification({ SELENA_SELF_SERVE_SIGNUP_ENABLED: "true" })).toBe(true);
+	});
+
+	it("lets the bootstrap signup of a closed instance straight in", () => {
+		expect(awaitsVerification({})).toBe(false);
+	});
+
+	it("keeps asking cloud signups to verify", () => {
+		expect(shouldAwaitVerification({ mode: "cloud", features: { selfServeSignup: false } })).toBe(true);
 	});
 });

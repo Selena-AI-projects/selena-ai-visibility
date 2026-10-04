@@ -1,9 +1,10 @@
 /**
  * /auth/register - Account registration page
  *
- * Available in local mode for the single bootstrap signup and in cloud mode
- * for public self-serve signup. Cloud requires email verification before
- * sign-in and also offers Google OAuth.
+ * Available in local mode for the single bootstrap signup and the invited
+ * self-serve pilot, and in cloud mode for public self-serve signup. Cloud and
+ * the self-serve pilot require email verification before sign-in; cloud also
+ * offers Google OAuth.
  */
 
 import { IconBrandGoogle } from "@tabler/icons-react";
@@ -18,6 +19,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { useState } from "react";
 import { z } from "zod";
 import FullPageCard from "@/components/full-page-card";
+import { shouldAwaitVerification } from "@/lib/auth/email-verification";
 import { safeReturnTo } from "@/lib/return-to";
 
 export const Route = createFileRoute("/auth/register")({
@@ -37,6 +39,7 @@ function RegisterPage() {
 	const context = useRouteContext({ strict: false }) as { clientConfig?: ClientConfig };
 	const hasUsers = context.clientConfig?.hasUsers ?? false;
 	const isCloud = context.clientConfig?.mode === "cloud";
+	const awaitVerification = shouldAwaitVerification(context.clientConfig);
 	const navigate = useNavigate();
 	const [name, setName] = useState("");
 	const [email, setEmail] = useState("");
@@ -56,7 +59,7 @@ function RegisterPage() {
 				email,
 				password,
 				name,
-				...(isCloud && { callbackURL: safeReturnTo(returnTo) }),
+				...(awaitVerification && { callbackURL: safeReturnTo(returnTo) }),
 			});
 
 			if (result.error) {
@@ -65,7 +68,7 @@ function RegisterPage() {
 				return;
 			}
 
-			if (isCloud) {
+			if (awaitVerification) {
 				setPendingVerification(true);
 				setLoading(false);
 				return;
@@ -93,6 +96,10 @@ function RegisterPage() {
 				<div className="space-y-4 w-full">
 					<p className="text-sm text-muted-foreground text-center">
 						Click the link in the email to verify your address and get started. The link expires, so verify soon.
+					</p>
+					<p className="text-sm text-muted-foreground text-center" lang="ru">
+						Мы отправили письмо со ссылкой для подтверждения на этот адрес. Перейдите по ссылке — после этого можно
+						войти в кабинет. Ссылка действует ограниченное время.
 					</p>
 					<Button type="button" variant="outline" className="w-full" onClick={handleResend} disabled={resending}>
 						{resending ? "Sending..." : "Resend verification email"}
