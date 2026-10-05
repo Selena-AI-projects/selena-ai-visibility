@@ -78,6 +78,10 @@ const FOLLOWUP_MESSAGES: Record<string, [string, string]> = {
 		"Your role in this workspace is view-only. Ask an owner or member to update the status.",
 		"Ваша роль в этом пространстве — только просмотр. Попросите владельца или участника обновить статус.",
 	],
+	SELENA_FOLLOWUP_UNAVAILABLE: [
+		"Action statuses are not enabled here yet. The report itself is complete; nothing was saved.",
+		"Статусы действий здесь ещё не подключены. Сам отчёт полный; ничего не сохранено.",
+	],
 };
 
 /**

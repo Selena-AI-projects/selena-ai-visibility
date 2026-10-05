@@ -4,7 +4,9 @@ import { svAuditEvents, svCycles, svOrders, svRecommendationFollowups } from "./
 import {
 	type FollowupStatus,
 	followupStatuses,
+	isFollowupStorageMissing,
 	type RecommendationFollowupInput,
+	RecommendationFollowupsUnavailable,
 } from "./selena-recommendation-followups";
 
 export type RecommendationFollowupContext = { actorId: string; tenantId: string };
@@ -39,6 +41,15 @@ function toRecord(row: typeof svRecommendationFollowups.$inferSelect): Recommend
 	};
 }
 
+async function unlessStorageMissing<T>(work: () => Promise<T>): Promise<T> {
+	try {
+		return await work();
+	} catch (error) {
+		if (isFollowupStorageMissing(error)) throw new RecommendationFollowupsUnavailable(error);
+		throw error;
+	}
+}
+
 /** A blank field is a cleared field, not a value. */
 function optionalText(value: string | undefined): string | null {
 	const trimmed = value?.trim() ?? "";
@@ -51,20 +62,22 @@ export function createRecommendationFollowupRepository(db: OrganizationDatabase)
 			ctx: RecommendationFollowupContext,
 			input: { projectId: string; cycleId: string },
 		): Promise<RecommendationFollowupRecord[]> {
-			return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
-				const rows = await tx
-					.select()
-					.from(svRecommendationFollowups)
-					.where(
-						and(
-							eq(svRecommendationFollowups.organizationId, ctx.tenantId),
-							eq(svRecommendationFollowups.projectId, input.projectId),
-							eq(svRecommendationFollowups.cycleId, input.cycleId),
-						),
-					)
-					.orderBy(svRecommendationFollowups.recommendationKey);
-				return rows.map(toRecord);
-			});
+			return unlessStorageMissing(() =>
+				withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					const rows = await tx
+						.select()
+						.from(svRecommendationFollowups)
+						.where(
+							and(
+								eq(svRecommendationFollowups.organizationId, ctx.tenantId),
+								eq(svRecommendationFollowups.projectId, input.projectId),
+								eq(svRecommendationFollowups.cycleId, input.cycleId),
+							),
+						)
+						.orderBy(svRecommendationFollowups.recommendationKey);
+					return rows.map(toRecord);
+				}),
+			);
 		},
 
 		/**
@@ -76,92 +89,94 @@ export function createRecommendationFollowupRepository(db: OrganizationDatabase)
 			ctx: RecommendationFollowupContext,
 			input: { projectId: string; cycleId: string; recommendationKey: string } & RecommendationFollowupInput,
 		): Promise<RecommendationFollowupRecord> {
-			return withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
-				// The composite foreign keys would refuse a foreign cycle anyway; the
-				// check here answers with not-found instead of a constraint error.
-				const [cycle] = await tx
-					.select({ id: svCycles.id })
-					.from(svCycles)
-					.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
-					.where(
-						and(
-							eq(svCycles.id, input.cycleId),
-							eq(svCycles.organizationId, ctx.tenantId),
-							eq(svOrders.projectId, input.projectId),
-							eq(svOrders.organizationId, ctx.tenantId),
-						),
-					)
-					.limit(1);
-				if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
+			return unlessStorageMissing(() =>
+				withOrganizationTransaction(db, ctx.tenantId, async (tx) => {
+					// The composite foreign keys would refuse a foreign cycle anyway; the
+					// check here answers with not-found instead of a constraint error.
+					const [cycle] = await tx
+						.select({ id: svCycles.id })
+						.from(svCycles)
+						.innerJoin(svOrders, eq(svCycles.orderId, svOrders.id))
+						.where(
+							and(
+								eq(svCycles.id, input.cycleId),
+								eq(svCycles.organizationId, ctx.tenantId),
+								eq(svOrders.projectId, input.projectId),
+								eq(svOrders.organizationId, ctx.tenantId),
+							),
+						)
+						.limit(1);
+					if (!cycle) throw new Error("Not found: cycle is outside AuthContext tenant");
 
-				// Locked for the transaction, so two saves of one recommendation
-				// serialise and each audit row names the status it really moved from.
-				const [previous] = await tx
-					.select()
-					.from(svRecommendationFollowups)
-					.where(
-						and(
-							eq(svRecommendationFollowups.organizationId, ctx.tenantId),
-							eq(svRecommendationFollowups.cycleId, input.cycleId),
-							eq(svRecommendationFollowups.recommendationKey, input.recommendationKey),
-						),
-					)
-					.limit(1)
-					.for("update");
+					// Locked for the transaction, so two saves of one recommendation
+					// serialise and each audit row names the status it really moved from.
+					const [previous] = await tx
+						.select()
+						.from(svRecommendationFollowups)
+						.where(
+							and(
+								eq(svRecommendationFollowups.organizationId, ctx.tenantId),
+								eq(svRecommendationFollowups.cycleId, input.cycleId),
+								eq(svRecommendationFollowups.recommendationKey, input.recommendationKey),
+							),
+						)
+						.limit(1)
+						.for("update");
 
-				const fields = {
-					status: input.status,
-					assignee: optionalText(input.assignee),
-					dueOn: input.dueOn ?? null,
-					note: optionalText(input.note),
-					updatedBy: ctx.actorId,
-				};
-				// A save that repeats what is stored is not a change: no row is touched
-				// and no audit event claims a move that did not happen.
-				if (
-					previous &&
-					previous.status === fields.status &&
-					previous.assignee === fields.assignee &&
-					previous.dueOn === fields.dueOn &&
-					previous.note === fields.note
-				)
-					return toRecord(previous);
-				const [row] = await tx
-					.insert(svRecommendationFollowups)
-					.values({
+					const fields = {
+						status: input.status,
+						assignee: optionalText(input.assignee),
+						dueOn: input.dueOn ?? null,
+						note: optionalText(input.note),
+						updatedBy: ctx.actorId,
+					};
+					// A save that repeats what is stored is not a change: no row is touched
+					// and no audit event claims a move that did not happen.
+					if (
+						previous &&
+						previous.status === fields.status &&
+						previous.assignee === fields.assignee &&
+						previous.dueOn === fields.dueOn &&
+						previous.note === fields.note
+					)
+						return toRecord(previous);
+					const [row] = await tx
+						.insert(svRecommendationFollowups)
+						.values({
+							organizationId: ctx.tenantId,
+							projectId: input.projectId,
+							cycleId: input.cycleId,
+							recommendationKey: input.recommendationKey,
+							...fields,
+						})
+						.onConflictDoUpdate({
+							target: [
+								svRecommendationFollowups.organizationId,
+								svRecommendationFollowups.cycleId,
+								svRecommendationFollowups.recommendationKey,
+							],
+							set: { ...fields, updatedAt: new Date() },
+						})
+						.returning();
+					if (!row) throw new Error("RECOMMENDATION_FOLLOWUP_UPSERT_RETURNED_NOTHING");
+
+					await tx.insert(svAuditEvents).values({
 						organizationId: ctx.tenantId,
-						projectId: input.projectId,
-						cycleId: input.cycleId,
-						recommendationKey: input.recommendationKey,
-						...fields,
-					})
-					.onConflictDoUpdate({
-						target: [
-							svRecommendationFollowups.organizationId,
-							svRecommendationFollowups.cycleId,
-							svRecommendationFollowups.recommendationKey,
-						],
-						set: { ...fields, updatedAt: new Date() },
-					})
-					.returning();
-				if (!row) throw new Error("RECOMMENDATION_FOLLOWUP_UPSERT_RETURNED_NOTHING");
-
-				await tx.insert(svAuditEvents).values({
-					organizationId: ctx.tenantId,
-					actorId: ctx.actorId,
-					event: RECOMMENDATION_FOLLOWUP_UPDATED_EVENT,
-					subjectKind: "sv_recommendation_followups",
-					subjectId: row.id,
-					details: {
-						recommendationKey: input.recommendationKey,
-						from: previous?.status ?? null,
-						to: input.status,
-						assignee: fields.assignee,
-						dueOn: fields.dueOn,
-					},
-				});
-				return toRecord(row);
-			});
+						actorId: ctx.actorId,
+						event: RECOMMENDATION_FOLLOWUP_UPDATED_EVENT,
+						subjectKind: "sv_recommendation_followups",
+						subjectId: row.id,
+						details: {
+							recommendationKey: input.recommendationKey,
+							from: previous?.status ?? null,
+							to: input.status,
+							assignee: fields.assignee,
+							dueOn: fields.dueOn,
+						},
+					});
+					return toRecord(row);
+				}),
+			);
 		},
 	};
 }

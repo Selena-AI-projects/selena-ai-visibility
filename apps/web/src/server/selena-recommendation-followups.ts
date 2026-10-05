@@ -1,7 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
-import { recommendationFollowupInputSchema } from "@workspace/lib/selena-recommendation-followups";
+import {
+	RecommendationFollowupsUnavailable,
+	recommendationFollowupInputSchema,
+} from "@workspace/lib/selena-recommendation-followups";
 import { createRecommendationFollowupRepository } from "@workspace/lib/selena-recommendation-followups-store";
 import { z } from "zod";
 import { canWrite, resolveSessionAuthContext } from "../lib/selena-auth-context";
@@ -20,15 +23,24 @@ const projectInput = z.object({ projectId: z.string().uuid() });
 
 export const listSelenaRecommendationFollowupsFn = createServerFn({ method: "GET" })
 	.validator(projectInput)
-	.handler(async ({ data }): Promise<{ cycleId: string | null; followups: RecommendationFollowupView[] }> => {
-		const context = await resolveSessionAuthContext();
-		const anchor = await withOrganizationTransaction(db, context.tenantId, (tx) =>
-			loadReportAnchor(tx, { projectId: data.projectId, tenantId: context.tenantId }),
-		);
-		if (!anchor?.cycle) return { cycleId: null, followups: [] };
-		const records = await repository.list(context, { projectId: data.projectId, cycleId: anchor.cycle.id });
-		return { cycleId: anchor.cycle.id, followups: records.map(serializeRecommendationFollowup) };
-	});
+	.handler(
+		async ({
+			data,
+		}): Promise<{ cycleId: string | null; available: boolean; followups: RecommendationFollowupView[] }> => {
+			const context = await resolveSessionAuthContext();
+			const anchor = await withOrganizationTransaction(db, context.tenantId, (tx) =>
+				loadReportAnchor(tx, { projectId: data.projectId, tenantId: context.tenantId }),
+			);
+			if (!anchor?.cycle) return { cycleId: null, available: true, followups: [] };
+			try {
+				const records = await repository.list(context, { projectId: data.projectId, cycleId: anchor.cycle.id });
+				return { cycleId: anchor.cycle.id, available: true, followups: records.map(serializeRecommendationFollowup) };
+			} catch (error) {
+				if (!(error instanceof RecommendationFollowupsUnavailable)) throw error;
+				return { cycleId: anchor.cycle.id, available: false, followups: [] };
+			}
+		},
+	);
 
 /**
  * Follow-ups attach to the READY cycle the report speaks for; a report that is

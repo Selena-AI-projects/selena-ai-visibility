@@ -543,7 +543,7 @@ function ReportContextRail({
 			items: [
 				{ id: "opportunities", label: tr(locale, "Opportunities", "Возможности"), value: railValue(locale, report?.gaps.length ?? null, noMeasurement) },
 				{ id: "recommendations", label: tr(locale, "Recommendations", "Рекомендации"), value: railValue(locale, report?.recommendations.length ?? view?.freeAudit?.actions.length ?? null, notSetUp) },
-				{ id: "action-plan", label: tr(locale, "Action statuses", "Статусы действий"), value: railValue(locale, report ? (view?.followups.length ?? 0) : null, noMeasurement) },
+				{ id: "action-plan", label: tr(locale, "Action statuses", "Статусы действий"), value: report && view?.followupsAvailable === false ? notSetUp : railValue(locale, report ? (view?.followups.length ?? 0) : null, noMeasurement) },
 				{ id: "evidence-ledger", label: tr(locale, "Evidence Ledger", "Журнал доказательств"), value: railValue(locale, report?.methodology.answersAnalyzed ?? null, noMeasurement) },
 			],
 		},
@@ -1706,6 +1706,7 @@ function SelenaReportPage() {
 													<p className="mt-1 text-xs text-[#574d45]">
 														{tr(locale, "Why", "Почему")}: {body.why}
 													</p>
+													{view?.followupsAvailable !== false && (
 													<RecommendationFollowup
 														locale={locale}
 														projectId={projectId}
@@ -1719,6 +1720,7 @@ function SelenaReportPage() {
 															)
 														}
 													/>
+													)}
 												</div>
 											</div>
 										);

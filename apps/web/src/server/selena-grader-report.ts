@@ -5,6 +5,7 @@ import { svConfigurationLocks, svRecommendationRuns, svScenarios, svWebsiteSnaps
 import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import type { GraderReport } from "@workspace/lib/selena-grader-report";
+import { RecommendationFollowupsUnavailable } from "@workspace/lib/selena-recommendation-followups";
 import { createRecommendationFollowupRepository } from "@workspace/lib/selena-recommendation-followups-store";
 import type { ReportCycleUpdate } from "@workspace/lib/selena-report-cycle";
 import { createSelenaRepositories } from "@workspace/lib/selena-visibility-repositories";
@@ -48,6 +49,8 @@ export type GraderReportView = {
 	cycle: { cycleId: string; status: string; expectedRuns: number; completedRuns: number; succeededRuns: number } | null;
 	/** What the client has recorded against this cycle's recommendations, by recommendation key. */
 	followups: RecommendationFollowupView[];
+	/** False while this database has no follow-up table or grant yet; the report itself is unaffected. */
+	followupsAvailable: boolean;
 	/**
 	 * A cycle newer than the report (or the only cycle, when nothing is READY
 	 * yet), as a status the client is told about rather than a report they see.
@@ -173,6 +176,7 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			monthUsage: null,
 			cycle: null,
 			followups: [],
+			followupsAvailable: true,
 			update: null,
 			report: null,
 			freeAudit,
@@ -218,9 +222,15 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 			succeededRuns: cycle.succeededRuns,
 		};
 		view.measuredAt = cycle.createdAt.toISOString();
-		view.followups = (await followups.list(context, { projectId: data.projectId, cycleId: cycle.id })).map(
-			serializeRecommendationFollowup,
-		);
+		try {
+			view.followups = (await followups.list(context, { projectId: data.projectId, cycleId: cycle.id })).map(
+				serializeRecommendationFollowup,
+			);
+		} catch (error) {
+			if (!(error instanceof RecommendationFollowupsUnavailable)) throw error;
+			console.warn(`[selena-report] follow-ups unavailable: ${String(error.cause)}`);
+			view.followupsAvailable = false;
+		}
 		if (!subjects) return view;
 
 		const allRuns = await repositories.runs.listForOrder(context, anchor.orderId);

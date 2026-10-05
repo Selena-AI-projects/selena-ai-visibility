@@ -33,6 +33,7 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 	let withOrganizationTransaction: typeof import("@workspace/lib/db/organization-transaction").withOrganizationTransaction;
 	let repository: import("@workspace/lib/selena-recommendation-followups-store").RecommendationFollowupRepository;
 	let inputSchema: typeof import("@workspace/lib/selena-recommendation-followups").recommendationFollowupInputSchema;
+	let Unavailable: typeof import("@workspace/lib/selena-recommendation-followups").RecommendationFollowupsUnavailable;
 	let a: Tenant;
 	let b: Tenant;
 
@@ -46,7 +47,9 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 		repository = (
 			await import("@workspace/lib/selena-recommendation-followups-store")
 		).createRecommendationFollowupRepository(db);
-		inputSchema = (await import("@workspace/lib/selena-recommendation-followups")).recommendationFollowupInputSchema;
+		const followupModule = await import("@workspace/lib/selena-recommendation-followups");
+		inputSchema = followupModule.recommendationFollowupInputSchema;
+		Unavailable = followupModule.RecommendationFollowupsUnavailable;
 
 		// The test connection is a superuser and so bypasses every row policy;
 		// the policy is exercised through a role that cannot. Creating it needs
@@ -235,6 +238,42 @@ describe.skipIf(!url)("recommendation follow-ups on a database", () => {
 				),
 			),
 		).toMatch(/row-level security/);
+		expect(await rowCount(a)).toBe(2);
+	});
+
+	it("answers unavailable, not with a driver error, where the runtime role has no grant yet", async () => {
+		const { createRecommendationFollowupRepository } = await import(
+			"@workspace/lib/selena-recommendation-followups-store"
+		);
+		const roleRepository = createRecommendationFollowupRepository(rlsDb);
+		await db.execute(sql.raw(`REVOKE ALL ON sv_recommendation_followups FROM ${RLS_ROLE}`));
+		try {
+			await expect(roleRepository.list(a.ctx, { projectId: a.projectId, cycleId: a.cycleId })).rejects.toBeInstanceOf(
+				Unavailable,
+			);
+		} finally {
+			await db.execute(sql.raw(`GRANT SELECT, INSERT, UPDATE ON sv_recommendation_followups TO ${RLS_ROLE}`));
+		}
+		expect(await roleRepository.list(a.ctx, { projectId: a.projectId, cycleId: a.cycleId })).toHaveLength(2);
+	});
+
+	it("answers unavailable for reads and saves where migration 0080 has not been applied", async () => {
+		await db.execute(sql.raw("ALTER TABLE sv_recommendation_followups RENAME TO sv_recommendation_followups_parked"));
+		try {
+			await expect(repository.list(a.ctx, { projectId: a.projectId, cycleId: a.cycleId })).rejects.toBeInstanceOf(
+				Unavailable,
+			);
+			await expect(
+				repository.upsert(a.ctx, {
+					projectId: a.projectId,
+					cycleId: a.cycleId,
+					recommendationKey: SOURCE_KEY,
+					status: "DONE",
+				}),
+			).rejects.toBeInstanceOf(Unavailable);
+		} finally {
+			await db.execute(sql.raw("ALTER TABLE sv_recommendation_followups_parked RENAME TO sv_recommendation_followups"));
+		}
 		expect(await rowCount(a)).toBe(2);
 	});
 

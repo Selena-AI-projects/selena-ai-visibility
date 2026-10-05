@@ -40,3 +40,38 @@ export const recommendationFollowupInputSchema = z.object({
 });
 
 export type RecommendationFollowupInput = z.infer<typeof recommendationFollowupInputSchema>;
+
+export const RECOMMENDATION_FOLLOWUPS_UNAVAILABLE = "SELENA_FOLLOWUP_UNAVAILABLE";
+
+/**
+ * The web ships before its migration does: release deploys the code, and the
+ * table reaches a database only once the owner moves the migration frontier
+ * and re-runs the runtime-role grants. Until then follow-ups are unavailable,
+ * not broken, and the report they sit on must still open.
+ */
+export class RecommendationFollowupsUnavailable extends Error {
+	constructor(cause: unknown) {
+		super(RECOMMENDATION_FOLLOWUPS_UNAVAILABLE, { cause });
+		this.name = "RecommendationFollowupsUnavailable";
+	}
+}
+
+const FOLLOWUP_TABLE = "sv_recommendation_followups";
+
+/**
+ * Only the table's absence or a missing grant on it counts. A row-policy
+ * refusal shares the permission code but means a cross-tenant write, which
+ * must surface as the error it is.
+ */
+export function isFollowupStorageMissing(error: unknown): boolean {
+	let current: unknown = error;
+	for (let depth = 0; depth < 5 && current; depth += 1) {
+		const { code, message } = current as { code?: unknown; message?: unknown };
+		if (typeof message === "string" && message.includes(FOLLOWUP_TABLE)) {
+			if (code === "42P01") return true;
+			if (code === "42501" && message.startsWith("permission denied")) return true;
+		}
+		current = (current as { cause?: unknown }).cause;
+	}
+	return false;
+}
