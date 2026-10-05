@@ -239,6 +239,12 @@ type OrderDraftInput = {
 	planId: (typeof planIds)[number];
 	scenarioIds: string[];
 	idempotencyKey: string;
+	/**
+	 * How the order is settled. A pilot seat pays nothing: the quote keeps the
+	 * plan's nominal price, while the recorded payment is the amount actually
+	 * paid, so the ledger never shows money that did not change hands.
+	 */
+	settlement?: "test_payment" | "pilot_seat";
 };
 
 export async function createSelenaOrderDraft(context: SelenaRepositoryContext, data: OrderDraftInput) {
@@ -440,6 +446,8 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 			.returning();
 		if (!order) throw new Error("SELENA_ORDER_DRAFT_WRITE_FAILED");
 
+		const settlement = data.settlement ?? "test_payment";
+		const paidAmount = settlement === "pilot_seat" ? 0 : plan.price;
 		const [payment] = await tx
 			.insert(svPayments)
 			.values({
@@ -448,7 +456,7 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 				provider: "test",
 				providerEventId: data.idempotencyKey,
 				status: "SUCCEEDED",
-				amount: String(plan.price),
+				amount: String(paidAmount),
 				currency: plan.currency,
 			})
 			.onConflictDoNothing({ target: [svPayments.provider, svPayments.providerEventId] })
@@ -473,6 +481,9 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 				expectedRuns,
 				scenarioCount: approved.length,
 				idempotencyKey: data.idempotencyKey,
+				settlement,
+				nominalPrice: plan.price,
+				paidAmount,
 				checkoutMetadata: SELENA_CHECKOUT_METADATA,
 			},
 		});
@@ -517,4 +528,64 @@ export async function startSelenaMeasurement(context: SelenaRepositoryContext, d
 		queued: { enqueued: queued.enqueued, skipped: queued.skipped, reason: queued.reason },
 		stoppedAt: queued.reason ? ("execution" as const) : null,
 	};
+}
+
+export type MeasurementByKey = { orderId: string; status: string; runsQueued: boolean };
+
+/**
+ * The order a measurement started under this key, and whether any of its runs
+ * reached the queue. Read from storage, so it is the truth even when the call
+ * that started it crashed half-way.
+ */
+export async function readMeasurementByKey(
+	context: SelenaRepositoryContext,
+	idempotencyKey: string,
+): Promise<MeasurementByKey | null> {
+	return withOrganizationTransaction(db, context.tenantId, async (tx) => {
+		const [order] = await tx
+			.select({ orderId: svOrders.id, status: svOrders.status })
+			.from(svPayments)
+			.innerJoin(svOrders, eq(svOrders.id, svPayments.orderId))
+			.where(
+				and(
+					eq(svPayments.provider, "test"),
+					eq(svPayments.providerEventId, idempotencyKey),
+					eq(svPayments.organizationId, context.tenantId),
+				),
+			)
+			.limit(1);
+		if (!order) return null;
+		const [queued] = await tx
+			.select({ id: svAuditEvents.id })
+			.from(svAuditEvents)
+			.where(
+				and(
+					eq(svAuditEvents.organizationId, context.tenantId),
+					eq(svAuditEvents.event, "RUNS_ENQUEUED"),
+					eq(svAuditEvents.subjectId, order.orderId),
+					sql`coalesce((${svAuditEvents.details} ->> 'enqueued')::int, 0) + coalesce((${svAuditEvents.details} ->> 'duplicates')::int, 0) > 0`,
+				),
+			)
+			.limit(1);
+		return { ...order, runsQueued: Boolean(queued) };
+	});
+}
+
+/**
+ * Carries a measurement an earlier call drafted under the same key on to the
+ * queue, with the same approval and enqueue keys startSelenaMeasurement uses,
+ * so nothing is minted or queued twice. An order already past the queue is
+ * left alone.
+ */
+export async function resumeSelenaMeasurement(
+	context: SelenaRepositoryContext,
+	existing: MeasurementByKey,
+	idempotencyKey: string,
+): Promise<void> {
+	if (existing.status === "PAID_REVIEW_REQUIRED") {
+		await approveOrder(context, existing.orderId, `${idempotencyKey}:approve`);
+		await enqueueOrderRunsForOrder(context, existing.orderId, `${idempotencyKey}:enqueue`);
+	} else if (existing.status === "QUEUED" && !existing.runsQueued) {
+		await enqueueOrderRunsForOrder(context, existing.orderId, `${idempotencyKey}:enqueue`);
+	}
 }

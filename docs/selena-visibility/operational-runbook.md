@@ -47,12 +47,50 @@ Staging project: `selena-ai-visibility` (`51dd0770-e622-4734-a705-ace401234bb8`)
 
 - Web: `55909c04-a9ea-49af-9b71-98e4d7b848c9`, generated URL `https://web-staging-4a8f.up.railway.app`.
 - Worker: `a43c94e7-76c5-4490-b8cb-87fd4ff97e33`, no public domain.
-- Migration: `85e09996-7bc6-4dcd-a4af-7582683fa38c`, one-shot, restart policy `NEVER`.
+- Migration (`migrate`): `cfedff9a-d176-4f08-a2c9-8d6d04504df4`, one-shot, restart policy `NEVER`.
 - PostgreSQL: `280e3b59-77c3-46e0-8c2c-75955b7f9a40`.
 
 Fixture bindings use `DEPLOYMENT_MODE=local`, `SCRAPE_TARGETS=stub:stub`, `ONBOARDING_LLM_TARGET=stub:stub`, telemetry disabled and `SCHEDULE_MAINTENANCE_ENABLED=false`. Staging-only auth/encryption secrets are generated randomly and passed to Railway through sealed stdin bindings; their values are never read back.
 
 Activation order is migration SUCCESS → web SUCCESS and `/api/setup-status` HTTP 200 → worker SUCCESS with bounded logs. Real provider calls, payment calls, Elmo measurements and scheduler fan-out remain disabled.
+
+## Release push → staging deploy
+
+A push to `release/selena-visibility-mvp` is the deploy: `web`, `worker`,
+`measure` and `migrate` are bound to that branch as their Railway source, and
+no GitHub Action runs on the push. What each service then does:
+
+- `migrate` runs the bounded runner (`packages/lib/scripts/apply-migrations.mjs`)
+  on every deploy. With nothing pending it is a no-op that still logs
+  `migrations complete` (`:305`); the owner-approval gate engages only when
+  `pending > 0` (`:239-242`), and then names the commit to put in
+  `SELENA_MIGRATION_APPROVED_SHA`.
+- `measure` rebuilds whenever `packages/lib` or `apps/worker` change, and its
+  first gate is `SELENA_EMERGENCY_STOP`
+  (`apps/worker/src/scripts/measurement-deployment-gate.ts:16-17`). A SUCCESS status
+  does not prove the gate held — read the log. `PROVIDER_CALLS_STOPPED` means
+  the stop refused (exit 1, `measure-journal-entrypoint.ts:3-9`);
+  `JOURNAL_MEASUREMENT_DISABLED` or `JOURNAL_MEASUREMENT_DEPLOYMENT_NOT_APPROVED`
+  mean it exited without a call; none of the three means it measured.
+- `web` and `worker` restart on the new image with their current variables.
+
+Smoke after the deploy, in this order:
+
+1. `GET /api/setup-status` → `{"ready":true,"commit":"<12 hex>"}`. The commit
+   is the deployed `RAILWAY_GIT_COMMIT_SHA`, so it tells which build answered
+   where the package version cannot
+   (`apps/web/src/routes/api/setup-status/index.ts`).
+2. `GET /auth/login` → 200.
+3. Signed in as a non-admin → `/app/selena-admin` → NotFound
+   (`apps/web/src/routes/_authed/app/selena-admin.tsx:25-27`).
+4. Railway logs: `migrate` → `migrations complete`; `worker` →
+   `Registered handler: selena-measure` (`apps/worker/src/handlers.ts:99`).
+
+Rollback is a redeploy of the previous SUCCESS deployment of **both** `web`
+and `worker` (list the deployments, redeploy the last good one of each), never
+of one alone: they share the contracts package. No database revert is needed
+when the release shipped no migration; when it did, the revert is a decision
+of its own and not part of this procedure.
 
 ## Production readiness gate (2026-08-15)
 

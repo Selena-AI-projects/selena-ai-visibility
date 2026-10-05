@@ -36,7 +36,14 @@ function report(systems: Array<{ answersAnalyzed: number; brandMentioned: number
 	return { systems, overall: { brandMentionRate: rate } } as unknown as GraderReport;
 }
 
-function source(overrides: Partial<WeeklyDigestSource> = {}): WeeklyDigestSource {
+/**
+ * One project's rows as the fake store sees them. With `cycles`, the store
+ * resolves the digested cycle from the sweep's window the way the database
+ * does; without them it hands back the source as given.
+ */
+type ProjectRows = WeeklyDigestSource & { cycles?: Array<{ id: string; completedAt: Date }> };
+
+function source(overrides: Partial<ProjectRows> = {}): ProjectRows {
 	return {
 		projectName: "Synthetic Clinic",
 		planId: "visibility-snapshot",
@@ -73,13 +80,29 @@ class FakeTenant {
 	recipientStatus: "BOUND" | "UNBOUND" = "BOUND";
 	constructor(
 		readonly organizationId: string,
-		readonly sources: Map<string, WeeklyDigestSource>,
+		readonly sources: Map<string, ProjectRows>,
 		readonly events: string[],
 	) {}
 
 	store(clock: () => Date): TenantDigestStore {
 		return {
-			readSource: async (projectId) => this.sources.get(projectId) ?? null,
+			readSource: async (projectId, window) => {
+				const rows = this.sources.get(projectId);
+				if (!rows) return null;
+				const { cycles, ...given } = rows;
+				if (!cycles) return given;
+				const finished = cycles
+					.filter((cycle) => cycle.completedAt < window.periodEnd)
+					.sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
+				const [current, previous] = finished;
+				if (!current) return { ...given, cycle: null, previousCycleId: null, diff: null };
+				return {
+					...given,
+					cycle: current,
+					previousCycleId: previous?.id ?? null,
+					diff: previous ? ({ changes: [], groups: [] } as unknown as CycleDiffReport) : null,
+				};
+			},
 			saveDigest: async ({ projectId, content }) => {
 				const key = `${projectId}:${content.periodStart}`;
 				const existing = this.digests.get(key);
@@ -153,7 +176,7 @@ class FakeTenant {
 
 function harness(options: {
 	env?: Record<string, string | undefined>;
-	tenants: Record<string, Record<string, WeeklyDigestSource>>;
+	tenants: Record<string, Record<string, ProjectRows>>;
 	outcomes?: DeliveryOutcome[];
 	failTenant?: string;
 }) {
@@ -292,6 +315,38 @@ test("the digest is saved before it is sent, and a rerun never sends it twice", 
 	]);
 	assert.equal(h.sent.length, 1);
 	assert.equal(h.tenant("org-a").digests.size, 1);
+});
+
+test("a cycle finished on Sunday is digested on Monday even when a newer cycle finished after midnight", async () => {
+	const h = harness({
+		tenants: {
+			"org-a": {
+				p1: source({
+					cycles: [
+						{ id: "sunday", completedAt: new Date("2026-09-27T20:00:00Z") },
+						{ id: "monday", completedAt: new Date("2026-09-28T01:00:00Z") },
+					],
+				}),
+			},
+		},
+	});
+	const first = await runWeeklyDigestSweep(h.deps);
+	assert.deepEqual("outcomes" in first && first.outcomes.map(({ outcome }) => outcome), ["DELIVERED"]);
+	assert.match(h.sent[0].text, /2026-09-21 — 2026-09-28/);
+	const [sundayDigest] = [...h.tenant("org-a").digests.values()];
+	assert.equal(sundayDigest.content.cycleId, "sunday");
+	assert.equal(sundayDigest.content.previousCycleId, null);
+
+	// The week after, the Monday cycle is the news and the Sunday one is what it is compared with.
+	h.advanceTo(new Date("2026-10-05T06:00:00Z"));
+	const second = await runWeeklyDigestSweep(h.deps);
+	assert.deepEqual("outcomes" in second && second.outcomes.map(({ outcome }) => outcome), ["DELIVERED"]);
+	assert.match(h.sent[1].text, /2026-09-28 — 2026-10-05/);
+	const digests = [...h.tenant("org-a").digests.values()];
+	assert.equal(digests.length, 2);
+	assert.equal(digests[1].content.cycleId, "monday");
+	assert.equal(digests[1].content.previousCycleId, "sunday");
+	assert.equal(h.sent.length, 2);
 });
 
 test("a system with no analyzed answers is reported as unknown, never as zero", async () => {

@@ -1,3 +1,4 @@
+import { sha256HexSync } from "./sha256.js";
 /**
  * When a promo code makes a measurement free, the human approval step in the
  * order desk is no longer protecting a payment — the customer's own questions
@@ -69,5 +70,52 @@ export function decideFreeAutoDispatch(input: {
  * refusal or a failure stays visible as ordinary work to pick up by hand, which
  * is why neither of them closes the request.
  */
-export const freeAutoDispatchStatuses = ["AUTO_QUEUED", "AUTO_FAILED"] as const;
+export const freeAutoDispatchStatuses = ["AUTO_QUEUED", "AUTO_AWAITING_OPERATOR", "AUTO_FAILED"] as const;
 export type FreeAutoDispatchStatus = (typeof freeAutoDispatchStatuses)[number];
+
+/**
+ * The request a pilot seat makes, as a UUID derived from the workspace and the
+ * seat's code digest. Every submission of the same code by the same workspace
+ * — a double click, two tabs, a retry after an error — lands on one request
+ * row, so on the one dispatch slot and the one order that request keys.
+ */
+export function pilotSeatRequestId(organizationId: string, codeHash: string): string {
+	const hex = sha256HexSync(`selena-pilot-seat-request:${organizationId}:${codeHash}`);
+	const variant = ((Number.parseInt(hex.charAt(16), 16) & 0x3) | 0x8).toString(16);
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+/** What the client is told about a free request, read off the order it produced. */
+export type FreeRequestLaunch =
+	| { state: "NOT_STARTED"; reason: string }
+	/** Another submission of the same request is starting it right now. */
+	| { state: "STARTING" }
+	| { state: "AWAITING_OPERATOR" | "QUEUED" | "RUNNING" | "IN_REVIEW" | "READY" | "STOPPED"; orderStatus: string };
+
+/**
+ * The launch state of a free request, from the facts rather than from how far
+ * the request handler got: a handler that crashed after queueing still left a
+ * queued order, and one that stopped at preflight left an order the operator
+ * must release. `runsQueued` is whether any run of the order reached the queue.
+ */
+export function freeRequestLaunch(input: {
+	orderStatus: string | null;
+	runsQueued: boolean;
+	notStartedReason?: string;
+}): FreeRequestLaunch {
+	const { orderStatus } = input;
+	if (orderStatus === null) return { state: "NOT_STARTED", reason: input.notStartedReason ?? "NO_ORDER" };
+	if (orderStatus === "QUEUED") return { state: input.runsQueued ? "QUEUED" : "AWAITING_OPERATOR", orderStatus };
+	if (orderStatus === "RUNNING" || orderStatus === "ANALYZING") return { state: "RUNNING", orderStatus };
+	if (orderStatus === "QC_REQUIRED") return { state: "IN_REVIEW", orderStatus };
+	if (orderStatus === "READY" || orderStatus === "DELIVERED") return { state: "READY", orderStatus };
+	if (orderStatus === "CANCELLED" || orderStatus === "CARDINALITY_INCIDENT") return { state: "STOPPED", orderStatus };
+	return { state: "AWAITING_OPERATOR", orderStatus };
+}
+
+/** The inbox status a request carries once its launch state is known. */
+export function freeAutoDispatchStatusFor(launch: FreeRequestLaunch): FreeAutoDispatchStatus {
+	if (launch.state === "NOT_STARTED") return "AUTO_FAILED";
+	if (launch.state === "AWAITING_OPERATOR" || launch.state === "STARTING") return "AUTO_AWAITING_OPERATOR";
+	return "AUTO_QUEUED";
+}

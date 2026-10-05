@@ -5,7 +5,8 @@
  * plan, contact — and a pilot invite code stands in for payment: an unspent,
  * unexpired seat issued for this plan makes the request free of charge, once.
  * The operator sees every request on the admin desk and builds the actual
- * order there; nothing on this page touches quotes, orders or the queue.
+ * order there. The one exception is a free request, which may start itself;
+ * the page then reports the launch state the server read back from storage.
  */
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Button } from "@workspace/ui/components/button";
@@ -15,7 +16,7 @@ import { Textarea } from "@workspace/ui/components/textarea";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { humanizeSelenaError } from "@/lib/selena-workspace-errors";
-import { createSelenaOrderRequestFn } from "@/server/selena-order-requests";
+import { createSelenaOrderRequestFn, type OrderRequestOutcome } from "@/server/selena-order-requests";
 import { getSelenaWorkspaceFn } from "../../../server/selena-client";
 
 export const Route = createFileRoute("/_authed/app/selena-order")({
@@ -28,6 +29,71 @@ export const Route = createFileRoute("/_authed/app/selena-order")({
 });
 
 type OrderLocale = "en" | "ru";
+
+/**
+ * What the customer is told after sending a request. It states what the
+ * server found in storage — an order queued, one waiting for the operator, or
+ * none at all — never what the request hoped would happen.
+ */
+function requestOutcomeText(result: OrderRequestOutcome, locale: OrderLocale): string {
+	const t = (en: string, ru: string) => tr(locale, en, ru);
+	if (!result.promoApplied || !result.launch)
+		return t(
+			"Online payment is not available yet, so we will contact you at the address you left to arrange the payment and start the measurement.",
+			"Онлайн-оплаты пока нет, поэтому мы свяжемся с вами по указанному контакту, чтобы договориться об оплате и запустить замер.",
+		);
+	if (result.legacySeat && result.launch.state === "NOT_STARTED")
+		return t(
+			"Your workspace already has a promo request made earlier, so this code does not start a second free measurement. The operator will check that request and contact you.",
+			"В вашем пространстве уже есть заявка по промокоду, оформленная ранее, поэтому второй бесплатный замер не запускается. Оператор проверит ту заявку и свяжется с вами.",
+		);
+	const heldElsewhere = result.legacySeat
+		? t(
+				"Your workspace already has a promo request made earlier; here is the state of its measurement, and no second free one is started. ",
+				"В вашем пространстве уже есть заявка по промокоду, оформленная ранее; ниже — состояние её замера, второй бесплатный не запускается. ",
+			)
+		: result.seatHeldElsewhere
+			? t(
+					"This promo code was already used by your workspace for another project or plan; here is the state of that measurement. ",
+					"Этот промокод ваше пространство уже использовало для другого проекта или тарифа; ниже — состояние того замера. ",
+				)
+			: "";
+	switch (result.launch.state) {
+		case "QUEUED":
+		case "RUNNING":
+			return `${heldElsewhere}${t(
+				"Promo code accepted. The measurement is queued — nothing to pay. Results appear in your cabinet after the answers come back and the operator has reviewed them.",
+				"Промокод принят. Замер поставлен в очередь — платить ничего не нужно. Результаты появятся в кабинете, когда вернутся ответы и оператор их проверит.",
+			)}`;
+		case "IN_REVIEW":
+			return `${heldElsewhere}${t(
+				"Promo code accepted. The answers are in and the operator is reviewing them; the report opens in your cabinet once that review is recorded.",
+				"Промокод принят. Ответы получены, оператор их проверяет; отчёт откроется в кабинете после записи проверки.",
+			)}`;
+		case "READY":
+			return `${heldElsewhere}${t("The report for this request is ready in your cabinet.", "Отчёт по этой заявке готов в кабинете.")}`;
+		case "AWAITING_OPERATOR":
+			return `${heldElsewhere}${t(
+				"Promo code accepted and the order is created, but the measurement has not started yet: it is waiting for the operator. Sending the form again will not create a second order.",
+				"Промокод принят, заказ создан, но замер ещё не запущен: он ждёт оператора. Повторная отправка формы не создаст второй заказ.",
+			)}`;
+		case "STARTING":
+			return t(
+				"Promo code accepted. The measurement is being started by your earlier submission — check the cabinet in a minute.",
+				"Промокод принят. Замер запускается по вашей предыдущей отправке — загляните в кабинет через минуту.",
+			);
+		case "STOPPED":
+			return `${heldElsewhere}${t(
+				"The measurement for this promo code is closed: the operator stopped it or it was not accepted at quality review (the reason is in your cabinet). Nothing re-runs or is charged automatically; the operator will contact you to agree on a new measurement.",
+				"Замер по этому промокоду закрыт: оператор остановил его или он не прошёл проверку качества (причина — в кабинете). Повторный замер сам не запускается и ничего не списывает; оператор свяжется с вами, чтобы договориться о новом замере.",
+			)}`;
+		case "NOT_STARTED":
+			return `${heldElsewhere}${t(
+				`Promo code accepted, but the measurement was not started (${result.launch.reason}). The code stays with your workspace: send the form again later and it will not be spent twice.`,
+				`Промокод принят, но замер не запущен (${result.launch.reason}). Код остаётся за вашим пространством: отправьте форму позже ещё раз — второй раз он не спишется.`,
+			)}`;
+	}
+}
 
 const PLAN_OPTIONS = [
 	{
@@ -66,7 +132,7 @@ function SelenaOrderPage() {
 	const [promoCode, setPromoCode] = useState("");
 	const [pending, setPending] = useState(false);
 	const [error, setError] = useState("");
-	const [result, setResult] = useState<{ promoApplied: boolean; autoStarted: boolean } | null>(null);
+	const [result, setResult] = useState<OrderRequestOutcome | null>(null);
 
 	useEffect(() => {
 		const saved = window.localStorage.getItem("selena-workspace-locale");
@@ -90,7 +156,7 @@ function SelenaOrderPage() {
 					promoCode: promoCode.trim() ? promoCode.trim() : undefined,
 				},
 			});
-			setResult({ promoApplied: created.promoApplied, autoStarted: created.autoStarted });
+			setResult(created);
 		} catch (cause) {
 			setError(
 				humanizeSelenaError(
@@ -113,31 +179,7 @@ function SelenaOrderPage() {
 			<main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-12">
 				<section className="selena-section">
 					<h1 className="selena-heading text-3xl">{tr(locale, "Request received", "Заявка принята")}</h1>
-					{result.autoStarted ? (
-						<p className="mt-4 text-sm leading-6 text-[#3d362e]">
-							{tr(
-								locale,
-								"Your promo code was accepted and the measurement has already started — nothing to pay, nothing to confirm. The results will appear in your cabinet, in the Measurement section, as the answers come back.",
-								"Промокод принят, замер уже запущен — платить и подтверждать ничего не нужно. Результаты появятся в кабинете в разделе «Замер», как только вернутся ответы.",
-							)}
-						</p>
-					) : result.promoApplied ? (
-						<p className="mt-4 text-sm leading-6 text-[#3d362e]">
-							{tr(
-								locale,
-								"Your promo code was accepted — this measurement is free of charge, no payment needed. We will prepare the questions and start the measurement; the results will appear in your cabinet, in the Measurement section.",
-								"Промокод принят — этот замер для вас бесплатный, оплата не требуется. Мы подготовим вопросы и запустим замер; результаты появятся в вашем кабинете в разделе «Замер».",
-							)}
-						</p>
-					) : (
-						<p className="mt-4 text-sm leading-6 text-[#3d362e]">
-							{tr(
-								locale,
-								"Online payment is not available yet, so we will contact you at the address you left to arrange the payment and start the measurement.",
-								"Онлайн-оплаты пока нет, поэтому мы свяжемся с вами по указанному контакту, чтобы договориться об оплате и запустить замер.",
-							)}
-						</p>
-					)}
+					<p className="mt-4 text-sm leading-6 text-[#3d362e]">{requestOutcomeText(result, locale)}</p>
 					<div className="mt-6">
 						<Link to="/app/selena" className="text-sm underline">
 							{tr(locale, "Back to the cabinet", "Вернуться в кабинет")}

@@ -111,12 +111,37 @@ describe("run enqueue gate", () => {
 	});
 });
 
-describe("operator order desk cross-org read (P1-9)", () => {
-	it("keeps the shared order fetch scoped to the caller's own tenant, so mutations never cross orgs", () => {
-		// getOwnedOrder backs approve/enqueue/stop; its own-tenant filter is what
-		// confines a platform operator's actions to their own organization even
-		// though the desk now reads across organizations.
-		expect(adminOrdersSource).toContain("eq(svOrders.organizationId, context.tenantId)");
+const operatorScopeSource = readFileSync(
+	fileURLToPath(new URL("../../server/selena-operator-scope.ts", import.meta.url)),
+	"utf8",
+);
+
+describe("operator order desk across organizations", () => {
+	it("acts on an order only in the organization stored on that order, after the platform-role check", () => {
+		// requireAdmin() admits user.role = admin only; a workspace admin is a
+		// member role and never reaches the order lookup.
+		const scope = operatorScopeSource.slice(operatorScopeSource.indexOf("async function operatorScope("));
+		expect(scope.indexOf("await requireAdmin()")).toBeGreaterThan(-1);
+		expect(scope.indexOf("await requireAdmin()")).toBeLessThan(scope.indexOf("await resolveOrganization()"));
+		expect(operatorScopeSource).toContain(".where(eq(svOrders.id, orderId))");
+		for (const name of [
+			"getSelenaOrderPreflightFn",
+			"approveSelenaOrderFn",
+			"enqueueSelenaOrderRunsFn",
+			"stopSelenaOrderFn",
+			"deliverSelenaOrderFn",
+			"recordSelenaQcFn",
+		]) {
+			expect(serverFnSource(name), name).toContain("operatorScopeForOrder(data.orderId");
+		}
+	});
+
+	it("records who acted and what for in the order's own organization", () => {
+		expect(operatorScopeSource).toContain('event: "OPERATOR_ACTION"');
+		expect(operatorScopeSource).toContain("operatorOrganizationId: operator.tenantId");
+	});
+
+	it("keeps every order read and write inside one organization at a time", () => {
 		for (const name of ["approveOrder", "enqueueOrderRunsForOrder"]) {
 			expect(serverFnSource(name)).toContain("getOwnedOrder(context, orderId)");
 		}
@@ -128,11 +153,5 @@ describe("operator order desk cross-org read (P1-9)", () => {
 		expect(queue).not.toContain("eq(svOrders.organizationId, context.tenantId)");
 		// Each order's detail is read scoped to that order's own organization.
 		expect(queue).toContain("withOrganizationTransaction(db, organizationId");
-	});
-
-	it("reads an order's preflight scoped to the order's own organization", () => {
-		const preflight = serverFnSource("getSelenaOrderPreflightFn");
-		expect(preflight).toContain("resolveOrderOrganization(data.orderId)");
-		expect(preflight).toContain("tenantId: organizationId");
 	});
 });

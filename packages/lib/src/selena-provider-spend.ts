@@ -151,7 +151,6 @@ export function createMeasurementSpendMeter(
 ): {
 	reserve(request: { requestKey: string; estimatedUsd: number }): Promise<void>;
 	settle(request: { requestKey: string; actualUsd: number }): Promise<void>;
-	release(request: { requestKey: string }): Promise<void>;
 } {
 	const scope = MEASURE_SPEND_SCOPE;
 	return {
@@ -159,10 +158,12 @@ export function createMeasurementSpendMeter(
 			await assertProviderSpendReserved(executor, { scope, organizationId, requestKey, estimatedUsd });
 		},
 		async settle({ requestKey, actualUsd }) {
-			await settleProviderSpend(executor, { scope, organizationId, requestKey, actualUsd });
-		},
-		async release({ requestKey }) {
-			await releaseProviderSpend(executor, { scope, organizationId, requestKey });
+			const receipt = await settleProviderSpend(executor, { scope, organizationId, requestKey, actualUsd });
+			// A repeat finds its own earlier settlement and adds nothing. Any other
+			// answer — a released or missing reservation — means this cost is in no
+			// one's books, which the caller has to hear about.
+			if (receipt.decision !== "SETTLED" && receipt.decision !== "ALREADY_SETTLED")
+				throw new ProviderSpendRefused(receipt);
 		},
 	};
 }

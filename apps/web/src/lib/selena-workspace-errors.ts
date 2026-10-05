@@ -95,6 +95,10 @@ const ADMIN_MESSAGES: Record<string, [string, string]> = {
 		"Measurement execution is switched off. Set SELENA_MEASUREMENT_ENABLED=true on web and worker to let queued runs execute.",
 		"Исполнение замеров выключено. Поставьте SELENA_MEASUREMENT_ENABLED=true на web и worker, чтобы очередь выполнялась.",
 	],
+	SELENA_QC_NO_VALID_ANSWERS: [
+		"No run in this cycle came back with an answer, so there is nothing to publish. Record the review as rejected or stop the order.",
+		"Ни один прогон этого цикла не вернул ответ — публиковать нечего. Запишите проверку как отклонённую или остановите заказ.",
+	],
 	SELENA_SCENARIOS_NOT_APPROVED: [
 		"Some selected questions are not approved. Order only approved questions, or approve them first.",
 		"Часть выбранных вопросов не утверждена. Заказывайте только утверждённые вопросы или сначала утвердите их.",

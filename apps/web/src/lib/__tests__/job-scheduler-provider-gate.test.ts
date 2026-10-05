@@ -36,6 +36,9 @@ describe("legacy provider job scheduling gate", () => {
 	});
 
 	it("does not touch the queue when measurement execution is not explicitly enabled", async () => {
+		// Set here rather than inherited, so a local .env cannot decide the outcome.
+		vi.stubEnv("SELENA_MEASUREMENT_ENABLED", undefined);
+		vi.stubEnv("SELENA_EMERGENCY_STOP", undefined);
 		expect(await createPromptJobScheduler("prompt-1")).toBe(false);
 		expect(await sendImmediatePromptJob("prompt-1")).toBe(false);
 		expect(await scheduleNextPromptRun("prompt-1", 24)).toBe(false);

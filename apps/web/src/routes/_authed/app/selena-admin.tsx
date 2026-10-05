@@ -244,8 +244,8 @@ function SelenaAdminOrders() {
 					<CardDescription>
 						{tr(
 							locale,
-							"Orders in the review, dispatch and QC stages of your workspace.",
-							"Заказы вашего пространства на стадиях проверки, диспетчеризации и QC.",
+							"Orders from every workspace in the review, dispatch and QC stages; each row names its workspace.",
+							"Заказы всех пространств на стадиях проверки, диспетчеризации и QC; в строке указано пространство.",
 						)}
 					</CardDescription>
 				</CardHeader>
@@ -272,7 +272,12 @@ function SelenaAdminOrders() {
 								<TableBody>
 									{orders.map((order) => (
 										<TableRow key={order.id} data-state={order.id === selectedOrder?.id ? "selected" : undefined}>
-											<TableCell className="font-medium">{order.projectName}</TableCell>
+											<TableCell className="font-medium">
+												{order.projectName}
+												<span className="block text-xs font-normal text-muted-foreground">
+													{order.organizationName}
+												</span>
+											</TableCell>
 											<TableCell>
 												<span className="rounded-full border px-2 py-0.5 text-xs">{order.status}</span>
 											</TableCell>

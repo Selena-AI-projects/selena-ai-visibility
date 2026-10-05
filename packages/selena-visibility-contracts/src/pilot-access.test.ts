@@ -3,6 +3,7 @@ import {
 	evaluatePilotSignup,
 	PILOT_ALLOWLIST_ENV,
 	PILOT_SEAT_CAP_ENV,
+	PILOT_SIGNUP_REFUSAL_MESSAGE,
 	pilotAllowlistFromEnv,
 	pilotSeatCapFromEnv,
 } from "./pilot-access.js";
@@ -11,15 +12,15 @@ const invited = ["avli@example.com", "kora@example.com"];
 
 describe("pilot signup guest list", () => {
 	it("admits an invited address while seats remain", () => {
-		expect(
-			evaluatePilotSignup({ email: "AVLI@Example.com ", allowlist: invited, seatCap: 20, seatsTaken: 3 }),
-		).toEqual({ allowed: true });
+		expect(evaluatePilotSignup({ email: "AVLI@Example.com ", allowlist: invited, seatCap: 20, seatsTaken: 3 })).toEqual(
+			{ allowed: true },
+		);
 	});
 
 	it("refuses an address nobody invited", () => {
-		expect(evaluatePilotSignup({ email: "stranger@example.com", allowlist: invited, seatCap: 20, seatsTaken: 3 })).toEqual(
-			{ allowed: false, reason: "NOT_INVITED" },
-		);
+		expect(
+			evaluatePilotSignup({ email: "stranger@example.com", allowlist: invited, seatCap: 20, seatsTaken: 3 }),
+		).toEqual({ allowed: false, reason: "NOT_INVITED" });
 	});
 
 	it("refuses everyone until both the guest list and the cap are configured", () => {
@@ -83,5 +84,16 @@ describe("seat cap parsing", () => {
 		expect(pilotSeatCapFromEnv({ [PILOT_SEAT_CAP_ENV]: "2.5" })).toBe(0);
 		expect(pilotSeatCapFromEnv({ [PILOT_SEAT_CAP_ENV]: "twenty" })).toBe(0);
 		expect(pilotSeatCapFromEnv({ [PILOT_SEAT_CAP_ENV]: "-5" })).toBe(0);
+	});
+});
+
+describe("pilot signup refusal", () => {
+	/**
+	 * The public site invites experts and service businesses as well as
+	 * restaurants, and every refusal reads the same from outside, so the one
+	 * sentence everyone sees must fit any invited participant.
+	 */
+	it("refuses in wording that fits any invited participant", () => {
+		expect(PILOT_SIGNUP_REFUSAL_MESSAGE).toBe("Registration is open to invited pilot participants only.");
 	});
 });

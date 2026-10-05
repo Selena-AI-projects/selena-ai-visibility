@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
 import {
+	organization,
 	svAuditEvents,
 	svConfigurationLocks,
 	svCostEvents,
@@ -17,13 +18,17 @@ import { isMaintenanceEnabled } from "@workspace/lib/run-policy/controlled-cycle
 import { qcDecisions } from "@workspace/lib/selena-dispatch";
 import { assertApprovable, evaluatePreflight, type PreflightEvaluation } from "@workspace/lib/selena-preflight";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
-import { measurementConfigFromEnv, parseMeasurementScope } from "@workspace/selena-visibility-contracts";
+import {
+	measurementConfigFromEnv,
+	parseMeasurementScope,
+	worstCaseOrderCostUsd,
+} from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { isAdmin, requireAdmin, requireAuthSession } from "@/lib/auth/helpers";
 import { getBoss } from "@/lib/boss-client";
 import { enqueueOrderRuns } from "@/lib/selena-run-enqueue";
-import { resolveSessionAuthContext } from "../lib/selena-auth-context";
+import { operatorScopeForOrder } from "./selena-operator-scope";
 
 // Operator surface for the order pipeline: read the preflight, approve (which
 // mints run permits and nothing else), enqueue those permits, stop, and record
@@ -55,11 +60,6 @@ export const adminQueueStatuses = [
 const database = async () => (await import("@workspace/lib/db/db")).db;
 
 const orderIdSchema = z.object({ orderId: z.string().uuid() });
-
-async function requireAdminContext(): Promise<SelenaRepositoryContext> {
-	await requireAdmin();
-	return resolveSessionAuthContext();
-}
 
 async function recordAdminAudit(
 	context: SelenaRepositoryContext,
@@ -107,23 +107,6 @@ async function getOwnedOrder(context: SelenaRepositoryContext, orderId: string) 
 	);
 	if (!order) throw new Error("Not found: order is outside AuthContext tenant");
 	return order;
-}
-
-/**
- * The owning organization of an order, read across tenants. Only reachable
- * after requireAdmin(), which has gated the request to a platform operator and
- * switched it onto the operator connection that spans every tenant; the desk
- * uses it to scope the rest of a read to the order's own organization. Returns
- * null when no such order exists. This never widens write access: the mutating
- * paths keep getOwnedOrder, which stays scoped to the caller's own tenant.
- */
-async function resolveOrderOrganization(orderId: string): Promise<string | null> {
-	const [row] = await (await database())
-		.select({ organizationId: svOrders.organizationId })
-		.from(svOrders)
-		.where(eq(svOrders.id, orderId))
-		.limit(1);
-	return row?.organizationId ?? null;
 }
 
 /**
@@ -225,9 +208,11 @@ export async function collectPreflight(
 		maintenanceActive: isMaintenanceEnabled(process.env.SCHEDULE_MAINTENANCE_ENABLED),
 		providerBudgetRemaining: providerBudgetRemaining(),
 		orderCap: Number(order.orderCap),
-		// The lock's committed budget cap is the configuration's worst case: it
-		// is the most this order may ever cost under the locked scope.
-		worstCaseCost: Number(lock?.budgetCap ?? Number.NaN),
+		// What the worker can reserve for this many answers, not the plan's cap:
+		// the cap is the order cap below, and comparing it with itself proved
+		// nothing, and refused every order whenever the owner's per-order
+		// ceiling sat below the plan's cap.
+		worstCaseCost: lock ? worstCaseOrderCostUsd(lock.expectedRuns) : Number.NaN,
 		paymentRecorded: Boolean(payment[0]),
 		currency: quote?.currency,
 	});
@@ -240,7 +225,7 @@ export const getSelenaAdminAccessFn = createServerFn({ method: "GET" }).handler(
 });
 
 export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).handler(async () => {
-	await requireAdminContext();
+	await requireAdmin();
 	// The operator desk spans every tenant: list orders across organizations on
 	// the operator connection requireAdmin() entered, then enrich each one scoped
 	// to its own organization so tenant-forced tables stay readable. The owning
@@ -258,12 +243,14 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 			updatedAt: svOrders.updatedAt,
 			projectId: svOrders.projectId,
 			projectName: svProjects.name,
+			organizationName: organization.name,
 			currency: svQuotes.currency,
 			lockId: svOrders.lockId,
 		})
 		.from(svOrders)
 		.innerJoin(svProjects, eq(svOrders.projectId, svProjects.id))
 		.innerJoin(svQuotes, eq(svOrders.quoteId, svQuotes.id))
+		.innerJoin(organization, eq(svOrders.organizationId, organization.id))
 		.where(inArray(svOrders.status, [...adminQueueStatuses]))
 		.orderBy(desc(svOrders.updatedAt));
 	return Promise.all(
@@ -278,7 +265,9 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 							budgetCap: svConfigurationLocks.budgetCap,
 						})
 						.from(svConfigurationLocks)
-						.where(and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, organizationId)))
+						.where(
+							and(eq(svConfigurationLocks.id, order.lockId), eq(svConfigurationLocks.organizationId, organizationId)),
+						)
 						.limit(1),
 					tx
 						.select({
@@ -341,6 +330,7 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 				updatedAt: order.updatedAt,
 				projectId: order.projectId,
 				projectName: order.projectName,
+				organizationName: order.organizationName,
 				currency: order.currency,
 				lockVersion: lock[0]?.version ?? null,
 				lockExpectedRuns: lock[0]?.expectedRuns ?? null,
@@ -360,14 +350,7 @@ export const getSelenaAdminOrderQueueFn = createServerFn({ method: "GET" }).hand
 export const getSelenaOrderPreflightFn = createServerFn({ method: "GET" })
 	.validator(orderIdSchema)
 	.handler(async ({ data }) => {
-		const context = await requireAdminContext();
-		// The operator reads any tenant's order; scope the read to the order's own
-		// organization so its tenant-forced tables are visible. Reading the
-		// preflight never acts on the order — approval and the rest keep the
-		// caller's own tenant (getOwnedOrder).
-		const organizationId = await resolveOrderOrganization(data.orderId);
-		if (!organizationId) throw new Error("Not found: order does not exist");
-		return collectPreflight({ ...context, tenantId: organizationId }, data.orderId);
+		return collectPreflight(await operatorScopeForOrder(data.orderId, "preflight"), data.orderId);
 	});
 
 /**
@@ -469,12 +452,14 @@ export async function enqueueOrderRunsForOrder(
 
 export const approveSelenaOrderFn = createServerFn({ method: "POST" })
 	.validator(orderIdSchema.extend({ idempotencyKey: z.string().min(1).max(200).optional() }))
-	.handler(async ({ data }) => approveOrder(await requireAdminContext(), data.orderId, data.idempotencyKey));
+	.handler(async ({ data }) =>
+		approveOrder(await operatorScopeForOrder(data.orderId, "approve"), data.orderId, data.idempotencyKey),
+	);
 
 export const enqueueSelenaOrderRunsFn = createServerFn({ method: "POST" })
 	.validator(orderIdSchema.extend({ idempotencyKey: z.string().min(1).max(200).optional() }))
 	.handler(async ({ data }) =>
-		enqueueOrderRunsForOrder(await requireAdminContext(), data.orderId, data.idempotencyKey),
+		enqueueOrderRunsForOrder(await operatorScopeForOrder(data.orderId, "enqueue"), data.orderId, data.idempotencyKey),
 	);
 
 export const stopSelenaOrderFn = createServerFn({ method: "POST" })
@@ -485,7 +470,7 @@ export const stopSelenaOrderFn = createServerFn({ method: "POST" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const context = await requireAdminContext();
+		const context = await operatorScopeForOrder(data.orderId, "stop");
 		const order = await getOwnedOrder(context, data.orderId);
 		if (data.idempotencyKey) {
 			const prior = await findPriorAudit(context, "ORDER_STOPPED", data.orderId, data.idempotencyKey);
@@ -537,7 +522,7 @@ export const stopSelenaOrderFn = createServerFn({ method: "POST" })
 export const deliverSelenaOrderFn = createServerFn({ method: "POST" })
 	.validator(orderIdSchema)
 	.handler(async ({ data }) => {
-		const context = await requireAdminContext();
+		const context = await operatorScopeForOrder(data.orderId, "deliver");
 		const delivered = await (await getRepositories()).orders.deliver(context, data.orderId);
 		return { orderId: data.orderId, status: delivered.status };
 	});
@@ -554,8 +539,8 @@ export const recordSelenaQcFn = createServerFn({ method: "POST" })
 		}),
 	)
 	.handler(async ({ data }) => {
-		const context = await requireAdminContext();
-		return (await getRepositories()).qcRecords.create(context, {
+		const context = await operatorScopeForOrder(data.orderId, "qc");
+		const record = await (await getRepositories()).qcRecords.create(context, {
 			orderId: data.orderId,
 			cycleId: data.cycleId ?? null,
 			reviewer: data.reviewer,
@@ -564,4 +549,5 @@ export const recordSelenaQcFn = createServerFn({ method: "POST" })
 			decision: data.decision,
 			notes: data.notes ?? null,
 		});
+		return record;
 	});

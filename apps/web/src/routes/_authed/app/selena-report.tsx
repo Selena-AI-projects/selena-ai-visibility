@@ -15,6 +15,7 @@ import { type CycleCompareResult, getSelenaCycleCompareFn } from "../../../serve
 import { summarizeCycleCompare } from "@/lib/selena-measurement-view";
 import { PRIORITY_LABELS, ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitle } from "@/lib/selena-rule-help";
 import { type GraderReportView, getSelenaGraderReportFn } from "../../../server/selena-grader-report";
+import { unsuccessfulMeasurementText } from "@/lib/selena-measurement-outcome";
 import { getSelenaRunDetailFn } from "../../../server/selena-run-explorer";
 
 export const Route = createFileRoute("/_authed/app/selena-report")({
@@ -382,7 +383,8 @@ function formatReportDate(locale: ReportLocale, iso: string): string {
 
 type ReportUpdate = NonNullable<GraderReportView["update"]>;
 
-function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
+/** Russian agrees the participle with its subject: «обновление» is neuter, «замер» masculine. */
+function updateOutcome(locale: ReportLocale, update: ReportUpdate, subject: "update" | "measurement" = "update"): string {
 	if (update.state === "in_progress")
 		return tr(
 			locale,
@@ -390,10 +392,14 @@ function updateOutcome(locale: ReportLocale, update: ReportUpdate): string {
 			`выполняется: проверено ответов ${update.completedRuns} из ${update.expectedRuns}`,
 		);
 	if (update.state === "awaiting_review")
-		return tr(locale, "is complete and awaiting quality review", "завершено и ожидает проверку качества");
+		return tr(
+			locale,
+			"is complete and awaiting quality review",
+			subject === "update" ? "завершено и ожидает проверку качества" : "завершён и ожидает проверку качества",
+		);
 	switch (update.reason) {
 		case "QC_REJECTED":
-			return tr(locale, "did not pass quality review", "не прошло проверку качества");
+			return tr(locale, "was rejected at quality review", "отклонено при проверке качества");
 		case "NO_SUCCESSFUL_RUNS":
 			return tr(
 				locale,
@@ -444,20 +450,26 @@ function MeasurementUpdateNotice({
 				</p>
 			</div>
 		);
+	// The same status, reason and next step the cabinet shows for it.
+	const outcome =
+		update.state === "unsuccessful"
+			? unsuccessfulMeasurementText(
+					{ reason: update.reason, succeededRuns: update.succeededRuns, expectedRuns: update.expectedRuns },
+					locale,
+				)
+			: null;
 	return (
 		<SectionCard id="overview">
 			<div data-testid="measurement-update">
-				<SectionTitle title={tr(locale, "The report is not ready yet", "Отчёт ещё не готов")} />
+				<SectionTitle title={outcome ? outcome.status : tr(locale, "The report is not ready yet", "Отчёт ещё не готов")} />
 				<p className={`mt-4 rounded-xl border px-4 py-3 text-sm leading-6 ${tone}`}>
-					{tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} {updateOutcome(locale, update)}.
+					{outcome
+						? `${tr(locale, `Measurement of ${updateDate}.`, `Замер от ${updateDate}.`)} ${outcome.reason}`
+						: `${tr(locale, `The measurement of ${updateDate}`, `Замер от ${updateDate}`)} ${updateOutcome(locale, update, "measurement")}.`}
 				</p>
 				<p className="mt-3 max-w-2xl text-sm leading-6 text-[#574d45]">
-					{unsuccessful
-						? tr(
-								locale,
-								"No result is shown for it: an unsuccessful measurement is not a report. The operator re-runs it, and the report appears here once a measurement passes quality review.",
-								"Результат по нему не показывается: неудачный замер — не отчёт. Оператор запустит его повторно, и отчёт появится здесь, как только замер пройдёт проверку качества.",
-							)
+					{outcome
+						? `${tr(locale, "No result is shown for it: an unsuccessful measurement is not a report.", "Результат по нему не показывается: неудачный замер — не отчёт.")} ${outcome.nextStep}`
 						: tr(
 								locale,
 								"The report appears here once the measurement is complete and has passed quality review.",
@@ -720,8 +732,17 @@ function SelenaReportPage() {
 							<span className="rounded-full border border-[#b9825b66] px-3 py-1.5 tabular-nums">
 								{tr(
 									locale,
-									`${view.cycle.completedRuns} of ${view.cycle.expectedRuns} answers checked`,
-									`проверено ответов: ${view.cycle.completedRuns} из ${view.cycle.expectedRuns}`,
+									`${view.cycle.succeededRuns} of ${view.cycle.expectedRuns} answers received`,
+									`получено ответов: ${view.cycle.succeededRuns} из ${view.cycle.expectedRuns}`,
+								)}
+							</span>
+						)}
+						{view?.cycle && view.cycle.succeededRuns < view.cycle.expectedRuns && (
+							<span className="rounded-full border border-[#e0a37a] bg-[#5a2f1a] px-3 py-1.5 tabular-nums">
+								{tr(
+									locale,
+									`partial: ${view.cycle.expectedRuns - view.cycle.succeededRuns} without an answer (failed or invalid), shown as UNKNOWN`,
+									`частичный замер: без ответа ${view.cycle.expectedRuns - view.cycle.succeededRuns} (сбой или недействительный ответ), показаны как НЕИЗВЕСТНО`,
 								)}
 							</span>
 						)}
@@ -1204,7 +1225,7 @@ function SelenaReportPage() {
 																}
 															caption={
 																	system.answersAnalyzed === 0
-																		? tr(locale, "no analyzed answers yet", "разобранных ответов пока нет")
+																		? tr(locale, "no answer came back (failed or invalid runs)", "ответа нет: прогоны завершились сбоем или без ответа")
 																		: tr(locale, "answers name you — all questions together, split below", "ответов называют вас — все вопросы вместе, разбивка ниже")
 																}
 															/>
@@ -1268,8 +1289,8 @@ function SelenaReportPage() {
 							<p className="mt-3 max-w-3xl text-xs italic text-[#574d45]">
 								{tr(
 									locale,
-									"UNKNOWN means the run has no analyzable answer yet or the retained text was not available; it is never counted as a miss.",
-									"НЕИЗВЕСТНО означает, что у прогона пока нет разобранного ответа или сохранённый текст недоступен; это никогда не считается промахом.",
+									"UNKNOWN means the run failed, came back invalid, or its retained text is not available; it is never counted as a miss.",
+									"НЕИЗВЕСТНО означает, что прогон завершился сбоем, вернул недействительный ответ или сохранённый текст недоступен; это никогда не считается промахом.",
 								)}
 							</p>
 						</SectionCard>
@@ -1306,8 +1327,8 @@ function SelenaReportPage() {
 									{report.methodology.answersAnalyzed === 0
 										? tr(
 												locale,
-												"UNKNOWN — no analyzed answers yet, so there is nothing to count.",
-												"НЕИЗВЕСТНО — разобранных ответов пока нет, считать нечего.",
+												"UNKNOWN — no run came back with an answer, so there is nothing to count.",
+												"НЕИЗВЕСТНО — ни один прогон не вернул ответ, считать нечего.",
 											)
 										: tr(
 												locale,
@@ -1410,7 +1431,7 @@ function SelenaReportPage() {
 							{report.gaps.length === 0 ? (
 								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
-										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
+										? tr(locale, "UNKNOWN — no run came back with an answer.", "НЕИЗВЕСТНО — ни один прогон не вернул ответ.")
 										: tr(locale, "No such answers: wherever a competitor was named, you were named too.", "Таких ответов нет: везде, где назван конкурент, названы и вы.")}
 								</p>
 							) : (
@@ -1462,7 +1483,7 @@ function SelenaReportPage() {
 							{report.overall.citationGap.length === 0 ? (
 								<p className="mt-4 text-sm text-[#574d45]">
 									{report.methodology.answersAnalyzed === 0
-										? tr(locale, "UNKNOWN — no analyzed answers yet.", "НЕИЗВЕСТНО — разобранных ответов пока нет.")
+										? tr(locale, "UNKNOWN — no run came back with an answer.", "НЕИЗВЕСТНО — ни один прогон не вернул ответ.")
 										: tr(locale, "The analyzed answers cited no sources.", "В разобранных ответах источники не встречались.")}
 								</p>
 							) : (

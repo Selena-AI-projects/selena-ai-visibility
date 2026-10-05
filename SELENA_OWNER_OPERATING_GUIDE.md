@@ -19,13 +19,70 @@ While recurring maintenance is on, a commercial order cannot be approved: the
 background scheduler and an order-scoped dispatch would both drive provider
 calls for the same work, which doubles spend and breaks cardinality.
 
-`SELENA_PROVIDER_BUDGET_USD` is the ceiling for a single order's worst-case
-cost, not a wallet balance — no provider balance is ever read. Its job is to
-catch a scope typo before the first paid call: an order that suddenly costs ten
-times the usual amount cannot be approved. A starting value of `25` leaves
-roughly a fourfold margin over the current per-order estimates while still
-stopping an order-of-magnitude mistake. Re-tune it against the first real
-provider invoice.
+`SELENA_PROVIDER_BUDGET_USD` (on `web`; the worker never reads it) is the
+ceiling for a single order's estimated reservation, not a wallet balance — no
+provider balance is ever read. Preflight multiplies the order's answers by the
+highest per-answer reservation any approved route makes ($0.005): a Snapshot
+measurement of 9 answers is $0.045, a full Landscape measurement of 400
+answers is $2.00, a full Expert Verified audit of 2,000 answers is $10.00. Its
+job is to catch a scope typo before the first paid call: an order that
+suddenly needs ten times the usual answers cannot be approved. Set it just
+above the largest order you mean to approve.
+
+### $0.005 is an estimated reservation, not a price
+
+No figure below has been reconciled with a provider invoice for these routes.
+Each answer is booked twice: the worker reserves an estimate before the call,
+and settles the reservation after it at the provider's reported cost, or at
+the route's estimate when the provider reports none.
+
+| Route | Reserved before the call | Settled when the provider reports no cost | Where the figure comes from |
+|---|---:|---:|---|
+| `brightdata-*` | $0.0015 | $0.01 | Reservation: the account's usage on 2026-09-01, nine ChatGPT records for $0.0135. Settlement: a coarse placeholder in `packages/lib/src/usage/cost.ts`. |
+| `oxylabs-perplexity` | $0.0015 | $0.01 | Same reservation; the settlement is the same placeholder table. |
+| `olostep-perplexity` | $0.0015 | $0.0054 | Three credits at the smallest paid plan's list rate. |
+| `openrouter` | $0.0015 | $0.005 | Placeholder table. |
+| `dataforseo-perplexity` | $0.005 | $0.005 | The `dataforseo` placeholder in the same table. This is where the $0.005 comes from. |
+
+So the $0.005 preflight figure is the highest *reservation*, not the highest
+*charge*: an answer on a route that reports no cost settles at up to $0.01.
+
+What happens around one answer:
+
+- **Before the call.** The reservation is taken against the `measure` spend
+  scope (`sv_provider_spend_budgets`, set with
+  `packages/lib/scripts/set-provider-spend-budget.ts`). It counts every open
+  reservation at its estimate and every settled one at its settled amount,
+  across all orders and workspaces. If that sum plus the new estimate would
+  pass the cap, the reservation is refused: the job fails before the permit is
+  claimed, no provider is called and the permit stays unspent. Nothing re-runs
+  it on its own — this is the moment spending stops.
+- **Retries and duplicates.** `selena-measure` has no retries, and a permit is
+  consumed when it is claimed, so one permit makes at most one provider call.
+  A reservation is keyed by the permit and belongs to the attempt that claimed
+  it: a duplicate delivery finds the permit spent and leaves the hold alone,
+  even while the first attempt is still waiting on the provider. A permit
+  that completes again is settled once; a repeat adds nothing.
+- **Errors.** A run that fails after the claim is settled at its reservation,
+  not released, because the call may have reached the provider. A cost the
+  provider reports is booked in full, above the reservation if it is higher.
+  A settlement that cannot be written is retried and then raised as
+  `SELENA_SPEND_UNSETTLED` with the permit, run and amount; the run keeps its
+  outcome and cost, and the reservation stays open at its estimate, so the
+  scope keeps counting it. A worker that dies mid-call leaves the same open
+  reservation.
+- **Overshoot.** The cap is checked when reserving, so it can be passed by the
+  difference between settlement and reservation of the answers in flight —
+  one at a time per worker process. For an answer settled at an estimate that
+  is at most $0.0085 on today's table; a cost the provider reports has no upper
+  bound here.
+
+Three limits stand between an order and a bill: this preflight ceiling (per
+order, before approval), the `measure` scope (cumulative, per answer, the one
+that stops a run) and the hard limit in each provider account (the only one
+that survives a failure outside this application). None of them changes what a
+provider actually charges; that stays unknown until the first invoice is read
+against the settled rows.
 
 Neither variable replaces a hard spend limit configured in the provider
 accounts themselves. Set those too: they are the only guard that survives a
@@ -399,8 +456,9 @@ says so as it runs.
 
 ### Owner database steps on Railway
 
-Minting pilot seats and reading or setting a spend ceiling need a connection
-with owner rights, which the product runtime deliberately does not hold and
+Minting pilot seats, reading or setting a spend ceiling and granting the
+operator role need a connection with owner rights, which the product runtime
+deliberately does not hold and
 which should not live on anyone's laptop either. The `owner` service is where
 those steps run: a one-shot job built from the worker image (the Dockerfile's
 `owner` stage), whose `DATABASE_URL` and `SELENA_RUNTIME_DATABASE_CA_PEM` are
@@ -410,11 +468,12 @@ exits; nothing here spends on a provider. Keep its restart policy at never.
 
 | Variable | What it does |
 |---|---|
-| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget` or `set-spend-budget` |
+| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget`, `set-spend-budget` or `grant-platform-admin` |
 | `SELENA_PILOT_SEATS_CSV` | The seats file's contents, one `CODE,planId[,label]` per line |
 | `SELENA_PILOT_SEAT_DAYS` | How many days the seats stay redeemable; default 30 |
 | `SELENA_SPEND_SCOPE` | The scope to read or set; default `measure` |
 | `SELENA_SPEND_CAP_USD` | The ceiling to set, for `set-spend-budget` only |
+| `SELENA_OWNER_ADMIN_EMAIL` | The address of the one existing account to make a platform operator, for `grant-platform-admin` only |
 
 A run is: set the task and its inputs, deploy, read the log. The seat task
 logs how many seats were new and how many already existed and never a code,
@@ -422,6 +481,20 @@ so delete `SELENA_PILOT_SEATS_CSV` once the seats are issued — until then the
 codes sit in a variable anyone with the dashboard can read. A second deploy
 of the seat task with the same contents issues nothing and says so, so a
 restart cannot double-mint.
+
+`grant-platform-admin` is how an account becomes a platform operator. The desk
+at `/app/selena-admin` opens only for a user whose `role` is `admin`
+(`apps/web/src/routes/_authed/app/selena-admin.tsx:25-27`); nothing in the
+product sets that column, and on a hosted environment there is no query window
+to set it by hand. Register the account in the product first, then on the
+`owner` service set `SELENA_OWNER_TASK=grant-platform-admin` and
+`SELENA_OWNER_ADMIN_EMAIL=<the account's address>`, deploy, and read
+`grant-platform-admin: updated 1 user (p***@domain)` — the address is matched
+without regard to case and is never printed in full. Then clear
+`SELENA_OWNER_ADMIN_EMAIL`. The task refuses, and grants nobody, when no
+account has the address (`SELENA_OWNER_ADMIN_NOT_FOUND`) or more than one does
+(`SELENA_OWNER_ADMIN_AMBIGUOUS`); a second deploy for an account that already
+is an operator reports `updated 1 user` again and changes nothing else.
 
 ### Applying Railway variable changes
 

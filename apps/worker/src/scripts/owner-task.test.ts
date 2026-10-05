@@ -11,7 +11,10 @@ test("refuses to run without a named task, and names the tasks it knows", () => 
 		kind: "refused",
 		reason: "OWNER_TASK_UNKNOWN",
 	});
-	assert.match(ownerTaskUsage().join("\n"), /issue-pilot-invites, read-spend-budget, set-spend-budget/);
+	assert.match(
+		ownerTaskUsage().join("\n"),
+		/issue-pilot-invites, read-spend-budget, set-spend-budget, grant-platform-admin/,
+	);
 });
 
 test("issues seats from the variable's contents with a default validity", () => {
@@ -71,4 +74,22 @@ test("sets a ceiling only from a non-negative dollar amount", () => {
 			reason: "SPEND_CAP_USD_INVALID",
 		});
 	}
+});
+
+test("grants the operator role only to a trimmed, plausible address", () => {
+	assert.deepEqual(
+		resolveOwnerTask({ SELENA_OWNER_TASK: "grant-platform-admin", SELENA_OWNER_ADMIN_EMAIL: " operator@example.com " }),
+		{ kind: "grant-platform-admin", email: "operator@example.com" },
+	);
+	for (const env of [{}, { SELENA_OWNER_ADMIN_EMAIL: "   " }]) {
+		assert.deepEqual(resolveOwnerTask({ SELENA_OWNER_TASK: "grant-platform-admin", ...env }), {
+			kind: "refused",
+			reason: "OWNER_ADMIN_EMAIL_REQUIRED",
+		});
+	}
+	assert.deepEqual(
+		resolveOwnerTask({ SELENA_OWNER_TASK: "grant-platform-admin", SELENA_OWNER_ADMIN_EMAIL: "operator" }),
+		{ kind: "refused", reason: "OWNER_ADMIN_EMAIL_INVALID" },
+	);
+	assert.match(ownerTaskUsage().join("\n"), /grant-platform-admin reads SELENA_OWNER_ADMIN_EMAIL/);
 });

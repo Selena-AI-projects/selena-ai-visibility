@@ -10,6 +10,8 @@ audit named.
 A read-only staging readback on 2026-09-04 found the `measure` scope at a
 `$2` lifetime cap with `$0` committed and no open reservations. That is not the
 `$20` standing limit selected below, so the funding step remains on hold.
+For the next run the owner chose a `$0.50` ceiling instead; the procedure is
+*One bounded Snapshot on staging (2026-10 procedure)* below.
 
 The read-only `discover` phase has run twice. A staging rehearsal then created
 and approved questions and built one 30-answer order chain with a zero-dollar
@@ -31,6 +33,114 @@ so **one answer is `$0.0015`**. The same rate held for Gemini.
 The plan's own `providerBudgetCap` is `$12`, roughly twenty-six times the
 expected cost. That margin is there to catch a scope typo, not to authorize
 spending twenty-six times more.
+
+## One bounded Snapshot on staging (2026-10 procedure)
+
+One Snapshot order in the operator's own workspace: a synthetic brand, 3
+questions, the three Visitor View surfaces, 9 answers. The owner chose a
+`$0.50` ceiling for it. Each step is one Railway service and one deploy —
+variables are staged until deployed, see "Applying Railway variable changes"
+in `SELENA_OWNER_OPERATING_GUIDE.md` — and nothing starts on a timer: the
+measurement begins when the operator presses Enqueue at step 6 and not before.
+The September order of operations further down stays as the record of the
+first run.
+
+0. **Owner service — read the ceiling.** `SELENA_OWNER_TASK=read-spend-budget`,
+   `SELENA_SPEND_SCOPE=measure` → deploy → read `cap:` and `committed:` from
+   the log. Last known (2026-09-08): cap `$2`, committed `$0.30`. The cap is
+   lifetime-cumulative across all orders and all tenants and `committed` never
+   resets, so the headroom is cap minus committed, not the cap.
+1. **Owner service — set the ceiling.** Add `SELENA_SPEND_CAP_USD=0.50` (the
+   variable does not exist on the service yet) and change
+   `SELENA_OWNER_TASK=set-spend-budget` → deploy → the log prints the new cap
+   with the unchanged `committed`. `$0.50 − $0.30` leaves `$0.20`; the run
+   below holds `$0.0135` and settles at `$0.09`, so it fits with `$0.11` to
+   spare. Lowering a cap towards what is already committed is allowed and
+   means exactly that (`packages/lib/src/selena-provider-spend-budget.ts:5-12`).
+2. **Owner service — grant the operator role.**
+   `SELENA_OWNER_TASK=grant-platform-admin`,
+   `SELENA_OWNER_ADMIN_EMAIL=<the operator's account>` → deploy → expect
+   `grant-platform-admin: updated 1 user (x***@domain)` → clear
+   `SELENA_OWNER_ADMIN_EMAIL`. Without `role = 'admin'` on the user row,
+   `/app/selena-admin` answers NotFound
+   (`apps/web/src/routes/_authed/app/selena-admin.tsx:25-27`), and the desk
+   is where steps 4 and 6 happen.
+3. **Web.** `SELENA_PROVIDER_BUDGET_USD=2`, `SCHEDULE_MAINTENANCE_ENABLED=false`,
+   `SELENA_MEASUREMENT_ENABLED=true`, `SELENA_PAYMENTS_ENABLED=true`,
+   `SELENA_PAYMENT_MODE=test` → deploy the staged change. Web's own
+   `SELENA_EMERGENCY_STOP` is not consulted by approve or enqueue — the stop
+   is read by the worker when it runs a permit
+   (`apps/worker/src/jobs/selena-measure.ts:201`) — so setting it on web
+   protects nothing. Preflight compares the order's 9 answers × `$0.005` =
+   `$0.045` with `SELENA_PROVIDER_BUDGET_USD`; `$0.005` is the highest
+   per-answer *reservation* any approved route makes, an estimate and not a
+   price (`packages/selena-visibility-contracts/src/measurement-execution.ts:116-126`).
+4. **Build the order** on the desk, in the operator's own workspace: synthetic
+   brand, 3 questions. It stops at `PAID_REVIEW_REQUIRED`; approve it and it
+   stands at `QUEUED`. **Do not press Enqueue yet.**
+5. **Worker.** `SELENA_EMERGENCY_STOP=false`, `SELENA_MEASUREMENT_ENABLED=true`,
+   `SELENA_MEASUREMENT_ADAPTER=brightdata`, `SCHEDULE_MAINTENANCE_ENABLED=false`,
+   `SELENA_RECURRING_JOBS_ENABLED` unset or `false` → deploy → wait for
+   SUCCESS **and** the log line `Registered handler: selena-measure`
+   (`apps/worker/src/handlers.ts:99`).
+6. **Operator presses Enqueue once.**
+7. **Wait until 9 runs are terminal.** The desk shows the order in
+   `QC_REQUIRED` with a `providerSpend` figure, and the worker log has 9
+   lines `[selena-measure] permit <id>: completed` or
+   `[selena-measure] permit <id> failed: <reason>`
+   (`apps/worker/src/jobs/selena-measure.ts:205-207`).
+8. **Close the path.** Worker: `SELENA_EMERGENCY_STOP=true`,
+   `SELENA_MEASUREMENT_ENABLED=false` → deploy. Web:
+   `SELENA_MEASUREMENT_ENABLED=false` → deploy.
+9. **Owner exports provider usage** from Bright Data and reconciles it against
+   the database (table below).
+
+> **WARNING — step 5 must be deployed and confirmed before step 6. Pressing
+> Enqueue while the worker's stop is still engaged burns all 9 permits.** The
+> executor reserves, then claims — which consumes the permit — then executes,
+> and the stop is checked inside execution: `reserve → claim → executePermit →
+> assertTransportAllowed` (`packages/lib/src/selena-run-executor.ts:185-188`,
+> `:227`, `:42-47`). Each run is recorded FAILED with
+> `SELENA_GLOBAL_EMERGENCY_STOP`
+> (`packages/lib/src/run-policy/controlled-cycle.ts:35`) and settled at its
+> reservation. A consumed permit cannot be retried: the queue has
+> `retryLimit: 0` (`apps/worker/src/index.ts:94-97`) and a replayed permit is
+> refused as already consumed (`selena-run-executor.ts:52`). The order would
+> have to be rebuilt from a new lock, and the 9 reservations stay in
+> `committed`.
+
+### Expected ledger for 9 answers
+
+| | Expected | Why |
+|---|---:|---|
+| Reservation, held before each call | 9 × `$0.0015` = `$0.0135` | `MEASUREMENT_ESTIMATED_COST_USD` for the `brightdata` family (`measurement-execution.ts:105`, `:110-114`). `branch-c` would reserve `$0.005` × 9 = `$0.045`, because its Perplexity route is `dataforseo-perplexity` (`:75-78`, `:107`). An estimated reservation, not a maximum and not a price. |
+| Settlement | 9 × `$0.01` = `$0.09`, every row `basis = estimated` | Bright Data payloads carry no cost, so each run settles at the `brightdata` placeholder in `packages/lib/src/usage/cost.ts:20`. The 2026-09-04 run settled 30 × `$0.01`, all estimated. |
+| Desk label | `$0.0900 · оценка для 9 из 9` | `apps/web/src/routes/_authed/app/selena-admin.tsx:687` |
+| `measure` committed afterwards | `$0.30` + `$0.09` = `$0.39` | Read it back with `read-spend-budget`. |
+| Validity | ≤ 6 `SUCCEEDED`, 3 `INVALID` — all 9 billed | `brightdata-perplexity` returned the sign-up wall 24/24 on 2026-09-05; an invalid answer is still a record on the invoice. |
+
+### Reconciliation: Bright Data usage against the database
+
+Bright Data → Billing / Usage, per dataset id. The ids are the worker's
+`SELENA_BRIGHTDATA_DATASET_CHATGPT`, `_GEMINI` and `_PERPLEXITY` values, which
+the owner reads off the service; unless those say otherwise they are
+`gd_m7aof0k82r803d5bjm` (ChatGPT), `gd_mbz66arm2mf9cu856y` (Gemini) and
+`gd_m7dhdot1vw9a7gc1n` (Perplexity).
+
+| Field | Bright Data side | Database side |
+|---|---|---|
+| UTC window | from Enqueue to the last terminal run | `min(created_at)` / `max(completed_at)` of the cycle's `sv_runs` |
+| Dataset id | one row per collector | `sv_runs.system_id` (ChatGPT, Gemini, Perplexity) |
+| Record count | per dataset | `count(*)` of `sv_runs` by `system_id` — 3 each |
+| Cost per record | as invoiced | compared with the `$0.0015` of 2026-09-01 |
+| Total | per dataset and overall | `Σ sv_provider_spend_reservations.actual_usd` and `Σ sv_cost_events.amount_usd` — both `$0.09` |
+| Request id | Bright Data request / snapshot id | `sv_runs.raw_response_reference` |
+
+Criterion: the record count is exact per dataset, and the per-record price is
+recorded and compared with the `$0.0015` figure of 2026-09-01. Follow-up once
+the invoice is in: correct `packages/lib/src/usage/cost.ts` (`brightdata: 0.01`)
+and `MEASUREMENT_ESTIMATED_COST_USD` to the invoiced figure, so the settlement
+stops overstating what was spent.
 
 ## Order of operations
 
@@ -139,14 +249,22 @@ spending twenty-six times more.
    | `SELENA_MEASUREMENT_ENABLED` | `true` | Anything else, a misspelling included, leaves execution off. |
    | `SELENA_MEASUREMENT_ADAPTER` | `brightdata` | A family name: the concrete adapter is chosen per permit from the surface that permit authorizes, so a customer is never measured on a surface they did not buy. |
    | `SCHEDULE_MAINTENANCE_ENABLED` | `false` | Recurring maintenance and an order-scoped dispatch would drive the same work twice. |
-   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order worst-case ceiling at preflight. |
-   | `BRIGHTDATA_API_TOKEN` | present | Sealed; never read back. |
+   | `BRIGHTDATA_API_TOKEN` | present | On the staging worker it is present but **not sealed**: anyone with the dashboard can read it back. Seal it at the next variable edit; a sealed value is never read back. |
 
-   Leave `SELENA_RECURRING_JOBS_ENABLED` off. `SELENA_PAYMENTS_ENABLED` belongs
-   to `web`, which serves the payment endpoints; no code path in the worker
-   reads it, so setting it here neither enables nor prevents anything. What
-   governs the worker is the measurement, adapter, emergency-stop and
-   scheduling flags in the table above.
+   On the staging `web` service, which runs preflight, approval and enqueue:
+
+   | Variable | Value | Why |
+   |---|---|---|
+   | `SELENA_PROVIDER_BUDGET_USD` | `2` | Per-order ceiling at preflight on the order's estimated reservation: its answers × $0.005, the highest per-answer reservation the worker makes — an estimate, not a provider price. Read by `web` only; the worker never reads it. |
+   | `SCHEDULE_MAINTENANCE_ENABLED` | `false` | Preflight reads it here as well; unset counts as on and blocks every order. |
+   | `SELENA_MEASUREMENT_ENABLED` | `true` | Web refuses to enqueue while it is off. |
+   | `SELENA_PAYMENTS_ENABLED` / `SELENA_PAYMENT_MODE` | `true` / `test` | The desk and a free promo order both draft through a test payment. |
+
+   Leave `SELENA_RECURRING_JOBS_ENABLED` off. What governs the worker is the
+   measurement, adapter, emergency-stop and scheduling flags in the first
+   table; what governs whether an order may be approved and queued is the
+   second. Real spend is bounded by the `measure` spend scope
+   (`sv_provider_spend_budgets`), not by `SELENA_PROVIDER_BUDGET_USD`.
 6. **Enqueue exactly one order** from the desk. Nothing runs on a timer; a
    commercial run starts from an explicit admin action.
 7. **Close the path again.** Set `SELENA_EMERGENCY_STOP=true` as soon as the run
@@ -158,9 +276,16 @@ spending twenty-six times more.
 
 - Every permit reached a terminal state, and the count of runs equals the
   planned cardinality — no permit consumed without a run.
-- The cost ledger has rows with `basis = actual`, not `estimated`, and the sum
-  is within a few cents of `$0.045`. A sum far above that means the scope was
-  not what the preflight said.
+- The cost ledger has one row per run and every row reads `basis = estimated`
+  at `$0.01`: Bright Data payloads carry no cost, so nothing on these routes
+  can write `actual` — the repository stores whatever basis the adapter
+  reports, defaulting to estimated
+  (`packages/lib/src/selena-visibility-repositories.ts:1269-1278`), and the
+  adapter has only the placeholder in `packages/lib/src/usage/cost.ts:20`.
+  For 9 answers that is `$0.09` in `sv_cost_events`, with `$0.0135` reserved
+  beforehand; the expected ledger under the 2026-10 procedure has the detail.
+  A sum far above `$0.01` a run means the scope was not what the preflight
+  said.
 - Each run carries extraction output. A run stored and billed with no mention,
   position or citation extracted is a successful call whose answer nothing read
   — worth stopping for.

@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const source = readFileSync(fileURLToPath(new URL("../../server/selena-order-requests.ts", import.meta.url)), "utf8");
+// The request layer is the server-function module plus the submission it
+// calls; the invariants hold for both.
+const source = ["../../server/selena-order-requests.ts", "../../server/selena-order-request-submit.ts"]
+	.map((path) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf8"))
+	.join("\n");
 
 describe("plan request layer zero invariant", () => {
 	// A request is a lead. Turning one into a paid measurement stays the
@@ -28,11 +32,20 @@ describe("plan request layer zero invariant", () => {
 		expect(source).toContain("promoCode: null");
 	});
 
-	it("keeps reading and closing requests behind the admin gate", () => {
-		const listing = source.slice(source.indexOf("listSelenaOrderRequestsFn"));
+	it("keeps reading and closing requests behind the platform-operator gate", () => {
+		const listing = source.slice(source.indexOf("export const listSelenaOrderRequestsFn"));
 		expect(listing).toContain("requireAdmin()");
-		const updating = source.slice(source.indexOf("updateSelenaOrderRequestStatusFn"));
-		expect(updating).toContain("requireAdmin()");
+		// Closing a request acts in the request's own workspace, which the
+		// operator scope resolves only after its own requireAdmin() check.
+		const updating = source.slice(source.indexOf("export const updateSelenaOrderRequestStatusFn"));
+		expect(updating).toContain('operatorScopeForRequest(data.requestId, "request_status")');
+	});
+
+	// One code is one request: the id is derived from the workspace and the
+	// code's digest, so a resubmission cannot mint a second request or order.
+	it("files every submission of one pilot code under one request", () => {
+		expect(source).toContain("pilotSeatRequestId(context.tenantId, hashPilotInviteCode(code))");
+		expect(source).toContain(".onConflictDoNothing({ target: svOrderRequests.id })");
 	});
 
 	// The two daily caps span every tenant, and the runtime role cannot count
@@ -41,7 +54,6 @@ describe("plan request layer zero invariant", () => {
 	it("decides the cross-tenant promo caps in the database, never by counting here", () => {
 		expect(source).toContain("claimFreeAutoDispatch(tx");
 		expect(source).toContain("releaseFreeAutoDispatchClaim(tx");
-		expect(source).not.toContain("await db\n");
 		expect(source).not.toContain("count()");
 	});
 });

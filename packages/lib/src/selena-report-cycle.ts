@@ -77,9 +77,11 @@ export function describeCycleUpdate(cycle: ReportCycleCandidate): ReportCycleUpd
 		succeededRuns: cycle.succeededRuns,
 	};
 	if (IN_PROGRESS_CYCLE_STATUSES.has(cycle.status)) return { ...base, state: "in_progress" };
+	// Checked before the broken statuses: a rejection stops the cycle, and the
+	// client is owed the reason it stopped, not only that it did.
+	if (cycle.latestQcDecision === "rejected") return { ...base, state: "unsuccessful", reason: "QC_REJECTED" };
 	if (BROKEN_CYCLE_STATUSES.has(cycle.status))
 		return { ...base, state: "unsuccessful", reason: cycle.status as "STOPPED" | "FAILED" | "CARDINALITY_INCIDENT" };
-	if (cycle.latestQcDecision === "rejected") return { ...base, state: "unsuccessful", reason: "QC_REJECTED" };
 	if (cycle.succeededRuns === 0) return { ...base, state: "unsuccessful", reason: "NO_SUCCESSFUL_RUNS" };
 	return { ...base, state: "awaiting_review" };
 }

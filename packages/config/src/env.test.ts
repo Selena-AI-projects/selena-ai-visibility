@@ -117,6 +117,14 @@ describe("unrecognised Selena variables", () => {
 		expect(lines).toEqual([]);
 	});
 
+	// The address belongs on the one-shot owner service, but a copy left on web
+	// or worker must read as a known variable, not as a typo of another one.
+	it("recognises the owner task's address variable", () => {
+		const lines: string[] = [];
+		reportUnknownSelenaEnv({ SELENA_OWNER_ADMIN_EMAIL: "operator@example.com" }, (message) => lines.push(message));
+		expect(lines).toEqual([]);
+	});
+
 	it("reports a name too far from anything known without guessing", () => {
 		const lines: string[] = [];
 		reportUnknownSelenaEnv({ SELENA_QQQQQQQQQQQQ: "1" }, (message) => lines.push(message));

@@ -1,12 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db } from "@workspace/lib/db/db";
 import { withOrganizationTransaction } from "@workspace/lib/db/organization-transaction";
-import {
-	svConfigurationLocks,
-	svRecommendationRuns,
-	svScenarios,
-	svWebsiteSnapshots,
-} from "@workspace/lib/db/schema";
+import { svConfigurationLocks, svRecommendationRuns, svScenarios, svWebsiteSnapshots } from "@workspace/lib/db/schema";
 import { buildCycleGraderReport } from "@workspace/lib/selena-cycle-report";
 import { parseLockedAnalysisSubjects } from "@workspace/lib/selena-extraction-context";
 import type { GraderReport } from "@workspace/lib/selena-grader-report";
@@ -44,7 +39,7 @@ export type GraderReportView = {
 	 */
 	monthUsage: { used: number; reserved: number; allowance: number } | null;
 	/** The READY cycle behind the report; null until an operator has signed one off. */
-	cycle: { status: string; expectedRuns: number; completedRuns: number } | null;
+	cycle: { status: string; expectedRuns: number; completedRuns: number; succeededRuns: number } | null;
 	/**
 	 * A cycle newer than the report (or the only cycle, when nothing is READY
 	 * yet), as a status the client is told about rather than a report they see.
@@ -206,7 +201,12 @@ export const getSelenaGraderReportFn = createServerFn({ method: "GET" })
 		// unfinished or rejected cycle's runs would print its gaps as findings.
 		const cycle = anchor.cycle;
 		if (!cycle) return view;
-		view.cycle = { status: cycle.status, expectedRuns: cycle.expectedRuns, completedRuns: cycle.completedRuns };
+		view.cycle = {
+			status: cycle.status,
+			expectedRuns: cycle.expectedRuns,
+			completedRuns: cycle.completedRuns,
+			succeededRuns: cycle.succeededRuns,
+		};
 		view.measuredAt = cycle.createdAt.toISOString();
 		if (!subjects) return view;
 

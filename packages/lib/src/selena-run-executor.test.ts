@@ -283,7 +283,6 @@ describe("Selena measurement runner", () => {
 		);
 		const reserve = vi.fn(async (_request: { requestKey: string; estimatedUsd: number }) => {});
 		const settle = vi.fn(async (_request: { requestKey: string; actualUsd: number }) => {});
-		const release = vi.fn(async (_request: { requestKey: string }) => {});
 
 		await runMeasurementForPermit({
 			permitId: "permit-1",
@@ -291,14 +290,13 @@ describe("Selena measurement runner", () => {
 			store,
 			adapters: { noop: createNoopMeasurementAdapter(), ...adapters },
 			config: { enabled: true, adapter: "branch-c" },
-			spend: { reserve, settle, release },
+			spend: { reserve, settle },
 			now,
 		});
 
 		expect(reached).toEqual(["dataforseo-perplexity"]);
 		expect(reserve).toHaveBeenCalledWith({ requestKey: "permit-1", estimatedUsd: 0.005 });
 		expect(settle).toHaveBeenCalledWith({ requestKey: "permit-1", actualUsd: 0.005 });
-		expect(release).not.toHaveBeenCalled();
 	});
 
 	it("refuses a family whose adapters are not all registered, before a permit is spent", async () => {
@@ -521,9 +519,6 @@ describe("metered measurement", () => {
 			settle: vi.fn(async () => {
 				calls.push("settle");
 			}),
-			release: vi.fn(async () => {
-				calls.push("release");
-			}),
 		};
 	}
 
@@ -586,9 +581,11 @@ describe("metered measurement", () => {
 		expect(spend.calls).toEqual(["reserve", "settle"]);
 	});
 
-	it("releases the hold for a permit somebody else already ran", async () => {
+	// The attempt that claimed the permit may still be mid-call; its hold is not
+	// this attempt's to give back.
+	it("leaves the hold alone for a permit another attempt claimed", async () => {
 		const { store } = storeFor(false);
-		const { adapter } = spyAdapter();
+		const { adapter, execute } = spyAdapter();
 		const spend = meter();
 		const result = await runMeasurementForPermit({
 			permitId: "permit-1",
@@ -600,7 +597,52 @@ describe("metered measurement", () => {
 			now,
 		});
 		expect(result.status).toBe("skipped");
-		expect(spend.calls).toEqual(["reserve", "release"]);
+		expect(spend.calls).toEqual(["reserve"]);
+		expect(execute).not.toHaveBeenCalled();
+	});
+
+	it("retries a settlement that fails once and keeps the stored outcome", async () => {
+		const { store } = storeFor();
+		const { adapter } = spyAdapter();
+		const spend = meter();
+		spend.settle.mockRejectedValueOnce(new Error("connection reset"));
+		const result = await runMeasurementForPermit({
+			permitId: "permit-1",
+			ctx,
+			store,
+			adapters: { noop: adapter },
+			config: enabled,
+			spend,
+			now,
+		});
+		expect(result.status).toBe("completed");
+		expect(spend.calls).toEqual(["reserve", "settle"]);
+		expect(store.complete).toHaveBeenCalledTimes(1);
+	});
+
+	it("raises a settlement that keeps failing instead of rewriting the run as failed", async () => {
+		const { store } = storeFor();
+		const { adapter } = spyAdapter();
+		const spend = meter();
+		spend.settle.mockRejectedValue(new Error("PROVIDER_SPEND_ALREADY_RELEASED"));
+		await expect(
+			runMeasurementForPermit({
+				permitId: "permit-1",
+				ctx,
+				store,
+				adapters: { noop: adapter },
+				config: enabled,
+				spend,
+				now,
+			}),
+		).rejects.toThrow(/SELENA_SPEND_UNSETTLED: permit permit-1, run run-1/);
+		expect(store.complete).toHaveBeenCalledTimes(1);
+		expect(store.complete).not.toHaveBeenCalledWith(
+			ctx,
+			"run-1",
+			expect.objectContaining({ status: "FAILED" }),
+			expect.anything(),
+		);
 	});
 
 	it("leaves spending unmetered when no meter is supplied", async () => {

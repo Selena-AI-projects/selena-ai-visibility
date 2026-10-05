@@ -5,6 +5,9 @@ import {
 	FREE_AUTO_DISPATCH_DEFAULT_PER_PROJECT_PER_DAY,
 	type FreeAutoDispatchConfig,
 	freeAutoDispatchConfigFromEnv,
+	freeAutoDispatchStatusFor,
+	freeRequestLaunch,
+	pilotSeatRequestId,
 } from "./free-auto-dispatch";
 
 const enabled: FreeAutoDispatchConfig = { enabled: true, maxPerDay: 3, maxPerProjectPerDay: 1 };
@@ -93,5 +96,52 @@ describe("free auto-dispatch", () => {
 				SELENA_FREE_AUTO_DISPATCH_MAX_PER_PROJECT_PER_DAY: "2",
 			}),
 		).toEqual({ enabled: true, maxPerDay: 10, maxPerProjectPerDay: 2 });
+	});
+});
+
+describe("one pilot seat, one request", () => {
+	const digest = "a".repeat(64);
+
+	it("gives every submission of a code by one workspace the same request id", () => {
+		expect(pilotSeatRequestId("org-1", digest)).toBe(pilotSeatRequestId("org-1", digest));
+		expect(pilotSeatRequestId("org-1", digest)).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+		);
+	});
+
+	it("never lets two workspaces or two codes share a request", () => {
+		expect(pilotSeatRequestId("org-1", digest)).not.toBe(pilotSeatRequestId("org-2", digest));
+		expect(pilotSeatRequestId("org-1", digest)).not.toBe(pilotSeatRequestId("org-1", "b".repeat(64)));
+	});
+});
+
+describe("what the client is told about a free request", () => {
+	it("calls a run queued only when a run reached the queue", () => {
+		expect(freeRequestLaunch({ orderStatus: "QUEUED", runsQueued: true })).toEqual({
+			state: "QUEUED",
+			orderStatus: "QUEUED",
+		});
+		expect(freeRequestLaunch({ orderStatus: "QUEUED", runsQueued: false })).toEqual({
+			state: "AWAITING_OPERATOR",
+			orderStatus: "QUEUED",
+		});
+	});
+
+	it("reports an order stopped before approval as waiting for the operator, not as started", () => {
+		const launch = freeRequestLaunch({ orderStatus: "PAID_REVIEW_REQUIRED", runsQueued: false });
+		expect(launch.state).toBe("AWAITING_OPERATOR");
+		expect(freeAutoDispatchStatusFor(launch)).toBe("AUTO_AWAITING_OPERATOR");
+	});
+
+	it("reports no order as not started, with the reason", () => {
+		const launch = freeRequestLaunch({ orderStatus: null, runsQueued: false, notStartedReason: "PROJECT_CAP" });
+		expect(launch).toEqual({ state: "NOT_STARTED", reason: "PROJECT_CAP" });
+		expect(freeAutoDispatchStatusFor(launch)).toBe("AUTO_FAILED");
+	});
+
+	it("follows the order to review and to the report", () => {
+		expect(freeRequestLaunch({ orderStatus: "QC_REQUIRED", runsQueued: true }).state).toBe("IN_REVIEW");
+		expect(freeRequestLaunch({ orderStatus: "READY", runsQueued: true }).state).toBe("READY");
+		expect(freeRequestLaunch({ orderStatus: "CANCELLED", runsQueued: true }).state).toBe("STOPPED");
 	});
 });

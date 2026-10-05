@@ -3,9 +3,10 @@
  *
  * It runs from the worker image on Railway, as a service named `owner` whose
  * DATABASE_URL is the migration runner's — the one connection that may write
- * pilot seats and spend ceilings. The task and its inputs are variables, so
- * the owner sets them on the service and deploys, and the log carries counts
- * and ceilings only: never a code, never a connection string.
+ * pilot seats, spend ceilings and the operator role. The task and its inputs
+ * are variables, so the owner sets them on the service and deploys, and the
+ * log carries counts, ceilings and a masked address only: never a code, never
+ * a connection string.
  */
 import { ownerTaskUsage, resolveOwnerTask } from "./owner-task.js";
 
@@ -34,6 +35,13 @@ async function run(): Promise<void> {
 			);
 			if (task.kind === "set-spend-budget") await setProviderSpendBudget(db, task.scope, task.capUsd);
 			for (const line of formatProviderSpendBudget(await readProviderSpendBudget(db, task.scope))) console.log(line);
+			return;
+		}
+		case "grant-platform-admin": {
+			const { formatPlatformAdminGrant, grantPlatformAdmin } = await import(
+				"@workspace/lib/selena-platform-admin-grant"
+			);
+			for (const line of formatPlatformAdminGrant(await grantPlatformAdmin(db, task.email))) console.log(line);
 			return;
 		}
 	}
