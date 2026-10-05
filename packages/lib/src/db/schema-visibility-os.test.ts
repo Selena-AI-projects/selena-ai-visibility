@@ -1997,7 +1997,7 @@ describe("Visibility OS Outcome Layer schema", () => {
 });
 
 describe("Recommendation follow-ups", () => {
-	it("keeps one tenant-isolated row per recommendation per cycle, granted only through the role bootstrap", () => {
+	it("keeps one tenant-isolated row per recommendation per cycle, granted to the runtime role on upgrade and clean install", () => {
 		const migration = readFileSync(new URL("./migrations/0080_recommendation_followups.sql", import.meta.url), "utf8");
 		const roleBootstrap = readFileSync(new URL("../../scripts/selena-rls-runtime-role.sql", import.meta.url), "utf8");
 		const config = getTableConfig(schema.svRecommendationFollowups);
@@ -2026,7 +2026,9 @@ describe("Recommendation follow-ups", () => {
 		expect(migration).toContain('ALTER TABLE "sv_recommendation_followups" ENABLE ROW LEVEL SECURITY');
 		expect(migration).toContain('ALTER TABLE "sv_recommendation_followups" FORCE ROW LEVEL SECURITY');
 		expect(migration).toContain('CREATE POLICY "tenant_isolation" ON "sv_recommendation_followups"');
-		expect(migration).not.toContain("GRANT ");
+		expect(migration).toContain("IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app') THEN");
+		expect(migration).toContain('GRANT SELECT, INSERT, UPDATE ON "sv_recommendation_followups" TO selena_app;');
+		expect(migration).not.toMatch(/GRANT[^;]*DELETE[^;]*sv_recommendation_followups/);
 
 		// Rows are rewritten in place and never removed by the application.
 		expect(roleBootstrap).toContain("('sv_recommendation_followups', 'SELECT, INSERT, UPDATE')");

@@ -41,3 +41,15 @@ ALTER TABLE "sv_recommendation_followups" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "tenant_isolation" ON "sv_recommendation_followups"
 	USING ("organization_id" = current_setting('app.organization_id', true))
 	WITH CHECK ("organization_id" = current_setting('app.organization_id', true));
+--> statement-breakpoint
+-- Where the runtime role already exists (staging), the table reaches it with
+-- this migration; a clean install creates the role later and gets the same
+-- grant from selena-rls-runtime-role.sql. No DELETE: a follow-up is
+-- rewritten, never removed.
+DO $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'selena_app') THEN
+		GRANT SELECT, INSERT, UPDATE ON "sv_recommendation_followups" TO selena_app;
+	END IF;
+END;
+$$;
