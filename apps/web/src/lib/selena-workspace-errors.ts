@@ -68,6 +68,22 @@ const WEBSITE_MESSAGES: Record<string, [string, string]> = {
 	],
 };
 
+/** Saving a recommendation's follow-up is refused by the report, not by the network. */
+const FOLLOWUP_MESSAGES: Record<string, [string, string]> = {
+	SELENA_REPORT_NOT_READY: [
+		"Statuses can be saved once a measurement has been reviewed and the report is ready.",
+		"Статусы можно сохранять после того, как замер проверен и отчёт готов.",
+	],
+	SELENA_FOLLOWUP_READ_ONLY: [
+		"Your role in this workspace is view-only. Ask an owner or member to update the status.",
+		"Ваша роль в этом пространстве — только просмотр. Попросите владельца или участника обновить статус.",
+	],
+	SELENA_FOLLOWUP_UNAVAILABLE: [
+		"Action statuses are not enabled here yet. The report itself is complete; nothing was saved.",
+		"Статусы действий здесь ещё не подключены. Сам отчёт полный; ничего не сохранено.",
+	],
+};
+
 /**
  * The operator desk throws the same machine codes the backend gates use
  * (`SELENA_PAYMENTS_DISABLED`, `SELENA_PREFLIGHT_BLOCKED: …`). The operator
@@ -252,6 +268,9 @@ export function humanizeSelenaError(cause: unknown, locale: WorkspaceLocale, fal
 
 	const website = WEBSITE_MESSAGES[raw];
 	if (website) return tr(locale, website);
+
+	const followup = FOLLOWUP_MESSAGES[raw];
+	if (followup) return tr(locale, followup);
 
 	const httpStatus = raw.match(/^WEBSITE_HTTP_(\d{3})$/)?.[1];
 	if (httpStatus) {

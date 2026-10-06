@@ -17,6 +17,9 @@ import { PRIORITY_LABELS, ruleExample, ruleFixTask, ruleHow, ruleSteps, ruleTitl
 import { type GraderReportView, getSelenaGraderReportFn } from "../../../server/selena-grader-report";
 import { unsuccessfulMeasurementText } from "@/lib/selena-measurement-outcome";
 import { getSelenaRunDetailFn } from "../../../server/selena-run-explorer";
+import { type FollowupStatus, followupStatuses, recommendationKey } from "@workspace/lib/selena-recommendation-followups";
+import { humanizeSelenaError } from "@/lib/selena-workspace-errors";
+import { upsertSelenaRecommendationFollowupFn } from "../../../server/selena-recommendation-followups";
 
 export const Route = createFileRoute("/_authed/app/selena-report")({
 	validateSearch: z.object({ project: z.string().uuid().optional() }),
@@ -540,7 +543,7 @@ function ReportContextRail({
 			items: [
 				{ id: "opportunities", label: tr(locale, "Opportunities", "Возможности"), value: railValue(locale, report?.gaps.length ?? null, noMeasurement) },
 				{ id: "recommendations", label: tr(locale, "Recommendations", "Рекомендации"), value: railValue(locale, report?.recommendations.length ?? view?.freeAudit?.actions.length ?? null, notSetUp) },
-				{ id: "action-plan", label: tr(locale, "Action Plan", "План действий"), value: railValue(locale, view?.freeAudit?.actions.length ?? report?.recommendations.length ?? null, notSetUp) },
+				{ id: "action-plan", label: tr(locale, "Action statuses", "Статусы действий"), value: report && view?.followupsAvailable === false ? notSetUp : railValue(locale, report ? (view?.followups.length ?? 0) : null, noMeasurement) },
 				{ id: "evidence-ledger", label: tr(locale, "Evidence Ledger", "Журнал доказательств"), value: railValue(locale, report?.methodology.answersAnalyzed ?? null, noMeasurement) },
 			],
 		},
@@ -610,6 +613,142 @@ function ReportContextRail({
 			</details>
 			<div className="hidden lg:block">{body}</div>
 		</aside>
+	);
+}
+
+const FOLLOWUP_STATUS_LABELS: Record<FollowupStatus, [string, string]> = {
+	NEW: ["New", "Новое"],
+	IN_PROGRESS: ["In progress", "В работе"],
+	DONE: ["Done", "Сделано"],
+	DISMISSED: ["Dismissed", "Отклонено"],
+};
+
+const FOLLOWUP_STATUS_CLASSES: Record<FollowupStatus, string> = {
+	NEW: "bg-[#efe3d7] text-[#8f5c34]",
+	IN_PROGRESS: "bg-[#fdf1d3] text-[#7a5200]",
+	DONE: "bg-[#e9f2ea] text-[#2e6b46]",
+	DISMISSED: "bg-[#ece7e1] text-[#574d45]",
+};
+
+type RecommendationFollowupView = GraderReportView["followups"][number];
+
+/**
+ * What the client decided about one recommendation. The chip and the dates
+ * print with the report; the controls do not, so a printed copy reads as a
+ * status sheet rather than a form.
+ */
+function RecommendationFollowup({
+	locale,
+	projectId,
+	recommendationKey: followupKey,
+	followup,
+	onSaved,
+}: {
+	locale: ReportLocale;
+	projectId: string;
+	recommendationKey: string;
+	followup: RecommendationFollowupView | null;
+	onSaved: (saved: RecommendationFollowupView) => void;
+}) {
+	const [status, setStatus] = useState<FollowupStatus>(followup?.status ?? "NEW");
+	const [assignee, setAssignee] = useState(followup?.assignee ?? "");
+	const [dueOn, setDueOn] = useState(followup?.dueOn ?? "");
+	const [note, setNote] = useState(followup?.note ?? "");
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState("");
+	const fieldId = `followup-${followupKey.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+	const fieldClass = "min-h-10 w-full rounded-lg border border-[#d9cfc2] bg-[#fffdf8] px-3 text-sm text-[#181614]";
+	const shown = followup?.status ?? "NEW";
+
+	const save = async () => {
+		setSaving(true);
+		setError("");
+		try {
+			const saved = await upsertSelenaRecommendationFollowupFn({
+				data: {
+					projectId,
+					recommendationKey: followupKey,
+					status,
+					assignee: assignee.trim() || undefined,
+					dueOn: dueOn || undefined,
+					note: note.trim() || undefined,
+				},
+			});
+			onSaved(saved);
+		} catch (cause) {
+			setError(humanizeSelenaError(cause, locale, tr(locale, "Could not save the status. Try again.", "Не удалось сохранить статус. Попробуйте ещё раз.")));
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	return (
+		<div className="mt-3 border-t border-[#dccfbe] pt-3">
+			<div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#574d45]">
+				<span className={`rounded-full px-2.5 py-1 font-semibold ${FOLLOWUP_STATUS_CLASSES[shown]}`}>{tr(locale, ...FOLLOWUP_STATUS_LABELS[shown])}</span>
+				{followup?.assignee && <span>{followup.assignee}</span>}
+				{followup?.dueOn && (
+					<span>
+						{tr(locale, "due", "срок")} {formatReportDate(locale, `${followup.dueOn}T00:00:00`)}
+					</span>
+				)}
+				{followup && (
+					<span>
+						{tr(locale, "updated", "обновлено")} {formatReportDate(locale, followup.updatedAt)}
+					</span>
+				)}
+			</div>
+			{followup?.note && <p className="mt-1.5 whitespace-pre-wrap text-xs text-[#574d45]">{followup.note}</p>}
+			<div className="mt-2.5 grid gap-2 print:hidden sm:grid-cols-3">
+				<label className="sr-only" htmlFor={`${fieldId}-status`}>
+					{tr(locale, "Status", "Статус")}
+				</label>
+				<select id={`${fieldId}-status`} className={fieldClass} value={status} onChange={(event) => setStatus(event.target.value as FollowupStatus)}>
+					{followupStatuses.map((option) => (
+						<option key={option} value={option}>
+							{tr(locale, ...FOLLOWUP_STATUS_LABELS[option])}
+						</option>
+					))}
+				</select>
+				<input
+					id={`${fieldId}-assignee`}
+					className={fieldClass}
+					type="text"
+					maxLength={120}
+					value={assignee}
+					placeholder={tr(locale, "Assignee", "Ответственный")}
+					aria-label={tr(locale, "Assignee", "Ответственный")}
+					onChange={(event) => setAssignee(event.target.value)}
+				/>
+				<input
+					id={`${fieldId}-due`}
+					className={fieldClass}
+					type="date"
+					value={dueOn}
+					aria-label={tr(locale, "Due date", "Срок")}
+					onChange={(event) => setDueOn(event.target.value)}
+				/>
+				<textarea
+					id={`${fieldId}-note`}
+					className={`${fieldClass} min-h-20 py-2 sm:col-span-3`}
+					maxLength={2000}
+					value={note}
+					placeholder={tr(locale, "Note", "Заметка")}
+					aria-label={tr(locale, "Note", "Заметка")}
+					onChange={(event) => setNote(event.target.value)}
+				/>
+				<div className="flex flex-wrap items-center gap-3 sm:col-span-3">
+					<Button type="button" className="bg-[#8f5c34] text-[#fff7ee] hover:bg-[#7c4e2b]" disabled={saving} onClick={save}>
+						{saving ? tr(locale, "Saving…", "Сохраняем…") : tr(locale, "Save", "Сохранить")}
+					</Button>
+					{error && (
+						<p className="text-xs text-[#9a3b2e]" role="alert">
+							{error}
+						</p>
+					)}
+				</div>
+			</div>
+		</div>
 	);
 }
 
@@ -1526,6 +1665,8 @@ function SelenaReportPage() {
 								</div>
 								<div className="mt-4 grid gap-3">
 									{report.recommendations.map((rec, index) => {
+										const followupKey = recommendationKey(rec);
+										const followup = view?.followups.find((entry) => entry.recommendationKey === followupKey) ?? null;
 										const body =
 											rec.kind === "SOURCE_PRESENCE"
 												? {
@@ -1560,11 +1701,26 @@ function SelenaReportPage() {
 										return (
 											<div key={`${rec.kind}-${index === 0 ? "a" : index}`} className="flex items-start gap-3.5 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 												<span className="selena-heading flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#efe3d7] text-[#8f5c34]">{index + 1}</span>
-												<div>
+												<div className="min-w-0 flex-1">
 													<p className="font-semibold">{body.action}</p>
 													<p className="mt-1 text-xs text-[#574d45]">
 														{tr(locale, "Why", "Почему")}: {body.why}
 													</p>
+													{view?.followupsAvailable !== false && (
+													<RecommendationFollowup
+														locale={locale}
+														projectId={projectId}
+														recommendationKey={followupKey}
+														followup={followup}
+														onSaved={(saved) =>
+															setView((current) =>
+																current
+																	? { ...current, followups: [...current.followups.filter((entry) => entry.recommendationKey !== saved.recommendationKey), saved] }
+																	: current,
+															)
+														}
+													/>
+													)}
 												</div>
 											</div>
 										);

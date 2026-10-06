@@ -73,6 +73,8 @@
 		"./selena-answer-analysis": "./src/selena-answer-analysis.ts",
 		"./selena-answer-payload": "./src/selena-answer-payload.ts",
 		"./selena-grader-report": "./src/selena-grader-report.ts",
+		"./selena-recommendation-followups": "./src/selena-recommendation-followups.ts",
+		"./selena-recommendation-followups-store": "./src/selena-recommendation-followups-store.ts",
 		"./selena-measurement": "./src/selena-measurement.ts",
 		"./selena-findings": "./src/selena-findings.ts",
 		"./selena-dataset-gateway": "./src/selena-dataset-gateway.ts",

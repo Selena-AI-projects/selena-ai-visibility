@@ -397,7 +397,9 @@ FROM (VALUES
 	('sv_delivery_recipients', 'SELECT, INSERT, UPDATE'),
 	('sv_weekly_digests', 'SELECT, INSERT'),
 	('sv_digest_deliveries', 'SELECT, INSERT, UPDATE'),
-	('sv_digest_delivery_attempts', 'SELECT, INSERT')
+	('sv_digest_delivery_attempts', 'SELECT, INSERT'),
+	-- Recommendation follow-ups (migration 0080): one row per recommendation, rewritten in place.
+	('sv_recommendation_followups', 'SELECT, INSERT, UPDATE')
 ) AS pilot(name, privileges)
 WHERE to_regclass('public.' || name) IS NOT NULL
 \gexec
