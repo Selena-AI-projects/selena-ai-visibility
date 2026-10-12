@@ -10,6 +10,7 @@ import {
 	getPlan,
 	monthlyAnswerAllowance,
 	isApiViewWebSearchEnabled,
+	measurementScopeForPlan,
 	orderLockHash,
 	planIds,
 	plannedAnswers,
@@ -20,7 +21,7 @@ import {
 	validateMeasurementLanguageScope,
 } from "./catalog";
 
-const systems = ["ChatGPT", "Gemini", "Perplexity"];
+const systems = ["ChatGPT", "Gemini"];
 const apiSystems = [...systems, ...apiModelIds];
 const base = (
 	planId: "visibility-snapshot" | "full-discovery-landscape" | "competitive-audit" | "managed-discovery-90",
@@ -39,23 +40,35 @@ const base = (
 });
 
 describe("Selena RC6 catalog", () => {
-	it("Visibility Snapshot is 100 × 3 × 1", () => expect(plannedAnswers(base("visibility-snapshot"))).toBe(300));
+	it("Visibility Snapshot is 100 × 2 × 1 while Perplexity is pending", () =>
+		expect(plannedAnswers(base("visibility-snapshot"))).toBe(200));
 	it("Full Discovery Landscape keeps 100 total scenarios across two languages", () => {
 		const scope = base("full-discovery-landscape", { languages: ["en", "id"], systems: apiSystems });
-		expect(plannedAnswers(scope)).toBe(800);
+		expect(plannedAnswers(scope)).toBe(700);
 		expect(() => validateCatalogScope({ ...scope, languageScenarios: 101 })).toThrow("SCENARIO_LIMIT_EXCEEDED");
 	});
-	it("Expert Verified is 25 questions × 2 languages × 8 × 5", () =>
-		expect(
-			plannedAnswers({
-				...base("competitive-audit", {
-					languages: ["en", "id"],
-					systems: apiSystems,
-					languageScenarios: 50,
-					repeats: 5,
-				}),
-			}),
-		).toBe(2000));
+	it("Competitive Audit takes 20 scenarios and refuses a 21st", () => {
+		const scope = base("competitive-audit", {
+			languages: ["en", "id"],
+			systems: apiSystems,
+			languageScenarios: 20,
+			repeats: 5,
+		});
+		expect(getPlan("competitive-audit").scenarioLimit).toBe(20);
+		expect(validateCatalogScope(scope).planId).toBe("competitive-audit");
+		expect(() => validateCatalogScope({ ...scope, languageScenarios: 21 })).toThrow("SCENARIO_LIMIT_EXCEEDED");
+	});
+	it("Competitive Audit is 20 × 7 × 5 = 700 now and 20 × 8 × 5 = 800 once Perplexity is connected", () => {
+		const plan = getPlan("competitive-audit");
+		const scope = base("competitive-audit", {
+			languages: ["en"],
+			systems: apiSystems,
+			languageScenarios: 20,
+			repeats: 5,
+		});
+		expect(plannedAnswers(scope)).toBe(700);
+		expect(20 * (plan.systems.length + plan.pendingSystems.length) * 5).toBe(800);
+	});
 	it("keeps Visitor and API channels distinct and API web search off", () => {
 		expect(getPlan("full-discovery-landscape").channelScope).toEqual(["VISITOR_VIEW", "API_VIEW"]);
 		expect(isApiViewWebSearchEnabled()).toBe(false);
@@ -74,7 +87,7 @@ describe("Selena RC6 catalog", () => {
 			{ amount: 49, currency: "USD", taxMode: "owner-defined", refundPolicyVersion: "pending-owner-input" },
 			"config-v1",
 		);
-		expect(lock.plannedAnswers).toBe(300);
+		expect(lock.plannedAnswers).toBe(200);
 		expect(lock.checkoutMetadata).toEqual(SELENA_CHECKOUT_METADATA);
 		expect(orderLockHash(lock)).toBe(orderLockHash(lock));
 		lock.scope.languages.push("id");
@@ -133,19 +146,31 @@ describe("Selena RC6 catalog", () => {
 });
 
 describe("question limits", () => {
-	it("keeps 25 questions per measurement on every self-service paid tier", () => {
+	it("keeps 25 questions per measurement on the monthly self-service tiers", () => {
 		expect(getPlan("visibility-snapshot").questionLimitPerMeasurement).toBe(25);
 		expect(getPlan("full-discovery-landscape").questionLimitPerMeasurement).toBe(25);
-		expect(getPlan("competitive-audit").questionLimitPerMeasurement).toBe(25);
 		expect(getPlan("managed-discovery-90").questionLimitPerMeasurement).toBeNull();
+	});
+
+	it("caps the Competitive Audit at 20 scenarios whether in one language or split across two", () => {
+		const audit = getPlan("competitive-audit");
+		expect(audit.questionLimitPerMeasurement).toBe(20);
+		expect(audit.scenarioLimit).toBe(20);
+		expect(validateMeasurementLanguageScope("competitive-audit", Array(20).fill("en")).planId).toBe(
+			"competitive-audit",
+		);
+		expect(() => validateMeasurementLanguageScope("competitive-audit", Array(21).fill("en"))).toThrow();
+		expect(() =>
+			validateMeasurementLanguageScope("competitive-audit", [...Array(11).fill("en"), ...Array(10).fill("ru")]),
+		).toThrow("SCENARIO_LIMIT_EXCEEDED");
 	});
 });
 
 describe("monthlyAnswerAllowance", () => {
-	it("computes the quoted allowances from the catalog itself", () => {
-		expect(monthlyAnswerAllowance("visibility-snapshot")).toBe(300);
-		expect(monthlyAnswerAllowance("full-discovery-landscape")).toBe(800);
-		expect(monthlyAnswerAllowance("competitive-audit")).toBe(2000);
+	it("counts only the systems a plan measures", () => {
+		expect(monthlyAnswerAllowance("visibility-snapshot")).toBe(200);
+		expect(monthlyAnswerAllowance("full-discovery-landscape")).toBe(700);
+		expect(monthlyAnswerAllowance("competitive-audit")).toBe(700);
 	});
 
 	it("reports no computable allowance for a negotiated plan", () => {
@@ -171,6 +196,12 @@ describe("what a requestable plan may promise", () => {
 	it.each(requestable)("names only systems with a real adapter behind them: %s", (planId) => {
 		const outside = getPlan(planId).systems.filter((system) => !measurable.has(system));
 		expect(outside, `${planId} promises systems nothing can measure`).toEqual([]);
+	});
+
+	it.each(planIds)("lists Perplexity as being connected, never as measured: %s", (planId) => {
+		const plan = getPlan(planId);
+		expect(plan.systems).not.toContain("Perplexity");
+		expect(plan.pendingSystems).toEqual(["Perplexity"]);
 	});
 
 	it("does not sell a Maps rank, a local pack or a review metric", () => {
@@ -224,6 +255,23 @@ describe("canonical product catalog", () => {
 		});
 		expect(entitlementsFor("competitive-audit", verified).localManualAudit).toBe(true);
 		expect(entitlementsFor("managed-discovery-90", verified).localManualAudit).toBe(true);
+	});
+});
+
+describe("the scope a new order is locked to", () => {
+	const scenarioIds = ["00000000-0000-4000-8000-000000000001"];
+
+	it("covers only the measured systems, Visitor and API on their own channels", () => {
+		expect(measurementScopeForPlan(getPlan("full-discovery-landscape"), scenarioIds).systems).toEqual([
+			{ systemId: "ChatGPT", channel: "VISITOR" },
+			{ systemId: "Gemini", channel: "VISITOR" },
+			...apiModelIds.map((systemId) => ({ systemId, channel: "API" })),
+		]);
+	});
+
+	it("refuses a plan that names a surface nobody measures", () => {
+		const slipped = { ...getPlan("visibility-snapshot"), systems: ["ChatGPT", "Gemini", "Perplexity"] };
+		expect(() => measurementScopeForPlan(slipped, scenarioIds)).toThrow("SELENA_SYSTEM_NOT_MEASURED: Perplexity");
 	});
 });
 

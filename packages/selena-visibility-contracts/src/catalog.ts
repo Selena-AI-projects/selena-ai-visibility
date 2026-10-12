@@ -1,6 +1,13 @@
 import { z } from "zod";
+import { type MeasurementScope, measurementScopeSchema } from "./measurement-scope.js";
 
-export const SELENA_CATALOG_VERSION = "selena-catalog-v2" as const;
+/**
+ * Stamped into every configuration lock this catalog writes. Locks keep the
+ * version they were written under, and nothing resolves a plan through it, so
+ * a v2 lock that still lists Perplexity reads as it was sold; approving one
+ * that has not been dispatched is refused (see assertVisitorSystemsMeasured).
+ */
+export const SELENA_CATALOG_VERSION = "selena-catalog-v3" as const;
 export const SELENA_SELLER_LEGAL_ENTITY = "Selena Systems LLC" as const;
 export const SELENA_CHECKOUT_METADATA = {
 	sellerLegalEntity: SELENA_SELLER_LEGAL_ENTITY,
@@ -9,7 +16,28 @@ export const SELENA_CHECKOUT_METADATA = {
 	livePayments: "off",
 } as const;
 
+/** Every Visitor View surface the engine can address, measured or not. */
 export const visitorSurfaces = ["ChatGPT", "Gemini", "Perplexity"] as const;
+type VisitorSurface = (typeof visitorSurfaces)[number];
+
+/**
+ * Whether a surface is sold as measured. Perplexity has no verified transport
+ * (Bright Data returned a sign-up wall on 2026-09-05, Oxylabs a 4xx on
+ * 2026-09-07, the other routes are unproven). Until one is verified it stays
+ * out of every plan's measured systems (owner decision, 2026-10-12), so no
+ * permit is minted for it and no allowance counts it; plans list it as being
+ * connected instead.
+ */
+const visitorSurfaceStatus = {
+	ChatGPT: "measured",
+	Gemini: "measured",
+	Perplexity: "pending_connection",
+} as const satisfies Record<VisitorSurface, "measured" | "pending_connection">;
+
+const measuredVisitorSurfaces = visitorSurfaces.filter((surface) => visitorSurfaceStatus[surface] === "measured");
+const pendingVisitorSurfaces = visitorSurfaces.filter(
+	(surface) => visitorSurfaceStatus[surface] === "pending_connection",
+);
 export const apiModelIds = [
 	"anthropic/claude-haiku-4.5",
 	"deepseek/deepseek-v3.2",
@@ -135,7 +163,10 @@ export type SelenaPlan = {
 	price: number;
 	currency: "USD";
 	channelScope: readonly SelenaChannel[];
+	/** The systems a measurement under this plan actually queries. */
 	systems: readonly string[];
+	/** Named in the offer as being connected; never measured, never counted. */
+	pendingSystems: readonly string[];
 	languageLimit: number;
 	scenarioLimit: number | null;
 	/** Questions accepted in a single measurement; null = negotiated scope. */
@@ -161,7 +192,8 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 49,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW"],
-		systems: [...visitorSurfaces],
+		systems: [...measuredVisitorSurfaces],
+		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 1,
 		scenarioLimit: 100,
 		questionLimitPerMeasurement: 25,
@@ -171,7 +203,8 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 			"1 site",
 			"1 brand",
 			"1 city or district",
-			"300 planned answers",
+			"ChatGPT and Gemini measured; Perplexity being connected, not measured yet",
+			"200 planned answers until Perplexity is connected, 300 once it is",
 			"competitors",
 			"mentions",
 			"positions",
@@ -202,16 +235,17 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 79,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...visitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 2,
 		scenarioLimit: 100,
 		questionLimitPerMeasurement: 25,
 		repeatCount: 1,
 		includedFeatures: [
-			"all 8 systems",
+			"7 systems measured; Perplexity being connected, not measured yet",
 			"separate Visitor/API views",
 			"divergence",
-			"800 planned answers",
+			"700 planned answers until Perplexity is connected, 800 once it is",
 			"expanded source map",
 			"Evidence Ledger",
 			"PDF/XLSX/CSV when available",
@@ -231,14 +265,16 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 399,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...visitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 2,
-		scenarioLimit: 50,
-		questionLimitPerMeasurement: 25,
+		scenarioLimit: 20,
+		questionLimitPerMeasurement: 20,
 		repeatCount: 5,
 		includedFeatures: [
-			"25 questions across up to 2 languages",
-			"2000 planned answers",
+			"20 scenarios across up to 2 languages",
+			"7 systems measured; Perplexity being connected, not measured yet",
+			"700 planned answers until Perplexity is connected, 800 once it is",
 			"deep review of the top 10 priorities",
 			"Evidence Ledger",
 			"PDF/XLSX/CSV",
@@ -262,7 +298,8 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 2490,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...visitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 0,
 		scenarioLimit: null,
 		questionLimitPerMeasurement: null,
@@ -317,10 +354,10 @@ export function plannedAnswers(scope: Pick<CatalogScope, "languageScenarios" | "
 }
 
 /**
- * The plan's monthly answer allowance — the number the pricing page quotes
- * (100 scenarios × 3 systems = 300, and so on). Null when the plan sets no
- * scenario or repeat bound (Growth), meaning the allowance is negotiated,
- * not computed.
+ * The plan's monthly answer allowance over the systems it actually measures
+ * (100 scenarios × 2 Visitor systems = 200 while Perplexity is pending, and so
+ * on). Null when the plan sets no scenario or repeat bound (Growth), meaning
+ * the allowance is negotiated, not computed.
  */
 export function monthlyAnswerAllowance(planId: SelenaPlanId): number | null {
 	const plan = SELENA_CATALOG[planId];
@@ -330,6 +367,41 @@ export function monthlyAnswerAllowance(planId: SelenaPlanId): number | null {
 
 export function getPlan(planId: SelenaPlanId): SelenaPlan {
 	return SELENA_CATALOG[planId];
+}
+
+/**
+ * The scope a new order under this plan is locked to, and so the permits its
+ * approval mints. A surface that is not measured is refused even if a plan
+ * names it, so a catalog slip cannot buy a provider call nobody can deliver.
+ */
+export function measurementScopeForPlan(plan: SelenaPlan, scenarioIds: readonly string[]): MeasurementScope {
+	const isVisitor = (systemId: string) => (visitorSurfaces as readonly string[]).includes(systemId);
+	const unknown = plan.systems.filter(
+		(systemId) => !isVisitor(systemId) && !(apiModelIds as readonly string[]).includes(systemId),
+	);
+	if (unknown.length > 0) throw new Error(`SELENA_UNKNOWN_CATALOG_SYSTEM: ${unknown.join(", ")}`);
+	const systems = plan.systems.map((systemId) => ({
+		systemId,
+		channel: isVisitor(systemId) ? ("VISITOR" as const) : ("API" as const),
+	}));
+	assertVisitorSystemsMeasured(systems);
+	return measurementScopeSchema.parse({ scenarios: [...scenarioIds], systems, repeats: plan.repeatCount ?? 1 });
+}
+
+/**
+ * Refuses a scope that would buy a Visitor View answer from a surface no plan
+ * measures. A lock keeps the systems it was written with, so an order locked
+ * under an earlier catalog can still name Perplexity; approving it is where
+ * that is caught, before any permit is minted.
+ */
+export function assertVisitorSystemsMeasured(systems: readonly { systemId: string; channel: string }[]): void {
+	const unmeasured = systems
+		.filter(
+			(system) =>
+				system.channel === "VISITOR" && !(measuredVisitorSurfaces as readonly string[]).includes(system.systemId),
+		)
+		.map((system) => system.systemId);
+	if (unmeasured.length > 0) throw new Error(`SELENA_SYSTEM_NOT_MEASURED: ${unmeasured.join(", ")}`);
 }
 
 export function validateCatalogScope(input: CatalogScope): SelenaPlan {

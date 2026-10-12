@@ -10,14 +10,14 @@ import {
 
 describe("the answer count", () => {
 	it("counts one answer per question per surface", () => {
-		expect(assertWithinMaxRuns(3, 30)).toBe(9);
+		expect(assertWithinMaxRuns(3, 30)).toBe(6);
 	});
 
 	// A full plan is a hundred questions; reaching for one by mistake is the
-	// difference between five cents and forty-five.
+	// difference between three cents and thirty.
 	it("refuses a question set that would exceed the allowed answers", () => {
-		expect(() => assertWithinMaxRuns(11, 30)).toThrow(FirstLiveOrderRefused);
-		expect(() => assertWithinMaxRuns(10, 30)).not.toThrow();
+		expect(() => assertWithinMaxRuns(16, 30)).toThrow(FirstLiveOrderRefused);
+		expect(() => assertWithinMaxRuns(15, 30)).not.toThrow();
 	});
 
 	it("refuses an empty set rather than ordering nothing", () => {
@@ -34,7 +34,6 @@ describe("the lock snapshot", () => {
 			systems: [
 				{ systemId: "ChatGPT", channel: "VISITOR" },
 				{ systemId: "Gemini", channel: "VISITOR" },
-				{ systemId: "Perplexity", channel: "VISITOR" },
 			],
 			repeats: 1,
 		});

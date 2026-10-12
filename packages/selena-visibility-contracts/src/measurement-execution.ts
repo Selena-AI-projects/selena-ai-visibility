@@ -57,7 +57,7 @@ export type OwnerApprovedMeasurementAdapter = (typeof ownerApprovedMeasurementAd
 
 /**
  * One environment variable names one adapter, but a plan sells several systems
- * at once — the local plan alone buys three visitor surfaces. A family name is
+ * at once — the Snapshot plan alone buys two visitor surfaces. A family name is
  * the routing rule for that: the concrete adapter is chosen per permit from the
  * system that permit authorizes, so a surface the customer bought is never
  * measured on a different one.

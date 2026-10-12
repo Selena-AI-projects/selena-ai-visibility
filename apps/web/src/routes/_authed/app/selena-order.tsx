@@ -101,7 +101,7 @@ const PLAN_OPTIONS = [
 		planId: "visibility-snapshot" as const,
 		title: "Visitor View · Snapshot",
 		price: "$49",
-		systems: "ChatGPT · Gemini · Perplexity",
+		systems: "ChatGPT · Gemini",
 		en: "What customers see in live AI answer surfaces.",
 		ru: "Что клиенты видят в пользовательских AI-сервисах.",
 	},
@@ -110,7 +110,7 @@ const PLAN_OPTIONS = [
 		planId: "full-discovery-landscape" as const,
 		title: "Visitor + API View · Landscape",
 		price: "$79",
-		systems: "ChatGPT · Gemini · Perplexity · Claude · DeepSeek · Qwen · Mistral · Grok",
+		systems: "ChatGPT · Gemini · Claude · DeepSeek · Qwen · Mistral · Grok",
 		en: "The visitor check plus a model-knowledge baseline.",
 		ru: "Проверка глазами посетителя плюс базовая проверка знаний моделей.",
 	},
@@ -246,6 +246,13 @@ function SelenaOrderPage() {
 									</span>
 								</span>
 								<span className="text-xs uppercase tracking-wide text-[#574d45]">{option.systems}</span>
+								<span className="text-xs text-[#574d45]">
+									{tr(
+										locale,
+										"Perplexity is being connected and is not measured yet.",
+										"Perplexity подключается и пока не измеряется.",
+									)}
+								</span>
 								<span className="text-sm text-[#574d45]">{tr(locale, option.en, option.ru)}</span>
 							</label>
 						))}

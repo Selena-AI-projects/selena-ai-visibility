@@ -1188,7 +1188,7 @@ function SelenaReportPage() {
 										{[
 											[
 												tr(locale, "How AI systems see you", "Как вас видят AI-системы"),
-												tr(locale, "whether ChatGPT, Gemini and Perplexity name you — known only after a measurement.", "упомянуты ли вы в ответах ChatGPT, Gemini, Perplexity: станет известно после замера."),
+												tr(locale, "whether ChatGPT and Gemini name you — known only after a measurement. Perplexity is being connected and is not measured yet.", "упомянуты ли вы в ответах ChatGPT и Gemini: станет известно после замера. Perplexity подключается и пока не измеряется."),
 											],
 											[
 												tr(locale, "Who occupies the answers", "Кто занимает ответы"),

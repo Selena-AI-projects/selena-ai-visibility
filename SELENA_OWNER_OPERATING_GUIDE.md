@@ -23,8 +23,9 @@ calls for the same work, which doubles spend and breaks cardinality.
 ceiling for a single order's estimated reservation, not a wallet balance — no
 provider balance is ever read. Preflight multiplies the order's answers by the
 highest per-answer reservation any approved route makes ($0.005): a Snapshot
-measurement of 9 answers is $0.045, a full Landscape measurement of 400
-answers is $2.00, a full Expert Verified audit of 2,000 answers is $10.00. Its
+measurement of 6 answers is $0.03, a full Landscape measurement of 350
+answers is $1.75, a full Expert Verified audit of 700 answers is $3.50 (800
+answers and $4.00 once Perplexity is connected). Its
 job is to catch a scope typo before the first paid call: an order that
 suddenly needs ten times the usual answers cannot be approved. Set it just
 above the largest order you mean to approve.
@@ -320,7 +321,8 @@ What the adapter does and does not do, so the first invoice holds no surprises:
 ### Wiring the Bright Data adapters for Visitor View
 
 Visitor View is what the local plan sells: what a person actually sees on
-ChatGPT, Gemini and Perplexity. One adapter instance measures one surface, and
+ChatGPT and Gemini. Perplexity is being connected and is not measured yet, so
+no plan mints a permit for it. One adapter instance measures one surface, and
 the account supplies one collector per surface, so the worker holds three of
 them — `brightdata-chatgpt`, `brightdata-gemini`, `brightdata-perplexity`.
 A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
@@ -344,8 +346,8 @@ siblings override one if a collector is ever replaced, and
 `SELENA_BRIGHTDATA_ENDPOINT` overrides the API address.
 
 `SELENA_MEASUREMENT_ADAPTER=brightdata` is the name to set — a **family**, not
-an adapter. One plan sells three surfaces, and a single adapter name would send
-all three to one of them: the customer would pay for a Gemini answer measured on
+an adapter. One plan sells several surfaces, and a single adapter name would send
+all of them to one: the customer would pay for a Gemini answer measured on
 ChatGPT, which the executor then refuses as evidence for a system the permit did
 not authorize. The family routes per permit instead, from the surface that
 permit authorizes. `SELENA_MEASUREMENT_ADAPTER=auto` does the same across both
@@ -353,9 +355,9 @@ channels — visitor surfaces to Bright Data, API models to OpenRouter — which
 what the full landscape plan needs, and it requires both credentials.
 
 Naming one adapter directly (`brightdata-chatgpt`) is for a scope that sells
-that one surface. Do not use it to "start small" on a three-surface order: a
-plain name is not routing, so the Gemini and Perplexity permits are spent on the
-ChatGPT collector, and the guard then refuses their answers as evidence for a
+that one surface. Do not use it to "start small" on a multi-surface order: a
+plain name is not routing, so the Gemini permits are spent on the ChatGPT
+collector, and the guard then refuses their answers as evidence for a
 system the permit did not authorize. Paid, and no numbers. Set the family.
 
 Every member of a family passes the same owner gate, and the whole family is
@@ -527,6 +529,23 @@ operator controls:
   `PAID_REVIEW_REQUIRED`, never directly to `APPROVED`.
 - Confirm brand, domain, region, languages, scenarios and expected cardinality.
 - Review the configuration lock, quote expiry, budget and provider status.
+
+An order locked before Perplexity was taken out of the plans (catalog
+`selena-catalog-v2`) and not yet dispatched still names Perplexity in its
+lock. Approving it is refused with `SELENA_SYSTEM_NOT_MEASURED: Perplexity`
+before any permit is minted. Cancel that order and place it again from the
+order desk: the new lock covers ChatGPT and Gemini only. A free pilot request
+resumes the same order on resubmission, so it will not create a new one: stop
+that order and build the replacement on the desk for the same workspace. A v2
+order that is already QUEUED but not yet enqueued still holds Perplexity
+permits: stop it instead of pressing Enqueue. Runs and reports of earlier
+orders are left as they were.
+
+Monthly allowances change with this catalog at once: 200 answers on Snapshot
+and 700 on Landscape until Perplexity is connected (300 and 800 after). Answers
+already used or reserved earlier this month count against the new figure, so a
+client who used more than 200 (or 700) before the change has no allowance left
+until the next calendar month (UTC).
 
 ## During a cycle
 

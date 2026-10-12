@@ -32,9 +32,14 @@
  */
 
 import { readFileSync } from "node:fs";
+import { getPlan } from "@workspace/selena-visibility-contracts";
 
-/** The three Visitor View surfaces a `visibility-snapshot` measurement buys. */
-const VISITOR_SURFACES = ["ChatGPT", "Gemini", "Perplexity"] as const;
+/**
+ * The Visitor View surfaces a `visibility-snapshot` measurement buys, read from
+ * the catalog so a surface it does not measure (Perplexity, until a transport
+ * is verified) never reaches a lock.
+ */
+const VISITOR_SURFACES = getPlan("visibility-snapshot").systems;
 
 /**
  * One answer per question per surface. A repeat multiplies the bill without

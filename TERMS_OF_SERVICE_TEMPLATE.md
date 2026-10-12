@@ -2,10 +2,11 @@
 
 Status: template only; not effective until owner approval and publication.
 
-Seller: `PT Izi Jiza Bali` (temporarily approved seller metadata, pending payment-provider KYC).
+Seller: `Selena Systems LLC`, a Wyoming limited liability company, United States (owner-approved seller, pending payment-provider KYC).
 
-Official registered address, country, NIB, NPWP, support contact, effective date,
-and governing-law details are owner inputs and must remain blank until confirmed.
+Official registered address, registration numbers, support contact, effective
+date, and governing-law details are owner inputs and must remain blank until
+confirmed.
 
 Prices are displayed in USD. No live payment is enabled by this release. Product
 outputs are evidence-based technical readiness and/or separately measured AI

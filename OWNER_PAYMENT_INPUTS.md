@@ -5,11 +5,12 @@ checkout session, live webhook, real charge or recurring billing is enabled.
 
 Before production payment activation, provide this single set of inputs:
 
-- Approved seller legal entity: `Selena Systems LLC`, United States. Settled by
+- Approved seller legal entity: `Selena Systems LLC`, a Wyoming limited
+  liability company, United States. Settled by
   the owner on 2026-08-25 and now the single seller named by the site, the
   offer and the structured data.
 - KYC confirmation for that entity with the chosen payment provider
-- Registered address, NIB and NPWP (owner input; not supplied by this change)
+- Registered address and registration numbers (owner input; not supplied by this change)
 - Settlement bank account and banking details (owner input; not supplied by this change)
 - Chosen payment provider and confirmed account ownership
 - Settlement currency

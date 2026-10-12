@@ -3,7 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	expectedRunsFromScope,
+	getPlan,
 	type MeasurementScope,
+	measurementScopeForPlan,
 	measurementScopeSchema,
 } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it } from "vitest";
@@ -44,6 +46,14 @@ describe("planOrderDispatch", () => {
 			channel: "VISITOR",
 			repeatIndex: 0,
 		});
+	});
+
+	it("mints a Snapshot order's permits for ChatGPT and Gemini only, none for Perplexity", () => {
+		const snapshot = measurementScopeForPlan(getPlan("visibility-snapshot"), [scenarioA, scenarioB]);
+		const planned = planOrderDispatch({ orderId, lockVersion: 1, scope: snapshot });
+		expect(planned).toHaveLength(4);
+		expect([...new Set(planned.map((permit) => permit.systemId))]).toEqual(["ChatGPT", "Gemini"]);
+		expect(planned.every((permit) => permit.channel === "VISITOR")).toBe(true);
 	});
 
 	it("replans identically: a second planning pass mints zero new keys", () => {

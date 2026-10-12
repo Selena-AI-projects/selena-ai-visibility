@@ -2330,11 +2330,11 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 					<div className="mt-4 grid gap-3 sm:grid-cols-2">
 						<ChannelSummary
 							title="Visitor View"
-							systems="ChatGPT · Gemini · Perplexity"
+							systems="ChatGPT · Gemini"
 							description={tr(
 								locale,
-								"What customers see in live AI answer surfaces.",
-								"Что клиенты видят в пользовательских AI-сервисах.",
+								"What customers see in live AI answer surfaces. Perplexity is being connected and is not measured yet.",
+								"Что клиенты видят в пользовательских AI-сервисах. Perplexity подключается и пока не измеряется.",
 							)}
 							href={orderPlanUrl(project.project.id, "snapshot", access.isAdmin)}
 							planLabel={tr(locale, "Snapshot plan · $49/mo", "План Snapshot · $49/мес")}

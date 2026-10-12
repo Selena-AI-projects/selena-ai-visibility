@@ -109,7 +109,8 @@ describe.skipIf(!url)("monthly answer allowance on a database", () => {
 
 	it("lets only one of two simultaneous orders take the last of the month's allowance", async () => {
 		const fixture = await project("parallel orders");
-		// 800 answers on this plan; 300 already delivered this month.
+		// 700 answers on this plan while Perplexity is pending; 300 already
+		// delivered this month.
 		const delivered = await seedOrder(fixture, { expectedRuns: 300, orderStatus: "READY" });
 		const deliveredCycle = await seedCycle(fixture, {
 			...delivered,

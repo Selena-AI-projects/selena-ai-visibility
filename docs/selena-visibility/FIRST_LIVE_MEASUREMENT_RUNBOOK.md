@@ -27,17 +27,20 @@ so **one answer is `$0.0015`**. The same rate held for Gemini.
 
 | Run | Answers | Expected | Worst case with one retry each |
 |---|---:|---:|---:|
-| Bounded first run: 10 questions × 3 surfaces × 1 repeat | 30 | `$0.045` | `$0.09` |
-| Full Visitor Local plan: 100 × 3 × 1 | 300 | `$0.45` | `$0.90` |
+| Bounded first run: 15 questions × 2 surfaces × 1 repeat | 30 | `$0.045` | `$0.09` |
+| Full Visitor Local plan: 100 × 2 × 1 | 200 | `$0.30` | `$0.60` |
 
-The plan's own `providerBudgetCap` is `$12`, roughly twenty-six times the
-expected cost. That margin is there to catch a scope typo, not to authorize
-spending twenty-six times more.
+Two Visitor surfaces, ChatGPT and Gemini: Perplexity is being connected and is
+not measured, so no plan mints a permit for it. The plan's own
+`providerBudgetCap` is `$12`, roughly forty times the expected cost. That
+margin is there to catch a scope typo, not to authorize spending forty times
+more.
 
 ## One bounded Snapshot on staging (2026-10 procedure)
 
 One Snapshot order in the operator's own workspace: a synthetic brand, 3
-questions, the three Visitor View surfaces, 9 answers. The owner chose a
+questions, the two measured Visitor View surfaces (ChatGPT and Gemini), 6
+answers; no Perplexity rows are expected. The owner chose a
 `$0.50` ceiling for it. Each step is one Railway service and one deploy —
 variables are staged until deployed, see "Applying Railway variable changes"
 in `SELENA_OWNER_OPERATING_GUIDE.md` — and nothing starts on a timer: the
@@ -54,7 +57,7 @@ first run.
    variable does not exist on the service yet) and change
    `SELENA_OWNER_TASK=set-spend-budget` → deploy → the log prints the new cap
    with the unchanged `committed`. `$0.50 − $0.30` leaves `$0.20`; the run
-   below holds `$0.0135` and settles at `$0.09`, so it fits with `$0.11` to
+   below holds `$0.009` and settles at `$0.06`, so it fits with `$0.14` to
    spare. Lowering a cap towards what is already committed is allowed and
    means exactly that (`packages/lib/src/selena-provider-spend-budget.ts:5-12`).
 2. **Owner service — grant the operator role.**
@@ -71,8 +74,8 @@ first run.
    `SELENA_EMERGENCY_STOP` is not consulted by approve or enqueue — the stop
    is read by the worker when it runs a permit
    (`apps/worker/src/jobs/selena-measure.ts:201`) — so setting it on web
-   protects nothing. Preflight compares the order's 9 answers × `$0.005` =
-   `$0.045` with `SELENA_PROVIDER_BUDGET_USD`; `$0.005` is the highest
+   protects nothing. Preflight compares the order's 6 answers × `$0.005` =
+   `$0.03` with `SELENA_PROVIDER_BUDGET_USD`; `$0.005` is the highest
    per-answer *reservation* any approved route makes, an estimate and not a
    price (`packages/selena-visibility-contracts/src/measurement-execution.ts:116-126`).
 4. **Build the order** on the desk, in the operator's own workspace: synthetic
@@ -84,8 +87,8 @@ first run.
    SUCCESS **and** the log line `Registered handler: selena-measure`
    (`apps/worker/src/handlers.ts:99`).
 6. **Operator presses Enqueue once.**
-7. **Wait until 9 runs are terminal.** The desk shows the order in
-   `QC_REQUIRED` with a `providerSpend` figure, and the worker log has 9
+7. **Wait until 6 runs are terminal.** The desk shows the order in
+   `QC_REQUIRED` with a `providerSpend` figure, and the worker log has 6
    lines `[selena-measure] permit <id>: completed` or
    `[selena-measure] permit <id> failed: <reason>`
    (`apps/worker/src/jobs/selena-measure.ts:205-207`).
@@ -96,7 +99,7 @@ first run.
    the database (table below).
 
 > **WARNING — step 5 must be deployed and confirmed before step 6. Pressing
-> Enqueue while the worker's stop is still engaged burns all 9 permits.** The
+> Enqueue while the worker's stop is still engaged burns all 6 permits.** The
 > executor reserves, then claims — which consumes the permit — then executes,
 > and the stop is checked inside execution: `reserve → claim → executePermit →
 > assertTransportAllowed` (`packages/lib/src/selena-run-executor.ts:185-188`,
@@ -106,18 +109,18 @@ first run.
 > reservation. A consumed permit cannot be retried: the queue has
 > `retryLimit: 0` (`apps/worker/src/index.ts:94-97`) and a replayed permit is
 > refused as already consumed (`selena-run-executor.ts:52`). The order would
-> have to be rebuilt from a new lock, and the 9 reservations stay in
+> have to be rebuilt from a new lock, and the 6 reservations stay in
 > `committed`.
 
-### Expected ledger for 9 answers
+### Expected ledger for 6 answers
 
 | | Expected | Why |
 |---|---:|---|
-| Reservation, held before each call | 9 × `$0.0015` = `$0.0135` | `MEASUREMENT_ESTIMATED_COST_USD` for the `brightdata` family (`measurement-execution.ts:105`, `:110-114`). `branch-c` would reserve `$0.005` × 9 = `$0.045`, because its Perplexity route is `dataforseo-perplexity` (`:75-78`, `:107`). An estimated reservation, not a maximum and not a price. |
-| Settlement | 9 × `$0.01` = `$0.09`, every row `basis = estimated` | Bright Data payloads carry no cost, so each run settles at the `brightdata` placeholder in `packages/lib/src/usage/cost.ts:20`. The 2026-09-04 run settled 30 × `$0.01`, all estimated. |
-| Desk label | `$0.0900 · оценка для 9 из 9` | `apps/web/src/routes/_authed/app/selena-admin.tsx:687` |
-| `measure` committed afterwards | `$0.30` + `$0.09` = `$0.39` | Read it back with `read-spend-budget`. |
-| Validity | ≤ 6 `SUCCEEDED`, 3 `INVALID` — all 9 billed | `brightdata-perplexity` returned the sign-up wall 24/24 on 2026-09-05; an invalid answer is still a record on the invoice. |
+| Reservation, held before each call | 6 × `$0.0015` = `$0.009` | `MEASUREMENT_ESTIMATED_COST_USD` for the `brightdata` family (`measurement-execution.ts:105`, `:110-114`). An estimated reservation, not a maximum and not a price. |
+| Settlement | 6 × `$0.01` = `$0.06`, every row `basis = estimated` | Bright Data payloads carry no cost, so each run settles at the `brightdata` placeholder in `packages/lib/src/usage/cost.ts:20`. The 2026-09-04 run settled 30 × `$0.01`, all estimated. |
+| Desk label | `$0.0600 · оценка для 6 из 6` | `apps/web/src/routes/_authed/app/selena-admin.tsx:687` |
+| `measure` committed afterwards | `$0.30` + `$0.06` = `$0.36` | Read it back with `read-spend-budget`. |
+| Validity | ≤ 6 `SUCCEEDED`, no Perplexity rows — all 6 billed | Perplexity is not measured, so the order holds no Perplexity permit; an invalid ChatGPT or Gemini answer is still a record on the invoice. |
 
 ### Reconciliation: Bright Data usage against the database
 
@@ -130,10 +133,10 @@ the owner reads off the service; unless those say otherwise they are
 | Field | Bright Data side | Database side |
 |---|---|---|
 | UTC window | from Enqueue to the last terminal run | `min(created_at)` / `max(completed_at)` of the cycle's `sv_runs` |
-| Dataset id | one row per collector | `sv_runs.system_id` (ChatGPT, Gemini, Perplexity) |
+| Dataset id | one row per collector | `sv_runs.system_id` (ChatGPT, Gemini; no Perplexity rows) |
 | Record count | per dataset | `count(*)` of `sv_runs` by `system_id` — 3 each |
 | Cost per record | as invoiced | compared with the `$0.0015` of 2026-09-01 |
-| Total | per dataset and overall | `Σ sv_provider_spend_reservations.actual_usd` and `Σ sv_cost_events.amount_usd` — both `$0.09` |
+| Total | per dataset and overall | `Σ sv_provider_spend_reservations.actual_usd` and `Σ sv_cost_events.amount_usd` — both `$0.06` |
 | Request id | Bright Data request / snapshot id | `sv_runs.raw_response_reference` |
 
 Criterion: the record count is exact per dataset, and the per-record price is
@@ -282,15 +285,15 @@ stops overstating what was spent.
   reports, defaulting to estimated
   (`packages/lib/src/selena-visibility-repositories.ts:1269-1278`), and the
   adapter has only the placeholder in `packages/lib/src/usage/cost.ts:20`.
-  For 9 answers that is `$0.09` in `sv_cost_events`, with `$0.0135` reserved
+  For 6 answers that is `$0.06` in `sv_cost_events`, with `$0.009` reserved
   beforehand; the expected ledger under the 2026-10 procedure has the detail.
   A sum far above `$0.01` a run means the scope was not what the preflight
   said.
 - Each run carries extraction output. A run stored and billed with no mention,
   position or citation extracted is a successful call whose answer nothing read
   — worth stopping for.
-- The answers are real text, not empty strings, and the surfaces are the three
-  the plan sold.
+- The answers are real text, not empty strings, and the surfaces are the two
+  the plan measures (ChatGPT and Gemini); there are no Perplexity rows.
 
 ## If it goes wrong
 
