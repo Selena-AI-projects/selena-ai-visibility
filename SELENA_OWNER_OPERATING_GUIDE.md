@@ -485,7 +485,7 @@ exits; nothing here spends on a provider. Keep its restart policy at never.
 
 | Variable | What it does |
 |---|---|
-| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget`, `set-spend-budget` or `grant-platform-admin` |
+| `SELENA_OWNER_TASK` | `issue-pilot-invites`, `read-spend-budget`, `set-spend-budget` or `grant-platform-admin`; the `local-maps-*` tasks are in `docs/selena-visibility/LOCAL_MAPS_CANARY_RUNBOOK.md` |
 | `SELENA_PILOT_SEATS_CSV` | The seats file's contents, one `CODE,planId[,label]` per line |
 | `SELENA_PILOT_SEAT_DAYS` | How many days the seats stay redeemable; default 30 |
 | `SELENA_SPEND_SCOPE` | The scope to read or set; default `measure` |

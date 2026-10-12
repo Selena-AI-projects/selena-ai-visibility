@@ -519,6 +519,146 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 		description: "Owner-approved provider call ceiling for the one-shot canary.",
 	},
 	{
+		name: "SELENA_LOCAL_SETUP_DISPLAY_NAME",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: the business location's display name (also names its dedicated Local Maps project).",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_COUNTRY_CODE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: ISO 3166-1 alpha-2 country of the location, upper case.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_ADMIN_AREA",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-setup: optional region of the location.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_LOCALITY",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-setup: optional town of the location.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_TIMEZONE",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-setup: IANA time zone of the location.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_LATITUDE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: client-confirmed latitude of the location and of the grid center.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_LONGITUDE",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: client-confirmed longitude of the location and of the grid center.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_PLACE_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: client-confirmed Google Place ID the rank is matched on; this or the CID is required.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_CID",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: client-confirmed Google Maps CID (decimal) the rank is matched on; this or the Place ID is required.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_MAPS_URL",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: optional Google Maps URL kept for human cross-checking; derived from the Place ID or CID when unset.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_KEYWORDS",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: one to five keywords, one per line or separated by '|'; each gets its own configuration lock.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_LANGUAGE",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-setup: keyword and request language; defaults to 'en'.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_SE_DOMAIN",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: Google domain sent to the provider; defaults to 'google.com'.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_WINDOW_STARTS_AT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: ISO instant from which the canary and its pilot may run.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_WINDOW_ENDS_AT",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: ISO instant after which the lock's canary and pilot can no longer start.",
+	},
+	{
+		name: "SELENA_LOCAL_SETUP_PRICE_SNAPSHOT_VERSION",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-setup: optional label of the price the lock freezes; defaults to one derived from SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD.",
+	},
+	{
+		name: "SELENA_LOCAL_CANARY_CYCLE_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-canary-review: the CANARY cycle to decide on.",
+	},
+	{
+		name: "SELENA_LOCAL_CANARY_REVIEW_DECISION",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-canary-review: ACCEPTED (creates the pilot) or REJECTED; no default.",
+	},
+	{
+		name: "SELENA_LOCAL_PILOT_CYCLE_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-pilot-approve: the PILOT cycle an accepted canary created.",
+	},
+	{
+		name: "SELENA_LOCAL_PILOT_OWNER_APPROVED",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Only exact 'true' lets the owner task local-maps-pilot-approve queue the pilot's nine points.",
+	},
+	{
+		name: "SELENA_LOCAL_PILOT_MAX_SPEND_USD",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Owner-approved USD ceiling for one pilot's worst case (every retry of every point); a lock above it is refused.",
+	},
+	{
 		name: "SELENA_LOCAL_VISIBILITY_ENABLED",
 		scope: "server",
 		requiredBy: "optional",

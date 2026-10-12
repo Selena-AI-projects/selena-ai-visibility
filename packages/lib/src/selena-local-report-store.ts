@@ -1,4 +1,7 @@
-import { localMapsMaterializedProviderRequestSchema } from "@workspace/selena-visibility-contracts";
+import {
+	formatLocalMapsLocationCoordinate,
+	localMapsMaterializedProviderRequestSchema,
+} from "@workspace/selena-visibility-contracts";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { OrganizationDatabase, OrganizationTransaction } from "./db/organization-transaction";
@@ -143,7 +146,7 @@ async function loadReportCompetition(
 			evidenceId: row.evidenceId,
 			keyword: row.keyword,
 			language: row.language,
-			locationCoordinate: `${request.point.latitude},${request.point.longitude},${request.params.zoom}`,
+			locationCoordinate: formatLocalMapsLocationCoordinate(request),
 			target: request.targetIdentity,
 			targetRank: row.targetRank,
 			captureDepth: request.params.depth,

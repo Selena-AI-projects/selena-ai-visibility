@@ -168,8 +168,9 @@ describe("LocalMapsRankAdapter contract", () => {
 			keywordSetVersion: lock.keywordSet.version,
 		});
 		expect(formatLocalMapsLocationCoordinate(task)).toBe(
-			`${task.point.latitude},${task.point.longitude},${lock.request.zoom}`,
+			`${task.point.latitude},${task.point.longitude},${lock.request.zoom}z`,
 		);
+		expect(formatLocalMapsLocationCoordinate(task)).toMatch(/^-?\d+\.\d{6},-?\d+\.\d{6},13z$/);
 	});
 
 	it("rejects a provider capability whose depth is below the locked request", () => {
