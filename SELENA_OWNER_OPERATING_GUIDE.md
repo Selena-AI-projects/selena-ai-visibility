@@ -23,8 +23,9 @@ calls for the same work, which doubles spend and breaks cardinality.
 ceiling for a single order's estimated reservation, not a wallet balance — no
 provider balance is ever read. Preflight multiplies the order's answers by the
 highest per-answer reservation any approved route makes ($0.005): a Snapshot
-measurement of 9 answers is $0.045, a full Landscape measurement of 400
-answers is $2.00, a full Expert Verified audit of 2,000 answers is $10.00. Its
+measurement of 9 answers (3 questions × ChatGPT, Gemini and Perplexity (API))
+is $0.045, a full Landscape measurement of 400 answers is $2.00, a full Expert
+Verified audit of 800 answers is $4.00. Its
 job is to catch a scope typo before the first paid call: an order that
 suddenly needs ten times the usual answers cannot be approved. Set it just
 above the largest order you mean to approve.
@@ -42,7 +43,12 @@ the route's estimate when the provider reports none.
 | `oxylabs-perplexity` | $0.0015 | $0.01 | Same reservation; the settlement is the same placeholder table. |
 | `olostep-perplexity` | $0.0015 | $0.0054 | Three credits at the smallest paid plan's list rate. |
 | `openrouter` | $0.0015 | $0.005 | Placeholder table. |
-| `dataforseo-perplexity` | $0.005 | $0.005 | The `dataforseo` placeholder in the same table. This is where the $0.005 comes from. |
+| `dataforseo-perplexity` | $0.005 | $0.005 | The `dataforseo` placeholder in the same table. This is where the $0.005 comes from. It measures Perplexity (API); no DataForSEO invoice has confirmed the figure. |
+
+The reservation column is for a route named on its own. Under a family name
+(`brightdata`, `branch-c`, `auto`) every answer reserves $0.005, because every
+family routes Perplexity (API) to DataForSEO and the reservation is taken
+before the worker knows which system a permit is for.
 
 So the $0.005 preflight figure is the highest *reservation*, not the highest
 *charge*: an answer on a route that reports no cost settles at up to $0.01.
@@ -107,10 +113,18 @@ be the side effect of a typo in a variable.
 
 The list currently holds the inert adapters, `openrouter`, the three Visitor
 View surfaces `brightdata-chatgpt`, `brightdata-gemini` and
-`brightdata-perplexity`, and the two stand-alone Perplexity transports
-`oxylabs-perplexity` and `olostep-perplexity` — so `brightdata` as a family
-name does select a live paid path, and the credentials are the remaining
-requirement. Neither Perplexity transport belongs to a family: `oxylabs-perplexity`
+`brightdata-perplexity`, `dataforseo-perplexity` (Perplexity's API, sold as
+Perplexity (API), system `perplexity/sonar`), and the two stand-alone
+Perplexity transports `oxylabs-perplexity` and `olostep-perplexity` — so
+`brightdata` as a family name does select a live paid path, and the credentials
+are the remaining requirement. Every family (`brightdata`, `branch-c`, `auto`)
+routes Perplexity (API) to `dataforseo-perplexity`, so each needs
+`DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` on the worker beside its other
+credentials; without them the worker refuses the batch before a permit is
+claimed. Because the worker reserves before it knows a permit's system, a
+family that reaches DataForSEO reserves its `$0.005` estimate for every answer,
+ChatGPT and Gemini included; each run then settles at its own figure.
+Neither stand-alone Perplexity transport belongs to a family: `oxylabs-perplexity`
 was approved on 2026-09-06 for a canary, `olostep-perplexity` was built on
 2026-09-08 for the same purpose, and each runs only when named outright, which
 is a one-surface scope by construction. While `noop` is selected every run is
@@ -319,8 +333,11 @@ What the adapter does and does not do, so the first invoice holds no surprises:
 
 ### Wiring the Bright Data adapters for Visitor View
 
-Visitor View is what the local plan sells: what a person actually sees on
-ChatGPT, Gemini and Perplexity. One adapter instance measures one surface, and
+Visitor View is what a person actually sees on ChatGPT and Gemini. The
+perplexity.ai website as a visitor sees it is not measured yet, so no plan
+mints a Visitor View permit for it; Snapshot sells Perplexity through its API
+instead (Perplexity (API), on DataForSEO), shown in the report's API View
+section and never pooled with the Visitor View rates. One adapter instance measures one surface, and
 the account supplies one collector per surface, so the worker holds three of
 them — `brightdata-chatgpt`, `brightdata-gemini`, `brightdata-perplexity`.
 A fourth visitor adapter, `oxylabs-perplexity`, measures the same Perplexity
@@ -344,8 +361,8 @@ siblings override one if a collector is ever replaced, and
 `SELENA_BRIGHTDATA_ENDPOINT` overrides the API address.
 
 `SELENA_MEASUREMENT_ADAPTER=brightdata` is the name to set — a **family**, not
-an adapter. One plan sells three surfaces, and a single adapter name would send
-all three to one of them: the customer would pay for a Gemini answer measured on
+an adapter. One plan sells several surfaces, and a single adapter name would send
+all of them to one: the customer would pay for a Gemini answer measured on
 ChatGPT, which the executor then refuses as evidence for a system the permit did
 not authorize. The family routes per permit instead, from the surface that
 permit authorizes. `SELENA_MEASUREMENT_ADAPTER=auto` does the same across both
@@ -353,9 +370,9 @@ channels — visitor surfaces to Bright Data, API models to OpenRouter — which
 what the full landscape plan needs, and it requires both credentials.
 
 Naming one adapter directly (`brightdata-chatgpt`) is for a scope that sells
-that one surface. Do not use it to "start small" on a three-surface order: a
-plain name is not routing, so the Gemini and Perplexity permits are spent on the
-ChatGPT collector, and the guard then refuses their answers as evidence for a
+that one surface. Do not use it to "start small" on a multi-surface order: a
+plain name is not routing, so the Gemini permits are spent on the ChatGPT
+collector, and the guard then refuses their answers as evidence for a
 system the permit did not authorize. Paid, and no numbers. Set the family.
 
 Every member of a family passes the same owner gate, and the whole family is
@@ -527,6 +544,24 @@ operator controls:
   `PAID_REVIEW_REQUIRED`, never directly to `APPROVED`.
 - Confirm brand, domain, region, languages, scenarios and expected cardinality.
 - Review the configuration lock, quote expiry, budget and provider status.
+
+An order locked before Visitor View Perplexity was taken out of the plans
+(catalog `selena-catalog-v2`) and not yet dispatched still names Perplexity in
+its lock. Approving it is refused with `SELENA_SYSTEM_NOT_MEASURED: Perplexity`
+before any permit is minted. Cancel that order and place it again from the
+order desk: the new lock (`selena-catalog-v4`) covers ChatGPT and Gemini in
+Visitor View and Perplexity (API). A free pilot request
+resumes the same order on resubmission, so it will not create a new one: stop
+that order and build the replacement on the desk for the same workspace. A v2
+order that is already QUEUED but not yet enqueued still holds Perplexity
+permits: stop it instead of pressing Enqueue. An order locked under
+`selena-catalog-v3` (ChatGPT and Gemini only) is approved as it was sold, with
+no Perplexity (API) answers; to add them, cancel it and place it again. Runs
+and reports of earlier orders are left as they were.
+
+Monthly allowances follow the catalog at once: 300 answers on Snapshot and 800
+on Landscape. Answers already used or reserved earlier this month count against
+them.
 
 ## During a cycle
 

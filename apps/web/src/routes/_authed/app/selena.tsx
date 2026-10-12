@@ -2330,25 +2330,33 @@ function ResultsPanel({ project, locale }: { project: WorkspaceProject; locale: 
 					<div className="mt-4 grid gap-3 sm:grid-cols-2">
 						<ChannelSummary
 							title="Visitor View"
-							systems="ChatGPT · Gemini · Perplexity"
+							systems="ChatGPT · Gemini"
 							description={tr(
 								locale,
-								"What customers see in live AI answer surfaces.",
-								"Что клиенты видят в пользовательских AI-сервисах.",
+								"What customers see in live AI answer surfaces. The perplexity.ai website is not measured yet.",
+								"Что клиенты видят в пользовательских AI-сервисах. Сайт perplexity.ai пока не измеряется.",
 							)}
 							href={orderPlanUrl(project.project.id, "snapshot", access.isAdmin)}
-							planLabel={tr(locale, "Snapshot plan · $49/mo", "План Snapshot · $49/мес")}
+							planLabel={tr(
+								locale,
+								"Snapshot plan · $49/mo, with Perplexity through its API",
+								"План Snapshot · $49/мес, вместе с Perplexity через API",
+							)}
 						/>
 						<ChannelSummary
 							title="API View"
-							systems="Claude · DeepSeek · Qwen · Mistral · Grok"
+							systems="Perplexity (API) · Claude · DeepSeek · Qwen · Mistral · Grok"
 							description={tr(
 								locale,
-								"A separate model-knowledge baseline without web search by default.",
-								"Отдельная проверка знаний моделей; веб-поиск по умолчанию выключен.",
+								"Asked over the API, counted apart from the visitor view. Perplexity (API) searches the web itself; the other five answer from their own knowledge.",
+								"Вопросы через API, считаются отдельно от Visitor View. Perplexity (API) сам ищет в интернете, остальные пять отвечают из собственного знания.",
 							)}
 							href={orderPlanUrl(project.project.id, "landscape", access.isAdmin)}
-							planLabel={tr(locale, "In the Landscape plan · $79/mo", "Входит в Landscape · $79/мес")}
+							planLabel={tr(
+								locale,
+								"Perplexity (API) in Snapshot; all six in Landscape · $79/mo",
+								"Perplexity (API) — в Snapshot; все шесть — в Landscape · $79/мес",
+							)}
 						/>
 					</div>
 					{project.measurement ? (

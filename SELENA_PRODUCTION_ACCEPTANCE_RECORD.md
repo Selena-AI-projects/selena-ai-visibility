@@ -19,6 +19,7 @@ Release commit: `16e522e712aa55c2737f8b80f14a62f80b6f55ab`
 ## Production foundation actions
 
 - Temporary approved seller legal entity for Selena AI Visibility: `PT Izi Jiza Bali`.
+- Superseded 2026-08-25 (owner): the seller is Selena Systems LLC, a Wyoming limited liability company, United States; see OWNER_PAYMENT_INPUTS.md.
 - Seller address, NIB, NPWP, bank details and payment-provider KYC: owner inputs pending.
 - Checkout currency: USD; live payments remain OFF pending payment-provider KYC and explicit owner authorization.
 

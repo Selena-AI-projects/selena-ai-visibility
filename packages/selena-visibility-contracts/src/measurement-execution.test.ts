@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { apiModelIds, getPlan, PERPLEXITY_API_SYSTEM_ID, planIds } from "./catalog";
 import {
 	assertAdapterAllowed,
 	assertAdaptersConfigured,
 	assertMeasurementAllowed,
 	estimatedAnswerCostUsd,
 	isAffirmativeEnvValue,
+	measurementAdapterFamilies,
 	measurementAdapterNamesFor,
 	measurementConfigFromEnv,
 	resolveMeasurementAdapterName,
@@ -52,6 +54,32 @@ describe("Selena measurement execution boundary", () => {
 		expect(resolveMeasurementAdapterName("noop", null)).toBe("noop");
 	});
 
+	it("routes Perplexity (API) to DataForSEO in every family, and never to OpenRouter", () => {
+		for (const family of Object.keys(measurementAdapterFamilies)) {
+			expect(resolveMeasurementAdapterName(family, PERPLEXITY_API_SYSTEM_ID)).toBe("dataforseo-perplexity");
+			expect(measurementAdapterFamilies[family]?.[PERPLEXITY_API_SYSTEM_ID]).not.toBe("openrouter");
+		}
+		expect(Object.keys(measurementAdapterFamilies).sort()).toEqual(["auto", "branch-c", "brightdata"]);
+		// The OpenRouter route holds exactly the five OpenRouter models.
+		const openRouterSystems = Object.entries(measurementAdapterFamilies.auto ?? {})
+			.filter(([, adapter]) => adapter === "openrouter")
+			.map(([systemId]) => systemId);
+		expect(openRouterSystems.sort()).toEqual([...apiModelIds].sort());
+		// The Visitor View Perplexity routes stay where they were.
+		expect(resolveMeasurementAdapterName("brightdata", "Perplexity")).toBe("brightdata-perplexity");
+		expect(resolveMeasurementAdapterName("branch-c", "Perplexity")).toBe("dataforseo-perplexity");
+	});
+
+	it("routes every system a plan sells under the family that measures both channels", () => {
+		for (const planId of planIds)
+			for (const systemId of getPlan(planId).systems)
+				expect(() => resolveMeasurementAdapterName("auto", systemId)).not.toThrow();
+		for (const systemId of getPlan("visibility-snapshot").systems) {
+			expect(() => resolveMeasurementAdapterName("brightdata", systemId)).not.toThrow();
+			expect(() => resolveMeasurementAdapterName("branch-c", systemId)).not.toThrow();
+		}
+	});
+
 	it("refuses a system the configured family cannot measure rather than guessing one", () => {
 		expect(() => resolveMeasurementAdapterName("brightdata", "anthropic/claude-haiku-4.5")).toThrow(
 			"SELENA_ADAPTER_NO_ROUTE",
@@ -79,14 +107,20 @@ describe("Selena measurement execution boundary", () => {
 
 	it("holds every adapter a family can reach to the same owner gate", () => {
 		const brightData = ["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity"];
-		expect(measurementAdapterNamesFor("brightdata").sort()).toEqual([...brightData].sort());
+		expect(measurementAdapterNamesFor("brightdata").sort()).toEqual([...brightData, "dataforseo-perplexity"].sort());
 		expect(measurementAdapterNamesFor("branch-c").sort()).toEqual(
 			["brightdata-chatgpt", "brightdata-gemini", "dataforseo-perplexity"].sort(),
 		);
 		expect(measurementAdapterNamesFor("auto").sort()).toEqual(
 			["brightdata-chatgpt", "brightdata-gemini", "dataforseo-perplexity", "openrouter"].sort(),
 		);
-		expect(() => assertAdaptersConfigured("brightdata", ["noop", ...brightData])).not.toThrow();
+		expect(() =>
+			assertAdaptersConfigured("brightdata", ["noop", ...brightData, "dataforseo-perplexity"]),
+		).not.toThrow();
+		// Perplexity (API) is part of the family: without DataForSEO it is refused.
+		expect(() => assertAdaptersConfigured("brightdata", ["noop", ...brightData])).toThrow(
+			"SELENA_ADAPTER_NOT_REGISTERED",
+		);
 		expect(() => assertAdaptersConfigured("branch-c", ["noop", ...brightData, "dataforseo-perplexity"])).not.toThrow();
 		// One missing member is enough: the family is refused before a permit is spent.
 		expect(() => assertAdaptersConfigured("brightdata", ["noop", "brightdata-chatgpt"])).toThrow(
@@ -229,11 +263,17 @@ describe("Selena measurement execution boundary", () => {
 
 describe("an order's worst-case provider reservation", () => {
 	it("is what the executor can reserve for its answers, not the plan's cap", () => {
-		// A Snapshot measurement of 3 questions × 3 systems: well inside a $2
-		// per-order ceiling, although the plan's provider cap is $12.
+		// A Snapshot measurement of 3 questions × 3 systems (ChatGPT, Gemini,
+		// Perplexity (API)): well inside a $2 per-order ceiling, although the
+		// plan's provider cap is $12.
 		expect(worstCaseOrderCostUsd(9)).toBe(0.045);
 		// A full Landscape month at 25 questions × 2 languages × 8 systems.
 		expect(worstCaseOrderCostUsd(400)).toBe(2);
+	});
+
+	it("reserves the DataForSEO estimate per answer in every family, since each reaches Perplexity (API)", () => {
+		for (const family of ["brightdata", "branch-c", "auto"]) expect(estimatedAnswerCostUsd(family)).toBe(0.005);
+		expect(estimatedAnswerCostUsd("openrouter")).toBe(0.0015);
 	});
 
 	it("never undercuts the reservation of any route the worker may take", () => {

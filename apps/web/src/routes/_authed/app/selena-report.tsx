@@ -20,6 +20,7 @@ import { getSelenaRunDetailFn } from "../../../server/selena-run-explorer";
 import { type FollowupStatus, followupStatuses, recommendationKey } from "@workspace/lib/selena-recommendation-followups";
 import { humanizeSelenaError } from "@/lib/selena-workspace-errors";
 import { upsertSelenaRecommendationFollowupFn } from "../../../server/selena-recommendation-followups";
+import { PERPLEXITY_API_SYSTEM_ID, SELENA_SYSTEM_LABELS } from "@workspace/selena-visibility-contracts";
 
 export const Route = createFileRoute("/_authed/app/selena-report")({
 	validateSearch: z.object({ project: z.string().uuid().optional() }),
@@ -92,22 +93,17 @@ function pct(locale: ReportLocale, value: number | null): string {
 	return value === null ? tr(locale, "UNKNOWN", "НЕИЗВЕСТНО") : `${Math.round(value * 100)}%`;
 }
 
-const SYSTEM_LABELS: Record<string, string> = {
-	"anthropic/claude-haiku-4.5": "Claude",
-	"deepseek/deepseek-v3.2": "DeepSeek",
-	"qwen/qwen3.5-9b": "Qwen",
-	"mistralai/mistral-small-2603": "Mistral",
-	"x-ai/grok-4.5": "Grok",
-};
-
 /**
  * The method line under each system, printed from how the answers were
  * ACTUALLY captured — the sold channel never overrides the observed capture
- * mode, so the page cannot claim a visitor's eyes for an API capture.
+ * mode, so the page cannot claim a visitor's eyes for an API capture. An API
+ * answer with live search (Perplexity (API)) still reads as the API.
  */
 function captureLabel(locale: ReportLocale, channel: "VISITOR" | "API", captureModes: string[]): string {
 	const live = captureModes.includes("live_search");
 	const api = captureModes.includes("training_data");
+	if (channel === "API" && live && !api)
+		return tr(locale, "captured over the API · with web search", "снято через API · с веб-поиском");
 	if (channel === "API" || (api && !live))
 		return tr(locale, "captured over the API · model knowledge", "снято через API · знание модели");
 	if (live && !api) return tr(locale, "captured as a live visitor", "снято глазами живого посетителя");
@@ -117,7 +113,7 @@ function captureLabel(locale: ReportLocale, channel: "VISITOR" | "API", captureM
 
 function systemLabel(locale: ReportLocale, systemId: string): string {
 	if (systemId === "unattributed") return tr(locale, "System not recorded", "Система не записана");
-	return SYSTEM_LABELS[systemId] ?? systemId;
+	return SELENA_SYSTEM_LABELS[systemId] ?? systemId;
 }
 
 function systemKey(system: { channel: GraderChannel; systemId: string }): string {
@@ -837,6 +833,8 @@ function SelenaReportPage() {
 	const report = view?.report ?? null;
 	const visitorSystems = report?.systems.filter((system) => system.channel === "VISITOR") ?? [];
 	const apiSystems = report?.systems.filter((system) => system.channel === "API") ?? [];
+	const apiHasPerplexity = apiSystems.some((system) => system.systemId === PERPLEXITY_API_SYSTEM_ID);
+	const apiHasModelKnowledge = apiSystems.some((system) => system.systemId !== PERPLEXITY_API_SYSTEM_ID);
 	const rosterTotal = report?.roster.reduce((total, entry) => total + entry.answersMentioned, 0) ?? 0;
 	const planLabel = view?.planId ? (PLAN_LABELS[view.planId] ?? view.planId) : null;
 
@@ -1188,7 +1186,7 @@ function SelenaReportPage() {
 										{[
 											[
 												tr(locale, "How AI systems see you", "Как вас видят AI-системы"),
-												tr(locale, "whether ChatGPT, Gemini and Perplexity name you — known only after a measurement.", "упомянуты ли вы в ответах ChatGPT, Gemini, Perplexity: станет известно после замера."),
+												tr(locale, "whether ChatGPT and Gemini (as a visitor sees them) and Perplexity through its API name you — known only after a measurement.", "упоминают ли вас ChatGPT и Gemini (как их видит посетитель) и Perplexity через API: станет известно после замера."),
 											],
 											[
 												tr(locale, "Who occupies the answers", "Кто занимает ответы"),
@@ -1299,11 +1297,23 @@ function SelenaReportPage() {
 								<div className="flex items-start gap-3 rounded-xl border border-[#dccfbe] bg-[#fffdf8] p-4 text-sm">
 									<span className="shrink-0 rounded-full bg-[#e8e4dc] px-3 py-1 text-[0.7rem] font-bold tracking-wide text-[#574d45]">API VIEW</span>
 									<p>
-										{tr(
-											locale,
-											"The model's own knowledge: the question goes straight to the model over the API — no web search, no hints.",
-											"Внутреннее знание модели: вопрос задаётся модели напрямую через API — без веб-поиска и без подсказок.",
-										)}
+										{apiHasPerplexity && !apiHasModelKnowledge
+											? tr(
+													locale,
+													"Over the API: the question goes straight to Perplexity's API, which searches the web itself. This is not the perplexity.ai website a visitor sees, so it is counted apart from Visitor View.",
+													"Через API: вопрос задаётся напрямую API Perplexity, который сам ищет в интернете. Это не сайт perplexity.ai, который видит посетитель, поэтому он считается отдельно от Visitor View.",
+												)
+											: apiHasPerplexity
+												? tr(
+														locale,
+														"Over the API: the question goes straight to each model, without hints. The five models answer from their own knowledge, with no web search; Perplexity (API) searches the web itself. None of it is the website a visitor sees.",
+														"Через API: вопрос задаётся каждой модели напрямую, без подсказок. Пять моделей отвечают из собственного знания, без веб-поиска; Perplexity (API) сам ищет в интернете. Ни то ни другое — не сайт, который видит посетитель.",
+													)
+												: tr(
+														locale,
+														"The model's own knowledge: the question goes straight to the model over the API — no web search, no hints.",
+														"Внутреннее знание модели: вопрос задаётся модели напрямую через API — без веб-поиска и без подсказок.",
+													)}
 									</p>
 								</div>
 							</div>
@@ -1321,7 +1331,12 @@ function SelenaReportPage() {
 
 						{[
 							{ list: visitorSystems, title: tr(locale, "How AI systems see you — Visitor View", "Как вас видят AI-системы — Visitor View") },
-							{ list: apiSystems, title: tr(locale, "What models know on their own — API View", "Внутреннее знание моделей — API View") },
+							{
+								list: apiSystems,
+								title: apiHasPerplexity
+									? tr(locale, "What AI systems answer over the API — API View", "Что AI-системы отвечают через API — API View")
+									: tr(locale, "What models know on their own — API View", "Внутреннее знание моделей — API View"),
+							},
 						]
 							.filter((group) => group.list.length > 0)
 							.map((group, index) => (

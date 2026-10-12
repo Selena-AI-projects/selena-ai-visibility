@@ -23,21 +23,29 @@ close it again after the terminal evidence is checked.
 ## What one run costs
 
 From the account's own invoice on 2026-09-01: 9 ChatGPT records cost `$0.0135`,
-so **one answer is `$0.0015`**. The same rate held for Gemini.
+so **one Bright Data answer is `$0.0015`**. The same rate held for Gemini.
+Perplexity (API) goes through DataForSEO, booked at the `$0.005` placeholder in
+`packages/lib/src/usage/cost.ts`; no DataForSEO invoice has confirmed it, so it
+is an estimate, not a price.
 
 | Run | Answers | Expected | Worst case with one retry each |
 |---|---:|---:|---:|
-| Bounded first run: 10 questions × 3 surfaces × 1 repeat | 30 | `$0.045` | `$0.09` |
-| Full Visitor Local plan: 100 × 3 × 1 | 300 | `$0.45` | `$0.90` |
+| Bounded first run (2026-09): 15 questions × 2 surfaces × 1 repeat | 30 | `$0.045` | `$0.09` |
+| Full Snapshot plan: 100 × (2 Bright Data + Perplexity (API)) × 1 | 300 | `$0.30` + `$0.50` estimated = `$0.80` | `$1.60` |
 
-The plan's own `providerBudgetCap` is `$12`, roughly twenty-six times the
-expected cost. That margin is there to catch a scope typo, not to authorize
-spending twenty-six times more.
+Snapshot measures ChatGPT and Gemini in Visitor View on Bright Data and
+Perplexity through its API on DataForSEO. Perplexity's website as a visitor
+sees it is not measured, so no plan mints a Visitor View permit for it. The
+plan's own `providerBudgetCap` is `$12`, roughly fifteen times the expected
+cost. That margin is there to catch a scope typo, not to authorize spending
+fifteen times more.
 
 ## One bounded Snapshot on staging (2026-10 procedure)
 
 One Snapshot order in the operator's own workspace: a synthetic brand, 3
-questions, the three Visitor View surfaces, 9 answers. The owner chose a
+questions, 9 answers: 6 from Bright Data (ChatGPT and Gemini in Visitor View)
+and 3 from DataForSEO (Perplexity (API), system `perplexity/sonar`, channel
+API). No Visitor View Perplexity rows are expected. The owner chose a
 `$0.50` ceiling for it. Each step is one Railway service and one deploy —
 variables are staged until deployed, see "Applying Railway variable changes"
 in `SELENA_OWNER_OPERATING_GUIDE.md` — and nothing starts on a timer: the
@@ -54,7 +62,7 @@ first run.
    variable does not exist on the service yet) and change
    `SELENA_OWNER_TASK=set-spend-budget` → deploy → the log prints the new cap
    with the unchanged `committed`. `$0.50 − $0.30` leaves `$0.20`; the run
-   below holds `$0.0135` and settles at `$0.09`, so it fits with `$0.11` to
+   below holds `$0.045` and settles at `$0.075`, so it fits with `$0.125` to
    spare. Lowering a cap towards what is already committed is allowed and
    means exactly that (`packages/lib/src/selena-provider-spend-budget.ts:5-12`).
 2. **Owner service — grant the operator role.**
@@ -73,14 +81,17 @@ first run.
    (`apps/worker/src/jobs/selena-measure.ts:201`) — so setting it on web
    protects nothing. Preflight compares the order's 9 answers × `$0.005` =
    `$0.045` with `SELENA_PROVIDER_BUDGET_USD`; `$0.005` is the highest
-   per-answer *reservation* any approved route makes, an estimate and not a
-   price (`packages/selena-visibility-contracts/src/measurement-execution.ts:116-126`).
+   per-answer *reservation* any approved route makes — a reservation
+   estimate, not a price and not a maximum charge (`packages/selena-visibility-contracts/src/measurement-execution.ts:116-126`).
 4. **Build the order** on the desk, in the operator's own workspace: synthetic
    brand, 3 questions. It stops at `PAID_REVIEW_REQUIRED`; approve it and it
    stands at `QUEUED`. **Do not press Enqueue yet.**
 5. **Worker.** `SELENA_EMERGENCY_STOP=false`, `SELENA_MEASUREMENT_ENABLED=true`,
    `SELENA_MEASUREMENT_ADAPTER=brightdata`, `SCHEDULE_MAINTENANCE_ENABLED=false`,
-   `SELENA_RECURRING_JOBS_ENABLED` unset or `false` → deploy → wait for
+   `SELENA_RECURRING_JOBS_ENABLED` unset or `false`; `BRIGHTDATA_API_TOKEN`,
+   `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` present — the `brightdata`
+   family routes Perplexity (API) to DataForSEO, and without its credentials
+   every job of the batch fails before a permit is claimed → deploy → wait for
    SUCCESS **and** the log line `Registered handler: selena-measure`
    (`apps/worker/src/handlers.ts:99`).
 6. **Operator presses Enqueue once.**
@@ -92,8 +103,8 @@ first run.
 8. **Close the path.** Worker: `SELENA_EMERGENCY_STOP=true`,
    `SELENA_MEASUREMENT_ENABLED=false` → deploy. Web:
    `SELENA_MEASUREMENT_ENABLED=false` → deploy.
-9. **Owner exports provider usage** from Bright Data and reconciles it against
-   the database (table below).
+9. **Owner exports provider usage** from Bright Data and DataForSEO and
+   reconciles it against the database (tables below).
 
 > **WARNING — step 5 must be deployed and confirmed before step 6. Pressing
 > Enqueue while the worker's stop is still engaged burns all 9 permits.** The
@@ -113,11 +124,12 @@ first run.
 
 | | Expected | Why |
 |---|---:|---|
-| Reservation, held before each call | 9 × `$0.0015` = `$0.0135` | `MEASUREMENT_ESTIMATED_COST_USD` for the `brightdata` family (`measurement-execution.ts:105`, `:110-114`). `branch-c` would reserve `$0.005` × 9 = `$0.045`, because its Perplexity route is `dataforseo-perplexity` (`:75-78`, `:107`). An estimated reservation, not a maximum and not a price. |
-| Settlement | 9 × `$0.01` = `$0.09`, every row `basis = estimated` | Bright Data payloads carry no cost, so each run settles at the `brightdata` placeholder in `packages/lib/src/usage/cost.ts:20`. The 2026-09-04 run settled 30 × `$0.01`, all estimated. |
-| Desk label | `$0.0900 · оценка для 9 из 9` | `apps/web/src/routes/_authed/app/selena-admin.tsx:687` |
-| `measure` committed afterwards | `$0.30` + `$0.09` = `$0.39` | Read it back with `read-spend-budget`. |
-| Validity | ≤ 6 `SUCCEEDED`, 3 `INVALID` — all 9 billed | `brightdata-perplexity` returned the sign-up wall 24/24 on 2026-09-05; an invalid answer is still a record on the invoice. |
+| Reservation, held before each call | 9 × `$0.005` = `$0.045` | The worker reserves before it claims a permit, so before it knows the system; a family that can reach DataForSEO reserves its `$0.005` placeholder for every answer (`estimatedAnswerCostUsd` in `measurement-execution.ts`). A reservation estimate, not a maximum and not a price. |
+| Settlement | 6 × `$0.01` + 3 × `$0.005` = `$0.075`, every row `basis = estimated` | Bright Data payloads carry no cost, so each ChatGPT and Gemini run settles at the `brightdata` placeholder in `packages/lib/src/usage/cost.ts`; each Perplexity (API) run settles at the `dataforseo` placeholder. The 2026-09-04 run settled 30 × `$0.01`, all estimated. |
+| Desk label | `$0.0750 · оценка для 9 из 9` | `apps/web/src/routes/_authed/app/selena-admin.tsx` |
+| `measure` committed afterwards | `$0.30` + `$0.075` = `$0.375` | Read it back with `read-spend-budget`. |
+| Validity | ≤ 9 `SUCCEEDED`, no Visitor View Perplexity rows — all 9 billed | Perplexity's website is not measured, so the order holds no Visitor View Perplexity permit; an invalid answer is still a record on the invoice. |
+| Report | ChatGPT and Gemini under Visitor View, Perplexity (API) in the API View table | `sv_runs.channel` is `API` for the 3 `perplexity/sonar` runs; their rates are never pooled with the Visitor View ones. |
 
 ### Reconciliation: Bright Data usage against the database
 
@@ -130,14 +142,22 @@ the owner reads off the service; unless those say otherwise they are
 | Field | Bright Data side | Database side |
 |---|---|---|
 | UTC window | from Enqueue to the last terminal run | `min(created_at)` / `max(completed_at)` of the cycle's `sv_runs` |
-| Dataset id | one row per collector | `sv_runs.system_id` (ChatGPT, Gemini, Perplexity) |
+| Dataset id | one row per collector | `sv_runs.system_id` (ChatGPT, Gemini; no Visitor View Perplexity rows) |
 | Record count | per dataset | `count(*)` of `sv_runs` by `system_id` — 3 each |
 | Cost per record | as invoiced | compared with the `$0.0015` of 2026-09-01 |
-| Total | per dataset and overall | `Σ sv_provider_spend_reservations.actual_usd` and `Σ sv_cost_events.amount_usd` — both `$0.09` |
+| Total | per dataset and overall | `Σ sv_provider_spend_reservations.actual_usd` and `Σ sv_cost_events.amount_usd` over the ChatGPT and Gemini runs — both `$0.06` |
 | Request id | Bright Data request / snapshot id | `sv_runs.raw_response_reference` |
 
-Criterion: the record count is exact per dataset, and the per-record price is
-recorded and compared with the `$0.0015` figure of 2026-09-01. Follow-up once
+DataForSEO → usage for `perplexity/llm_responses/live` in the same window:
+3 requests against the 3 `sv_runs` rows with `system_id = 'perplexity/sonar'`
+and `channel = 'API'`, settled at `$0.005` each (`$0.015`), every row
+`basis = estimated`; `raw_response_reference` starts with `dataforseo:sha256:`.
+Record the invoiced per-request price beside the `$0.005` placeholder.
+
+Criterion: the record count is exact per dataset and per DataForSEO endpoint,
+and each per-record price is recorded and compared with its placeholder — the
+`$0.0015` Bright Data figure of 2026-09-01 and the unconfirmed `$0.005`
+DataForSEO one. Follow-up once
 the invoice is in: correct `packages/lib/src/usage/cost.ts` (`brightdata: 0.01`)
 and `MEASUREMENT_ESTIMATED_COST_USD` to the invoiced figure, so the settlement
 stops overstating what was spent.
@@ -277,20 +297,20 @@ stops overstating what was spent.
 - Every permit reached a terminal state, and the count of runs equals the
   planned cardinality — no permit consumed without a run.
 - The cost ledger has one row per run and every row reads `basis = estimated`
-  at `$0.01`: Bright Data payloads carry no cost, so nothing on these routes
-  can write `actual` — the repository stores whatever basis the adapter
-  reports, defaulting to estimated
-  (`packages/lib/src/selena-visibility-repositories.ts:1269-1278`), and the
-  adapter has only the placeholder in `packages/lib/src/usage/cost.ts:20`.
-  For 9 answers that is `$0.09` in `sv_cost_events`, with `$0.0135` reserved
-  beforehand; the expected ledger under the 2026-10 procedure has the detail.
-  A sum far above `$0.01` a run means the scope was not what the preflight
-  said.
+  — `$0.01` for a Bright Data run, `$0.005` for a Perplexity (API) run on
+  DataForSEO: neither provider's payload carries a cost here, so nothing on
+  these routes can write `actual` — the repository stores whatever basis the
+  adapter reports, defaulting to estimated, and the adapters have only the
+  placeholders in `packages/lib/src/usage/cost.ts`. For the 2026-10 Snapshot
+  that is `$0.075` in `sv_cost_events`, with `$0.045` reserved beforehand; the
+  expected ledger above has the detail. A sum far above `$0.01` a run means
+  the scope was not what the preflight said.
 - Each run carries extraction output. A run stored and billed with no mention,
   position or citation extracted is a successful call whose answer nothing read
   — worth stopping for.
-- The answers are real text, not empty strings, and the surfaces are the three
-  the plan sold.
+- The answers are real text, not empty strings, and the systems are the three
+  the plan measures: ChatGPT and Gemini on channel `VISITOR`, `perplexity/sonar`
+  on channel `API`; there are no Visitor View Perplexity rows.
 
 ## If it goes wrong
 

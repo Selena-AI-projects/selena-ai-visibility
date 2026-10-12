@@ -4,9 +4,9 @@ This template is not approval and does not enable production.
 
 - Release/tag:
 - Configuration Lock hash:
-- Temporary approved seller legal entity: PT Izi Jiza Bali
+- Approved seller legal entity: Selena Systems LLC, a Wyoming limited liability company, United States
 - Official legal entity/country/KYC confirmation:
-- Registered address/NIB/NPWP:
+- Registered address/registration numbers:
 - Settlement bank details:
 - Payment provider and settlement currency:
 - Tax/refund/Terms/Privacy versions:

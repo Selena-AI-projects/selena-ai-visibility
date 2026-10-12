@@ -124,6 +124,21 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 	});
 
+	it("mints a Snapshot order's permits for ChatGPT and Gemini in Visitor View and Perplexity (API) in API View", async () => {
+		const g = await guest();
+		await requests.submitSelenaOrderRequest(g.context, g.submit);
+		const rows = (
+			await db.execute(
+				sql`select system_id, channel::text as channel, count(*)::int as permits from sv_run_permits where organization_id = ${g.organizationId} group by system_id, channel order by system_id`,
+			)
+		).rows;
+		expect(rows).toEqual([
+			{ system_id: "ChatGPT", channel: "VISITOR", permits: 3 },
+			{ system_id: "Gemini", channel: "VISITOR", permits: 3 },
+			{ system_id: "perplexity/sonar", channel: "API", permits: 3 },
+		]);
+	});
+
 	it("records the plan's nominal price on the quote and nothing paid for a pilot seat", async () => {
 		const g = await guest();
 		await requests.submitSelenaOrderRequest(g.context, g.submit);

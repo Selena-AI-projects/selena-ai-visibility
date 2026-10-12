@@ -20,12 +20,15 @@ HARNESS_PLAN=landscape bash e2e/selena-client-flow/run.sh # Full Discovery Lands
 ```
 
 Both clients redeem a seat for the chosen plan, so the scenario expects
-3 questions × systems × repeats runs: 9 for Snapshot (3 visitor surfaces),
-24 for Landscape (3 visitor surfaces and 5 API models), at the plan's nominal
-price ($49 / $79) and a recorded payment of $0. The estimated reservation the
-order preflight checks is 24 × $0.005 = $0.12, under the run's $2 provider
-budget and the plan's own cap; at run time the worker reserves $0.0015 per
-answer against the $1 `measure` scope, which the run never approaches.
+3 questions × systems × repeats runs: 9 for Snapshot (ChatGPT and Gemini in
+Visitor View, Perplexity through its API), 24 for Landscape (the same three
+and 5 more API models), at the plan's nominal price ($49 / $79) and a recorded
+payment of $0. Perplexity's website as a visitor sees it is not measured until
+a transport for it is verified, so no plan mints a Visitor View run for it.
+The estimated reservation the order preflight checks is 24 × $0.005 = $0.12
+(a reservation estimate, not a price), under the run's $2 provider budget and
+the plan's own cap; at run time the stub worker reserves $0.0015 per answer
+against the $1 `measure` scope, which the run never approaches.
 
 ## Why the other two plans do not run here
 

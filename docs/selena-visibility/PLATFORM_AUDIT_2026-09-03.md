@@ -175,6 +175,8 @@ approval and publication». Продавец `PT Izi Jiza Bali` — времен
 список субпроцессоров — пустые. `SECURITY.md` направляет уязвимости на
 `security@elmohq.com`, то есть в апстрим-проект, а не в Selena.
 
+- Superseded 2026-08-25 (owner): the seller is Selena Systems LLC, a Wyoming limited liability company, United States; see `OWNER_PAYMENT_INPUTS.md`.
+
 ### F-9. Документация местами противоречит проверяемым фактам — умеренно
 
 Помимо F-2: PR #120 в `ACCEPTANCE_MATRIX_V1_3.md` и в handoff описан как

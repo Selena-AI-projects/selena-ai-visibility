@@ -37,8 +37,9 @@ const ADAPTERS: MeasurementAdapterRegistry = { noop: createNoopMeasurementAdapte
 /**
  * Bright Data's own default endpoint. One adapter instance measures one
  * surface — `brightdata-chatgpt` and its two siblings — so a plan that sells
- * three of them is configured as the `brightdata` family and every instance it
- * routes to is built here. Only the API token is account-specific.
+ * several systems is configured as a family (`brightdata`, which also routes
+ * Perplexity (API) to DataForSEO) and every instance it routes to is built
+ * here. Only the API token is account-specific.
  */
 const BRIGHTDATA_DEFAULT_ENDPOINT = "https://api.brightdata.com/datasets/v3/scrape";
 const BRIGHTDATA_SURFACES = ["chatgpt", "gemini", "perplexity"] as const;

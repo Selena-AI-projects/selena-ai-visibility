@@ -29,7 +29,7 @@ const PLANS = {
 		planId: "visibility-snapshot",
 		search: "snapshot",
 		nominal: "49.00",
-		systems: ["ChatGPT", "Gemini", "Perplexity"],
+		systems: ["ChatGPT", "Gemini", "perplexity/sonar"],
 		repeats: 1,
 	},
 	landscape: {
@@ -39,12 +39,12 @@ const PLANS = {
 		systems: [
 			"ChatGPT",
 			"Gemini",
-			"Perplexity",
 			"anthropic/claude-haiku-4.5",
 			"deepseek/deepseek-v3.2",
 			"qwen/qwen3.5-9b",
 			"mistralai/mistral-small-2603",
 			"x-ai/grok-4.5",
+			"perplexity/sonar",
 		],
 		repeats: 1,
 	},

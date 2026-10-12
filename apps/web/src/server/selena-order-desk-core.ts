@@ -18,20 +18,16 @@ import {
 	type SelenaRepositoryContext,
 } from "@workspace/lib/selena-visibility-repositories";
 import {
-	apiModelIds,
 	assertPaymentAllowed,
 	expectedRunsFromScope,
-	type MeasurementScope,
-	measurementScopeSchema,
+	measurementScopeForPlan,
 	paymentConfigFromEnv,
 	type planIds,
 	SELENA_CATALOG,
 	SELENA_CATALOG_VERSION,
 	SELENA_CHECKOUT_METADATA,
-	type SelenaPlan,
 	type SelenaPlanId,
 	validateMeasurementLanguageScope,
-	visitorSurfaces,
 } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { approveOrder, enqueueOrderRunsForOrder } from "./selena-admin-orders";
@@ -208,24 +204,6 @@ export async function decideSelenaScenarios(
 	});
 }
 
-function scopeForPlan(plan: SelenaPlan, scenarioIds: string[]): MeasurementScope {
-	const systems = plan.systems.map((systemId) => ({
-		systemId,
-		channel: (visitorSurfaces as readonly string[]).includes(systemId) ? ("VISITOR" as const) : ("API" as const),
-	}));
-	const unknown = plan.systems.filter(
-		(systemId) =>
-			!(visitorSurfaces as readonly string[]).includes(systemId) &&
-			!(apiModelIds as readonly string[]).includes(systemId),
-	);
-	if (unknown.length > 0) throw new Error(`SELENA_UNKNOWN_CATALOG_SYSTEM: ${unknown.join(", ")}`);
-	return measurementScopeSchema.parse({
-		scenarios: scenarioIds,
-		systems,
-		repeats: plan.repeatCount ?? 1,
-	});
-}
-
 /**
  * Build one order from an approved scope: configuration lock, quote, order and
  * the recorded test payment that leaves it at PAID_REVIEW_REQUIRED.
@@ -324,7 +302,7 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		// above is a read of the result already committed under this key.
 		assertPaymentAllowed(paymentConfigFromEnv(process.env), "test");
 		const plan = SELENA_CATALOG[data.planId as SelenaPlanId];
-		const scope = scopeForPlan(plan, data.scenarioIds);
+		const scope = measurementScopeForPlan(plan, data.scenarioIds);
 		const expectedRuns = expectedRunsFromScope(scope);
 
 		const approved = await tx
@@ -343,6 +321,17 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		if (plan.scenarioLimit !== null && approved.length > plan.scenarioLimit)
 			throw new Error(`SELENA_PLAN_SCENARIO_LIMIT_EXCEEDED: ${plan.scenarioLimit}`);
 
+		// One measurement takes at most the plan's question count (× languages),
+		// or the plan's total scenario limit where that is lower (the audit's 20
+		// cover both languages together); refusals name the cap that binds.
+		const questionCap =
+			plan.questionLimitPerMeasurement === null
+				? null
+				: Math.min(
+						plan.questionLimitPerMeasurement * Math.max(1, plan.languageLimit),
+						plan.scenarioLimit ?? Number.POSITIVE_INFINITY,
+					);
+
 		// Language count and questions per language come from the scenarios
 		// themselves: an order for one language cannot borrow the second
 		// language's allowance.
@@ -354,22 +343,18 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 		} catch (error) {
 			const code = error instanceof Error ? error.message : String(error);
 			throw new Error(
-				`SELENA_LANGUAGE_SCOPE_EXCEEDED: ${code}; this plan takes up to ${plan.languageLimit} language(s) and ${plan.questionLimitPerMeasurement} questions per language per measurement`,
+				`SELENA_LANGUAGE_SCOPE_EXCEEDED: ${code}; this plan takes up to ${plan.languageLimit} language(s) and ${plan.questionLimitPerMeasurement} questions per language (${questionCap} in total) per measurement`,
 			);
 		}
 
-		// One measurement takes at most the plan's question count (× languages):
-		// twenty-five real questions beat a hundred invented ones.
-		if (plan.questionLimitPerMeasurement !== null) {
-			const scenarioCap = plan.questionLimitPerMeasurement * Math.max(1, plan.languageLimit);
-			if (data.scenarioIds.length > scenarioCap)
-				throw new Error(
-					`SELENA_QUESTION_LIMIT_EXCEEDED: this plan takes up to ${plan.questionLimitPerMeasurement} questions (${scenarioCap} language scenarios) per measurement, got ${data.scenarioIds.length}`,
-				);
-		}
-		// The pricing page quotes a monthly allowance (300/800 answers); an
-		// order that would overrun it is refused with the numbers, not queued
-		// quietly. Orders awaiting review and cycles still running hold their
+		if (questionCap !== null && data.scenarioIds.length > questionCap)
+			throw new Error(
+				`SELENA_QUESTION_LIMIT_EXCEEDED: this plan takes up to ${plan.questionLimitPerMeasurement} questions per language and ${questionCap} in total per measurement, got ${data.scenarioIds.length}`,
+			);
+		// The plan carries a monthly allowance over the systems it measures
+		// (300 on Snapshot, 800 on Landscape); an order that would
+		// overrun it is refused with the numbers, not queued quietly. Orders
+		// awaiting review and cycles still running hold their
 		// answers as reserved; only answers with a usable result count as used.
 		await assertMonthlyAllowanceAvailable(tx, {
 			tenantId: context.tenantId,

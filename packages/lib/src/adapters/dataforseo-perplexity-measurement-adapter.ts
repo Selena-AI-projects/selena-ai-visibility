@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
 	answerRetainUntil,
+	PERPLEXITY_API_SYSTEM_ID,
 	type RunOutcome,
 	runMeasurementSchema,
 	runOutcomeSchema,
@@ -68,10 +69,27 @@ function providerFailureReason(error: unknown): string {
 	return taskCode ? `PROVIDER_TASK_${taskCode}` : "TRANSPORT_ERROR";
 }
 
+const PERPLEXITY_SYSTEMS: readonly string[] = [PERPLEXITY_API_SYSTEM_ID, "Perplexity"];
+
 /**
- * Perplexity Visitor View fallback through DataForSEO's live Sonar response.
- * It remains a visitor-surface adapter because web search is enabled and the
- * permit is still authorized for the Perplexity surface.
+ * The system the answer is filed under. A Perplexity permit's own system, so
+ * the executor keeps the extraction: sold, that is Perplexity (API), and the
+ * owner's journal and canary runs still hold Visitor View "Perplexity"
+ * permits. Any other system is never echoed — a permit for ChatGPT that a
+ * plain adapter name sent here was not answered by ChatGPT, and the executor
+ * drops an extraction filed under a system the permit did not authorize.
+ */
+function measuredSystem(permit: SelenaExecutablePermit): string {
+	if (permit.systemId !== null && PERPLEXITY_SYSTEMS.includes(permit.systemId)) return permit.systemId;
+	if (permit.systemId === null && permit.channel !== "API") return "Perplexity";
+	return PERPLEXITY_API_SYSTEM_ID;
+}
+
+/**
+ * Perplexity's API through DataForSEO's live Sonar response, with Sonar's own
+ * web search on. It is the API channel: the answer is what the API returns,
+ * not the page a visitor of perplexity.ai is shown. The run's channel comes
+ * from the permit, so an API permit lands in the report's API section.
  */
 export function createDataForSeoPerplexityAdapter(deps: DataForSeoPerplexityAdapterDeps): SelenaMeasurementAdapter {
 	if (!deps.run && !dataforseo.isConfigured()) throw new Error("DATAFORSEO_CREDENTIALS_MISSING");
@@ -105,7 +123,7 @@ export function createDataForSeoPerplexityAdapter(deps: DataForSeoPerplexityAdap
 				const extracted = extractMeasurement({
 					answerText: content,
 					sources: result.citations.map(({ url, domain }) => ({ url, domain })),
-					system: "Perplexity",
+					system: measuredSystem(permit),
 					model: result.modelVersion,
 					captureMode: "live_search",
 					context: await deps.resolveExtractionContext(permit),
@@ -129,9 +147,10 @@ export function createDataForSeoPerplexityAdapter(deps: DataForSeoPerplexityAdap
 	}
 
 	return {
-		channel: "visitor_view",
+		channel: "api_view",
+		// No channel check: API permits are what is sold, and the owner's journal
+		// and canary runs still send Visitor View ones.
 		async measure(permit: SelenaMeasurementPermit) {
-			if (permit.channel !== "visitor_view") throw new Error("MEASUREMENT_CHANNEL_MISMATCH");
 			return { dispatchKey: permit.dispatchKey, status: "queued" as const };
 		},
 		async execute(permit: SelenaExecutablePermit) {

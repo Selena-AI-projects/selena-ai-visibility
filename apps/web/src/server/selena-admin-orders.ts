@@ -388,6 +388,7 @@ export async function approveOrder(context: SelenaRepositoryContext, orderId: st
 			auditEvent: "ORDER_APPROVED",
 			auditDetails: { idempotencyKey: idempotencyKey ?? null },
 		},
+		measuredSystemsOnly: true,
 	});
 	const order = await getOwnedOrder(context, orderId);
 	return {

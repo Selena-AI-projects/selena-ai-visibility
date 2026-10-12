@@ -3,7 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
 	expectedRunsFromScope,
+	getPlan,
 	type MeasurementScope,
+	measurementScopeForPlan,
 	measurementScopeSchema,
 } from "@workspace/selena-visibility-contracts";
 import { describe, expect, it } from "vitest";
@@ -44,6 +46,17 @@ describe("planOrderDispatch", () => {
 			channel: "VISITOR",
 			repeatIndex: 0,
 		});
+	});
+
+	it("mints a Snapshot order's permits for ChatGPT and Gemini in Visitor View and Perplexity (API) in API View", () => {
+		const snapshot = measurementScopeForPlan(getPlan("visibility-snapshot"), [scenarioA, scenarioB]);
+		const planned = planOrderDispatch({ orderId, lockVersion: 1, scope: snapshot });
+		expect(planned).toHaveLength(6);
+		const channelOf = new Map(planned.map((permit) => [permit.systemId, permit.channel]));
+		expect(Object.fromEntries(channelOf)).toEqual({ ChatGPT: "VISITOR", Gemini: "VISITOR", "perplexity/sonar": "API" });
+		expect(planned.filter((permit) => permit.systemId === "perplexity/sonar")).toHaveLength(2);
+		// Perplexity's website is not measured, so no Visitor View permit names it.
+		expect(planned.some((permit) => permit.systemId === "Perplexity")).toBe(false);
 	});
 
 	it("replans identically: a second planning pass mints zero new keys", () => {

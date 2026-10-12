@@ -1,4 +1,4 @@
-import { SELENA_CATALOG } from "@workspace/selena-visibility-contracts";
+import { measuredSystemsForPlan, SELENA_CATALOG, SELENA_SYSTEM_LABELS } from "@workspace/selena-visibility-contracts";
 import { Badge } from "@workspace/ui/components/badge";
 import { Button } from "@workspace/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card";
@@ -34,7 +34,20 @@ const PLANS = (
 	] as const
 ).map((entry) => {
 	const plan = SELENA_CATALOG[entry.id];
-	return { ...entry, systems: plan.systems.length, repeats: plan.repeatCount ?? 1, budgetCap: plan.providerBudgetCap };
+	const measured = measuredSystemsForPlan(plan);
+	const named = (channel: "VISITOR" | "API") =>
+		measured
+			.filter((system) => system.channel === channel)
+			.map((system) => SELENA_SYSTEM_LABELS[system.systemId] ?? system.systemId)
+			.join(" · ");
+	return {
+		...entry,
+		systems: plan.systems.length,
+		visitorSystems: named("VISITOR"),
+		apiSystems: named("API"),
+		repeats: plan.repeatCount ?? 1,
+		budgetCap: plan.providerBudgetCap,
+	};
 });
 
 function tr(locale: DeskLocale, english: string, russian: string): string {
@@ -171,6 +184,10 @@ export function SelenaOrderDesk({ locale, onOrderCreated }: { locale: DeskLocale
 										</option>
 									))}
 								</select>
+								<p className="text-xs text-muted-foreground">
+									{tr(locale, "Visitor View", "Как видит посетитель")}: {plan.visitorSystems}
+									{plan.apiSystems ? ` · ${tr(locale, "over the API", "через API")}: ${plan.apiSystems}` : ""}
+								</p>
 							</div>
 						</div>
 

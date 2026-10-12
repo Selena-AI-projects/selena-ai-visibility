@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ProviderOptions, ScrapeResult } from "../providers/types";
 import type { SelenaExecutablePermit, SelenaMeasurementPermit } from "../selena-measurement";
+import { executePermit } from "../selena-run-executor";
 import { createDataForSeoPerplexityAdapter } from "./dataforseo-perplexity-measurement-adapter";
 
 const now = new Date("2026-09-07T10:00:00.000Z");
@@ -11,9 +12,9 @@ function permit(overrides: Partial<SelenaExecutablePermit> = {}): SelenaExecutab
 		organizationId: "org-1",
 		cycleId: "cycle-1",
 		scenarioId: "scenario-1",
-		systemId: "Perplexity",
-		channel: "VISITOR",
-		dispatchKey: "order-1:scenario-1:Perplexity:0:1",
+		systemId: "perplexity/sonar",
+		channel: "API",
+		dispatchKey: "order-1:scenario-1:perplexity/sonar:0:1",
 		expiresAt: new Date("2026-09-07T11:00:00.000Z"),
 		consumedAt: null,
 		...overrides,
@@ -32,7 +33,7 @@ function result(overrides: Partial<ScrapeResult> = {}): ScrapeResult {
 }
 
 describe("DataForSEO Perplexity measurement adapter", () => {
-	it("dispatches the Perplexity Sonar search path as Visitor View evidence", async () => {
+	it("dispatches the Perplexity Sonar search path as Perplexity (API) evidence", async () => {
 		const run = vi.fn(async (_model: string, _prompt: string, _options?: ProviderOptions) => result());
 		const adapter = createDataForSeoPerplexityAdapter({
 			run,
@@ -49,7 +50,7 @@ describe("DataForSEO Perplexity measurement adapter", () => {
 		const outcome = await adapter.execute(permit());
 
 		expect(run).toHaveBeenCalledWith("perplexity", "Where should I eat?", { webSearch: true, version: "sonar" });
-		expect(adapter.channel).toBe("visitor_view");
+		expect(adapter.channel).toBe("api_view");
 		expect(outcome).toMatchObject({
 			status: "SUCCEEDED",
 			validity: "VALID",
@@ -58,7 +59,7 @@ describe("DataForSEO Perplexity measurement adapter", () => {
 			costBasis: "estimated",
 			rawResponseReference: expect.stringMatching(/^dataforseo:sha256:/),
 			measurement: {
-				system: "Perplexity",
+				system: "perplexity/sonar",
 				captureMode: "live_search",
 				mention: true,
 			},
@@ -77,7 +78,7 @@ describe("DataForSEO Perplexity measurement adapter", () => {
 		const adapter = createDataForSeoPerplexityAdapter({ run, resolveScenarioText: () => "Where should I eat?" });
 
 		expect(await adapter.execute(permit())).toEqual({
-			dispatchKey: "order-1:scenario-1:Perplexity:0:1",
+			dispatchKey: "order-1:scenario-1:perplexity/sonar:0:1",
 			status: "FAILED",
 			validity: "INVALID",
 			invalidReason: "PROVIDER_HTTP_401",
@@ -137,19 +138,77 @@ describe("DataForSEO Perplexity measurement adapter", () => {
 		expect(JSON.stringify(outcome)).not.toContain("unknown-sensitive-provider-detail");
 	});
 
-	it("rejects API permits instead of silently changing their channel", async () => {
+	it("accepts API permits as sold and Visitor View permits from the owner's journal", async () => {
 		const adapter = createDataForSeoPerplexityAdapter({
 			run: vi.fn(),
 			resolveScenarioText: () => "Where should I eat?",
 		});
 
-		const apiPermit: SelenaMeasurementPermit = {
-			cycleId: "cycle-1",
-			organizationId: "org-1",
-			scenarioId: "scenario-1",
-			dispatchKey: "k1",
-			channel: "api_view",
-		};
-		await expect(adapter.measure(apiPermit)).rejects.toThrow("MEASUREMENT_CHANNEL_MISMATCH");
+		for (const channel of ["api_view", "visitor_view"] as const) {
+			const queued: SelenaMeasurementPermit = {
+				cycleId: "cycle-1",
+				organizationId: "org-1",
+				scenarioId: "scenario-1",
+				dispatchKey: "k1",
+				channel,
+			};
+			await expect(adapter.measure(queued)).resolves.toEqual({ dispatchKey: "k1", status: "queued" });
+		}
+	});
+});
+
+describe("DataForSEO Perplexity answers through the executor", () => {
+	const extractionContext = () => ({
+		brandTerms: ["KORA Food Hall"],
+		ownedDomains: ["kora.example"],
+		competitors: [],
+		language: "en",
+	});
+	const executeThroughExecutor = (claimed: SelenaExecutablePermit) =>
+		executePermit({
+			permit: claimed,
+			adapter: createDataForSeoPerplexityAdapter({
+				run: vi.fn(async () => result()),
+				now: () => now,
+				resolveScenarioText: () => "Where should I eat?",
+				resolveExtractionContext: extractionContext,
+			}),
+			cycleState: {
+				activeMaintenanceJobs: 0,
+				activeCohortJobs: 0,
+				cohortId: claimed.cycleId,
+				expectedJobs: 1,
+				expectedProviderCalls: 1,
+				seenCohortIds: new Set<string>(),
+				globalEmergencyStop: false,
+				orderStopped: false,
+			},
+			config: { enabled: true, adapter: "dataforseo-perplexity" },
+			now,
+		});
+
+	it("keeps the extraction of a Perplexity (API) permit, filed under the system the permit sold", async () => {
+		const outcome = await executeThroughExecutor(permit());
+
+		expect(outcome.measurement).toMatchObject({ system: "perplexity/sonar", mention: true });
+	});
+
+	it("keeps the extraction of a historical Visitor View Perplexity permit too", async () => {
+		const outcome = await executeThroughExecutor(
+			permit({ systemId: "Perplexity", channel: "VISITOR", dispatchKey: "journal:scenario-1:Perplexity:0:1" }),
+		);
+
+		expect(outcome.measurement).toMatchObject({ system: "Perplexity", mention: true });
+	});
+
+	it("never files its answer under a system that is not Perplexity", async () => {
+		// A plain adapter name sends every permit here; a ChatGPT permit's answer
+		// came from Perplexity's API, so the executor must drop the extraction.
+		const outcome = await executeThroughExecutor(
+			permit({ systemId: "ChatGPT", channel: "VISITOR", dispatchKey: "order-1:scenario-1:ChatGPT:0:1" }),
+		);
+
+		expect(outcome.status).toBe("SUCCEEDED");
+		expect(outcome.measurement).toBeUndefined();
 	});
 });

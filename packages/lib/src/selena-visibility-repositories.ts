@@ -4,6 +4,7 @@ import {
 	assertObservationCardinality,
 	assertObservationMatchesLockedTask,
 	assertObservationSubmission,
+	assertVisitorSystemsMeasured,
 	contextHash,
 	expectedObservations,
 	localAiDiscoveryLockBlockSchema,
@@ -819,6 +820,13 @@ export function createSelenaRepositories(db: Db) {
 					 * that commit without the approval are permission nobody gave.
 					 */
 					approval?: { fromStatus: string; auditEvent: string; auditDetails?: Record<string, unknown> };
+					/**
+					 * Refuse an order not yet dispatched whose lock names a Visitor
+					 * surface the catalog does not measure. Customer approval sets it;
+					 * the owner's own measurement scripts leave it off, because that is
+					 * how an unmeasured transport gets verified before it is sold.
+					 */
+					measuredSystemsOnly?: boolean;
 				},
 			) => {
 				writable(ctx);
@@ -836,6 +844,9 @@ export function createSelenaRepositories(db: Db) {
 				const scope = parseMeasurementScope(lock.snapshot);
 				if (!scope) throw new Error("SELENA_LOCK_SCOPE_MISSING");
 				const expected = assertLockExpectedRuns(scope, lock.expectedRuns);
+				// A lock written under an earlier catalog can still name Visitor View Perplexity.
+				// A QUEUED order already holds its permits and is left as it was.
+				if (opts?.measuredSystemsOnly && order.status !== "QUEUED") assertVisitorSystemsMeasured(scope.systems);
 				const state: ControlledCycleState = {
 					activeMaintenanceJobs: 0,
 					activeCohortJobs: 0,
