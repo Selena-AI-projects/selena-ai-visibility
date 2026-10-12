@@ -127,6 +127,28 @@ USER worker
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["./node_modules/.bin/tsx", "src/index.ts"]
 
+# Local stage — the isolated Local Maps worker: it consumes only the
+# selena-local-measure queue, which the main worker never does, and is the
+# only process that calls the Local Maps provider. A long-running service like
+# `worker`, selected by naming the service `local`.
+FROM base AS local
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 worker
+
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+COPY --from=builder --chown=worker:nodejs /deploy/worker ./
+
+USER worker
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["./node_modules/.bin/tsx", "src/local-index.ts"]
+
 # Measurement stage — runs one measurement of the owner's own projects, then
 # exits. A job, not a server: the script refuses a second run of the same
 # question set on the same day, so a platform that restarts what exits cannot
@@ -170,8 +192,8 @@ COPY --from=builder /deploy/worker ./
 
 CMD ["./node_modules/.bin/tsx", "src/scripts/owner-task-entrypoint.ts"]
 
-# The service name selects the final runtime stage: web or worker. A service
-# named for what it proves rather than for what it runs — a gate or a rehearsal
-# rig — cannot borrow a stage name another service already holds, so it names
-# its stage directly instead.
+# The service name selects the final runtime stage: web, worker, local or a
+# job. A service named for what it proves rather than for what it runs — a gate
+# or a rehearsal rig — cannot borrow a stage name another service already
+# holds, so it names its stage directly instead.
 FROM ${SELENA_RUNTIME_TARGET} AS final
