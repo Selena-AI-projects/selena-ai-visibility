@@ -2,7 +2,7 @@
  * The Local Maps owner tasks, read from the owner service's variables.
  *
  * One organization and one acting owner/admin carry the whole flow — setup,
- * canary, status, pilot approval — so every task reads them from the same
+ * canary, status, canary review, pilot approval — so every task reads them from the same
  * SELENA_LOCAL_CANARY_* variables the one-shot canary already requires. The
  * provider identity, version, price and lease are the Local worker's own
  * variables: the lock the setup freezes must match what that worker will
@@ -18,6 +18,7 @@ export const localMapsOwnerTaskKinds = [
 	"local-maps-setup",
 	"local-maps-canary",
 	"local-maps-status",
+	"local-maps-canary-review",
 	"local-maps-pilot-approve",
 ] as const;
 export type LocalMapsOwnerTaskKind = (typeof localMapsOwnerTaskKinds)[number];
@@ -25,6 +26,8 @@ export type LocalMapsOwnerTaskKind = (typeof localMapsOwnerTaskKinds)[number];
 export const LOCAL_ORGANIZATION_ENV = "SELENA_LOCAL_CANARY_ORGANIZATION_ID";
 export const LOCAL_ACTOR_ENV = "SELENA_LOCAL_CANARY_ACTOR_ID";
 export const LOCAL_LOCK_ENV = "SELENA_LOCAL_CANARY_CONFIGURATION_LOCK_ID";
+export const LOCAL_CANARY_CYCLE_ENV = "SELENA_LOCAL_CANARY_CYCLE_ID";
+export const LOCAL_CANARY_DECISION_ENV = "SELENA_LOCAL_CANARY_REVIEW_DECISION";
 export const LOCAL_PILOT_CYCLE_ENV = "SELENA_LOCAL_PILOT_CYCLE_ID";
 export const LOCAL_PILOT_APPROVED_ENV = "SELENA_LOCAL_PILOT_OWNER_APPROVED";
 export const LOCAL_PILOT_MAX_SPEND_ENV = "SELENA_LOCAL_PILOT_MAX_SPEND_USD";
@@ -57,6 +60,14 @@ export type LocalMapsOwnerTask =
 	| { kind: "local-maps-setup"; input: LocalMapsSetupInput }
 	| { kind: "local-maps-canary" }
 	| { kind: "local-maps-status"; organizationId: string; configurationLockId: string }
+	| {
+			kind: "local-maps-canary-review";
+			organizationId: string;
+			actorId: string;
+			configurationLockId: string;
+			canaryCycleId: string;
+			decision: "ACCEPTED" | "REJECTED";
+	  }
 	| {
 			kind: "local-maps-pilot-approve";
 			organizationId: string;
@@ -240,6 +251,15 @@ export function resolveLocalMapsOwnerTask(
 					organizationId: matching(env, LOCAL_ORGANIZATION_ENV, TOKEN),
 					configurationLockId: matching(env, LOCAL_LOCK_ENV, UUID),
 				};
+			case "local-maps-canary-review": {
+				const organizationId = matching(env, LOCAL_ORGANIZATION_ENV, TOKEN);
+				const actorId = matching(env, LOCAL_ACTOR_ENV, TOKEN);
+				const configurationLockId = matching(env, LOCAL_LOCK_ENV, UUID);
+				const canaryCycleId = matching(env, LOCAL_CANARY_CYCLE_ENV, UUID);
+				// No default: a decision on spend the owner has not read is not a decision.
+				const decision = matching(env, LOCAL_CANARY_DECISION_ENV, /^(?:ACCEPTED|REJECTED)$/) as "ACCEPTED" | "REJECTED";
+				return { kind, organizationId, actorId, configurationLockId, canaryCycleId, decision };
+			}
 			case "local-maps-pilot-approve": {
 				const organizationId = matching(env, LOCAL_ORGANIZATION_ENV, TOKEN);
 				const actorId = matching(env, LOCAL_ACTOR_ENV, TOKEN);
@@ -261,6 +281,6 @@ export function localMapsOwnerTaskUsage(): string[] {
 		`The local-maps-* tasks read ${LOCAL_ORGANIZATION_ENV} and ${LOCAL_ACTOR_ENV} (an owner or admin member of that organization).`,
 		`local-maps-setup also reads ${Object.values(LOCAL_SETUP_ENV).join(", ")}, and the Local worker's SELENA_LOCAL_MAPS_PROVIDER_ID, SELENA_LOCAL_DATAFORSEO_VERSION, SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD and SELENA_LOCAL_PROVIDER_LEASE_DURATION_MS.`,
 		"local-maps-canary runs the one-shot canary with its SELENA_LOCAL_CANARY_* controls.",
-		`local-maps-status reads ${LOCAL_LOCK_ENV}; local-maps-pilot-approve also reads ${LOCAL_PILOT_CYCLE_ENV}, ${LOCAL_PILOT_APPROVED_ENV}=true and ${LOCAL_PILOT_MAX_SPEND_ENV}.`,
+		`local-maps-status reads ${LOCAL_LOCK_ENV}; local-maps-canary-review also reads ${LOCAL_CANARY_CYCLE_ENV} and ${LOCAL_CANARY_DECISION_ENV} (ACCEPTED or REJECTED); local-maps-pilot-approve also reads ${LOCAL_PILOT_CYCLE_ENV}, ${LOCAL_PILOT_APPROVED_ENV}=true and ${LOCAL_PILOT_MAX_SPEND_ENV}.`,
 	];
 }

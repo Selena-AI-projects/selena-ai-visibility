@@ -215,18 +215,24 @@ describe.skipIf(!url)("Local Maps owner path from setup to an approved pilot", (
 		expect(measured).toMatchObject({ pointIndex: 4, status: "SUCCEEDED", event: "FOUND", targetRank: 2 });
 		if (!measured?.evidenceId) throw new Error("TEST_CANARY_EVIDENCE_MISSING");
 
-		const review = await withOrganizationTransaction(db, organizationId, (tx) =>
-			orchestrator.reviewLocalCanaryInTransaction({
-				tx,
-				organizationId,
-				cycleId: canary.cycleId,
-				actorId,
-				attemptId: measured.attemptId,
-				evidenceId: measured.evidenceId as string,
-				decision: "ACCEPTED",
+		const reviewInput = {
+			db,
+			organizationId,
+			actorId,
+			configurationLockId: target.configurationLockId,
+			canaryCycleId: canary.cycleId,
+			decision: "ACCEPTED" as const,
+		};
+		await expect(
+			owner.reviewLocalMapsCanary({
+				...reviewInput,
+				configurationLockId: setup.keywords[1]?.configurationLockId ?? "",
 			}),
-		);
-		const pilotCycleId = "pilotCycleId" in review ? review.pilotCycleId : undefined;
+		).rejects.toThrow("LOCAL_CANARY_REVIEW_STATE_INVALID");
+		const review = await owner.reviewLocalMapsCanary(reviewInput);
+		expect(review).toMatchObject({ attemptId: measured.attemptId, evidenceId: measured.evidenceId });
+		expect(await owner.reviewLocalMapsCanary(reviewInput)).toEqual(review);
+		const pilotCycleId = review.pilotCycleId;
 		if (!pilotCycleId) throw new Error("TEST_PILOT_NOT_CREATED");
 
 		const approve = (overrides: Partial<Parameters<typeof owner.approveLocalPilot>[0]> = {}) =>

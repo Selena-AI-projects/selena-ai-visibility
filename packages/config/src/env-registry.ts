@@ -627,6 +627,19 @@ export const ENV_REGISTRY: EnvVarSpec[] = [
 			"Read only by the owner task local-maps-setup: optional label of the price the lock freezes; defaults to one derived from SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD.",
 	},
 	{
+		name: "SELENA_LOCAL_CANARY_CYCLE_ID",
+		scope: "server",
+		requiredBy: "optional",
+		description: "Read only by the owner task local-maps-canary-review: the CANARY cycle to decide on.",
+	},
+	{
+		name: "SELENA_LOCAL_CANARY_REVIEW_DECISION",
+		scope: "server",
+		requiredBy: "optional",
+		description:
+			"Read only by the owner task local-maps-canary-review: ACCEPTED (creates the pilot) or REJECTED; no default.",
+	},
+	{
 		name: "SELENA_LOCAL_PILOT_CYCLE_ID",
 		scope: "server",
 		requiredBy: "optional",

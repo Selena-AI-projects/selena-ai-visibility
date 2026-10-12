@@ -146,6 +146,33 @@ test("a pilot is approved only with explicit owner approval, a spend ceiling and
 		assert.deepEqual(resolveOwnerTask({ ...approve, ...env }), { kind: "refused", reason });
 });
 
+test("a canary is reviewed only with an explicit decision on one exact cycle", () => {
+	const review = {
+		SELENA_OWNER_TASK: "local-maps-canary-review",
+		SELENA_LOCAL_CANARY_ORGANIZATION_ID: "default",
+		SELENA_LOCAL_CANARY_ACTOR_ID: "user-owner-1",
+		SELENA_LOCAL_CANARY_CONFIGURATION_LOCK_ID: lockId,
+		SELENA_LOCAL_CANARY_CYCLE_ID: pilotId,
+		SELENA_LOCAL_CANARY_REVIEW_DECISION: "ACCEPTED",
+	};
+	assert.deepEqual(resolveOwnerTask(review), {
+		kind: "local-maps-canary-review",
+		organizationId: "default",
+		actorId: "user-owner-1",
+		configurationLockId: lockId,
+		canaryCycleId: pilotId,
+		decision: "ACCEPTED",
+	});
+	assert.deepEqual(resolveOwnerTask({ ...review, SELENA_LOCAL_CANARY_REVIEW_DECISION: undefined }), {
+		kind: "refused",
+		reason: "LOCAL_CANARY_REVIEW_DECISION_REQUIRED",
+	});
+	assert.deepEqual(resolveOwnerTask({ ...review, SELENA_LOCAL_CANARY_REVIEW_DECISION: "accepted" }), {
+		kind: "refused",
+		reason: "LOCAL_CANARY_REVIEW_DECISION_INVALID",
+	});
+});
+
 test("status reads one lock, and the canary task defers to the one-shot's own controls", () => {
 	assert.deepEqual(
 		resolveOwnerTask({

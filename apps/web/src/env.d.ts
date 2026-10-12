@@ -86,6 +86,8 @@ declare global {
 			readonly SELENA_LOCAL_SETUP_WINDOW_STARTS_AT?: string;
 			readonly SELENA_LOCAL_SETUP_WINDOW_ENDS_AT?: string;
 			readonly SELENA_LOCAL_SETUP_PRICE_SNAPSHOT_VERSION?: string;
+			readonly SELENA_LOCAL_CANARY_CYCLE_ID?: string;
+			readonly SELENA_LOCAL_CANARY_REVIEW_DECISION?: string;
 			readonly SELENA_LOCAL_PILOT_CYCLE_ID?: string;
 			readonly SELENA_LOCAL_PILOT_OWNER_APPROVED?: string;
 			readonly SELENA_LOCAL_PILOT_MAX_SPEND_USD?: string;

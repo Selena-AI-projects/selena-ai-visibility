@@ -67,6 +67,19 @@ async function run(): Promise<void> {
 			for (const line of formatLocalMapsLockStatus(status)) console.log(line);
 			return;
 		}
+		case "local-maps-canary-review": {
+			const { formatLocalCanaryReview, reviewLocalMapsCanary } = await import("@workspace/lib/selena-local-maps-owner");
+			const review = await reviewLocalMapsCanary({
+				db,
+				organizationId: task.organizationId,
+				actorId: task.actorId,
+				configurationLockId: task.configurationLockId,
+				canaryCycleId: task.canaryCycleId,
+				decision: task.decision,
+			});
+			for (const line of formatLocalCanaryReview(review)) console.log(line);
+			return;
+		}
 		case "local-maps-pilot-approve": {
 			const { approveLocalPilot, formatLocalPilotApproval } = await import("@workspace/lib/selena-local-maps-owner");
 			const { dispatchLocalOutboxNow } = await import("./local-maps-one-shot.js");

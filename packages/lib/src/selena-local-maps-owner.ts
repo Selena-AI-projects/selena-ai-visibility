@@ -4,6 +4,7 @@ import * as schema from "./db/schema";
 import {
 	localPilotBodyHash,
 	materializeLocalPilotInTransaction,
+	reviewLocalCanaryInTransaction,
 	validateLocalPilotLock,
 	withLocalPilotMutation,
 } from "./selena-local-pilot-orchestrator";
@@ -14,6 +15,111 @@ function usdMicros(value: string): bigint {
 	if (!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/.test(value)) throw new Error("LOCAL_PILOT_SPEND_CAP_INVALID");
 	const [whole, fraction = ""] = value.split(".");
 	return BigInt(whole) * MICROS + BigInt(fraction.padEnd(6, "0"));
+}
+
+export type LocalCanaryReview = {
+	canaryCycleId: string;
+	reviewId: string;
+	decision: "ACCEPTED" | "REJECTED";
+	attemptId: string;
+	evidenceId: string;
+	pilotCycleId: string | null;
+};
+
+/**
+ * The owner's decision on one canary of this lock, recorded through the same
+ * orchestrator step the operator route uses. The attempt and its canary-only
+ * evidence are the single measured center point of that canary, so the owner
+ * names the cycle and the decision, never an id that could point elsewhere.
+ * An accepted canary creates its PILOT cycle in CREATED; a second acceptance
+ * is refused rather than creating a second pilot.
+ */
+export async function reviewLocalMapsCanary(input: {
+	db: OrganizationDatabase;
+	organizationId: string;
+	actorId: string;
+	configurationLockId: string;
+	canaryCycleId: string;
+	decision: "ACCEPTED" | "REJECTED";
+}): Promise<LocalCanaryReview> {
+	const identity = {
+		tenantId: input.organizationId,
+		operation: "canary-review",
+		resourceId: input.canaryCycleId,
+		idempotencyKey: `local-maps-owner-canary-review:${input.canaryCycleId}`,
+		bodyHash: localPilotBodyHash({
+			organizationId: input.organizationId,
+			configurationLockId: input.configurationLockId,
+			canaryCycleId: input.canaryCycleId,
+			decision: input.decision,
+		}),
+	};
+	return withLocalPilotMutation<LocalCanaryReview>({
+		db: input.db,
+		identity,
+		actorId: input.actorId,
+		work: async (tx) => {
+			const org = input.organizationId;
+			const [canary] = await tx
+				.select()
+				.from(schema.svLocalScanCycles)
+				.where(
+					and(eq(schema.svLocalScanCycles.organizationId, org), eq(schema.svLocalScanCycles.id, input.canaryCycleId)),
+				)
+				.limit(1);
+			if (canary?.executionMode !== "CANARY" || canary.configurationLockId !== input.configurationLockId)
+				throw new Error("LOCAL_CANARY_REVIEW_STATE_INVALID");
+			const [accepted] = await tx
+				.select({ id: schema.svLocalCanaryReviews.id })
+				.from(schema.svLocalCanaryReviews)
+				.where(
+					and(
+						eq(schema.svLocalCanaryReviews.organizationId, org),
+						eq(schema.svLocalCanaryReviews.localCycleId, canary.id),
+						eq(schema.svLocalCanaryReviews.status, "ACCEPTED"),
+					),
+				)
+				.limit(1);
+			if (accepted) throw new Error("LOCAL_CANARY_ALREADY_ACCEPTED");
+			const measured = await tx.execute(sql`
+				select a.id as attempt_id, s.id as evidence_id
+				from sv_measurement_attempts a
+				join sv_grid_points p on p.id = a.point_id and p.organization_id = a.organization_id and p.point_index = 4
+				join sv_source_snapshots s on s.organization_id = a.organization_id and s.source_ref = a.raw_ref
+					and s.source_type = 'LOCAL_MAPS_CANARY_ONLY'
+				where a.organization_id = ${org} and a.measurement_cycle_id = ${canary.measurementCycleId}
+					and a.status = 'SUCCEEDED'`);
+			const rows = measured.rows as Array<{ attempt_id: string; evidence_id: string }>;
+			const [only] = rows;
+			if (rows.length !== 1 || !only) throw new Error("LOCAL_CANARY_REVIEW_EVIDENCE_INVALID");
+			const review = await reviewLocalCanaryInTransaction({
+				tx,
+				organizationId: org,
+				cycleId: canary.id,
+				actorId: input.actorId,
+				attemptId: only.attempt_id,
+				evidenceId: only.evidence_id,
+				decision: input.decision,
+			});
+			return {
+				canaryCycleId: canary.id,
+				reviewId: review.reviewId,
+				decision: input.decision,
+				attemptId: only.attempt_id,
+				evidenceId: only.evidence_id,
+				pilotCycleId: ("pilotCycleId" in review ? review.pilotCycleId : undefined) ?? null,
+			};
+		},
+	});
+}
+
+export function formatLocalCanaryReview(review: LocalCanaryReview): string[] {
+	return [
+		`canary-review: canary ${review.canaryCycleId} ${review.decision} (review ${review.reviewId}, attempt ${review.attemptId}, evidence ${review.evidenceId})`,
+		review.pilotCycleId
+			? `  SELENA_LOCAL_PILOT_CYCLE_ID=${review.pilotCycleId}`
+			: "no pilot created: a rejected canary ends here",
+	];
 }
 
 export type LocalPilotApproval = {
