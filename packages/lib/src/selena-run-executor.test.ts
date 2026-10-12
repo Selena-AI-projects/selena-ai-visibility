@@ -240,14 +240,15 @@ describe("Selena measurement runner", () => {
 	});
 
 	it("measures a permit on the adapter for the system it authorized", async () => {
-		for (const [systemId, expected] of [
-			["ChatGPT", "brightdata-chatgpt"],
-			["Perplexity", "brightdata-perplexity"],
+		for (const [systemId, channel, expected] of [
+			["ChatGPT", "VISITOR", "brightdata-chatgpt"],
+			["Perplexity", "VISITOR", "brightdata-perplexity"],
+			["perplexity/sonar", "API", "dataforseo-perplexity"],
 		] as const) {
-			const { store } = storeFor(permitFor({ systemId, channel: "VISITOR" }));
+			const { store } = storeFor(permitFor({ systemId, channel }));
 			const reached: string[] = [];
 			const adapters = Object.fromEntries(
-				["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity"].map((name) => {
+				["brightdata-chatgpt", "brightdata-gemini", "brightdata-perplexity", "dataforseo-perplexity"].map((name) => {
 					const { adapter, execute } = spyAdapter();
 					execute.mockImplementation(async (permit: SelenaExecutablePermit) => {
 						reached.push(name);

@@ -56,6 +56,7 @@ import {
 	runMeasurementForPermit,
 } from "@workspace/lib/selena-run-executor";
 import { createSelenaRepositories, type SelenaRepositoryContext } from "@workspace/lib/selena-visibility-repositories";
+import { PERPLEXITY_API_SYSTEM_ID } from "@workspace/selena-visibility-contracts";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import {
 	assertBrightDataPersistedCanaryEnvironment,
@@ -571,13 +572,23 @@ async function measure(slug: string): Promise<void> {
 			channel: "VISITOR" as const,
 			priceUsd: PRICE_PER_ANSWER_USD,
 		})),
+		// DataForSEO answers through Perplexity's API. Where Bright Data holds the
+		// Perplexity surface (the `brightdata` family) they are filed as the
+		// API system the plans sell; elsewhere they stay under the surface the
+		// journal has always filed them under, so its series continues.
 		...(dataForSeoSelected
 			? [
-					{
-						systemId: brightDataVisitorSurface.perplexity,
-						channel: "VISITOR" as const,
-						priceUsd: DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD,
-					},
+					selected.has("brightdata-perplexity")
+						? {
+								systemId: PERPLEXITY_API_SYSTEM_ID,
+								channel: "API" as const,
+								priceUsd: DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD,
+							}
+						: {
+								systemId: brightDataVisitorSurface.perplexity,
+								channel: "VISITOR" as const,
+								priceUsd: DATAFORSEO_PERPLEXITY_PRICE_PER_ANSWER_USD,
+							},
 				]
 			: []),
 		...(oxylabsSelected

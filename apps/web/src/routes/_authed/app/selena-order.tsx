@@ -99,20 +99,20 @@ const PLAN_OPTIONS = [
 	{
 		search: "snapshot" as const,
 		planId: "visibility-snapshot" as const,
-		title: "Visitor View · Snapshot",
+		title: "Snapshot",
 		price: "$49",
-		systems: "ChatGPT · Gemini",
-		en: "What customers see in live AI answer surfaces.",
-		ru: "Что клиенты видят в пользовательских AI-сервисах.",
+		systems: "ChatGPT · Gemini + Perplexity (API)",
+		en: "ChatGPT and Gemini as a visitor sees them, plus Perplexity through its API, reported separately.",
+		ru: "ChatGPT и Gemini — как их видит посетитель, плюс Perplexity через API, в отдельном разделе отчёта.",
 	},
 	{
 		search: "landscape" as const,
 		planId: "full-discovery-landscape" as const,
 		title: "Visitor + API View · Landscape",
 		price: "$79",
-		systems: "ChatGPT · Gemini · Claude · DeepSeek · Qwen · Mistral · Grok",
-		en: "The visitor check plus a model-knowledge baseline.",
-		ru: "Проверка глазами посетителя плюс базовая проверка знаний моделей.",
+		systems: "ChatGPT · Gemini + Perplexity (API) · Claude · DeepSeek · Qwen · Mistral · Grok",
+		en: "The visitor check plus six AI systems asked over the API.",
+		ru: "Проверка глазами посетителя плюс шесть AI-систем, которых спрашиваем через API.",
 	},
 ];
 
@@ -249,8 +249,8 @@ function SelenaOrderPage() {
 								<span className="text-xs text-[#574d45]">
 									{tr(
 										locale,
-										"Perplexity is being connected and is not measured yet.",
-										"Perplexity подключается и пока не измеряется.",
+										"Perplexity is measured through its API; the perplexity.ai website as a visitor sees it is not measured yet.",
+										"Perplexity измеряется через API; сайт perplexity.ai глазами посетителя пока не измеряется.",
 									)}
 								</span>
 								<span className="text-sm text-[#574d45]">{tr(locale, option.en, option.ru)}</span>

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
 	apiModelIds,
+	apiViewSystemIds,
 	assertDispatchModes,
 	assertExpertVerified,
 	assertHardCaps,
+	assertVisitorSystemsMeasured,
 	createOrderLock,
 	entitlementsFor,
 	FREE_PUBLIC_READINESS,
@@ -12,6 +14,7 @@ import {
 	isApiViewWebSearchEnabled,
 	measurementScopeForPlan,
 	orderLockHash,
+	PERPLEXITY_API_SYSTEM_ID,
 	planIds,
 	plannedAnswers,
 	resolvePlanId,
@@ -21,8 +24,9 @@ import {
 	validateMeasurementLanguageScope,
 } from "./catalog";
 
-const systems = ["ChatGPT", "Gemini"];
-const apiSystems = [...systems, ...apiModelIds];
+const visitor = ["ChatGPT", "Gemini"];
+const systems = [...visitor, PERPLEXITY_API_SYSTEM_ID];
+const apiSystems = [...visitor, ...apiViewSystemIds];
 const base = (
 	planId: "visibility-snapshot" | "full-discovery-landscape" | "competitive-audit" | "managed-discovery-90",
 	overrides = {},
@@ -40,11 +44,11 @@ const base = (
 });
 
 describe("Selena RC6 catalog", () => {
-	it("Visibility Snapshot is 100 × 2 × 1 while Perplexity is pending", () =>
-		expect(plannedAnswers(base("visibility-snapshot"))).toBe(200));
+	it("Visibility Snapshot is 100 × 3 × 1: ChatGPT, Gemini and Perplexity (API)", () =>
+		expect(plannedAnswers(base("visibility-snapshot"))).toBe(300));
 	it("Full Discovery Landscape keeps 100 total scenarios across two languages", () => {
 		const scope = base("full-discovery-landscape", { languages: ["en", "id"], systems: apiSystems });
-		expect(plannedAnswers(scope)).toBe(700);
+		expect(plannedAnswers(scope)).toBe(800);
 		expect(() => validateCatalogScope({ ...scope, languageScenarios: 101 })).toThrow("SCENARIO_LIMIT_EXCEEDED");
 	});
 	it("Competitive Audit takes 20 scenarios and refuses a 21st", () => {
@@ -58,20 +62,29 @@ describe("Selena RC6 catalog", () => {
 		expect(validateCatalogScope(scope).planId).toBe("competitive-audit");
 		expect(() => validateCatalogScope({ ...scope, languageScenarios: 21 })).toThrow("SCENARIO_LIMIT_EXCEEDED");
 	});
-	it("Competitive Audit is 20 × 7 × 5 = 700 now and 20 × 8 × 5 = 800 once Perplexity is connected", () => {
-		const plan = getPlan("competitive-audit");
+	it("Competitive Audit is 20 × 8 × 5 = 800", () => {
 		const scope = base("competitive-audit", {
 			languages: ["en"],
 			systems: apiSystems,
 			languageScenarios: 20,
 			repeats: 5,
 		});
-		expect(plannedAnswers(scope)).toBe(700);
-		expect(20 * (plan.systems.length + plan.pendingSystems.length) * 5).toBe(800);
+		expect(plannedAnswers(scope)).toBe(800);
+		expect(getPlan("competitive-audit").systems).toHaveLength(8);
 	});
 	it("keeps Visitor and API channels distinct and API web search off", () => {
 		expect(getPlan("full-discovery-landscape").channelScope).toEqual(["VISITOR_VIEW", "API_VIEW"]);
 		expect(isApiViewWebSearchEnabled()).toBe(false);
+	});
+	it("sells Snapshot's Perplexity on the API channel, never as Visitor View", () => {
+		const snapshot = getPlan("visibility-snapshot");
+		expect(snapshot.channelScope).toEqual(["VISITOR_VIEW", "API_VIEW"]);
+		expect(snapshot.systems).toEqual(["ChatGPT", "Gemini", "perplexity/sonar"]);
+		expect(snapshot.systems).not.toContain("Perplexity");
+	});
+	it("does not count Perplexity (API) as an OpenRouter model", () => {
+		expect(apiModelIds).not.toContain(PERPLEXITY_API_SYSTEM_ID);
+		expect(apiViewSystemIds).toContain(PERPLEXITY_API_SYSTEM_ID);
 	});
 	it("enforces model allowlist, caps, dispatch conflict, and QC", () => {
 		expect(() =>
@@ -87,7 +100,7 @@ describe("Selena RC6 catalog", () => {
 			{ amount: 49, currency: "USD", taxMode: "owner-defined", refundPolicyVersion: "pending-owner-input" },
 			"config-v1",
 		);
-		expect(lock.plannedAnswers).toBe(200);
+		expect(lock.plannedAnswers).toBe(300);
 		expect(lock.checkoutMetadata).toEqual(SELENA_CHECKOUT_METADATA);
 		expect(orderLockHash(lock)).toBe(orderLockHash(lock));
 		lock.scope.languages.push("id");
@@ -168,9 +181,9 @@ describe("question limits", () => {
 
 describe("monthlyAnswerAllowance", () => {
 	it("counts only the systems a plan measures", () => {
-		expect(monthlyAnswerAllowance("visibility-snapshot")).toBe(200);
-		expect(monthlyAnswerAllowance("full-discovery-landscape")).toBe(700);
-		expect(monthlyAnswerAllowance("competitive-audit")).toBe(700);
+		expect(monthlyAnswerAllowance("visibility-snapshot")).toBe(300);
+		expect(monthlyAnswerAllowance("full-discovery-landscape")).toBe(800);
+		expect(monthlyAnswerAllowance("competitive-audit")).toBe(800);
 	});
 
 	it("reports no computable allowance for a negotiated plan", () => {
@@ -198,10 +211,11 @@ describe("what a requestable plan may promise", () => {
 		expect(outside, `${planId} promises systems nothing can measure`).toEqual([]);
 	});
 
-	it.each(planIds)("lists Perplexity as being connected, never as measured: %s", (planId) => {
+	it.each(planIds)("lists Perplexity's website as being connected and measures Perplexity (API): %s", (planId) => {
 		const plan = getPlan(planId);
 		expect(plan.systems).not.toContain("Perplexity");
 		expect(plan.pendingSystems).toEqual(["Perplexity"]);
+		expect(plan.systems).toContain(PERPLEXITY_API_SYSTEM_ID);
 	});
 
 	it("does not sell a Maps rank, a local pack or a review metric", () => {
@@ -247,7 +261,9 @@ describe("canonical product catalog", () => {
 			localManualAudit: false,
 		});
 		expect(entitlementsFor("visibility-snapshot", verified).tabs).not.toContain("local_discovery");
-		expect(entitlementsFor("visibility-snapshot", verified).tabs).not.toContain("expanded_ai");
+		// Snapshot's API section holds Perplexity (API), apart from Visitor View.
+		expect(entitlementsFor("visibility-snapshot", verified).tabs).toContain("expanded_ai");
+		expect(entitlementsFor("visibility-snapshot", verified).tabs).toContain("visitor_ai");
 		expect(entitlementsFor("full-discovery-landscape", pending).localDiscovery).toBe("pending_verification");
 		expect(entitlementsFor("full-discovery-landscape", verified)).toMatchObject({
 			localDiscovery: "included",
@@ -266,7 +282,25 @@ describe("the scope a new order is locked to", () => {
 			{ systemId: "ChatGPT", channel: "VISITOR" },
 			{ systemId: "Gemini", channel: "VISITOR" },
 			...apiModelIds.map((systemId) => ({ systemId, channel: "API" })),
+			{ systemId: "perplexity/sonar", channel: "API" },
 		]);
+	});
+
+	it("locks a Snapshot order to ChatGPT and Gemini in Visitor View and Perplexity (API) in API View", () => {
+		const scope = measurementScopeForPlan(getPlan("visibility-snapshot"), scenarioIds);
+		expect(scope.systems).toEqual([
+			{ systemId: "ChatGPT", channel: "VISITOR" },
+			{ systemId: "Gemini", channel: "VISITOR" },
+			{ systemId: "perplexity/sonar", channel: "API" },
+		]);
+		expect(scope.repeats).toBe(1);
+	});
+
+	it("refuses Perplexity (API) filed as a Visitor View surface", () => {
+		expect(() => assertVisitorSystemsMeasured([{ systemId: "perplexity/sonar", channel: "VISITOR" }])).toThrow(
+			"SELENA_SYSTEM_NOT_MEASURED",
+		);
+		expect(() => assertVisitorSystemsMeasured([{ systemId: "perplexity/sonar", channel: "API" }])).not.toThrow();
 	});
 
 	it("refuses a plan that names a surface nobody measures", () => {

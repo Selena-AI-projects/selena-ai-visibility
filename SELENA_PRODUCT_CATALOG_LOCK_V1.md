@@ -7,15 +7,21 @@ Source of truth: `packages/selena-visibility-contracts/src/catalog.ts`
 
 | Plan | Price | Scope | Planned answers | Verification | Purchase |
 | --- | ---: | --- | ---: | --- | --- |
-| Visitor Local | $49/month | 1 language, 100 scenarios, ChatGPT/Gemini measured (Perplexity being connected, not measured yet), 1 repeat | 100 × 2 × 1 = 200 until Perplexity is connected; 100 × 3 × 1 = 300 once it is | Automated — not expert verified | Self-service test checkout |
-| Full AI Landscape | $79/month | Up to 2 languages, 100 total language scenarios, 7 systems measured (Perplexity being connected), 1 repeat | 100 × 7 × 1 = 700 until Perplexity is connected; 100 × 8 × 1 = 800 once it is | Automated — not expert verified | Self-service test checkout |
-| Expert Verified | $399 one-time | 10 families, 2 languages, 20 scenarios, 7 systems measured (Perplexity being connected), 5 repeats | 20 × 7 × 5 = 700 until Perplexity is connected; 20 × 8 × 5 = 800 once it is | Awaiting expert review until QC record | Self-service test checkout |
-| Growth 90 Days | $2,490 | Custom immutable scope; the measured systems (Perplexity being connected); cycles/scenarios/repeats/labor/cost cap required | Not assumed | Awaiting expert review | Manual approval / contact sales |
+| Visitor Local | $49/month | 1 language, 100 scenarios, ChatGPT and Gemini (Visitor View) + Perplexity (API), 1 repeat | 100 × 3 × 1 = 300 | Automated — not expert verified | Self-service test checkout |
+| Full AI Landscape | $79/month | Up to 2 languages, 100 total language scenarios, 8 systems (2 Visitor View + Perplexity (API) and 5 API models), 1 repeat | 100 × 8 × 1 = 800 | Automated — not expert verified | Self-service test checkout |
+| Expert Verified | $399 one-time | 10 families, 2 languages, 20 scenarios, the same 8 systems, 5 repeats | 20 × 8 × 5 = 800 | Awaiting expert review until QC record | Self-service test checkout |
+| Growth 90 Days | $2,490 | Custom immutable scope; the same 8 systems; cycles/scenarios/repeats/labor/cost cap required | Not assumed | Awaiting expert review | Manual approval / contact sales |
 
-Visitor View measures ChatGPT and Gemini; Perplexity is being connected and
-is not measured yet, so no plan mints a run for it. API View is Claude,
-DeepSeek, Qwen, Mistral and Grok. API View uses exact model IDs from the
-contract and web search is off by default. The two channels are never merged
+Visitor View measures ChatGPT and Gemini. Perplexity's website as a visitor
+sees it is being connected and is not measured yet, so no plan mints a Visitor
+View run for it. API View is Perplexity (API) — system id `perplexity/sonar`,
+measured through DataForSEO's live Sonar response, which runs its own web
+search — and Claude, DeepSeek, Qwen, Mistral and Grok, the five OpenRouter
+models. API View uses exact model IDs from the contract and web search is off
+by default for the five OpenRouter models. Locks written under
+`selena-catalog-v4` carry Perplexity (API); v2 and v3 locks read as they were
+sold, and approving an undispatched lock that names Visitor View Perplexity is
+refused. The two channels are never merged
 into one opaque metric; divergence is calculated only for comparable results.
 
 ## Safety and commercial lock

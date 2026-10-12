@@ -844,7 +844,7 @@ export function createSelenaRepositories(db: Db) {
 				const scope = parseMeasurementScope(lock.snapshot);
 				if (!scope) throw new Error("SELENA_LOCK_SCOPE_MISSING");
 				const expected = assertLockExpectedRuns(scope, lock.expectedRuns);
-				// A lock written under an earlier catalog can still name Perplexity.
+				// A lock written under an earlier catalog can still name Visitor View Perplexity.
 				// A QUEUED order already holds its permits and is left as it was.
 				if (opts?.measuredSystemsOnly && order.status !== "QUEUED") assertVisitorSystemsMeasured(scope.systems);
 				const state: ControlledCycleState = {

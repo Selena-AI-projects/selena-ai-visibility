@@ -22,7 +22,13 @@ const approval = { fromStatus: "PAID_REVIEW_REQUIRED", auditEvent: "ORDER_APPROV
  * An order awaiting approval and its lock, with every write past the reads
  * standing in for the mint: getting that far means approval would have minted.
  */
-function dbWithLock(systemIds: string[], orderStatus = "PAID_REVIEW_REQUIRED") {
+function dbWithLock(
+	systems: (string | { systemId: string; channel: "VISITOR" | "API" })[],
+	orderStatus = "PAID_REVIEW_REQUIRED",
+) {
+	const scopeSystems = systems.map((system) =>
+		typeof system === "string" ? { systemId: system, channel: "VISITOR" as const } : system,
+	);
 	let selectCall = 0;
 	const reachedMint = () => {
 		throw new Error(REACHED_THE_MINT);
@@ -47,11 +53,11 @@ function dbWithLock(systemIds: string[], orderStatus = "PAID_REVIEW_REQUIRED") {
 							id: LOCK_ID,
 							organizationId: context.tenantId,
 							version: 1,
-							expectedRuns: systemIds.length,
+							expectedRuns: scopeSystems.length,
 							snapshot: {
 								measurementScope: {
 									scenarios: [SCENARIO_ID],
-									systems: systemIds.map((systemId) => ({ systemId, channel: "VISITOR" })),
+									systems: scopeSystems,
 									repeats: 1,
 								},
 							},
@@ -74,6 +80,16 @@ describe("approving an order locked under an earlier catalog", () => {
 		await expect(
 			repositories.dispatch.createPermits(context, ORDER_ID, { approval, measuredSystemsOnly: true }),
 		).rejects.toThrow("SELENA_SYSTEM_NOT_MEASURED: Perplexity");
+	});
+
+	it("lets a current Snapshot lock with Perplexity (API) through to minting", async () => {
+		const repositories = createSelenaRepositories(
+			dbWithLock(["ChatGPT", "Gemini", { systemId: "perplexity/sonar", channel: "API" }]),
+		);
+
+		await expect(
+			repositories.dispatch.createPermits(context, ORDER_ID, { approval, measuredSystemsOnly: true }),
+		).rejects.toThrow(REACHED_THE_MINT);
 	});
 
 	it("lets a ChatGPT and Gemini lock through to minting", async () => {

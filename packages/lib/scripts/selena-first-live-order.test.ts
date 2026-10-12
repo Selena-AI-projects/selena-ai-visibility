@@ -9,15 +9,15 @@ import {
 } from "./selena-first-live-order";
 
 describe("the answer count", () => {
-	it("counts one answer per question per surface", () => {
-		expect(assertWithinMaxRuns(3, 30)).toBe(6);
+	it("counts one answer per question per system", () => {
+		expect(assertWithinMaxRuns(3, 30)).toBe(9);
 	});
 
 	// A full plan is a hundred questions; reaching for one by mistake is the
-	// difference between three cents and thirty.
+	// difference between five cents and a dollar and a half.
 	it("refuses a question set that would exceed the allowed answers", () => {
-		expect(() => assertWithinMaxRuns(16, 30)).toThrow(FirstLiveOrderRefused);
-		expect(() => assertWithinMaxRuns(15, 30)).not.toThrow();
+		expect(() => assertWithinMaxRuns(11, 30)).toThrow(FirstLiveOrderRefused);
+		expect(() => assertWithinMaxRuns(10, 30)).not.toThrow();
 	});
 
 	it("refuses an empty set rather than ordering nothing", () => {
@@ -34,6 +34,7 @@ describe("the lock snapshot", () => {
 			systems: [
 				{ systemId: "ChatGPT", channel: "VISITOR" },
 				{ systemId: "Gemini", channel: "VISITOR" },
+				{ systemId: "perplexity/sonar", channel: "API" },
 			],
 			repeats: 1,
 		});

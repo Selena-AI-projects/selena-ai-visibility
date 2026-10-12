@@ -4,10 +4,11 @@ import { type MeasurementScope, measurementScopeSchema } from "./measurement-sco
 /**
  * Stamped into every configuration lock this catalog writes. Locks keep the
  * version they were written under, and nothing resolves a plan through it, so
- * a v2 lock that still lists Perplexity reads as it was sold; approving one
- * that has not been dispatched is refused (see assertVisitorSystemsMeasured).
+ * a v2 lock that still lists Visitor View Perplexity, or a v3 lock without
+ * Perplexity (API), reads as it was sold; approving an undispatched lock that
+ * names Visitor View Perplexity is refused (see assertVisitorSystemsMeasured).
  */
-export const SELENA_CATALOG_VERSION = "selena-catalog-v3" as const;
+export const SELENA_CATALOG_VERSION = "selena-catalog-v4" as const;
 export const SELENA_SELLER_LEGAL_ENTITY = "Selena Systems LLC" as const;
 export const SELENA_CHECKOUT_METADATA = {
 	sellerLegalEntity: SELENA_SELLER_LEGAL_ENTITY,
@@ -21,12 +22,13 @@ export const visitorSurfaces = ["ChatGPT", "Gemini", "Perplexity"] as const;
 type VisitorSurface = (typeof visitorSurfaces)[number];
 
 /**
- * Whether a surface is sold as measured. Perplexity has no verified transport
- * (Bright Data returned a sign-up wall on 2026-09-05, Oxylabs a 4xx on
- * 2026-09-07, the other routes are unproven). Until one is verified it stays
- * out of every plan's measured systems (owner decision, 2026-10-12), so no
- * permit is minted for it and no allowance counts it; plans list it as being
- * connected instead.
+ * Whether a surface is sold as measured. Perplexity's website has no verified
+ * transport (Bright Data returned a sign-up wall on 2026-09-05, Oxylabs a 4xx
+ * on 2026-09-07, the other routes are unproven). Until one is verified it
+ * stays out of every plan's measured systems (owner decision, 2026-10-12), so
+ * no Visitor View permit is minted for it and no allowance counts it; plans
+ * list it as being connected instead. Perplexity's API is a separate system,
+ * below.
  */
 const visitorSurfaceStatus = {
 	ChatGPT: "measured",
@@ -38,6 +40,8 @@ const measuredVisitorSurfaces = visitorSurfaces.filter((surface) => visitorSurfa
 const pendingVisitorSurfaces = visitorSurfaces.filter(
 	(surface) => visitorSurfaceStatus[surface] === "pending_connection",
 );
+
+/** The five API View models measured through OpenRouter. */
 export const apiModelIds = [
 	"anthropic/claude-haiku-4.5",
 	"deepseek/deepseek-v3.2",
@@ -46,6 +50,41 @@ export const apiModelIds = [
 	"x-ai/grok-4.5",
 ] as const;
 export type ApiModelId = (typeof apiModelIds)[number];
+
+/**
+ * Perplexity asked over its API (DataForSEO's live Sonar response, owner
+ * decision 2026-10-12). It is sold as the API channel, never as Visitor View:
+ * the answer is the API's, with its own web search, not the page a visitor of
+ * perplexity.ai is shown. A separate id from the "Perplexity" surface, because
+ * a scope may not list one system twice and the report keys rows by system.
+ * Not an OpenRouter model, so it is not in `apiModelIds`.
+ */
+export const PERPLEXITY_API_SYSTEM_ID = "perplexity/sonar" as const;
+/** API View systems measured outside OpenRouter. */
+export const directApiSystemIds = [PERPLEXITY_API_SYSTEM_ID] as const;
+/** Every API View system a plan can sell. */
+export const apiViewSystemIds = [...apiModelIds, ...directApiSystemIds] as const;
+
+/** What the cabinet calls each sold system; an id without an entry is shown as is. */
+export const SELENA_SYSTEM_LABELS: Readonly<Record<string, string>> = {
+	ChatGPT: "ChatGPT",
+	Gemini: "Gemini",
+	Perplexity: "Perplexity",
+	[PERPLEXITY_API_SYSTEM_ID]: "Perplexity (API)",
+	"anthropic/claude-haiku-4.5": "Claude",
+	"deepseek/deepseek-v3.2": "DeepSeek",
+	"qwen/qwen3.5-9b": "Qwen",
+	"mistralai/mistral-small-2603": "Mistral",
+	"x-ai/grok-4.5": "Grok",
+};
+
+/** The channel a sold system is measured on; null for an id the catalog does not know. */
+export function systemChannelFor(systemId: string): "VISITOR" | "API" | null {
+	if ((visitorSurfaces as readonly string[]).includes(systemId)) return "VISITOR";
+	if ((apiViewSystemIds as readonly string[]).includes(systemId)) return "API";
+	return null;
+}
+
 export const channels = ["VISITOR_VIEW", "API_VIEW"] as const;
 export type SelenaChannel = (typeof channels)[number];
 
@@ -93,6 +132,11 @@ export const FREE_PUBLIC_READINESS = {
 	currency: "USD",
 } as const;
 
+/**
+ * `expanded_ai` is the API View section of the report: every plan that sells
+ * an API system has it, Snapshot's holding Perplexity (API) alone. It is a
+ * section of its own so API answers are never read as Visitor View ones.
+ */
 export const reportTabs = [
 	"visitor_ai",
 	"expanded_ai",
@@ -120,7 +164,6 @@ const localDiscoveryPlans: readonly SelenaPlanId[] = [
 	"competitive-audit",
 	"managed-discovery-90",
 ];
-const expandedAiPlans: readonly SelenaPlanId[] = localDiscoveryPlans;
 const localManualAuditPlans: readonly SelenaPlanId[] = ["competitive-audit", "managed-discovery-90"];
 
 export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryVerified: boolean }): PlanEntitlements {
@@ -131,7 +174,7 @@ export function entitlementsFor(planId: SelenaPlanId, options: { localDiscoveryV
 			? "included"
 			: "pending_verification";
 	const tabs = reportTabs.filter((tab) => {
-		if (tab === "expanded_ai") return expandedAiPlans.includes(planId);
+		if (tab === "expanded_ai") return SELENA_CATALOG[planId].channelScope.includes("API_VIEW");
 		if (tab === "local_discovery") return hasLocal;
 		return true;
 	});
@@ -165,7 +208,7 @@ export type SelenaPlan = {
 	channelScope: readonly SelenaChannel[];
 	/** The systems a measurement under this plan actually queries. */
 	systems: readonly string[];
-	/** Named in the offer as being connected; never measured, never counted. */
+	/** Visitor View surfaces named in the offer as being connected; never measured, never counted. */
 	pendingSystems: readonly string[];
 	languageLimit: number;
 	scenarioLimit: number | null;
@@ -191,8 +234,10 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		billingInterval: "month",
 		price: 49,
 		currency: "USD",
-		channelScope: ["VISITOR_VIEW"],
-		systems: [...measuredVisitorSurfaces],
+		// API_VIEW for Perplexity (API) alone: the report shows it in its own
+		// API section, never pooled into the Visitor View rates.
+		channelScope: ["VISITOR_VIEW", "API_VIEW"],
+		systems: [...measuredVisitorSurfaces, PERPLEXITY_API_SYSTEM_ID],
 		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 1,
 		scenarioLimit: 100,
@@ -203,8 +248,10 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 			"1 site",
 			"1 brand",
 			"1 city or district",
-			"ChatGPT and Gemini measured; Perplexity being connected, not measured yet",
-			"200 planned answers until Perplexity is connected, 300 once it is",
+			"ChatGPT and Gemini as a visitor sees them (Visitor View)",
+			"Perplexity through its API (API View), reported separately",
+			"Perplexity's website as a visitor sees it: being connected, not measured yet",
+			"300 planned answers",
 			"competitors",
 			"mentions",
 			"positions",
@@ -216,7 +263,7 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 			"automatic recommendations",
 		],
 		excludedFeatures: [
-			"five API View models",
+			"the five other API View models",
 			"manual analyst review",
 			"Competitive Audit",
 			"Connected Analytics by default",
@@ -235,17 +282,18 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 79,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiViewSystemIds],
 		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 2,
 		scenarioLimit: 100,
 		questionLimitPerMeasurement: 25,
 		repeatCount: 1,
 		includedFeatures: [
-			"7 systems measured; Perplexity being connected, not measured yet",
+			"8 systems: ChatGPT and Gemini (Visitor View), Perplexity through its API and 5 more API models",
+			"Perplexity's website as a visitor sees it: being connected, not measured yet",
 			"separate Visitor/API views",
 			"divergence",
-			"700 planned answers until Perplexity is connected, 800 once it is",
+			"800 planned answers",
 			"expanded source map",
 			"Evidence Ledger",
 			"PDF/XLSX/CSV when available",
@@ -265,7 +313,7 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 399,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiViewSystemIds],
 		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 2,
 		scenarioLimit: 20,
@@ -273,8 +321,9 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		repeatCount: 5,
 		includedFeatures: [
 			"20 scenarios across up to 2 languages",
-			"7 systems measured; Perplexity being connected, not measured yet",
-			"700 planned answers until Perplexity is connected, 800 once it is",
+			"8 systems: ChatGPT and Gemini (Visitor View), Perplexity through its API and 5 more API models",
+			"Perplexity's website as a visitor sees it: being connected, not measured yet",
+			"800 planned answers",
 			"deep review of the top 10 priorities",
 			"Evidence Ledger",
 			"PDF/XLSX/CSV",
@@ -298,7 +347,7 @@ export const SELENA_CATALOG: Readonly<Record<SelenaPlanId, SelenaPlan>> = {
 		price: 2490,
 		currency: "USD",
 		channelScope: ["VISITOR_VIEW", "API_VIEW"],
-		systems: [...measuredVisitorSurfaces, ...apiModelIds],
+		systems: [...measuredVisitorSurfaces, ...apiViewSystemIds],
 		pendingSystems: [...pendingVisitorSurfaces],
 		languageLimit: 0,
 		scenarioLimit: null,
@@ -355,9 +404,9 @@ export function plannedAnswers(scope: Pick<CatalogScope, "languageScenarios" | "
 
 /**
  * The plan's monthly answer allowance over the systems it actually measures
- * (100 scenarios × 2 Visitor systems = 200 while Perplexity is pending, and so
- * on). Null when the plan sets no scenario or repeat bound (Growth), meaning
- * the allowance is negotiated, not computed.
+ * (100 scenarios × 3 systems = 300 for Snapshot, and so on). Null when the
+ * plan sets no scenario or repeat bound (Growth), meaning the allowance is
+ * negotiated, not computed.
  */
 export function monthlyAnswerAllowance(planId: SelenaPlanId): number | null {
 	const plan = SELENA_CATALOG[planId];
@@ -375,17 +424,23 @@ export function getPlan(planId: SelenaPlanId): SelenaPlan {
  * names it, so a catalog slip cannot buy a provider call nobody can deliver.
  */
 export function measurementScopeForPlan(plan: SelenaPlan, scenarioIds: readonly string[]): MeasurementScope {
-	const isVisitor = (systemId: string) => (visitorSurfaces as readonly string[]).includes(systemId);
-	const unknown = plan.systems.filter(
-		(systemId) => !isVisitor(systemId) && !(apiModelIds as readonly string[]).includes(systemId),
-	);
+	return measurementScopeSchema.parse({
+		scenarios: [...scenarioIds],
+		systems: measuredSystemsForPlan(plan),
+		repeats: plan.repeatCount ?? 1,
+	});
+}
+
+/** Each system the plan measures, on the channel it is sold on. */
+export function measuredSystemsForPlan(plan: SelenaPlan): { systemId: string; channel: "VISITOR" | "API" }[] {
+	const unknown = plan.systems.filter((systemId) => systemChannelFor(systemId) === null);
 	if (unknown.length > 0) throw new Error(`SELENA_UNKNOWN_CATALOG_SYSTEM: ${unknown.join(", ")}`);
 	const systems = plan.systems.map((systemId) => ({
 		systemId,
-		channel: isVisitor(systemId) ? ("VISITOR" as const) : ("API" as const),
+		channel: systemChannelFor(systemId) as "VISITOR" | "API",
 	}));
 	assertVisitorSystemsMeasured(systems);
-	return measurementScopeSchema.parse({ scenarios: [...scenarioIds], systems, repeats: plan.repeatCount ?? 1 });
+	return systems;
 }
 
 /**

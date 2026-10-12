@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { apiModelIds, type visitorSurfaces } from "./catalog.js";
+import { apiModelIds, type directApiSystemIds, PERPLEXITY_API_SYSTEM_ID, type visitorSurfaces } from "./catalog.js";
 
 // Measurement execution is the only layer allowed to reach a provider, so it
 // ships inert: the flag is default-off and the adapter name defaults to the
@@ -28,8 +28,9 @@ export type InertMeasurementAdapter = (typeof inertMeasurementAdapters)[number];
  * it is registered, so configuration alone can never turn spend on. Every
  * name beyond the inert pair is an explicit owner decision made together with
  * supplying credentials and a provider-side spend cap: `openrouter` (API View)
- * and `dataforseo-perplexity` (Branch C Visitor View) are approved on those
- * terms.
+ * and `dataforseo-perplexity` (Perplexity's API through DataForSEO's live
+ * Sonar response, sold as the API system `perplexity/sonar`) are approved on
+ * those terms.
  */
 export const ownerApprovedMeasurementAdapters = [
 	...inertMeasurementAdapters,
@@ -57,10 +58,10 @@ export type OwnerApprovedMeasurementAdapter = (typeof ownerApprovedMeasurementAd
 
 /**
  * One environment variable names one adapter, but a plan sells several systems
- * at once — the Snapshot plan alone buys two visitor surfaces. A family name is
- * the routing rule for that: the concrete adapter is chosen per permit from the
- * system that permit authorizes, so a surface the customer bought is never
- * measured on a different one.
+ * at once — the Snapshot plan alone buys two visitor surfaces and Perplexity's
+ * API. A family name is the routing rule for that: the concrete adapter is
+ * chosen per permit from the system that permit authorizes, so a surface the
+ * customer bought is never measured on a different one.
  *
  * A family widens nothing. Every destination is an individually owner-approved
  * adapter, and each one is still checked against the approved list before it
@@ -72,23 +73,39 @@ const visitorRoutes = {
 	Perplexity: "brightdata-perplexity",
 } as const satisfies Record<(typeof visitorSurfaces)[number], OwnerApprovedMeasurementAdapter>;
 
+/**
+ * Perplexity (API) is part of every plan from Snapshot up, so every family
+ * routes it, and only ever to DataForSEO: it is not an OpenRouter model, and a
+ * Visitor View transport would be measuring a different system.
+ */
+const perplexityApiRoutes = {
+	[PERPLEXITY_API_SYSTEM_ID]: "dataforseo-perplexity",
+} as const satisfies Record<(typeof directApiSystemIds)[number], OwnerApprovedMeasurementAdapter>;
+
+/**
+ * The Visitor View "Perplexity" routes serve only permits no plan sells any
+ * more (owner journal and canary runs, locks from before catalog v3). Sending
+ * one to DataForSEO measures Perplexity's API, not its website.
+ */
 const branchCFallbackRoutes = {
 	...visitorRoutes,
 	Perplexity: "dataforseo-perplexity",
 } as const satisfies Record<(typeof visitorSurfaces)[number], OwnerApprovedMeasurementAdapter>;
 
-const bothChannelRoutes: Record<string, OwnerApprovedMeasurementAdapter> = { ...visitorRoutes };
-bothChannelRoutes.Perplexity = "dataforseo-perplexity";
+const bothChannelRoutes: Record<string, OwnerApprovedMeasurementAdapter> = {
+	...branchCFallbackRoutes,
+	...perplexityApiRoutes,
+};
 for (const model of apiModelIds) bothChannelRoutes[model] = "openrouter";
 
 export const measurementAdapterFamilies: Readonly<
 	Record<string, Readonly<Record<string, OwnerApprovedMeasurementAdapter>>>
 > = {
-	/** Visitor View across every sold surface; needs the Bright Data token only. */
-	brightdata: visitorRoutes,
-	/** Visitor View with the owner-selected replacement provider for Perplexity. */
-	"branch-c": branchCFallbackRoutes,
-	/** Both channels at once, with the selected Branch C Perplexity fallback. */
+	/** Visitor View on Bright Data, plus Perplexity (API) on DataForSEO; needs both credentials. */
+	brightdata: { ...visitorRoutes, ...perplexityApiRoutes },
+	/** As `brightdata`, with Visitor View Perplexity permits sent to DataForSEO too. */
+	"branch-c": { ...branchCFallbackRoutes, ...perplexityApiRoutes },
+	/** Both channels at once: Bright Data, DataForSEO and OpenRouter. */
 	auto: bothChannelRoutes,
 };
 
@@ -103,10 +120,16 @@ export function measurementAdapterNamesFor(configuredAdapter: string): string[] 
  * account's own usage on 2026-09-01: nine ChatGPT records cost USD 0.0135.
  */
 export const MEASUREMENT_ESTIMATED_COST_USD = 0.0015;
-// The `dataforseo` placeholder in packages/lib/src/usage/cost.ts; no invoice has confirmed it.
+// The `dataforseo` placeholder in packages/lib/src/usage/cost.ts. It is a
+// reservation estimate, not a price: no DataForSEO invoice has confirmed it.
 const DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD = 0.005;
 
-/** The amount the executor reserves against the spend scope before one answer. */
+/**
+ * The amount the executor reserves against the spend scope before one answer.
+ * It is taken before the permit is claimed, so before its system is known: a
+ * family that can reach DataForSEO reserves the DataForSEO estimate for every
+ * answer, ChatGPT and Gemini included, and each settles at its own figure.
+ */
 export function estimatedAnswerCostUsd(configuredAdapter: string): number {
 	return measurementAdapterNamesFor(configuredAdapter).includes("dataforseo-perplexity")
 		? DATAFORSEO_PERPLEXITY_ESTIMATED_COST_USD

@@ -32,11 +32,13 @@ into one opaque score or promise guaranteed rankings.
 
 - `selenasystems.com` is the public marketing and free-readiness surface.
 - `app.selenasystems.com` is the authenticated customer workspace.
-- Visitor View measures ChatGPT and Gemini. Perplexity is being connected and is
-  not measured yet: no plan measures it or counts it in its answers until a
-  transport for it is verified.
-- API View covers Claude, DeepSeek, Qwen, Mistral and Grok with web search off by
-  default.
+- Visitor View measures ChatGPT and Gemini. Perplexity's website as a visitor
+  sees it is being connected and is not measured yet: no plan measures it or
+  counts it in its answers until a transport for it is verified.
+- API View covers Perplexity (API) — Perplexity's own API through DataForSEO's
+  live Sonar response, which searches the web itself — and Claude, DeepSeek,
+  Qwen, Mistral and Grok with web search off by default. Snapshot includes
+  Perplexity (API); Landscape and above include all six.
 - Public website readiness can run without connecting private customer accounts.
 - Paid measurements require an approved order, fixed cardinality and provider
   budget caps.
@@ -45,8 +47,10 @@ into one opaque score or promise guaranteed rankings.
 
 The current locked catalog is Visitor Local at $49/month, Full AI Landscape at
 $79/month, Expert Verified at $399 one-time and Growth 90 Days at $2,490 with
-manual approval. Expert Verified is 20 scenarios × 8 systems × 5 repeats = 800
-planned answers once Perplexity is connected, and 700 (7 systems) until then.
+manual approval. Snapshot is 100 scenarios × 3 systems (ChatGPT and Gemini in
+Visitor View, Perplexity (API)) = 300 answers a month, Landscape 100 × 8 = 800,
+and Expert Verified 20 scenarios × 8 systems × 5 repeats = 800 planned
+answers.
 Local visibility in Google Maps is not measured and is not part of any plan
 yet. Online checkout, live payments, recurring maintenance and real provider
 calls remain off until their separate owner gates and production acceptance are

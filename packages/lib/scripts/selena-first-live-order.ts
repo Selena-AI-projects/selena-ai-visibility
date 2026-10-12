@@ -32,17 +32,18 @@
  */
 
 import { readFileSync } from "node:fs";
-import { getPlan } from "@workspace/selena-visibility-contracts";
+import { getPlan, measuredSystemsForPlan } from "@workspace/selena-visibility-contracts";
 
 /**
- * The Visitor View surfaces a `visibility-snapshot` measurement buys, read from
- * the catalog so a surface it does not measure (Perplexity, until a transport
- * is verified) never reaches a lock.
+ * The systems a `visibility-snapshot` measurement buys, each on its own
+ * channel, read from the catalog: ChatGPT and Gemini as Visitor View and
+ * Perplexity (API) as API View. Perplexity's website, which nothing measures
+ * yet, never reaches a lock.
  */
-const VISITOR_SURFACES = getPlan("visibility-snapshot").systems;
+const SNAPSHOT_SYSTEMS = measuredSystemsForPlan(getPlan("visibility-snapshot"));
 
 /**
- * One answer per question per surface. A repeat multiplies the bill without
+ * One answer per question per system. A repeat multiplies the bill without
  * telling us anything new on a first run, so it stays at one.
  */
 const REPEATS = 1;
@@ -64,7 +65,7 @@ export class FirstLiveOrderRefused extends Error {}
 
 export interface MeasurementScopeBlock {
 	scenarios: string[];
-	systems: { systemId: string; channel: "VISITOR" }[];
+	systems: { systemId: string; channel: "VISITOR" | "API" }[];
 	repeats: number;
 }
 
@@ -74,7 +75,7 @@ export interface MeasurementScopeBlock {
  */
 export function assertWithinMaxRuns(count: number, maxRuns: number): number {
 	if (count === 0) throw new FirstLiveOrderRefused("SELENA_FIRST_LIVE_NO_QUESTIONS");
-	const expectedRuns = count * VISITOR_SURFACES.length * REPEATS;
+	const expectedRuns = count * SNAPSHOT_SYSTEMS.length * REPEATS;
 	if (expectedRuns > maxRuns)
 		throw new FirstLiveOrderRefused(
 			`SELENA_FIRST_LIVE_OVER_MAX_RUNS: ${expectedRuns} planned answers exceed the ${maxRuns} allowed`,
@@ -90,7 +91,7 @@ export function assertWithinMaxRuns(count: number, maxRuns: number): number {
 export function measurementScopeFor(scenarioIds: readonly string[]): MeasurementScopeBlock {
 	return {
 		scenarios: [...scenarioIds],
-		systems: VISITOR_SURFACES.map((systemId) => ({ systemId, channel: "VISITOR" as const })),
+		systems: SNAPSHOT_SYSTEMS.map(({ systemId, channel }) => ({ systemId, channel })),
 		repeats: REPEATS,
 	};
 }
@@ -163,7 +164,7 @@ async function main(): Promise<void> {
 	const expectedRuns = assertWithinMaxRuns(input.length, args.maxRuns);
 
 	console.log(`${args.phase}: ${input.length} ${args.phase === "propose" ? "questions" : "scenarios"}`);
-	console.log(`surfaces: ${VISITOR_SURFACES.join(", ")}`);
+	console.log(`systems: ${SNAPSHOT_SYSTEMS.map(({ systemId, channel }) => `${systemId} (${channel})`).join(", ")}`);
 	console.log(`planned answers: ${expectedRuns}`);
 
 	if (!args.confirm) {
@@ -228,7 +229,7 @@ async function main(): Promise<void> {
 			lockId: lock.id,
 			input: {
 				scenarioIds: input,
-				systems: VISITOR_SURFACES.map((id) => ({ id, channel: "VISITOR" as const })),
+				systems: SNAPSHOT_SYSTEMS.map(({ systemId, channel }) => ({ id: systemId, channel })),
 				repeats: REPEATS,
 			},
 			pricing: REHEARSAL_PRICING,

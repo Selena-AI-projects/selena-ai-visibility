@@ -29,7 +29,7 @@ const PLANS = {
 		planId: "visibility-snapshot",
 		search: "snapshot",
 		nominal: "49.00",
-		systems: ["ChatGPT", "Gemini"],
+		systems: ["ChatGPT", "Gemini", "perplexity/sonar"],
 		repeats: 1,
 	},
 	landscape: {
@@ -44,6 +44,7 @@ const PLANS = {
 			"qwen/qwen3.5-9b",
 			"mistralai/mistral-small-2603",
 			"x-ai/grok-4.5",
+			"perplexity/sonar",
 		],
 		repeats: 1,
 	},
@@ -54,7 +55,7 @@ if (!plan) throw new Error(`HARNESS_PLAN must be one of ${Object.keys(PLANS).joi
 const QUESTIONS = 3;
 const expectedRuns = QUESTIONS * plan.systems.length * plan.repeats;
 
-/** «6 прогонов», «21 прогон»: the step texts stay grammatical for either plan. */
+/** «9 прогонов», «24 прогона»: the step texts stay grammatical for either plan. */
 function runsText(count) {
 	const tens = count % 100;
 	const ones = count % 10;

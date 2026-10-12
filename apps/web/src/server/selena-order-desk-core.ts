@@ -352,7 +352,7 @@ export async function createSelenaOrderDraft(context: SelenaRepositoryContext, d
 				`SELENA_QUESTION_LIMIT_EXCEEDED: this plan takes up to ${plan.questionLimitPerMeasurement} questions per language and ${questionCap} in total per measurement, got ${data.scenarioIds.length}`,
 			);
 		// The plan carries a monthly allowance over the systems it measures
-		// (200/700 answers while Perplexity is pending); an order that would
+		// (300 on Snapshot, 800 on Landscape); an order that would
 		// overrun it is refused with the numbers, not queued quietly. Orders
 		// awaiting review and cycles still running hold their
 		// answers as reserved; only answers with a usable result count as used.

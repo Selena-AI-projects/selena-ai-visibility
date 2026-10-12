@@ -20,14 +20,15 @@ HARNESS_PLAN=landscape bash e2e/selena-client-flow/run.sh # Full Discovery Lands
 ```
 
 Both clients redeem a seat for the chosen plan, so the scenario expects
-3 questions × systems × repeats runs: 6 for Snapshot (2 visitor surfaces),
-21 for Landscape (2 visitor surfaces and 5 API models), at the plan's nominal
-price ($49 / $79) and a recorded payment of $0. Perplexity is not measured
-until a transport for it is verified, so no plan mints a run for it. The
-estimated reservation the order preflight checks is 21 × $0.005 = $0.105,
-under the run's $2 provider budget and the plan's own cap; at run time the
-worker reserves $0.0015 per answer against the $1 `measure` scope, which the
-run never approaches.
+3 questions × systems × repeats runs: 9 for Snapshot (ChatGPT and Gemini in
+Visitor View, Perplexity through its API), 24 for Landscape (the same three
+and 5 more API models), at the plan's nominal price ($49 / $79) and a recorded
+payment of $0. Perplexity's website as a visitor sees it is not measured until
+a transport for it is verified, so no plan mints a Visitor View run for it.
+The estimated reservation the order preflight checks is 24 × $0.005 = $0.12
+(a reservation estimate, not a price), under the run's $2 provider budget and
+the plan's own cap; at run time the stub worker reserves $0.0015 per answer
+against the $1 `measure` scope, which the run never approaches.
 
 ## Why the other two plans do not run here
 
@@ -39,6 +40,5 @@ run never approaches.
 - Managed Discovery Growth has `providerBudgetCap: 0` in the catalog, so the
   order preflight's WITHIN_ORDER_CAP fails for any reservation; its scope is
   negotiated and admin-approved, not self-served.
-- Competitive Audit measures 3 × 7 × 5 = 105 runs for the three questions here
-  (3 × 8 × 5 = 120 once Perplexity is connected);
+- Competitive Audit measures 3 × 8 × 5 = 120 runs for the three questions here;
   running it would need the promo request path extended to that plan.

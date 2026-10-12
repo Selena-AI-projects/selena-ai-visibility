@@ -121,20 +121,21 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		// Execution is off: the order is approved, but no run reached the queue.
 		expect(first.launch).toEqual({ state: "AWAITING_OPERATOR", orderStatus: "QUEUED" });
 		expect(second.launch).toEqual(first.launch);
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 6, claims: 1, seatsHeld: 1 });
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 	});
 
-	it("mints a Snapshot order's permits for ChatGPT and Gemini only, none for Perplexity", async () => {
+	it("mints a Snapshot order's permits for ChatGPT and Gemini in Visitor View and Perplexity (API) in API View", async () => {
 		const g = await guest();
 		await requests.submitSelenaOrderRequest(g.context, g.submit);
 		const rows = (
 			await db.execute(
-				sql`select system_id, count(*)::int as permits from sv_run_permits where organization_id = ${g.organizationId} group by system_id order by system_id`,
+				sql`select system_id, channel::text as channel, count(*)::int as permits from sv_run_permits where organization_id = ${g.organizationId} group by system_id, channel order by system_id`,
 			)
 		).rows;
 		expect(rows).toEqual([
-			{ system_id: "ChatGPT", permits: 3 },
-			{ system_id: "Gemini", permits: 3 },
+			{ system_id: "ChatGPT", channel: "VISITOR", permits: 3 },
+			{ system_id: "Gemini", channel: "VISITOR", permits: 3 },
+			{ system_id: "perplexity/sonar", channel: "API", permits: 3 },
 		]);
 	});
 
@@ -157,7 +158,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		]);
 		expect(a.id).toBe(b.id);
 		expect(a.promoApplied && b.promoApplied).toBe(true);
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 6, claims: 1, seatsHeld: 1 });
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 	});
 
 	it("keeps the code and the slot when preflight refuses, and resumes the same order once it passes", async () => {
@@ -169,7 +170,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		const resumed = await requests.submitSelenaOrderRequest(g.context, g.submit);
 		expect(resumed.id).toBe(refused.id);
 		expect(resumed.launch).toEqual({ state: "AWAITING_OPERATOR", orderStatus: "QUEUED" });
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 6, claims: 1, seatsHeld: 1 });
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 	});
 
 	it("gives the slot back when nothing was ordered, and the same code works after the profile is fixed", async () => {
@@ -189,7 +190,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		const retried = await requests.submitSelenaOrderRequest(g.context, g.submit);
 		expect(retried.id).toBe(failed.id);
 		expect(retried.launch).toEqual({ state: "AWAITING_OPERATOR", orderStatus: "QUEUED" });
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 2, claims: 1, seatsHeld: 1 });
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 3, claims: 1, seatsHeld: 1 });
 	});
 
 	it("reports a queued order after a crash that followed the enqueue, and the retry queues nothing new", async () => {
@@ -205,12 +206,12 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 			count(
 				sql`select count(*) from pgboss.job where name = 'selena-measure' and data ->> 'organizationId' = ${g.organizationId}`,
 			);
-		expect(await jobs()).toBe(6);
+		expect(await jobs()).toBe(9);
 		const retried = await requests.submitSelenaOrderRequest(g.context, g.submit);
 		expect(retried.id).toBe(crashed.id);
 		expect(retried.launch).toEqual({ state: "QUEUED", orderStatus: "QUEUED" });
-		expect(await jobs()).toBe(6);
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 6, claims: 1, seatsHeld: 1 });
+		expect(await jobs()).toBe(9);
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
 	});
 
 	it("does not let a workspace spend one seat on a second project", async () => {
@@ -248,7 +249,7 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		const rejection = {
 			orderId: order.id,
 			reviewedAt: new Date(),
-			scope: "six answers read",
+			scope: "nine answers read",
 			decision: "rejected",
 		};
 		const recorded = await repositories.qcRecords.create(g.context, rejection);
@@ -275,8 +276,8 @@ describe.skipIf(!url)("free pilot request on a database", () => {
 		expect(again.id).toBe(first.id);
 		expect(again.launch).toEqual({ state: "STOPPED", orderStatus: "CANCELLED" });
 		expect(await outcome()).toEqual(atRejection);
-		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 6, claims: 1, seatsHeld: 1 });
-		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(6);
+		expect(await state(g.organizationId)).toEqual({ requests: 1, orders: 1, permits: 9, claims: 1, seatsHeld: 1 });
+		expect(await count(sql`select count(*) from sv_runs where organization_id = ${g.organizationId}`)).toBe(9);
 	});
 
 	/**
