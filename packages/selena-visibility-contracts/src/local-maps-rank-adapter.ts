@@ -114,11 +114,13 @@ export type LocalMapsRankAdapter<TRawResult = unknown> = {
  * Formats the provider wire value required by the Maps contract. Coordinates
  * are already frozen decimal strings in the materialized request; only the
  * locked zoom is appended, so a provider adapter cannot silently choose a
- * different point or depth context.
+ * different point or depth context. DataForSEO reads the zoom only with its
+ * `z` suffix (`latitude,longitude,13z`); without it the zoom is not the one
+ * the lock froze.
  */
 export function formatLocalMapsLocationCoordinate(inputTask: LocalMapsMaterializedProviderRequest): string {
 	const task = localMapsMaterializedProviderRequestSchema.parse(inputTask);
-	return `${task.point.latitude},${task.point.longitude},${task.params.zoom}`;
+	return `${task.point.latitude},${task.point.longitude},${task.params.zoom}z`;
 }
 
 /** A provider must be able to honour the depth frozen in the Maps Lock. */
