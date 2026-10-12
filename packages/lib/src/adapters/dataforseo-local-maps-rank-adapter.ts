@@ -12,7 +12,8 @@ import {
 	mapsLockV1Schema,
 } from "@workspace/selena-visibility-contracts";
 
-const DEFAULT_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/live/advanced";
+export const DATAFORSEO_LOCAL_MAPS_PROVIDER_ID = "dataforseo-google-maps";
+export const DATAFORSEO_LOCAL_MAPS_DEFAULT_ENDPOINT = "https://api.dataforseo.com/v3/serp/google/maps/live/advanced";
 const USD = /^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/;
 
 type DataForSeoRaw = {
@@ -48,7 +49,7 @@ type DataForSeoConfig = {
 function configFrom(env: Record<string, string | undefined>): DataForSeoConfig {
 	const login = env.DATAFORSEO_LOGIN?.trim();
 	const password = env.DATAFORSEO_PASSWORD?.trim();
-	const endpoint = env.SELENA_LOCAL_DATAFORSEO_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
+	const endpoint = env.SELENA_LOCAL_DATAFORSEO_ENDPOINT?.trim() || DATAFORSEO_LOCAL_MAPS_DEFAULT_ENDPOINT;
 	const version = env.SELENA_LOCAL_DATAFORSEO_VERSION?.trim();
 	const priceUsd = env.SELENA_LOCAL_DATAFORSEO_PER_ATTEMPT_USD?.trim();
 	const timeoutMs = Number(env.SELENA_LOCAL_DATAFORSEO_TIMEOUT_MS ?? "15000");
@@ -136,7 +137,7 @@ export function createDataForSeoLocalMapsRankAdapter(
 		maxDepth: 20,
 	});
 	return {
-		id: "dataforseo-google-maps",
+		id: DATAFORSEO_LOCAL_MAPS_PROVIDER_ID,
 		version: config.version,
 		endpoint: config.endpoint,
 		quote(lock: MapsLockV1): LocalMapsRankQuote {

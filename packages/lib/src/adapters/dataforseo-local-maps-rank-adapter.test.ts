@@ -137,7 +137,9 @@ describe("DataForSEO Local Maps rank adapter", () => {
 				priceSnapshotVersion: "wire-test-price",
 			},
 		});
-		const center = planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lock).find((slot) => slot.pointIndex === 4);
+		const center = planMapsLockSlots("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", lock).find(
+			(slot) => slot.pointIndex === 4,
+		);
 		if (!center) throw new Error("TEST_CENTER_SLOT_MISSING");
 		const wireTask = materializeLocalMapsProviderRequest(lock, center, {
 			id: keywordId,

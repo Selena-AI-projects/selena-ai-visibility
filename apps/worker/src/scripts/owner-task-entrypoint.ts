@@ -3,7 +3,8 @@
  *
  * It runs from the worker image on Railway, as a service named `owner` whose
  * DATABASE_URL is the migration runner's — the one connection that may write
- * pilot seats, spend ceilings and the operator role. The task and its inputs
+ * pilot seats, spend ceilings and the operator role, and read the Local
+ * evidence provenance the runtime role may not select. The task and its inputs
  * are variables, so the owner sets them on the service and deploys, and the
  * log carries counts, ceilings and a masked address only: never a code, never
  * a connection string.
@@ -42,6 +43,45 @@ async function run(): Promise<void> {
 				"@workspace/lib/selena-platform-admin-grant"
 			);
 			for (const line of formatPlatformAdminGrant(await grantPlatformAdmin(db, task.email))) console.log(line);
+			return;
+		}
+		case "local-maps-setup": {
+			const { applyLocalMapsSetup, formatLocalMapsSetup } = await import("@workspace/lib/selena-local-maps-setup");
+			for (const line of formatLocalMapsSetup(await applyLocalMapsSetup(db, task.input))) console.log(line);
+			return;
+		}
+		case "local-maps-canary": {
+			const { executeLocalMapsOneShot } = await import("./local-maps-one-shot.js");
+			console.log(`local-maps-canary: ${JSON.stringify(await executeLocalMapsOneShot())}`);
+			return;
+		}
+		case "local-maps-status": {
+			const { formatLocalMapsLockStatus, readLocalMapsLockStatus } = await import(
+				"@workspace/lib/selena-local-maps-owner"
+			);
+			const status = await readLocalMapsLockStatus({
+				db,
+				organizationId: task.organizationId,
+				configurationLockId: task.configurationLockId,
+			});
+			for (const line of formatLocalMapsLockStatus(status)) console.log(line);
+			return;
+		}
+		case "local-maps-pilot-approve": {
+			const { approveLocalPilot, formatLocalPilotApproval } = await import("@workspace/lib/selena-local-maps-owner");
+			const { dispatchLocalOutboxNow } = await import("./local-maps-one-shot.js");
+			const approval = await approveLocalPilot({
+				db,
+				organizationId: task.organizationId,
+				actorId: task.actorId,
+				configurationLockId: task.configurationLockId,
+				pilotCycleId: task.pilotCycleId,
+				maxSpendUsd: task.maxSpendUsd,
+				env: process.env,
+			});
+			for (const line of formatLocalPilotApproval(approval)) console.log(line);
+			const dispatched = await dispatchLocalOutboxNow(task.organizationId);
+			console.log(`dispatched: claimed ${dispatched.claimed}, enqueued ${dispatched.enqueued}`);
 			return;
 		}
 	}

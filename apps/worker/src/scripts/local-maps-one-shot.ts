@@ -54,7 +54,9 @@ function validateOwnerInputs(): {
 	providerId: string;
 	idempotencyKey: string;
 } {
-	const organizationId = parseUuid("SELENA_LOCAL_CANARY_ORGANIZATION_ID");
+	// Organization ids are text: a local-mode install's first workspace is "default".
+	const organizationId = required("SELENA_LOCAL_CANARY_ORGANIZATION_ID");
+	if (!/^\S{1,160}$/.test(organizationId)) throw new Error("LOCAL_CANARY_SELENA_LOCAL_CANARY_ORGANIZATION_ID_INVALID");
 	const actorId = required("SELENA_LOCAL_CANARY_ACTOR_ID");
 	const configurationLockId = parseUuid("SELENA_LOCAL_CANARY_CONFIGURATION_LOCK_ID");
 	const gridDefinitionId = parseUuid("SELENA_LOCAL_CANARY_GRID_DEFINITION_ID");
@@ -154,6 +156,15 @@ export async function executeLocalMapsOneShot(): Promise<CanaryReceipt> {
 		return response;
 	});
 
+	return { ...receipt, ...(await dispatchLocalOutboxNow(input.organizationId)) };
+}
+
+/**
+ * Enqueues the organization's pending Local outbox rows once, without waiting
+ * for the Local worker's dispatcher. Nothing here reaches a provider: the
+ * Local worker consumes the queue.
+ */
+export async function dispatchLocalOutboxNow(organizationId: string): Promise<{ claimed: number; enqueued: number }> {
 	const schemaLifecycle = runtimePgBossSchemaLifecycle();
 	const boss = new PgBoss({
 		...runtimeDatabaseConnection(),
@@ -165,12 +176,11 @@ export async function executeLocalMapsOneShot(): Promise<CanaryReceipt> {
 	try {
 		await boss.start();
 		await boss.createQueue(LOCAL_MEASUREMENT_QUEUE, { retryLimit: 0, expireInSeconds: 60 * 15 });
-		const dispatched = await dispatchLocalOutboxOnce({
-			store: createLocalDispatchStore(db, input.organizationId, 60_000),
+		return await dispatchLocalOutboxOnce({
+			store: createLocalDispatchStore(db, organizationId, 60_000),
 			queue: boss,
 			env: () => process.env,
 		});
-		return { ...receipt, ...dispatched };
 	} finally {
 		await boss.stop({ graceful: true, timeout: 10_000 }).catch(() => undefined);
 	}

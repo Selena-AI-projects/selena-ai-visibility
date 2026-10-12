@@ -9,12 +9,20 @@
  * inputs are the others. Everything here is a pure reading of that
  * environment, so the refusals are testable without a database.
  */
+import {
+	type LocalMapsOwnerTask,
+	type LocalMapsOwnerTaskRefusal,
+	localMapsOwnerTaskKinds,
+	localMapsOwnerTaskUsage,
+	resolveLocalMapsOwnerTask,
+} from "./owner-local-maps-task.js";
 
 export const ownerTaskKinds = [
 	"issue-pilot-invites",
 	"read-spend-budget",
 	"set-spend-budget",
 	"grant-platform-admin",
+	...localMapsOwnerTaskKinds,
 ] as const;
 export type OwnerTaskKind = (typeof ownerTaskKinds)[number];
 
@@ -33,6 +41,7 @@ export type OwnerTask =
 	| { kind: "read-spend-budget"; scope: string }
 	| { kind: "set-spend-budget"; scope: string; capUsd: number }
 	| { kind: "grant-platform-admin"; email: string }
+	| LocalMapsOwnerTask
 	| { kind: "refused"; reason: OwnerTaskRefusal };
 
 export const ownerTaskRefusals = [
@@ -45,7 +54,7 @@ export const ownerTaskRefusals = [
 	"OWNER_ADMIN_EMAIL_REQUIRED",
 	"OWNER_ADMIN_EMAIL_INVALID",
 ] as const;
-export type OwnerTaskRefusal = (typeof ownerTaskRefusals)[number];
+export type OwnerTaskRefusal = (typeof ownerTaskRefusals)[number] | LocalMapsOwnerTaskRefusal;
 
 function text(value: string | undefined): string {
 	return (value ?? "").trim();
@@ -55,6 +64,9 @@ export function resolveOwnerTask(env: Record<string, string | undefined>): Owner
 	const kind = text(env[OWNER_TASK_ENV]);
 	if (kind === "") return { kind: "refused", reason: "OWNER_TASK_REQUIRED" };
 	if (!(ownerTaskKinds as readonly string[]).includes(kind)) return { kind: "refused", reason: "OWNER_TASK_UNKNOWN" };
+
+	if ((localMapsOwnerTaskKinds as readonly string[]).includes(kind))
+		return resolveLocalMapsOwnerTask(kind as (typeof localMapsOwnerTaskKinds)[number], env);
 
 	if (kind === "issue-pilot-invites") {
 		// The variable holds the seats file's contents, one seat per line.
@@ -92,5 +104,6 @@ export function ownerTaskUsage(): string[] {
 		`issue-pilot-invites reads ${PILOT_SEATS_CSV_ENV} (one seat per line, CODE,planId[,label]) and ${PILOT_SEAT_DAYS_ENV} (default ${DEFAULT_PILOT_SEAT_DAYS}).`,
 		`read-spend-budget and set-spend-budget read ${SPEND_SCOPE_ENV} (default ${DEFAULT_SPEND_SCOPE}); set-spend-budget also needs ${SPEND_CAP_USD_ENV}.`,
 		`grant-platform-admin reads ${OWNER_ADMIN_EMAIL_ENV}, the address of the one existing account to make a platform operator.`,
+		...localMapsOwnerTaskUsage(),
 	];
 }
