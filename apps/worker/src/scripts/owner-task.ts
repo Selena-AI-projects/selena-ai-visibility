@@ -22,6 +22,7 @@ export const ownerTaskKinds = [
 	"read-spend-budget",
 	"set-spend-budget",
 	"grant-platform-admin",
+	"find-member",
 	...localMapsOwnerTaskKinds,
 ] as const;
 export type OwnerTaskKind = (typeof ownerTaskKinds)[number];
@@ -41,6 +42,7 @@ export type OwnerTask =
 	| { kind: "read-spend-budget"; scope: string }
 	| { kind: "set-spend-budget"; scope: string; capUsd: number }
 	| { kind: "grant-platform-admin"; email: string }
+	| { kind: "find-member"; email: string }
 	| LocalMapsOwnerTask
 	| { kind: "refused"; reason: OwnerTaskRefusal };
 
@@ -78,7 +80,7 @@ export function resolveOwnerTask(env: Record<string, string | undefined>): Owner
 		return { kind, csv, validDays };
 	}
 
-	if (kind === "grant-platform-admin") {
+	if (kind === "grant-platform-admin" || kind === "find-member") {
 		const email = text(env[OWNER_ADMIN_EMAIL_ENV]);
 		if (email === "") return { kind: "refused", reason: "OWNER_ADMIN_EMAIL_REQUIRED" };
 		// The database matches the address exactly (case aside); anything that
@@ -104,6 +106,7 @@ export function ownerTaskUsage(): string[] {
 		`issue-pilot-invites reads ${PILOT_SEATS_CSV_ENV} (one seat per line, CODE,planId[,label]) and ${PILOT_SEAT_DAYS_ENV} (default ${DEFAULT_PILOT_SEAT_DAYS}).`,
 		`read-spend-budget and set-spend-budget read ${SPEND_SCOPE_ENV} (default ${DEFAULT_SPEND_SCOPE}); set-spend-budget also needs ${SPEND_CAP_USD_ENV}.`,
 		`grant-platform-admin reads ${OWNER_ADMIN_EMAIL_ENV}, the address of the one existing account to make a platform operator.`,
+		`find-member reads ${OWNER_ADMIN_EMAIL_ENV} and prints, writing nothing, that account's user id and the workspaces it belongs to with its role in each.`,
 		...localMapsOwnerTaskUsage(),
 	];
 }
