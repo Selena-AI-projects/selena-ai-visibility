@@ -45,6 +45,11 @@ async function run(): Promise<void> {
 			for (const line of formatPlatformAdminGrant(await grantPlatformAdmin(db, task.email))) console.log(line);
 			return;
 		}
+		case "find-member": {
+			const { formatMemberLookup, lookupMember } = await import("@workspace/lib/selena-member-lookup");
+			for (const line of formatMemberLookup(await lookupMember(db, task.email))) console.log(line);
+			return;
+		}
 		case "local-maps-setup": {
 			const { applyLocalMapsSetup, formatLocalMapsSetup } = await import("@workspace/lib/selena-local-maps-setup");
 			for (const line of formatLocalMapsSetup(await applyLocalMapsSetup(db, task.input))) console.log(line);

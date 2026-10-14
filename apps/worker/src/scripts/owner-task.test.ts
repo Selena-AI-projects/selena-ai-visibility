@@ -13,7 +13,7 @@ test("refuses to run without a named task, and names the tasks it knows", () => 
 	});
 	assert.match(
 		ownerTaskUsage().join("\n"),
-		/issue-pilot-invites, read-spend-budget, set-spend-budget, grant-platform-admin/,
+		/issue-pilot-invites, read-spend-budget, set-spend-budget, grant-platform-admin, find-member/,
 	);
 });
 
@@ -92,4 +92,16 @@ test("grants the operator role only to a trimmed, plausible address", () => {
 		{ kind: "refused", reason: "OWNER_ADMIN_EMAIL_INVALID" },
 	);
 	assert.match(ownerTaskUsage().join("\n"), /grant-platform-admin reads SELENA_OWNER_ADMIN_EMAIL/);
+});
+
+test("finds an account's workspaces from the same address variable", () => {
+	assert.deepEqual(
+		resolveOwnerTask({ SELENA_OWNER_TASK: "find-member", SELENA_OWNER_ADMIN_EMAIL: " operator@example.com " }),
+		{ kind: "find-member", email: "operator@example.com" },
+	);
+	assert.deepEqual(resolveOwnerTask({ SELENA_OWNER_TASK: "find-member" }), {
+		kind: "refused",
+		reason: "OWNER_ADMIN_EMAIL_REQUIRED",
+	});
+	assert.match(ownerTaskUsage().join("\n"), /find-member reads SELENA_OWNER_ADMIN_EMAIL/);
 });
