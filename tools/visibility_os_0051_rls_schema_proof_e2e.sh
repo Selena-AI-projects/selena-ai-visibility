@@ -109,7 +109,8 @@ for migration in \
 	0054_journal_daily_claim_execution_lease \
 	0055_provider_snapshot_resume_reconciliation \
 	0057_evidence_project_identity_hardening \
-	0058_journal_provider_boundary_recovery; do
+	0058_journal_provider_boundary_recovery \
+	0059_journal_no_spend_reconciliation; do
 	"${psql[@]}" --single-transaction < "$repo_root/packages/lib/src/db/migrations/${migration}.sql" >/dev/null
 done
 
