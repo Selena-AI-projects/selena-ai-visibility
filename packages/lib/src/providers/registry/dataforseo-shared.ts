@@ -49,3 +49,18 @@ export function assertPromptLength(prompt: string) {
 		throw new Error(`DataForSEO prompts must be ${MAX_PROMPT_CHARS} characters or fewer (${length} provided)`);
 	}
 }
+
+/**
+ * The charge DataForSEO reports on the task it just executed.
+ *
+ * Their per-call price depends on the endpoint, the queue, the requested depth
+ * and whatever the account is actually on, so a list price hardcoded here would
+ * be wrong for someone the day it is written. The response already carries the
+ * real figure; read that instead. Anything missing or not a finite,
+ * non-negative number is reported as unknown rather than guessed.
+ */
+export function taskCostUsd(task: unknown): number | undefined {
+	const cost = (task as { cost?: unknown } | null | undefined)?.cost;
+	if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return undefined;
+	return cost;
+}
